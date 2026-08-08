@@ -1,0 +1,34 @@
+# 依存
+node_modules/
+
+# ビルド成果物
+dist/
+.output/
+*.tsbuildinfo
+
+# ルーターの生成物(dev / build で作り直される)
+src/frameworks/tanstack/routeTree.gen.ts
+
+# テスト
+coverage/
+
+# ローカル設定
+.env
+.env.*.local
+*.local
+
+# OS / エディター
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# 旧実装。読むためだけに置いてある参考資料で、履歴を持たない。
+# 移植を終えたらディレクトリごと消す。
+old/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/

@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "glasshive",
+  "project_id": "90aa1c64-9db5-4aa8-aeb0-8fd459427fe4"
+}
