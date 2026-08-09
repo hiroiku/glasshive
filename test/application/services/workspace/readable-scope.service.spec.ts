@@ -38,6 +38,9 @@ function subagent(id: string, file: string): SubagentSession {
   return {
     id,
     label: id,
+    agentType: null,
+    parentId: null,
+    depth: 1,
     file,
     state: 'ended',
     startedRaw: null,

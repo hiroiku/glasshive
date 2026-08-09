@@ -22,6 +22,9 @@ const ago = (ms: number) => new Date(NOW - ms).toISOString();
 const subagent = (over: Partial<SubagentJson> = {}): SubagentJson => ({
   id: 'sub',
   label: 'sub',
+  agent_type: null,
+  parent: null,
+  depth: 1,
   file: '/nest/sub.jsonl',
   state: 'ended',
   started: null,

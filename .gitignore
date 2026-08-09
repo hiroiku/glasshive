@@ -38,3 +38,6 @@ old/
 
 # ブラウザーで確かめたときの写し
 .playwright-mcp/
+
+# 作業場所。枝ごとに切り出して使う
+.worktrees/

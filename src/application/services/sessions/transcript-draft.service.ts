@@ -1,9 +1,9 @@
 import { absent, mapObserved, type Observation, observed } from '~/app-kernel/observation.ts';
 import type {
   SessionSource,
+  SubagentSource,
   TranscriptLocation,
   TranscriptRepository,
-  TranscriptSource,
 } from '~/application/ports/repositories/sessions/transcript.repository.ts';
 import {
   createTranscriptMemo,
@@ -11,6 +11,7 @@ import {
 } from '~/application/services/sessions/transcript-memo.service.ts';
 import type { UsageBucket } from '~/domain/entities/sessions/token-usage.entity.ts';
 import { deriveActivity } from '~/domain/services/sessions/activity-interval.service.ts';
+import { placeByLineage } from '~/domain/services/sessions/agent-lineage.service.ts';
 import type {
   DraftSession,
   DraftSubagent,
@@ -45,8 +46,13 @@ import {
 } from '~/domain/value-objects/sessions/observation-window.value-object.ts';
 import {
   isSubagentFileName,
+  resolveSubagentId,
   subagentIdOf,
 } from '~/domain/value-objects/sessions/subagent-id.value-object.ts';
+import {
+  TITLE_MAX_CHARS,
+  truncateChars,
+} from '~/domain/value-objects/sessions/text-limit.value-object.ts';
 
 /* 素材に読み解きを当てて、正本 1 つぶんの下書きを組む。
 
@@ -55,6 +61,20 @@ import {
 
    **どれか 1 つが読めなくても、下書きは返す。** 読めなかった事実はその欄に残す。
    欠けたところだけが黙り、残りは今までどおり見える、というのが観測の道具のあるべき姿である。 */
+
+/* 段がまだ付いていない子。段は木に入れ直して初めて決まる。
+   0 を仮に置いて後から書き換えると、書き換え漏れが根と見分けの付かない値になる。 */
+type FlatSubagent = Omit<DraftSubagent, 'depth'>;
+
+/* 呼んだ側が添えた一行を、呼び名に仕立てる。
+
+   注文は改行を挟んだ数行のことがあるので、1 行へ潰してから題と同じ長さで丸める。
+   潰さずに渡すと、木の 1 行の中で改行が空白として散らばり、隣の欄まで押し出す。 */
+function describedLabel(description: string | null): string | null {
+  if (description === null) return null;
+  const line = description.replace(/\s+/g, ' ').trim();
+  return line === '' ? null : truncateChars(line, TITLE_MAX_CHARS);
+}
 
 export interface TranscriptDraftService {
   readSession(source: SessionSource, nowMs: number): Promise<DraftSession>;
@@ -180,7 +200,7 @@ export function createTranscriptDrafts(deps: {
     return observed(bucketByFiveMinutes(extractUsageRecords(tail.value.text)));
   }
 
-  async function readSubagent(source: TranscriptSource, nowMs: number): Promise<DraftSubagent> {
+  async function readSubagent(source: SubagentSource, nowMs: number): Promise<FlatSubagent> {
     const active = isWithinThreshold(nowMs, source.mtimeMs, activeThresholdMs);
     const meta = await readSubagentMeta(source, active);
     const activity = await readActivity(source);
@@ -190,7 +210,12 @@ export function createTranscriptDrafts(deps: {
     const { id, label } = subagentIdOf(source.fileName);
     return {
       id,
-      label,
+      /* 呼んだ側が添えた一行が、何をしている子かを語る唯一の言葉である。
+         無ければ名前から起こしたもの、それも空なら鍵そのものに倒す。 */
+      label: describedLabel(source.meta?.description ?? null) ?? (label === '' ? id : label),
+      agentType: source.meta?.agentType ?? null,
+      /* 呼んだ相手は覚え書きにしか書かれていない。読めなければ根として並ぶ */
+      parentId: source.meta?.parentAgentId ?? null,
       file: source.file,
       startedRaw: found?.startedRaw ?? null,
       lastActivityMs: source.mtimeMs,
@@ -235,8 +260,19 @@ export function createTranscriptDrafts(deps: {
       const meta = await readSessionMeta(source);
       const activity = await readActivity(source);
       const usage = await readUsage(source, nowMs);
-      const subagents: DraftSubagent[] = [];
-      for (const child of subagentSources) subagents.push(await readSubagent(child, nowMs));
+      const flat: FlatSubagent[] = [];
+      for (const child of subagentSources) flat.push(await readSubagent(child, nowMs));
+      const ids = new Set(flat.map((child) => child.id));
+      const linked = flat.map((child) => ({
+        ...child,
+        parentId: resolveSubagentId(child.parentId, ids),
+      }));
+      /* 平らな棚を木に入れ直す。**何を先に見せるかを決めるのはここで、形を決めるのは domain である。**
+         渡した順は兄弟どうしの並びとして保たれるので、ここで並べ替えてから通す必要は無い。 */
+      const subagents: DraftSubagent[] = placeByLineage(linked).map(({ node, depth }) => ({
+        ...node,
+        depth,
+      }));
       const found = meta.kind === 'observed' ? meta.value : undefined;
       // 木の並びと稼働の判定は、自分と子のうち最も新しい書き込みで決まる
       const lastActivityMs = subagents.reduce(

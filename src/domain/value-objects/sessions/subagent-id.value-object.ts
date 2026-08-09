@@ -25,3 +25,15 @@ export function subagentIdOf(fileName: string): SubagentIdentity {
   const matched = FINGERPRINT.exec(stem);
   return { id, label: matched?.[1] ?? stem };
 }
+
+/* 覚え書きが呼んだ相手を指す字は、正本の名前から起こした鍵と形が揃っていない —
+   覚え書きは前置きの `agent-` を落とした字で書く。字のまま突き合わせると親が一人も見つからず、
+   木は 2 段に潰れたままになる。
+
+   **棚に在るものとしか照らさない。** 当てが外れた字はそのまま残す —
+   落とすと、呼んだ相手が窓の外へ落ちただけの子まで根から消える。 */
+export function resolveSubagentId(raw: string | null, known: ReadonlySet<string>): string | null {
+  if (raw === null || known.has(raw)) return raw;
+  const prefixed = `${FILE_PREFIX}${raw}`;
+  return known.has(prefixed) ? prefixed : raw;
+}

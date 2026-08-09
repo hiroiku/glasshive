@@ -30,6 +30,13 @@ export interface ObservationStatusJson {
 export interface SubagentJson {
   id: string;
   label: string;
+  /** 呼ばれ方。呼び名が 16 進の id しか無いとき、役どころはこれでしか読めない */
+  agent_type: string | null;
+  /** 呼んだ相手の id。セッションが直に呼んだ子では null */
+  parent: string | null;
+  /* 根から数えた段。セッションが 1 で、その子が 2。
+     並びは既に親のすぐ下に揃えてあるので、受け取る側はこれを字下げに使うだけでよい */
+  depth: number;
   file: string;
   state: SubagentState;
   /** 正本に書かれていた字面そのまま。数から起こしたものではないので、丸めない */
@@ -158,6 +165,9 @@ const intervalsOf = (activity: Observation<ActivityIntervalSet>): IntervalsJson 
 const presentSubagent = (subagent: SubagentSession): SubagentJson => ({
   id: subagent.id,
   label: subagent.label,
+  agent_type: subagent.agentType,
+  parent: subagent.parentId,
+  depth: subagent.depth,
   file: subagent.file,
   state: subagent.state,
   started: subagent.startedRaw,

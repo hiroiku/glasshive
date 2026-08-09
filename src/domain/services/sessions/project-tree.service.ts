@@ -7,6 +7,7 @@ import type {
 import type { TranscriptSession } from '~/domain/entities/sessions/session.entity.ts';
 import type { SubagentSession } from '~/domain/entities/sessions/subagent.entity.ts';
 import type { AgentProcess } from '~/domain/value-objects/sessions/agent-process.value-object.ts';
+import { placeByLineage } from './agent-lineage.service.ts';
 import { attributeProcesses } from './process-attribution.service.ts';
 import { type MergeableProject, mergeProjects } from './project-merge.service.ts';
 import { sortByLastActivityDesc, sortByLatestActivityDesc } from './session-ordering.service.ts';
@@ -132,9 +133,14 @@ export function buildProjectTree(input: {
           ...rest,
           state: assignments[at]?.state ?? 'ended',
           awaiting: assignments[at]?.awaiting ?? null,
-          subagents: sortByLastActivityDesc(session.subagents).map(
-            ({ recentTokens: _recent, ...subagent }) => ({
+          /* 新しい順に並べてから、呼んだ相手の下へ入れ直す。**順序が先で、木が後である。**
+             入れ直した後に並べ替えると親子が離れ、段だけが残って読めなくなる。
+             `placeByLineage` は兄弟どうしの順を渡されたまま保つので、この順で通せば
+             「兄弟の中では新しいものが上、子は親のすぐ下」の両方が立つ。 */
+          subagents: placeByLineage(sortByLastActivityDesc(session.subagents)).map(
+            ({ node: { recentTokens: _recent, ...subagent }, depth }) => ({
               ...subagent,
+              depth,
               state: isWithinThreshold(nowMs, subagent.lastActivityMs, activeThresholdMs)
                 ? ('active' as const)
                 : ('ended' as const),

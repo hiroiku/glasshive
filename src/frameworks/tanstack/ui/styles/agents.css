@@ -200,11 +200,13 @@
   text-align: right;
 }
 
-/* 罫線: セッションのドット直下から縦線を下ろし、サブエージェントのドットへ枝を渡す */
+/* 罫線: 呼んだ相手のドット直下から縦線を下ろし、子のドットへ枝を渡す。
+   段は行が --depth で持つ(1 が直に呼ばれた子)。名前の字下げと同じ 24px 刻みで右へずらす —
+   ずらさないと、深い子の枝だけが 1 段目の線から伸びているように見える */
 .row.kind-subagent::before {
   content: "";
   position: absolute;
-  left: 38px;
+  left: calc(38px + (var(--depth, 1) - 1) * 24px);
   top: 0;
   bottom: 0;
   border-left: 1px solid var(--border);
@@ -215,7 +217,7 @@
 .row.kind-subagent::after {
   content: "";
   position: absolute;
-  left: 38px;
+  left: calc(38px + (var(--depth, 1) - 1) * 24px);
   top: 50%;
   width: 16px;
   border-top: 1px solid var(--border);

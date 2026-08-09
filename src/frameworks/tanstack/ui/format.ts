@@ -75,6 +75,18 @@ export const cut = (text: string | null | undefined, max: number): string =>
     ? `${text.slice(0, max)}…`
     : (text ?? '');
 
+/* 呼ばれ方を、名前の脇へ添えられる短さにする。
+
+   どれも子である以上「agent」「subagent」の尾は何も言っていない。落とすと役どころだけが残る。
+   落とし切って空になる名(`subagent` そのもの)は、落とす前を残す。 */
+export const AGENT_TYPE_CHARS = 18;
+
+export const agentTypeShort = (agentType: string | null): string => {
+  if (agentType === null) return '';
+  const trimmed = agentType.replace(/[-_]?(sub)?agents?$/i, '');
+  return cut(trimmed === '' ? agentType : trimmed, AGENT_TYPE_CHARS);
+};
+
 /** 一覧では冗長な接頭辞と日付の尾を落とす。正式な名前は載せたときに見せる */
 export const modelShort = (model: string | null): string =>
   model === null ? '' : model.replace(/^claude-/, '').replace(/-\d{8}$/, '');

@@ -22,6 +22,9 @@ function subagent(at: number, overrides: Partial<DraftSubagent> = {}): DraftSuba
   return {
     id: 'agent-aimpl-foo-abcdef1234567890',
     label: 'aimpl-foo',
+    agentType: null,
+    parentId: null,
+    depth: 1,
     file: '/p/agent-aimpl-foo-abcdef1234567890.jsonl',
     startedRaw: '2026-08-04T00:00:10Z',
     lastActivityMs: at,

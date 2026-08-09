@@ -21,7 +21,14 @@ import {
   visibleSubagents,
 } from '~/interface/presenters/sessions/visibility.presenter.ts';
 import { searchQuery } from '../../../queries/sessions.query.ts';
-import { cut, formatSinceIso, formatTokens, modelShort, worktreeName } from '../../format.ts';
+import {
+  agentTypeShort,
+  cut,
+  formatSinceIso,
+  formatTokens,
+  modelShort,
+  worktreeName,
+} from '../../format.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import { popStyleOf, prunePops, touchFingerprint } from '../../phase.ts';
 import { pressable } from '../../pressable.ts';
@@ -61,7 +68,39 @@ type AgentRow =
       readonly rid: string;
       readonly kind: 'subagent';
       readonly node: SubagentJson;
+      readonly subs: AgentRow[];
     };
+
+/* 平らに届いた子を、呼んだ相手の下へ入れ子にする。
+
+   **字下げだけを深くしても木にはならない。** 親を畳んだのに孫が残っていれば、
+   観る人には親の居ない行が並んでいるようにしか見えない。畳みが孫まで届くのは、
+   表そのものが入れ子を持っているときだけである。
+
+   置くのは既に置いた相手の下だけにする。呼んだ相手がまだ現れていない子は根へ倒れるので、
+   覚え書きが輪を作っていても入れ子が輪にならない。
+
+   呼んだ相手が絞りで消えた子も根へ出す。木から外すと、
+   観る人には「そんな子は動いていない」としか見えない。 */
+function nestSubagents(subagents: readonly SubagentJson[]): AgentRow[] {
+  const placed = new Map<string, AgentRow>();
+  const roots: AgentRow[] = [];
+
+  for (const subagent of subagents) {
+    const row: AgentRow = {
+      rid: `a:${subagent.file}`,
+      kind: 'subagent',
+      node: subagent,
+      subs: [],
+    };
+    placed.set(subagent.id, row);
+    const parent = subagent.parent === null ? undefined : placed.get(subagent.parent);
+    if (parent === undefined) roots.push(row);
+    else parent.subs.push(row);
+  }
+
+  return roots;
+}
 
 /** 並べ替えたときの様子の順。動いているものが先 */
 const STATE_ORDER: Record<string, number> = { active: 0, waiting: 1, ended: 2 };
@@ -216,11 +255,7 @@ export function AgentsTable({
         rid: `s:${session.file}`,
         kind: 'session',
         node: session,
-        subs: subs.map((subagent) => ({
-          rid: `a:${subagent.file}`,
-          kind: 'subagent' as const,
-          node: subagent,
-        })),
+        subs: nestSubagents(subs),
       });
     }
     return rows;
@@ -338,7 +373,7 @@ export function AgentsTable({
     },
     onExpandedChange: setExpanded,
     getRowId: (row) => row.rid,
-    getSubRows: (row) => (row.kind === 'session' ? row.subs : undefined),
+    getSubRows: (row) => (row.subs.length > 0 ? row.subs : undefined),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
@@ -421,9 +456,10 @@ export function AgentsTable({
     const perParent = new Map<number, number>();
 
     rows.forEach((row: Row<AgentRow>, index: number) => {
-      if (row.depth !== 1) return;
+      if (row.depth === 0) return;
+      // 呼んだ相手は、自分より浅い段で最も近い上の行である
       let parent = index - 1;
-      while (parent >= 0 && rows[parent]?.depth !== 0) parent -= 1;
+      while (parent >= 0 && (rows[parent]?.depth ?? 0) >= row.depth) parent -= 1;
       if (parent < 0) return;
       const drawn = (perParent.get(parent) ?? 0) + 1;
       perParent.set(parent, drawn);
@@ -571,7 +607,12 @@ export function AgentsTable({
             <AgentRowView
               key={row.id}
               row={row}
-              last={row.depth === 1 && (index === rows.length - 1 || rows[index + 1]?.depth === 0)}
+              /* 縦線を半分で止めるのは、同じ線を継ぐ行がもう下に無いときだけ。
+                 次の行が浅くなったら、そこから先は別の親から下りる別の線である */
+              last={
+                row.depth > 0 &&
+                (index === rows.length - 1 || (rows[index + 1]?.depth ?? 0) < row.depth)
+              }
               selected={selectedFile !== null && selectedFile === row.original.node.file}
               axis={axis}
               nowMs={nowMs}
@@ -587,7 +628,9 @@ export function AgentsTable({
               onToggle={() => row.toggleExpanded()}
               canExpand={row.getCanExpand()}
               isExpanded={row.getIsExpanded()}
-              depth={row.depth}
+              /* 字下げは血筋が言う段で取る。表の入れ子の段だと、呼んだ相手が絞りで
+                 消えた孫が、直に呼ばれた子と同じ深さに見えてしまう */
+              depth={row.original.kind === 'session' ? 0 : row.original.node.depth}
             />
           ))
         )}
@@ -629,6 +672,8 @@ function AgentRowView({
   const worktree = worktreeName(node.cwd);
   const branch = node.git_branch ?? '';
   const awaiting = entry.kind === 'session' ? entry.node.awaiting : null;
+  /** 呼ばれ方。畳んだ字を出し、元の字は載せたときに見せる */
+  const calledAs = entry.kind === 'subagent' ? entry.node.agent_type : null;
 
   /* いま何をしているか。**待っていることを最優先で見せる。**
      稼働は勝手に進むが、応答待ちはあなたを待っている。 */
@@ -653,7 +698,8 @@ function AgentRowView({
     <div
       className={`grid-row row kind-${entry.kind} state-${node.state}${last ? ' last' : ''}${selected ? ' selected' : ''}${pop === null ? '' : ' pop'}`}
       data-tok={[node.file, ...issueTokens, worktree, branch].filter(Boolean).join(' ')}
-      style={pop ?? undefined}
+      /* 段は罫線を引く側にも渡す。字下げだけを動かすと、線だけが 1 段目に取り残される */
+      style={{ ...pop, '--depth': String(depth) } as React.CSSProperties}
       role="button"
       tabIndex={0}
       aria-label={`Open conversation for ${labelOf(entry)}`}
@@ -667,6 +713,13 @@ function AgentRowView({
         <Dot state={awaiting === 'user' ? 'input' : node.state} />
         <span className="t">{cut(labelOf(entry), MAX_LABEL_CHARS)}</span>
         {entry.kind === 'session' && <span className="sub-id">{node.id.slice(0, 8)}</span>}
+        {/* 呼び名が 16 進の id しか無い子では、何をしている子かはこれでしか読めない。
+            列は増やさない — 11 本の subgrid を崩すと表全体の列が揃わなくなる */}
+        {agentTypeShort(calledAs) !== '' && (
+          <span className="sub-id" title={calledAs ?? ''}>
+            {agentTypeShort(calledAs)}
+          </span>
+        )}
       </span>
 
       <span>

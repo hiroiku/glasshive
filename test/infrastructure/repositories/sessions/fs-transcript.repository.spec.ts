@@ -167,6 +167,190 @@ describe('木を歩く', () => {
   });
 });
 
+describe('子を集める', () => {
+  /** 名前ひとつぶんの棚を歩いて、そのセッションの子だけを取り出す */
+  async function subagentsOf(sessionId: string) {
+    const listed = await repo().listTranscripts();
+    if (listed.kind !== 'observed') throw new Error(`歩けなかった: ${listed.kind}`);
+    const session = listed.value[0]?.sessions.find((candidate) => candidate.id === sessionId);
+    if (session === undefined) throw new Error(`セッションが見えない: ${sessionId}`);
+    return [...session.subagents].sort((a, b) => a.id.localeCompare(b.id));
+  }
+
+  it('走りごとに切られた内側の棚に居る子も集める', async () => {
+    const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'workflows', 'wf_x', 'agent-a2.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'workflows', 'wf_y', 'nested', 'agent-a3.jsonl'), [
+      { type: 'user' },
+    ]);
+
+    const collected = await subagentsOf('sess');
+    expect(
+      collected.map((subagent) => subagent.id),
+      '直下しか歩かないと、走りの棚に入った子が丸ごと落ちる',
+    ).toEqual(['agent-a1', 'agent-a2', 'agent-a3']);
+    expect(
+      collected[1]?.file,
+      '在り処は歩いた場所そのまま。棚の名前を畳んで直下の振りをしない',
+    ).toBe(path.join(subagents, 'workflows', 'wf_x', 'agent-a2.jsonl'));
+  });
+
+  it('セッションの正本は棚の直下だけで、内側の棚には降りない', async () => {
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(root, '-w-proj', 'sess', 'subagents', 'agent-a1.jsonl'), [
+      { type: 'user' },
+    ]);
+
+    const listed = await repo().listTranscripts();
+    if (listed.kind !== 'observed') throw new Error('歩けなかった');
+    expect(
+      listed.value[0]?.sessions.map((session) => session.id),
+      'セッションは入れ子にならない。子をセッションとして並べると、同じ正本が二度出る',
+    ).toEqual(['sess']);
+  });
+
+  it('隣の覚え書きから、呼ばれ方と呼んだ相手と段を読む', async () => {
+    const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
+    writeText(
+      path.join(subagents, 'agent-a1.meta.json'),
+      JSON.stringify({
+        agentType: 'workflow-subagent',
+        description: 'かぞえなおす',
+        parentAgentId: 'agent-a0',
+        spawnDepth: 2,
+        model: 'claude-opus-5',
+      }),
+    );
+
+    const collected = await subagentsOf('sess');
+    expect(collected[0]?.meta, '親子は覚え書きにしか書かれていない').toEqual({
+      agentType: 'workflow-subagent',
+      description: 'かぞえなおす',
+      parentAgentId: 'agent-a0',
+      spawnDepth: 2,
+    });
+  });
+
+  it('走りの棚に居る子の覚え書きも、その隣から読む', async () => {
+    const run = path.join(root, '-w-proj', 'sess', 'subagents', 'workflows', 'wf_x');
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(run, 'agent-a2.jsonl'), [{ type: 'user' }]);
+    writeText(path.join(run, 'agent-a2.meta.json'), JSON.stringify({ spawnDepth: 1 }));
+
+    const collected = await subagentsOf('sess');
+    expect(collected[0]?.meta).toEqual({
+      agentType: null,
+      description: null,
+      parentAgentId: null,
+      spawnDepth: 1,
+    });
+  });
+
+  it('覚え書きが無くても、壊れていても、子は残る', async () => {
+    const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'agent-a2.jsonl'), [{ type: 'user' }]);
+    writeText(path.join(subagents, 'agent-a2.meta.json'), '{ここで切れて');
+    writeLines(path.join(subagents, 'agent-a3.jsonl'), [{ type: 'user' }]);
+    writeText(path.join(subagents, 'agent-a3.meta.json'), '"覚え書きの形をしていない"');
+
+    const collected = await subagentsOf('sess');
+    expect(
+      collected.map((subagent) => subagent.id),
+      '覚え書きを読めないことで子が消えると、動いている子が居ないように見える',
+    ).toEqual(['agent-a1', 'agent-a2', 'agent-a3']);
+    expect(collected.map((subagent) => subagent.meta)).toEqual([null, null, null]);
+  });
+
+  it('書かれ方が違う値は、書かれていなかったものに倒す', async () => {
+    const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
+    writeText(
+      path.join(subagents, 'agent-a1.meta.json'),
+      JSON.stringify({
+        agentType: 7,
+        description: { text: 'かぞえなおす' },
+        parentAgentId: ['agent-a0'],
+        spawnDepth: 'ふかい',
+      }),
+    );
+
+    const collected = await subagentsOf('sess');
+    expect(
+      collected[0]?.meta,
+      '観測した字をそのまま上へ流すと、読み解く側が数でないものを数える',
+    ).toEqual({
+      agentType: null,
+      description: null,
+      parentAgentId: null,
+      spawnDepth: null,
+    });
+  });
+
+  it('覚え書きそのものは子として数えない', async () => {
+    const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
+    writeText(path.join(subagents, 'agent-a1.meta.json'), JSON.stringify({ spawnDepth: 1 }));
+    writeText(path.join(subagents, 'agent-a1.forked-skill.json'), '{}');
+
+    const collected = await subagentsOf('sess');
+    expect(
+      collected.map((subagent) => subagent.fileName),
+      '正本の隣に置かれた覚え書きは、正本ではない',
+    ).toEqual(['agent-a1.jsonl']);
+  });
+
+  it('走りそのものの控えは子として数えない', async () => {
+    const run = path.join(root, '-w-proj', 'sess', 'subagents', 'workflows', 'wf_x');
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(run, 'agent-a2.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(run, 'journal.jsonl'), [{ type: 'started', agentId: 'agent-a2' }]);
+
+    const collected = await subagentsOf('sess');
+    expect(
+      collected.map((subagent) => subagent.id),
+      '走りの控えを子として並べると、誰も動かしていない仕事が木に出る',
+    ).toEqual(['agent-a2']);
+  });
+
+  it.skipIf(!DENIES_READ)('内側の棚が読めなくても、他の子は見えたまま', async () => {
+    const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
+    const closed = path.join(subagents, 'workflows', 'wf_x');
+    writeLines(path.join(closed, 'agent-a2.jsonl'), [{ type: 'user' }]);
+    fs.chmodSync(closed, 0o000);
+
+    const collected = await subagentsOf('sess');
+    expect(
+      collected.map((subagent) => subagent.id),
+      '読めない棚 1 つで、他の子まで隠さない',
+    ).toEqual(['agent-a1']);
+  });
+
+  it.skipIf(!DENIES_READ)('覚え書きを読む権利が無くても、子は残る', async () => {
+    const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
+    const meta = writeText(
+      path.join(subagents, 'agent-a1.meta.json'),
+      JSON.stringify({ spawnDepth: 1 }),
+    );
+    fs.chmodSync(meta, 0o000);
+
+    const collected = await subagentsOf('sess');
+    expect(collected.map((subagent) => subagent.id)).toEqual(['agent-a1']);
+    expect(collected[0]?.meta, '読めなかった覚え書きは、無かったのと同じ扱いにする').toBeNull();
+  });
+});
+
 describe('大きさと時刻を採る', () => {
   it('歩いてから読むまでの間に伸びた分も、採り直せば見える', async () => {
     const file = writeText(path.join(root, '-w-proj', 'sess.jsonl'), 'abc\n');

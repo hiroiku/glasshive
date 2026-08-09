@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { UnexpectedError } from '~/app-kernel/error.ts';
 import { absent, type Observation, observed, unobservable } from '~/app-kernel/observation.ts';
 import type {
+  AgentMeta,
   SessionSource,
+  SubagentSource,
   TranscriptRepository,
   TranscriptWindow,
 } from '~/application/ports/repositories/sessions/transcript.repository.ts';
@@ -95,12 +97,26 @@ function sessionSource(overrides: Partial<SessionSource> = {}): SessionSource {
   };
 }
 
-const subagentSource = (fileName: string, mtimeMs = NOW) => ({
+const subagentSource = (
+  fileName: string,
+  mtimeMs = NOW,
+  meta: AgentMeta | null = null,
+): SubagentSource => ({
   id: fileName.replace(/\.jsonl$/, ''),
   fileName,
   file: `/w/-w-proj/sess/subagents/${fileName}`,
   mtimeMs,
   sizeBytes: 40,
+  meta,
+});
+
+/** 隣に置かれた覚え書き。書かれていなかった欄は null のまま */
+const agentMeta = (overrides: Partial<AgentMeta> = {}): AgentMeta => ({
+  agentType: null,
+  description: null,
+  parentAgentId: null,
+  spawnDepth: null,
+  ...overrides,
 });
 
 describe('セッションの見出しを導く', () => {
@@ -372,6 +388,182 @@ describe('子の見出しを導く', () => {
       draft.subagents.map((child) => child.id),
       '名前で見分けるのは言葉を持つ側の仕事。口はただ棚に在ったものを並べてくる',
     ).toEqual(['agent-x-0123456789abcdef']);
+  });
+});
+
+describe('子を呼んだ相手の下へ入れ直す', () => {
+  const withChildren = (...subagents: readonly SubagentSource[]) => sessionSource({ subagents });
+
+  const parent = (label: string) =>
+    subagentSource(`agent-${label}-0123456789abcdef.jsonl`, NOW, agentMeta());
+
+  const child = (label: string, parentAgentId: string) =>
+    subagentSource(`agent-${label}-0123456789abcdef.jsonl`, NOW, agentMeta({ parentAgentId }));
+
+  it('親を持つ子は親のすぐ下に来て、段が 2 になる', async () => {
+    const stub = createStub(() => EMPTY);
+    const source = withChildren(
+      parent('lead'),
+      subagentSource('agent-other-0123456789abcdef.jsonl', NOW, agentMeta()),
+      child('helper', 'agent-lead-0123456789abcdef'),
+    );
+
+    const draft = await drafts(stub.transcripts).readSession(source, NOW);
+    expect(
+      draft.subagents.map((sub) => [sub.id, sub.depth]),
+      '段は子どうしで数える。セッションが直に呼んだ子が 1、その子が 2',
+    ).toEqual([
+      ['agent-lead-0123456789abcdef', 1],
+      ['agent-helper-0123456789abcdef', 2],
+      ['agent-other-0123456789abcdef', 1],
+    ]);
+  });
+
+  it('覚え書きの指す字に前置きが無くても、棚に在る鍵へ合わせる', async () => {
+    const stub = createStub(() => EMPTY);
+    // 覚え書きは呼んだ相手を `agent-` を落とした字で書く
+    const source = withChildren(parent('lead'), child('helper', 'lead-0123456789abcdef'));
+
+    const draft = await drafts(stub.transcripts).readSession(source, NOW);
+    expect(
+      draft.subagents.map((sub) => [sub.id, sub.parentId, sub.depth]),
+      '字のまま突き合わせると親が一人も見つからず、木は 2 段に潰れたままになる',
+    ).toEqual([
+      ['agent-lead-0123456789abcdef', null, 1],
+      ['agent-helper-0123456789abcdef', 'agent-lead-0123456789abcdef', 2],
+    ]);
+  });
+
+  it('親が棚に居ない子は、段 1 に出て消えない', async () => {
+    const stub = createStub(() => EMPTY);
+    const source = withChildren(child('orphan', 'agent-gone-0123456789abcdef'));
+
+    const draft = await drafts(stub.transcripts).readSession(source, NOW);
+    expect(
+      draft.subagents.map((sub) => [sub.id, sub.depth]),
+      '木から外すと、観る人には「そんな子は動いていない」としか見えない',
+    ).toEqual([['agent-orphan-0123456789abcdef', 1]]);
+    expect(draft.subagents[0]?.parentId, '当てが外れた字は、観測した字のまま残す').toBe(
+      'agent-gone-0123456789abcdef',
+    );
+  });
+
+  it('覚え書きが読めなかった子も、段 1 に並ぶ', async () => {
+    const stub = createStub(() => EMPTY);
+    const source = withChildren(subagentSource('agent-x-0123456789abcdef.jsonl', NOW, null));
+
+    const draft = await drafts(stub.transcripts).readSession(source, NOW);
+    expect(draft.subagents.map((sub) => [sub.id, sub.parentId, sub.depth])).toEqual([
+      ['agent-x-0123456789abcdef', null, 1],
+    ]);
+  });
+
+  it('兄弟どうしの並びは、棚に在った順のまま', async () => {
+    const stub = createStub(() => EMPTY);
+    const source = withChildren(parent('b'), parent('a'), child('c', 'agent-b-0123456789abcdef'));
+
+    const draft = await drafts(stub.transcripts).readSession(source, NOW);
+    expect(
+      draft.subagents.map((sub) => sub.id),
+      '何を先に見せるかを決めるのは呼ぶ側の役目で、形を決めるのが domain の役目である',
+    ).toEqual(['agent-b-0123456789abcdef', 'agent-c-0123456789abcdef', 'agent-a-0123456789abcdef']);
+  });
+
+  it('呼ばれ方は覚え書きから採る', async () => {
+    const stub = createStub(() => EMPTY);
+    const source = withChildren(
+      subagentSource(
+        'agent-x-0123456789abcdef.jsonl',
+        NOW,
+        agentMeta({ agentType: 'general-purpose' }),
+      ),
+      subagentSource('agent-y-0123456789abcdef.jsonl', NOW, null),
+    );
+
+    const draft = await drafts(stub.transcripts).readSession(source, NOW);
+    expect(draft.subagents.map((sub) => sub.agentType)).toEqual(['general-purpose', null]);
+  });
+});
+
+describe('子の呼び名を決める', () => {
+  const withMeta = (meta: AgentMeta | null) =>
+    sessionSource({
+      subagents: [subagentSource('agent-review-0123456789abcdef.jsonl', NOW, meta)],
+    });
+
+  it('呼んだ側が添えた一行が在れば、それが呼び名になる', async () => {
+    const stub = createStub(() => EMPTY);
+
+    const draft = await drafts(stub.transcripts).readSession(
+      withMeta(agentMeta({ description: 'Audit the transcript reader' })),
+      NOW,
+    );
+    expect(
+      draft.subagents[0]?.label,
+      '名前から起こした呼び名は役どころを語らない。添えられた一行だけが語る',
+    ).toBe('Audit the transcript reader');
+  });
+
+  it('一行が無ければ、名前から起こした呼び名に倒す', async () => {
+    const stub = createStub(() => EMPTY);
+
+    const draft = await drafts(stub.transcripts).readSession(withMeta(agentMeta()), NOW);
+    expect(draft.subagents[0]?.label).toBe('review');
+  });
+
+  it('名前からも呼び名が起きなければ、鍵をそのまま呼び名にする', async () => {
+    const stub = createStub(() => EMPTY);
+    // 前置きしか無い名前。剥がすと何も残らない
+    const source = sessionSource({ subagents: [subagentSource('agent-.jsonl')] });
+
+    const draft = await drafts(stub.transcripts).readSession(source, NOW);
+    expect(draft.subagents[0]?.label, '名無しで並ぶより、鍵で並ぶほうがまだ手繰れる').toBe(
+      'agent-',
+    );
+  });
+
+  it('覚え書きそのものが無くても、名前から起こした呼び名は残る', async () => {
+    const stub = createStub(() => EMPTY);
+
+    const draft = await drafts(stub.transcripts).readSession(withMeta(null), NOW);
+    expect(draft.subagents[0]?.label).toBe('review');
+    expect(draft.subagents[0]?.id, '同一性は呼び名に左右されない').toBe(
+      'agent-review-0123456789abcdef',
+    );
+  });
+
+  it('空白しか無い一行は、書かれていなかったものに倒す', async () => {
+    const stub = createStub(() => EMPTY);
+
+    const draft = await drafts(stub.transcripts).readSession(
+      withMeta(agentMeta({ description: '  \n ' })),
+      NOW,
+    );
+    expect(draft.subagents[0]?.label).toBe('review');
+  });
+
+  it('改行を挟んだ一行は、1 行に潰してから丸める', async () => {
+    const stub = createStub(() => EMPTY);
+
+    const draft = await drafts(stub.transcripts).readSession(
+      withMeta(agentMeta({ description: 'Read the shelf\nthen fix the tree' })),
+      NOW,
+    );
+    expect(
+      draft.subagents[0]?.label,
+      '潰さずに渡すと、木の 1 行の中で改行が空白として散らばり、隣の欄まで押し出す',
+    ).toBe('Read the shelf then fix the tree');
+  });
+
+  it('長い一行は、題と同じ 60 字で丸める', async () => {
+    const stub = createStub(() => EMPTY);
+    const long = 'a'.repeat(61);
+
+    const draft = await drafts(stub.transcripts).readSession(
+      withMeta(agentMeta({ description: long })),
+      NOW,
+    );
+    expect(draft.subagents[0]?.label).toBe(`${'a'.repeat(60)}…`);
   });
 });
 

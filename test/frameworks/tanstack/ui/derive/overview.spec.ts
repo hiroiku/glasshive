@@ -24,6 +24,9 @@ function subagent(overrides: Partial<SubagentJson> = {}): SubagentJson {
   return {
     id: 'agent-x',
     label: 'x',
+    agent_type: null,
+    parent: null,
+    depth: 1,
     file: '/p/agent-x.jsonl',
     state: 'ended',
     started: null,

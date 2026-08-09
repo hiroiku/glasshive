@@ -26,6 +26,9 @@ function subagent(overrides: Partial<SubagentSession> = {}): SubagentSession {
   return {
     id: 'agent-a1b2',
     label: 'a1b2',
+    agentType: null,
+    parentId: null,
+    depth: 1,
     file: '/root/proj/sess/subagents/agent-a1b2.jsonl',
     state: 'ended',
     startedRaw: '2026-08-03T23:59:59.456Z',
@@ -484,6 +487,9 @@ describe('内側だけの欄', () => {
     expect(Object.keys(presented ?? {}), '子も同じく、欄の抜けを字で押さえる').toEqual([
       'id',
       'label',
+      'agent_type',
+      'parent',
+      'depth',
       'file',
       'state',
       'started',

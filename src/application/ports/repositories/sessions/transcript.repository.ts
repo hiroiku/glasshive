@@ -27,9 +27,29 @@ export interface TranscriptSource extends TranscriptLocation {
   readonly fileName: string;
 }
 
+/* 正本の隣に置かれた覚え書き。Claude Code が `<正本名>.meta.json` として書く。
+
+   **親子は正本の置き場では分からない。** 子はどれだけ深く産まれても同じ棚に平らに並ぶので、
+   誰が誰を呼んだかはこの覚え書きにしか書かれていない。読まなければ木は 2 段に潰れる。 */
+export interface AgentMeta {
+  /** 呼ばれ方(general-purpose / Explore / workflow-subagent など) */
+  readonly agentType: string | null;
+  /** 呼んだ側が添えた一行。人が読める唯一の手がかりで、無ければ 16 進の id しか残らない */
+  readonly description: string | null;
+  /** 呼んだ相手。根の子には無い */
+  readonly parentAgentId: string | null;
+  /** 根から数えた段。根の子が 1 */
+  readonly spawnDepth: number | null;
+}
+
+/** 子の正本 1 つ。隣の覚え書きを読めていれば併せて持つ */
+export interface SubagentSource extends TranscriptSource {
+  readonly meta: AgentMeta | null;
+}
+
 /** セッションの正本と、その下の棚に置かれた子の正本 */
 export interface SessionSource extends TranscriptSource {
-  readonly subagents: readonly TranscriptSource[];
+  readonly subagents: readonly SubagentSource[];
 }
 
 /** 名前ひとつぶんの走査結果 */

@@ -6,6 +6,13 @@ import type { SubagentState } from '~/domain/value-objects/sessions/session-stat
 export interface SubagentSession {
   readonly id: string;
   readonly label: string;
+  /** 呼ばれ方。呼び名が id しか無いとき、せめてこれで役どころが読める */
+  readonly agentType: string | null;
+  /** 呼んだ相手の id。セッションが直に呼んだ子では null */
+  readonly parentId: string | null;
+  /* 子どうしで数えた段。セッションが直に呼んだ子が 1、その子が 2。
+   **並びは段の順ではなく親のすぐ下である。** 段は字下げの深さにしか使わない。 */
+  readonly depth: number;
   readonly file: string;
   readonly state: SubagentState;
   /** 正本に書かれていた起点の字面。手を加えない */

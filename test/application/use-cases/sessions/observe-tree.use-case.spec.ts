@@ -211,6 +211,7 @@ describe('木をひと目ぶん観測する', () => {
       file: `/root/-w-proj/sess/subagents/${name}.jsonl`,
       mtimeMs: NOW,
       sizeBytes: 10,
+      meta: null,
     });
     const session = (id: string) => ({
       id,

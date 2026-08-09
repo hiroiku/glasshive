@@ -60,6 +60,9 @@ function treeWith(files: readonly string[]): ProjectTree {
                   subagents: rest.map((file, index) => ({
                     id: `sub-${index}`,
                     label: `sub-${index}`,
+                    agentType: null,
+                    parentId: null,
+                    depth: 1,
                     file,
                     state: 'ended' as const,
                     startedRaw: null,
