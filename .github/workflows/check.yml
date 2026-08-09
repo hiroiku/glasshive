@@ -19,9 +19,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # **組み立てが先。** 道の一覧(routeTree.gen.ts)は組み立てが作るもので、
+      # git には入れていない。順を入れ替えると、まっさらな checkout でだけ型が落ちる
+      - run: npm run build
       # 書式・層の向き・8 構成の型・検め
       - run: npm run check
-      # 配りものを組んで、外の名前に頼っていないことまで見る
-      - run: npm run build
       # 組み上がった配りものを外から叩く。ここだけが本当に配るものを見る
       - run: npm run test:smoke
