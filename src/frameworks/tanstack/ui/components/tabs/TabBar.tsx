@@ -53,7 +53,7 @@ export function TabBar({ visible, projects, onUnpin, current, showAll }: TabBarP
   );
 
   return (
-    <nav id="tabs" aria-label="留めた巣">
+    <nav id="tabs" aria-label="Pinned projects">
       {/* 一覧へ戻る席。**留めた印が空でも消えない** — 消えると帰り道が無くなる */}
       <span className="tab">
         {hydrated ? (
@@ -62,12 +62,12 @@ export function TabBar({ visible, projects, onUnpin, current, showAll }: TabBarP
             className="tab-link"
             activeProps={{ className: 'tab-link on' }}
             activeOptions={{ exact: true }}
-            title={`巣の一覧${slotMark(1)}`}
+            title={`Overview${slotMark(1)}`}
           >
             {home}
           </Link>
         ) : (
-          <a className="tab-link" href="/" title={`巣の一覧${slotMark(1)}`}>
+          <a className="tab-link" href="/" title={`Overview${slotMark(1)}`}>
             {home}
           </a>
         )}
@@ -95,7 +95,7 @@ export function TabBar({ visible, projects, onUnpin, current, showAll }: TabBarP
               <button
                 type="button"
                 className="tab-close"
-                aria-label={`${project.name} をタブから外す`}
+                aria-label={`Unpin ${project.name}`}
                 onClick={() => onUnpin(id)}
               >
                 ×

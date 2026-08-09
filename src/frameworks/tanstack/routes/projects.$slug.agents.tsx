@@ -59,7 +59,7 @@ function AgentsView() {
 
   if (project === undefined) {
     // 木がまだ届いていないだけかもしれない。無いと言い切らずに黙って待つ
-    return <p className="empty">{tree.data === undefined ? '観ています…' : '観測がありません'}</p>;
+    return <p className="empty">{tree.data === undefined ? 'Loading…' : 'Project not observed'}</p>;
   }
 
   return (

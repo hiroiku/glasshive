@@ -41,7 +41,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 /* 器だけ。SPA なので、ここだけが組み立て時に一度描かれ、以降はブラウザーが中身を入れ替える。 */
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ja">
+    <html lang="en">
       <head>
         <HeadContent />
       </head>
@@ -151,8 +151,8 @@ function Chrome() {
           className={prefs.notify ? 'on' : ''}
           title={
             prefs.notify
-              ? '知らせあり: 返事待ちになったら、画面を観ていないときだけ知らせる'
-              : '知らせなし — 押すと入れる'
+              ? 'Notifications on: alerts you when a session starts awaiting input (only while the window is unfocused)'
+              : 'Notifications off — click to enable'
           }
           onClick={() => void toggleNotify()}
         >
@@ -163,7 +163,7 @@ function Chrome() {
         <span
           id="conn"
           className={connected ? 'on' : ''}
-          title={connected ? '合図の道は繋がっている' : '合図の道が切れている'}
+          title={connected ? 'Realtime connection: connected' : 'Realtime connection: disconnected'}
         >
           ●
         </span>

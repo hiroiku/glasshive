@@ -98,6 +98,6 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
 export function usePrefs(): PrefsStore {
   const store = useContext(PrefsContext);
   // 好みを持たない場所で好みを読もうとしたなら、それは組み立ての誤りである
-  if (store === null) throw new Error('PrefsProvider の外で好みを読もうとした');
+  if (store === null) throw new Error('usePrefs used outside PrefsProvider');
   return store;
 }

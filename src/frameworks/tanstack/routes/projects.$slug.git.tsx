@@ -78,7 +78,7 @@ function GitView() {
   if (answer === undefined) {
     return (
       <div id="git-view">
-        <p className="empty">観ています…</p>
+        <p className="empty">Loading…</p>
       </div>
     );
   }
@@ -86,7 +86,7 @@ function GitView() {
   if (!answer.ok) {
     return (
       <div id="git-view">
-        <p className="empty">記録を読めませんでした({answer.body.code})</p>
+        <p className="empty">Could not read the repository ({answer.body.code})</p>
       </div>
     );
   }
@@ -120,11 +120,12 @@ function GitPromo() {
   return (
     <div className="bd-promo git">
       <div className="bp-title">
-        <Icon path={mdiSourceBranch} size={13} /> この巣は git のリポジトリではありません
+        <Icon path={mdiSourceBranch} size={13} /> Not a git repository
       </div>
       <p>
-        <code>git init</code> を走らせるか、記録のある巣を開くと、この画面に灯りが点きます —
-        本流の上に重なる作業場所と枝、どの作業場所に誰が居るか、指しごとの差分と活動の帯。
+        Run <code>git init</code> (or open a project that has a repository) and this view lights up:
+        worktrees and branches drawn as living lines over the mainline, which agents occupy which
+        worktree, and ref details with diff stats and agent activity timelines.
       </p>
       <a href="https://git-scm.com" target="_blank" rel="noopener">
         git-scm.com →

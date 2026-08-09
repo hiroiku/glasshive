@@ -45,7 +45,7 @@ export function AgentChip({
       type="button"
       className="wk"
       title={file}
-      aria-label={`${label} の会話を開く`}
+      aria-label={`Open conversation for ${label}`}
       // 行そのものの押しどころを乗っ取らない。札は札として押される
       {...pressable(() => nav.openConv(file), { stopPropagation: true })}
       {...glow(file)}
@@ -67,7 +67,7 @@ export function IssueChip({ id, closed = false }: { id: string; closed?: boolean
       type="button"
       className={`ichip${closed ? ' closed' : ''}`}
       title={closed ? `${id} (closed)` : id}
-      aria-label={`課題 ${id} を開く`}
+      aria-label={`Open issue ${id}`}
       {...pressable(() => nav.openIssue(id), { stopPropagation: true })}
       {...glow(id)}
     >
@@ -85,7 +85,7 @@ export function RefChip({ name, kind = 'branch' }: { name: string; kind?: 'branc
       type="button"
       className="refchip"
       title={name}
-      aria-label={`記録の画面で ${name} を見る`}
+      aria-label={`View ${name} in Git`}
       {...pressable(() => nav.gotoGit(name), { stopPropagation: true })}
       {...glow(name)}
     >

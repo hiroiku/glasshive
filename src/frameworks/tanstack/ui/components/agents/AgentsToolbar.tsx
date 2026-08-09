@@ -52,7 +52,7 @@ export function AgentsToolbar({
       <button
         type="button"
         className={`fchip ${deep ? 'on' : ''}`}
-        title="正本の中身(末尾 1MiB・直近 7 日)を横断して探す"
+        title="Search inside transcripts (last 1 MiB · last 7 days)"
         onClick={() => onDeep(!deep)}
       >
         deep
@@ -60,7 +60,7 @@ export function AgentsToolbar({
       <button
         type="button"
         className={`fchip ${attention ? 'on' : ''}`}
-        title="要注意だけに絞る: あなたの返事待ち、または 30 分以上動きのない待機"
+        title="Show only what needs attention: awaiting your input, or waiting 30 minutes with no activity"
         onClick={() => onAttention(!attention)}
       >
         ⚠ attention

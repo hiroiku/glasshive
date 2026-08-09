@@ -103,7 +103,7 @@ function classifyLoadFailure(error: unknown, file: string): Observation<never> {
   const code = (error as NodeJS.ErrnoException | undefined)?.code;
   if (code === 'ENOENT' || code === 'ENOTDIR') return absent('no-source');
   return unobservable(
-    new PreferencesReadError(`${file} を読めなかった`, {
+    new PreferencesReadError(`Could not read ${file}`, {
       cause: error,
       details: { code },
     }),
@@ -127,7 +127,7 @@ function refusalFor(
   observedRoots: readonly string[],
 ): PreferencesRefusedError | undefined {
   if (!isSafeAbsolutePath(target)) {
-    return new PreferencesRefusedError('覚え書きの置き場が、場所として使えない名前だった');
+    return new PreferencesRefusedError('The preferences directory is not a usable path');
   }
   const canonical = canonicalize(target);
 
@@ -135,13 +135,16 @@ function refusalFor(
     /* 根が場所として使えないなら、どこが観測元なのかをこちらが言えていない。
        言えないまま書くより断る。**確かめられない側では書かない。** */
     if (!isSafeAbsolutePath(root)) {
-      return new PreferencesRefusedError('観測元の場所を確かめられなかった。確かめずには書かない', {
-        details: { reason: 'unknown-observation-root' },
-      });
+      return new PreferencesRefusedError(
+        'Could not resolve where glasshive observes from — refusing to write unchecked',
+        {
+          details: { reason: 'unknown-observation-root' },
+        },
+      );
     }
     if (rootContains(canonicalize(root), canonical)) {
       return new PreferencesRefusedError(
-        `${target} は観測元の中にある。この道具は観測元へ書かない`,
+        `${target} is inside an observation source — glasshive never writes there`,
         { details: { reason: 'observation-root' } },
       );
     }
@@ -153,7 +156,7 @@ function refusalFor(
     for (const material of READ_INSIDE_NEST) {
       if (rootContains(canonicalize(path.join(root, material)), canonical)) {
         return new PreferencesRefusedError(
-          `${target} は観測に使う材料の中にある。読みに行く先へは書かない`,
+          `${target} is inside what glasshive reads — it never writes where it reads`,
           { details: { reason: 'observed-material', material } },
         );
       }
@@ -207,7 +210,7 @@ export function createFsViewerPreferencesRepository(options: {
           fs.rmSync(temporary, { force: true });
         } catch {}
         return err(
-          new PreferencesWriteError(`${file} へ覚え書きを置けなかった`, {
+          new PreferencesWriteError(`Could not save preferences to ${file}`, {
             cause: error,
             details: { code },
           }),

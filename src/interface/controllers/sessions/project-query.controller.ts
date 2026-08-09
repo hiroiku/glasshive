@@ -15,11 +15,11 @@ export const own = (input: unknown, key: string): unknown => {
 
 export function projectIdOf(input: unknown): Result<string, InvalidSessionsRequestError> {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    return err(new InvalidSessionsRequestError('巣への問いとして読めない求めだった'));
+    return err(new InvalidSessionsRequestError('Request is not readable as a project query'));
   }
   const projectId = own(input, 'projectId');
   if (typeof projectId !== 'string' || projectId === '') {
-    return err(new InvalidSessionsRequestError('どの巣についての問いなのかが無い'));
+    return err(new InvalidSessionsRequestError('No project to query'));
   }
   return ok(projectId);
 }

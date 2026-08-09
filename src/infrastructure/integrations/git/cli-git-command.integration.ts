@@ -113,7 +113,7 @@ function classifyFailure(error: unknown, request: GitCommandRequest): Observatio
   if (errno === 'ENOENT' || errno === 'ENOTDIR') {
     if (!isDirectory(request.cwd)) return absent('no-source');
     return unobservable(
-      new GitCommandError('記録を読む道具が手元に無い', GIT_NOT_INSTALLED, {
+      new GitCommandError('git is not installed', GIT_NOT_INSTALLED, {
         cause: error,
         details,
       }),
@@ -121,7 +121,7 @@ function classifyFailure(error: unknown, request: GitCommandRequest): Observatio
   }
   if (errno === 'EACCES' || errno === 'EPERM') {
     return unobservable(
-      new GitCommandError('記録を読む道具を起こす権利が無い', GIT_DENIED, {
+      new GitCommandError('Not permitted to run git', GIT_DENIED, {
         cause: error,
         details,
       }),
@@ -129,7 +129,7 @@ function classifyFailure(error: unknown, request: GitCommandRequest): Observatio
   }
   if (errno === 'ETIMEDOUT' || propOf(error, 'killed') === true) {
     return unobservable(
-      new GitCommandError('記録を読む道具が時間内に答えなかった', GIT_TIMEOUT, {
+      new GitCommandError('git did not answer in time', GIT_TIMEOUT, {
         cause: error,
         details,
       }),
@@ -139,7 +139,7 @@ function classifyFailure(error: unknown, request: GitCommandRequest): Observatio
   const status = exitCodeOf(error);
   if (status !== undefined) {
     return unobservable(
-      new GitCommandError('記録を読む道具が非ゼロで終わった', GIT_EXIT_NONZERO, {
+      new GitCommandError('git exited non-zero', GIT_EXIT_NONZERO, {
         cause: error,
         // 言い分を捨てない。なぜ非ゼロだったのかは、ここにしか残らない
         details: {
@@ -157,7 +157,7 @@ function classifyFailure(error: unknown, request: GitCommandRequest): Observatio
      それは外へ出す包みの `message` にそのまま載る。ここが errno の見える最後の場所で、
      渡してしまえば外の道へ漏れる。証跡は `details` に置いて内側に留める。 */
   return unobservable(
-    new UnexpectedError('記録を読む道具の落ち方を説明できない', {
+    new UnexpectedError('git failed in a way we cannot explain', {
       cause: error,
       details: {
         ...details,

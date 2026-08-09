@@ -123,7 +123,7 @@ export function MiniGraph({
   return (
     <div className="mini-graph" ref={rootRef}>
       <svg className="mg-svg" role="img">
-        <title>この課題と、繋がっている課題の関係</title>
+        <title>This issue and the issues connected to it</title>
         {curves.map((curve) => (
           <g key={curve.key}>
             <path d={curve.d} stroke={curve.color} className="mg-edge" />

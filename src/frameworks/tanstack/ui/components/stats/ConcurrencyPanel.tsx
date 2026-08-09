@@ -43,7 +43,7 @@ export function ConcurrencyPanel({
       <div className="sf-h">
         <span className="sf-title">Agents</span>
         <span className="sf-dim">now {liveNow}</span>
-        <span className="sf-big" title="範囲の中で同時に動いていた最大">
+        <span className="sf-big" title="Peak agents concurrent in range">
           peak {peak}
         </span>
       </div>
@@ -58,7 +58,7 @@ export function ConcurrencyPanel({
           preserveAspectRatio="none"
           role="img"
         >
-          <title>同時に動いていた手の数</title>
+          <title>Agents concurrent over time</title>
           <path d={area} className="sf-carea" />
           <polyline points={top} className="sf-cline" />
         </svg>

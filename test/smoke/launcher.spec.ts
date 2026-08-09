@@ -134,7 +134,7 @@ describe('配りものを外から叩く', () => {
      食い違う。React は黙って木を丸ごと作り直すだけなので、**画面を見ても気付けない**。 */
   it('器には、待ちの姿が焼かれている', async () => {
     const shell = fs.readFileSync(path.join(ROOT, 'dist', 'client', '_shell.html'), 'utf8');
-    expect(shell, '空の器を引き継がせると、木が丸ごと作り直される').toContain('観ています…');
+    expect(shell, '空の器を引き継がせると、木が丸ごと作り直される').toContain('Loading…');
   });
 
   /* 器は 1 枚しかなく、どの道を直に開いてもこれが渡る。焼くときに描き手が居るのは

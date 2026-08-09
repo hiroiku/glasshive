@@ -82,12 +82,12 @@ export function RefDetailPanel({
   const nowMs = Date.now();
 
   const answer = ref.data;
-  if (answer === undefined) return <div className="empty">観ています…</div>;
-  if (!answer.ok) return <div className="empty">記録を読めませんでした({answer.body.code})</div>;
+  if (answer === undefined) return <div className="empty">Loading…</div>;
+  if (!answer.ok) return <div className="empty">Failed to load ref ({answer.body.code})</div>;
 
   const detail = answer.body;
   if (detail.state === 'absent') {
-    return <div className="empty">この指しに読める記録がありません</div>;
+    return <div className="empty">No commits found for this ref</div>;
   }
 
   const lanes = resolveActivityRows(project, agents.slice(0, MAX_ACTIVITY_ROWS));

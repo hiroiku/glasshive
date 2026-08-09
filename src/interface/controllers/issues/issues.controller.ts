@@ -62,7 +62,7 @@ export async function getIssue(deps: IssuesDeps, input: unknown): Promise<IssueR
   if (typeof id !== 'string' || id === '') {
     return {
       ok: false,
-      ...presentError(new InvalidSessionsRequestError('どの課題を引くのかが無い')),
+      ...presentError(new InvalidSessionsRequestError('No issue to fetch')),
     };
   }
 

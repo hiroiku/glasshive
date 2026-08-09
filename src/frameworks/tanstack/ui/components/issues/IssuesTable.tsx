@@ -196,7 +196,7 @@ export function IssuesTable({
           type="button"
           className={`sortable dep-sort${order.key === 'start' ? ' sorted' : ''}`}
           style={{ width: gutter }}
-          title="着手順に並べる: blocks がすべて解けた open を優先度順に上へ(列の並べ替えとは入れ替わる)"
+          title="Sort by start order: open with all blocks cleared, by priority (exclusive with column sort)"
           onClick={() => onSort('start')}
         >
           <Icon path={mdiPlay} size={11} /> Start
@@ -211,7 +211,7 @@ export function IssuesTable({
         <SortHead label="Updated" sortKey="updated" order={order} onSort={onSort} right />
       </div>
       {rows.length === 0 ? (
-        <div className="empty">当てはまる課題がありません</div>
+        <div className="empty">No matching issues</div>
       ) : (
         rows.map((row, index) => (
           <IssueRow
@@ -277,7 +277,7 @@ function IssueRow({
       style={pop === null ? undefined : { animationDelay: pop.animationDelay }}
       role="button"
       tabIndex={0}
-      aria-label={`課題 ${issue.id ?? ''} を開く`}
+      aria-label={`Open issue ${issue.id ?? ''}`}
       {...pressable(onOpen)}
     >
       {/* 弧の svg と、その幅を確保する空きで 1 組。svg はレイアウトの外に置いてあるので、
@@ -295,7 +295,10 @@ function IssueRow({
       <span className="ititle" title={issue.title ?? ''}>
         {issue.title !== null && <SubjectText text={issue.title} project={project} />}
         {agg !== undefined && agg.total >= 2 && (
-          <span className="epic-prog" title={`束ねた課題の消化: ${agg.closed}/${agg.total} closed`}>
+          <span
+            className="epic-prog"
+            title={`Child issue progress: ${agg.closed}/${agg.total} closed`}
+          >
             <i style={{ width: `${(agg.closed / agg.total) * 100}%` }} />
             <b>
               {agg.closed}/{agg.total}
@@ -360,7 +363,7 @@ function IssueRow({
           </span>
         )}
         {issue.status === 'in_progress' && live === 0 && (
-          <span className="wk-dup" title="in_progress なのに生きているエージェントが居ない">
+          <span className="wk-dup" title="in_progress but no live agent">
             <Icon path={mdiAlertOutline} size={10} /> stalled
           </span>
         )}

@@ -61,6 +61,6 @@ export function NavProvider({ slug, children }: { slug: string; children: React.
 export function useNav(): Nav {
   const nav = useContext(NavContext);
   // 道を持たない場所で道を呼ぼうとしたなら、それは組み立ての誤りである
-  if (nav === null) throw new Error('NavProvider の外で道を呼ぼうとした');
+  if (nav === null) throw new Error('useNav was called outside NavProvider');
   return nav;
 }

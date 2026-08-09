@@ -56,7 +56,7 @@ export async function readGitRef(deps: GitDeps, input: unknown): Promise<GitRefR
   if (typeof rev !== 'string' || rev === '') {
     return {
       ok: false,
-      ...presentError(new InvalidSessionsRequestError('どの指しを観るのかが無い')),
+      ...presentError(new InvalidSessionsRequestError('No revision to observe')),
     };
   }
   const base = own(input, 'base');

@@ -11,6 +11,6 @@ try {
   await launch(parsed.args);
 } catch (e) {
   const message = e instanceof Error ? e.message : String(e);
-  console.error(`起動できませんでした(番号 ${parsed.args.port}): ${message}`);
+  console.error(`could not bind port ${parsed.args.port}: ${message}`);
   process.exit(1);
 }

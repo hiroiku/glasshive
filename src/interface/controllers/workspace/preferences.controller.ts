@@ -46,7 +46,7 @@ const own = (record: Record<string, unknown>, key: string): unknown =>
    送り間違いが覚え書きの書き換えとして通ってしまう。 */
 function tabActionOf(input: unknown): Result<TabAction, InvalidTabActionError> {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    return err(new InvalidTabActionError('留めた印への申し出として読めない求めだった'));
+    return err(new InvalidTabActionError('Request is not readable as a tab action'));
   }
   const record = input as Record<string, unknown>;
 
@@ -54,12 +54,12 @@ function tabActionOf(input: unknown): Result<TabAction, InvalidTabActionError> {
      「どれに対する申し出か分からない」と答えることになり、言い分が実態とずれる。 */
   const action = own(record, 'action');
   if (action !== 'pin' && action !== 'unpin' && action !== 'move') {
-    return err(new InvalidTabActionError('留める・外す・並べ替えのどれでもない申し出だった'));
+    return err(new InvalidTabActionError('Action is neither pin, unpin nor move'));
   }
 
   const id = own(record, 'id');
   if (typeof id !== 'string' || id === '') {
-    return err(new InvalidTabActionError('どれに対する申し出なのかが無い'));
+    return err(new InvalidTabActionError('No id to act on'));
   }
 
   if (action === 'pin' || action === 'unpin') return ok({ action, id });
@@ -67,7 +67,7 @@ function tabActionOf(input: unknown): Result<TabAction, InvalidTabActionError> {
   const toIndex = own(record, 'toIndex');
   // 端の丸めは内側がする。ここで見るのは「数として読めるか」だけ
   if (typeof toIndex !== 'number' || !Number.isFinite(toIndex)) {
-    return err(new InvalidTabActionError('並べ替えの落とし先が数として読めない'));
+    return err(new InvalidTabActionError('Move target is not readable as a number'));
   }
   return ok({ action, id, toIndex });
 }

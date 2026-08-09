@@ -106,6 +106,6 @@ export function useTabSelection(): TabSelectionHandle {
     storedState,
     togglePin,
     movePin,
-    error: mutation.error === null ? null : '留めた印を置けませんでした',
+    error: mutation.error === null ? null : 'Failed to save pinned tabs',
   };
 }

@@ -71,8 +71,8 @@ function Overview() {
     );
   };
 
-  if (tree.isPending) return <p className="empty">観ています…</p>;
-  if (tree.error !== null) return <p className="empty">観測を取り出せませんでした</p>;
+  if (tree.isPending) return <p className="empty">Loading…</p>;
+  if (tree.error !== null) return <p className="empty">Failed to load</p>;
 
   const { projects, sources, processes } = tree.data;
 
@@ -95,28 +95,30 @@ function Overview() {
         {/* 見えなかったことは、見えた振りをせずにそのまま言う */}
         {sources.state === 'unobservable' && (
           <p className="warn">
-            正本の置き場を読めませんでした。巣が無いのではなく、見に行けていません。
+            Could not read the transcript roots — projects are not missing, we could not look
           </p>
         )}
         {processes.state === 'unobservable' && (
           <p className="warn">
-            生きている道具を数えられませんでした。待機と終了の見分けが付きません。
+            Could not count live processes — waiting and ended cannot be told apart
           </p>
         )}
         {tabs.storedState === 'unobservable' && (
-          <p className="warn">留めた印を読めませんでした。並びは既定に戻っています。</p>
+          <p className="warn">
+            Could not read the pinned tabs — the order fell back to the default
+          </p>
         )}
         {tabs.error !== null && <p className="warn">{tabs.error}</p>}
 
         {projects.length === 0 ? (
           <p className="empty">
             {sources.state === 'observed'
-              ? 'まだ巣がありません。Claude Code を動かすと、ここに並びます。'
-              : '巣を数えられませんでした。'}
+              ? 'No projects yet — run Claude Code and they show up here'
+              : 'Could not count projects'}
           </p>
         ) : shown.length === 0 ? (
           // 絞って何も残らなかったことを、巣が無いことと同じ顔で出さない
-          <p className="empty">この絞りに合う巣はありません({rows.length} 件のうち 0 件)</p>
+          <p className="empty">No matching projects (0 of {rows.length})</p>
         ) : (
           <OverviewTable
             rows={shown}

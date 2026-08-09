@@ -49,7 +49,7 @@ function placedOrUninspectable(
   cause: unknown,
 ): Observation<readonly LiveProcess[]> {
   if (processes.length > 0) return observed(processes);
-  return uninspectable('道具の作業場所を 1 つも引けませんでした', command, cause);
+  return uninspectable('Could not locate the working directory of any agent', command, cause);
 }
 
 /* 落ちた命令が、そこまでに返していた答え。execFileSync が誤りに載せてくる。
@@ -149,7 +149,7 @@ export function createOsAgentProcessIntegration(
         // `=` は見出しを消す。番号と名前だけが並ぶ
         psOutput = run('ps', ['-axo', 'pid=,comm=']);
       } catch (error) {
-        return uninspectable('生きている道具を数えられませんでした', 'ps', error);
+        return uninspectable('Could not count live agents', 'ps', error);
       }
 
       const pids = parseClaudePids(psOutput);

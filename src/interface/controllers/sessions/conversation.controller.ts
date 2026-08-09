@@ -31,11 +31,11 @@ function positionOf(value: unknown): number | null {
 
 function requestOf(input: unknown): Result<ConversationRequest, InvalidSessionsRequestError> {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    return err(new InvalidSessionsRequestError('会話への問いとして読めない求めだった'));
+    return err(new InvalidSessionsRequestError('Request is not readable as a conversation query'));
   }
   const file = own(input, 'file');
   if (typeof file !== 'string' || file === '') {
-    return err(new InvalidSessionsRequestError('どの正本を読むのかが無い'));
+    return err(new InvalidSessionsRequestError('No transcript to read'));
   }
 
   return ok({

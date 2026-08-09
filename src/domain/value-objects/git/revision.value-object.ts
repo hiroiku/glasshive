@@ -25,7 +25,7 @@ export class Revision {
   static create(raw: string): Result<Revision, InvalidRevisionError> {
     if (!REVISION_PATTERN.test(raw)) {
       return err(
-        new InvalidRevisionError('指しとして使えない形である', {
+        new InvalidRevisionError('Not a usable revision', {
           details: { raw },
         }),
       );

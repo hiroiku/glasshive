@@ -26,7 +26,7 @@ export async function searchTranscripts(
   if (typeof query !== 'string') {
     return {
       ok: false,
-      ...presentError(new InvalidSessionsRequestError('探す語が字として読めない')),
+      ...presentError(new InvalidSessionsRequestError('Search term is not readable as text')),
     };
   }
 

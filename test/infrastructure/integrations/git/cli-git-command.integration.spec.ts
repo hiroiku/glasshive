@@ -306,7 +306,7 @@ describe('落ち方を分ける', () => {
     expect(
       output.error.message,
       '言い分は外へ出す包みに載る。生の errno を渡すと、そのまま外の道へ漏れる',
-    ).toBe('記録を読む道具の落ち方を説明できない');
+    ).toBe('git failed in a way we cannot explain');
     expect(
       output.error.details,
       '外へは出さないが、何が起きたのかは内側に残さないと後から誰も言えない',
@@ -335,7 +335,7 @@ describe('落ち方を分ける', () => {
     );
     if (output.kind !== 'unobservable') return;
     expect(output.error.message, '受け皿の大きさはこちらの決めごとで、外に言うことではない').toBe(
-      '記録を読む道具の落ち方を説明できない',
+      'git failed in a way we cannot explain',
     );
   });
 });

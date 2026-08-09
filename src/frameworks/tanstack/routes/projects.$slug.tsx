@@ -111,7 +111,7 @@ function ProjectChrome({ slug }: { slug: string }) {
   };
 
   if (tree.data !== undefined && project === undefined) {
-    return <p className="empty">その巣は観測していません</p>;
+    return <p className="empty">Project not observed</p>;
   }
 
   return (
@@ -154,12 +154,14 @@ function ProjectChrome({ slug }: { slug: string }) {
         >
           {/* 幅を掴んで変えるためだけの面。窓の開け閉てと出し方は横の押しどころからできる */}
           {/* biome-ignore lint/a11y/noStaticElementInteractions: 掴んで動かすためだけの面 */}
-          <div id="drawer-grip" title="掴んで幅を変える" onMouseDown={onGripDown} />
+          <div id="drawer-grip" title="Drag to resize" onMouseDown={onGripDown} />
           <div id="drawer-controls">
             <button
               type="button"
               title={
-                prefs.dock ? '重ねて出す(本文の上に滑り出す)' : '並べて出す(本文を狭めて横に並ぶ)'
+                prefs.dock
+                  ? 'Switch to overlay panel (floats over the main area)'
+                  : 'Switch to side-by-side panel (shrinks the main area)'
               }
               onClick={() => prefs.set({ dock: !prefs.dock })}
             >
@@ -173,7 +175,7 @@ function ProjectChrome({ slug }: { slug: string }) {
             {/* 閉じている間は組み立てない。閉じた窓の中身を持ち続けても誰にも見えない */}
             <div id="conv-pane">
               {panel !== null && (
-                <Suspense fallback={<div className="empty">観ています…</div>}>
+                <Suspense fallback={<div className="empty">Loading…</div>}>
                   {panel.kind === 'issue' && <IssueDetail id={panel.id} project={project} />}
                   {panel.kind === 'ref' && (
                     <RefDetailPanel rev={panel.rev} label={panel.label} project={project} />
@@ -189,7 +191,7 @@ function ProjectChrome({ slug }: { slug: string }) {
           <button
             type="button"
             id="drawer-toggle"
-            title="窓を開け閉てする"
+            title="Toggle panel"
             onClick={() => {
               if (panel !== null) {
                 nav.closePanel();

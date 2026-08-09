@@ -24,7 +24,7 @@ export function useAwaitingNotice(tree: TreeJson | undefined, enabled: boolean):
         const becameAwaiting = session.awaiting === 'user' && was !== 'user';
         if (!first && enabled && becameAwaiting && !document.hasFocus()) {
           try {
-            new Notification(`${project.name}: あなたの返事を待っています`, {
+            new Notification(`${project.name}: awaiting your input`, {
               body: session.title ?? session.id.slice(0, 8),
             });
           } catch {

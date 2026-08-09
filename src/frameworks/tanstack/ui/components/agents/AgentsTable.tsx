@@ -656,7 +656,7 @@ function AgentRowView({
       style={pop ?? undefined}
       role="button"
       tabIndex={0}
-      aria-label={`${labelOf(entry)} の会話を開く`}
+      aria-label={`Open conversation for ${labelOf(entry)}`}
       {...pressable(() => {
         if (canExpand && selected) onToggle();
         onOpen();
@@ -679,7 +679,10 @@ function AgentRowView({
         {modelShort(node.model)}
       </span>
       <span className="col-eff">{node.effort ?? ''}</span>
-      <span className="col-tok" title="input + output + cache write(直近 7 日に動いた正本のみ)">
+      <span
+        className="col-tok"
+        title="input + output + cache write (transcripts active in the last 7 days only)"
+      >
         {node.tokens === null ? '' : formatTokens(node.tokens)}
       </span>
 

@@ -44,7 +44,7 @@ export function TokensPanel({ bins, fromMs, footMs, bars, nowMs, onFoot }: Token
             key={foot.label}
             type="button"
             className={`fchip ${footMs === foot.key ? 'on' : ''}`}
-            title={`1 本 = ${foot.label}(窓 ${rangeLabel(Math.min(WINDOW_MS, foot.key * MAX_BARS))})`}
+            title={`1 bar = ${foot.label} (window ${rangeLabel(Math.min(WINDOW_MS, foot.key * MAX_BARS))})`}
             onClick={() => onFoot(foot.key)}
           >
             {foot.label}
@@ -68,7 +68,7 @@ export function TokensPanel({ bins, fromMs, footMs, bars, nowMs, onFoot }: Token
           preserveAspectRatio="none"
           role="img"
         >
-          <title>時間ごとの消費</title>
+          <title>Tokens over time</title>
           {columns.map((column) =>
             column.total > 0 ? (
               <rect

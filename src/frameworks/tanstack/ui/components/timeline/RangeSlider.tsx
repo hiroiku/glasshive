@@ -103,7 +103,7 @@ export function RangeSlider({
         style={{ left: `${pct(a)}%` }}
         role="slider"
         tabIndex={0}
-        aria-label="窓の始まり"
+        aria-label="Window start"
         aria-valuemin={min}
         aria-valuemax={b}
         aria-valuenow={a}
@@ -116,7 +116,7 @@ export function RangeSlider({
         style={{ left: `${pct(b)}%` }}
         role="slider"
         tabIndex={0}
-        aria-label="窓の終わり"
+        aria-label="Window end"
         aria-valuemin={a}
         aria-valuemax={max}
         aria-valuenow={b}

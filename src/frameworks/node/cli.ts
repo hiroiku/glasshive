@@ -9,18 +9,19 @@ export interface Args {
    一時ポート(49152 以上)より下なので、外向きの繋ぎに先に取られることがない。 */
 export const DEFAULTS = { port: 4483, activeThresholdSecs: 60 } as const;
 
-export const HELP = `glasshive — 働くエージェントを、ガラス越しに観る
+export const HELP = `glasshive — watch your AI agents work, through glass
 
-使い方: glasshive [options]
+Usage: glasshive [options]
 
-  --port <n>                 待ち受ける番号(127.0.0.1 のみ。既定 ${DEFAULTS.port})
-  --active-threshold <secs>  最後の書き込みから何秒までを「稼働」と見るか(既定 ${DEFAULTS.activeThresholdSecs})
-  --config-dir <path>        手元の覚え書きを置く場所(既定 ~/.config/glasshive)
-  --no-open                  ブラウザーを自動で開かない
-  -h, --help                 この案内を出す
+  --port <n>                 Port to listen on (bound to 127.0.0.1 only; default ${DEFAULTS.port})
+  --active-threshold <secs>  Seconds since the last write to still count as "active" (default ${DEFAULTS.activeThresholdSecs})
+  --config-dir <path>        Where local preferences are kept (default ~/.config/glasshive)
+  --no-open                  Do not open the browser automatically
+  -h, --help                 Show this help
 
-観る範囲は指定しない。エージェントが動いた巣はすべて一覧に出て、
-タブに並べるものは観る人が選ぶ — どこから起動しても同じものが見える。
+Scope is not set at startup. Every project an agent has worked in is listed, and
+the viewer picks which ones to keep as tabs — the same things are visible no
+matter where you start from.
 `;
 
 export type ParseResult =
@@ -52,7 +53,7 @@ export function parseArgs(argv: readonly string[]): ParseResult {
         if (raw === undefined || !Number.isInteger(n) || n < 0 || n > 65535) {
           return {
             ok: false,
-            message: `--port の値が読めません: ${raw ?? '(無し)'}\n`,
+            message: `invalid --port value: ${raw ?? '(none)'}\n`,
             exitCode: 2,
           };
         }
@@ -65,7 +66,7 @@ export function parseArgs(argv: readonly string[]): ParseResult {
         if (raw === undefined || !Number.isFinite(n) || n < 0) {
           return {
             ok: false,
-            message: `--active-threshold の値が読めません: ${raw ?? '(無し)'}\n`,
+            message: `invalid --active-threshold value: ${raw ?? '(none)'}\n`,
             exitCode: 2,
           };
         }
@@ -77,7 +78,7 @@ export function parseArgs(argv: readonly string[]): ParseResult {
         if (raw === undefined || raw === '') {
           return {
             ok: false,
-            message: '--config-dir の値が空です\n',
+            message: 'missing --config-dir value\n',
             exitCode: 2,
           };
         }
@@ -89,7 +90,7 @@ export function parseArgs(argv: readonly string[]): ParseResult {
       case '--global':
         return {
           ok: false,
-          message: `--global は要らなくなりました(いまは常にすべての巣を観ます)\n\n${HELP}`,
+          message: `--global is no longer needed (every project is always observed)\n\n${HELP}`,
           exitCode: 2,
         };
       default:
@@ -97,15 +98,15 @@ export function parseArgs(argv: readonly string[]): ParseResult {
           return {
             ok: false,
             message:
-              `場所の指定は受け付けません: ${a}\n` +
-              `観る範囲は起動では決めません。すべての巣が一覧に出るので、` +
-              `タブに並べるものは画面で選んでください\n\n${HELP}`,
+              `path arguments are not accepted: ${a}\n` +
+              `Scope is not set at startup. Every project is listed, so pick ` +
+              `the ones to keep as tabs in the browser\n\n${HELP}`,
             exitCode: 2,
           };
         }
         return {
           ok: false,
-          message: `知らない指定です: ${a}\n\n${HELP}`,
+          message: `unknown option: ${a}\n\n${HELP}`,
           exitCode: 2,
         };
     }

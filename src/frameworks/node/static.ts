@@ -68,6 +68,6 @@ export function serveShell(res: ServerResponse, clientDir: string): void {
     res.end(body);
   } catch {
     res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end('画面が組み上がっていません(npm run build を実行してください)\n');
+    res.end('The interface is not built — run npm run build\n');
   }
 }

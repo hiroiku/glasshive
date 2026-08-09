@@ -43,7 +43,7 @@ export function FlowChart({
         style={{ height: HEIGHT }}
         role="img"
       >
-        <title>開いている課題と閉じた課題の、日ごとの積み上がり</title>
+        <title>Open issues and closed issues, day by day</title>
         <path d={area} className="fl-open" />
         <polyline points={line} className="fl-closed" />
       </svg>

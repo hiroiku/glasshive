@@ -180,7 +180,7 @@ export function GitGraph({
                 data-name={`${tip.name} ${worktreeLeaf}`}
                 role="button"
                 tabIndex={0}
-                aria-label={`${tip.name} の中身を見る`}
+                aria-label={`Open ref ${tip.name}`}
                 {...pressable(() => nav.openRef(rev, tip.name))}
               >
                 {gutter}
@@ -200,7 +200,7 @@ export function GitGraph({
                   {mergeReady.some(
                     (id) => tip.name.includes(id) || (tip.worktree ?? '').includes(id),
                   ) && (
-                    <span className="chip st-merge-ready" title="台帳の上で統合待ち(merge-ready)">
+                    <span className="chip st-merge-ready" title="Merge-ready in the ledger">
                       {' '}
                       merge-ready
                     </span>
@@ -214,7 +214,7 @@ export function GitGraph({
                   {tip.behind > 0 && (
                     <span
                       className={`g-behind${tip.behind >= BEHIND_WARN ? ' warn' : ''}`}
-                      title={`${overview.base} から ${tip.behind} 個ぶん遅れている`}
+                      title={`${tip.behind} commit${tip.behind > 1 ? 's' : ''} behind ${overview.base}`}
                     >
                       {' '}
                       −{tip.behind}
@@ -249,7 +249,7 @@ export function GitGraph({
               className={`git-row${node.merge ? ' merge' : ''}${dim}`}
               role="button"
               tabIndex={0}
-              aria-label={`${node.sha.slice(0, 9)} の中身を見る`}
+              aria-label={`Open commit ${node.sha.slice(0, 9)}`}
               {...pressable(() => nav.openRef(node.sha, node.sha.slice(0, 9)))}
             >
               {gutter}

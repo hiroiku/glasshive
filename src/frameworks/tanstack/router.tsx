@@ -31,7 +31,7 @@ export function getRouter() {
        **これを置かないと、器は空のまま焼かれる。** ブラウザーは器を引き継ぐときに
        道の中身を描くので、空の器と食い違い、React が木を丸ごと作り直す。
        同じものを両側で描かせておけば、引き継ぎは静かに済む。 */
-    defaultPendingComponent: () => <p className="empty">観ています…</p>,
+    defaultPendingComponent: () => <p className="empty">Loading…</p>,
     /* 待ちの姿を、待たせてから出すのではなく最初から出す。器には既に描かれているので、
        ここで間を置くと、その間だけブラウザー側が空になって食い違う。 */
     defaultPendingMs: 0,

@@ -15,7 +15,7 @@ export function classifyReadFailure(error: unknown, what: string): Observation<n
   const code = (error as NodeJS.ErrnoException | undefined)?.code;
   if (code === 'ENOENT' || code === 'ENOTDIR') return absent('no-source');
   return unobservable(
-    new TranscriptReadError(`${what} を読めなかった`, {
+    new TranscriptReadError(`Could not read ${what}`, {
       cause: error,
       details: { code },
     }),

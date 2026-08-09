@@ -22,10 +22,10 @@ const CHIPS: readonly {
   readonly key: OverviewFilter;
   readonly label: string;
 }[] = [
-  { key: 'all', label: 'すべて' },
-  { key: 'input', label: '入力待ち' },
-  { key: 'active', label: '稼働中' },
-  { key: 'pinned', label: 'タブ' },
+  { key: 'all', label: 'all' },
+  { key: 'input', label: 'input' },
+  { key: 'active', label: 'active' },
+  { key: 'pinned', label: 'pinned' },
 ];
 
 /* 期間の札は状態の札と別の群にする。**同じ列に混ぜない** —
@@ -35,7 +35,7 @@ const SPANS: readonly { readonly key: OverviewSpan; readonly label: string }[] =
   { key: '7d', label: '7d' },
   { key: '30d', label: '30d' },
   // 状態の札にも「すべて」が在る。同じ字を並べると、どちらが解けたのか読めない
-  { key: 'all', label: '全期間' },
+  { key: 'all', label: 'any time' },
 ];
 
 export function OverviewToolbar({
@@ -55,8 +55,8 @@ export function OverviewToolbar({
         className="search"
         type="search"
         value={query}
-        placeholder="巣を探す"
-        aria-label="巣を探す"
+        placeholder="Search projects…"
+        aria-label="Search projects"
         onChange={(event) => onQuery(event.target.value)}
       />
 
@@ -82,8 +82,8 @@ export function OverviewToolbar({
           aria-pressed={span === one.key}
           title={
             one.key === 'all'
-              ? 'いつ動いた巣も出す'
-              : `最後に動いてから ${one.label} 以内の巣だけを出す`
+              ? 'Show projects no matter when they last ran'
+              : `Show only projects active within the last ${one.label}`
           }
           onClick={() => onSpan(one.key)}
         >
@@ -108,7 +108,7 @@ export function OverviewToolbar({
         · tokens 24h <b>{formatTokens(totals.tokens)}</b>
         {/* 足りない合計に「これで全部だ」という顔をさせない */}
         {totals.tokensPartial && (
-          <span className="dimtxt" title="読めなかった正本があります">
+          <span className="dimtxt" title="Some transcripts could not be read">
             {' '}
             +?
           </span>

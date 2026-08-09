@@ -62,10 +62,10 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
   const actors = useMemo(() => agentTokens(project), [project]);
 
   const answer = one.data;
-  if (answer === undefined) return <div className="empty">観ています…</div>;
-  if (!answer.ok) return <div className="empty">課題を出せませんでした({answer.body.code})</div>;
+  if (answer === undefined) return <div className="empty">Loading…</div>;
+  if (!answer.ok) return <div className="empty">Failed to load issue ({answer.body.code})</div>;
   if (answer.body.state !== 'observed' || answer.body.issue === null) {
-    return <div className="empty">この課題は台帳の書き出しにありません</div>;
+    return <div className="empty">Issue not found in the ledger export</div>;
   }
   const record = answer.body.issue;
   const status = str(record, 'status') ?? 'open';

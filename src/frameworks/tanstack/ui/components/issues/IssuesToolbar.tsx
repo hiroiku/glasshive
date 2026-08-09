@@ -66,7 +66,7 @@ export function IssuesToolbar({
       <button
         type="button"
         className={`fchip ${flow ? 'on' : ''}`}
-        title="開いている数の推移と、閉じた数の累計(作られた時刻と閉じた時刻から導いた近似)"
+        title="Open count over time and closed cumulative (approximated from created / closed times)"
         onClick={() => onFlow(!flow)}
       >
         flow

@@ -83,19 +83,19 @@ function BeadsView() {
 
   const answer = ledger.data;
   if (answer === undefined) {
-    return <p className="empty">観ています…</p>;
+    return <p className="empty">Loading…</p>;
   }
   /* 断られたのと、見に行けたが無かったのは別の事実である。
      断りはこちらの求めの誤り(知らない巣の id など)で、台帳の話ではない。 */
   if (!answer.ok) {
-    return <p className="empty">課題を出せませんでした({answer.body.code})</p>;
+    return <p className="empty">Could not load issues ({answer.body.code})</p>;
   }
   const page = answer.body;
   if (page.state === 'absent') {
     return <BdPromo />;
   }
   if (page.state === 'unobservable') {
-    return <p className="empty">台帳を読めませんでした({page.reason})</p>;
+    return <p className="empty">Could not read the ledger ({page.reason})</p>;
   }
   /* 全量は無理に待たない。届くまでは一覧そのものを母集団として使う —
      束ねた課題の消化が少なめに出るが、待って画面を止めるよりよい。 */
@@ -141,12 +141,13 @@ function BdPromo() {
     <div id="issues-list">
       <div className="bd-promo">
         <div className="bp-title">
-          <Icon path={mdiRhombus} size={12} /> この巣に bd(beads)の台帳がありません
+          <Icon path={mdiRhombus} size={12} /> No bd (beads) ledger in this project
         </div>
         <p>
-          bd は AI エージェント向けの、git に載る軽い課題追跡です。この巣で <code>bd init</code>{' '}
-          を走らせると、この画面に灯りが点きます — 依存の弧を添えた課題の一覧、着手順の並べ替え、
-          どのエージェントがどの課題をどこで触っているかの突き合わせ、課題ごとの活動の帯。
+          bd is a lightweight, git-native issue tracker built for AI agents. Run{' '}
+          <code>bd init</code> in this project and this view lights up: the issue list with its
+          dependency graph, start-order sorting, live matching of which agent works on which issue
+          (and where), and per-issue agent activity timelines.
         </p>
         <a href="https://github.com/gastownhall/beads" target="_blank" rel="noopener">
           github.com/gastownhall/beads →

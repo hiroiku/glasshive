@@ -31,7 +31,7 @@ function classifyLedgerFailure(error: unknown, file: string): Observation<never>
   if (failure.kind !== 'unobservable') return failure;
   const { details } = failure.error;
   return unobservable(
-    new LedgerReadError(`${file} を読めなかった`, {
+    new LedgerReadError(`Could not read ${file}`, {
       cause: error,
       ...(details === undefined ? {} : { details: { ...details } }),
     }),
@@ -49,7 +49,7 @@ function readLedgerFile(projectPath: string): Observation<string> {
      もう一度求めれば通るかもしれない側(503)ではなく、こちらの穴(500)として言う。 */
   if (!isSafeAbsolutePath(projectPath)) {
     return unobservable(
-      new UnexpectedError('巣の場所として使えない字で台帳を尋ねられた', {
+      new UnexpectedError('Ledger asked for with a path that is not a usable project root', {
         details: { projectPath },
       }),
     );

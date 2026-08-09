@@ -65,7 +65,7 @@ export function TlBar({
       {unknownEnd !== null && unknownFrom < unknownTo && (
         <i
           className="bar unknown"
-          title={`${mdhms(startedMs)} → ${mdhms(unknownEnd)} · これより前にも動いていた(濃さは不明 — 走査の外)`}
+          title={`${mdhms(startedMs)} → ${mdhms(unknownEnd)} · earlier activity (density unknown — beyond bounded scan)`}
           style={{
             left: `${pct(unknownFrom)}%`,
             width: `${Math.max(0.3, pct(unknownTo) - pct(unknownFrom))}%`,

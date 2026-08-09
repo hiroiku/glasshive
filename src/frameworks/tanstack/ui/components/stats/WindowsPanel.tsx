@@ -24,7 +24,7 @@ export function WindowsPanel({
       <div className="sf-h">
         <span
           className="sf-title"
-          title="正本から観測できる範囲の近似(この巣のみ)。課金側の正とは一致しないことがある"
+          title="Approximated from transcripts (this project only) — may not match billing"
         >
           Windows (observed)
         </span>

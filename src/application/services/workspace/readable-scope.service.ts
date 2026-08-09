@@ -68,10 +68,10 @@ function isPlainId(id: string): boolean {
 /* 知らない id は断る。形が違うのも、一覧に無いのも、同じ断り方をする。
    分けると、断り方の違いだけで置き場に何が在るかが分かってしまう。 */
 export function resolveProject(scope: ReadableScope, id: string): Result<string, AppError> {
-  if (!isPlainId(id)) return err(new ProjectNotObservedError('観測していない巣を尋ねられた'));
+  if (!isPlainId(id)) return err(new ProjectNotObservedError('Not an observed project'));
   const location = scope.projectsById.get(id);
   if (location === undefined) {
-    return err(new ProjectNotObservedError('観測していない巣を尋ねられた'));
+    return err(new ProjectNotObservedError('Not an observed project'));
   }
   return ok(location);
 }

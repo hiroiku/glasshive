@@ -27,7 +27,7 @@ export function createFsWatchTranscript(root: string): TranscriptWatchIntegratio
         return observed(() => watcher.close());
       } catch (e) {
         return unobservable(
-          new TranscriptWatchError(`正本の木を見張れませんでした: ${root}`, {
+          new TranscriptWatchError(`Could not watch the transcript tree: ${root}`, {
             cause: asAppError(e),
             details: { root },
           }),

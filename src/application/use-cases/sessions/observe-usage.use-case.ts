@@ -42,7 +42,7 @@ export function createObserveUsage(deps: {
          引けない id は、形が違うのも一覧に無いのも同じ断り方をする。 */
       const project = snapshot.value.projects.find((candidate) => candidate.id === projectId);
       if (project === undefined) {
-        return err(new ProjectNotObservedError('観測していない巣を尋ねられた'));
+        return err(new ProjectNotObservedError('Not an observed project'));
       }
 
       const files: string[] = [];

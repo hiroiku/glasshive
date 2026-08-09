@@ -84,7 +84,7 @@ export function OverviewTable({
               type="button"
               className={`pin${isPinned ? ' on' : ''}`}
               aria-pressed={isPinned}
-              aria-label={isPinned ? `${row.name} をタブから外す` : `${row.name} をタブに出す`}
+              aria-label={isPinned ? `Unpin ${row.name}` : `Pin ${row.name}`}
               onClick={() => onTogglePin(row.id)}
             >
               <i />
@@ -109,7 +109,7 @@ export function OverviewTable({
                 空にすると「使っていない」と並んで見えてしまう。 */}
             <span
               className="right mono"
-              title={row.tokens24hState === 'unobservable' ? '読めませんでした' : undefined}
+              title={row.tokens24hState === 'unobservable' ? 'Could not be read' : undefined}
             >
               {row.tokens24hState === 'unobservable'
                 ? '?'

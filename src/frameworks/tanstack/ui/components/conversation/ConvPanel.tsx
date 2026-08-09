@@ -164,7 +164,7 @@ function Conversation({
   if (file === null) {
     return (
       <div id="conversation">
-        <div id="placeholder">セッションか子を選ぶと、その会話が出ます</div>
+        <div id="placeholder">Select a session or subagent to view its conversation</div>
       </div>
     );
   }
@@ -172,10 +172,10 @@ function Conversation({
   return (
     <div id="conversation" ref={window.boxRef}>
       {/* 読みに行けなかったことを、空の会話で表さない */}
-      {window.failed && <div id="placeholder">この正本を読めませんでした</div>}
+      {window.failed && <div id="placeholder">Failed to load</div>}
       {window.hasOlder && (
         <button type="button" id="older" onClick={window.loadOlder}>
-          もっと前
+          Load older
         </button>
       )}
       {window.events.map((entry) => (

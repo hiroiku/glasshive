@@ -62,7 +62,7 @@ export function createReadConversation(deps: {
       /* 在るか無いかは答えない。断り方を分けると、尋ねて回るだけで
          置き場に何が在るかが分かってしまう。 */
       if (!allowsTranscript(scope, file)) {
-        return err(new TranscriptOutOfScopeError('観測していない正本を開こうとした'));
+        return err(new TranscriptOutOfScopeError('Not an observed transcript'));
       }
 
       const page = await events.readPage(
