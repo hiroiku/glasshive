@@ -26,18 +26,43 @@ jobs:
           cache: npm
 
       # 札と package.json の版が食い違ったまま出すと、
-      # npm には別の番号が並び、GitHub の札からは辿れなくなる
+      # npm には別の番号が並び、GitHub の札からは辿れなくなる。
+      #
+      # **札でないところから来た求めは、照合を飛ばすのではなく断る。**
+      # 手で起こす道は枝からも起こせて、そのとき github.ref は枝を指す。
+      # 「札のときだけ照合する」と書くと、その道だけが照合を素通りして publish に届く。
       - name: 札と版が合っているか
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
+          case "$GITHUB_REF" in
+            refs/tags/*) ;;
+            *) echo "札以外から出そうとしている: $GITHUB_REF"; exit 1 ;;
+          esac
           tag="${GITHUB_REF_NAME#v}"
           pkg=$(node -p "require('./package.json').version")
           if [ "$tag" != "$pkg" ]; then
             echo "札 $tag と版 $pkg が食い違っている"
             exit 1
           fi
+          echo "VERSION=$pkg" >> "$GITHUB_ENV"
 
       - run: npm ci
+
+      # npm の trusted publisher はパッケージが在って初めて設定できるので、
+      # 最初の 1 つは手元から出すことになる。その版のリリースを公開したとき、
+      # 「同じ版は出せない」で赤を出さずに済ませる。
+      # 版を上げ忘れて素通りすることは無い — 同じ札は二度打てないので、
+      # ここへ来る時点で版はもう新しい
+      - name: この版は既に出ているか
+        id: registry
+        run: |
+          if npm view "glasshive@$VERSION" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "$VERSION は既にレジストリに在る。出さずに終える"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # publish の手前で prepublishOnly が組み立て・門・配りものの検めを全部走らせる。
       # 落ちれば出ない
-      - run: npm publish
+      - if: steps.registry.outputs.published == 'false'
+        run: npm publish
