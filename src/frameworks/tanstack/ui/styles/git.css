@@ -1,0 +1,179 @@
+/* ---------- Git。生きている線と本流 ---------- */
+
+/* ---------- Git ユニバーサルビュー(生きている線 + first-parent 統合レーン) ---------- */
+#git-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+#git-view .empty {
+  color: var(--dim);
+  padding: 30px;
+  text-align: center;
+}
+.g-base {
+  color: var(--accent);
+  font-weight: 700;
+}
+.g-note {
+  color: var(--dim);
+  font-size: 11px;
+}
+#git-rows {
+  flex: 1;
+  overflow: auto;
+  padding: 0 0 14px;
+  font-size: 12px;
+}
+.git-row {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+  padding: 0 14px 0 8px;
+  height: 26px;
+  /* Ahead は「+11 −627」まで入る幅を取る。行ごとに別の grid なので max-content にはできず
+     (行ごとに幅が変わって列が揃わなくなる)、いちばん長い中身に合わせて固定する。
+     足りないと、どれだけ本流から遅れているかが省略記号に潰れて読めない。 */
+  grid-template-columns: max-content minmax(220px, 1fr) minmax(140px, 0.6fr) 96px 70px 80px;
+}
+.git-row.head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  color: var(--dim);
+  font-size: 10.5px;
+  border-bottom: 1px solid var(--border);
+  height: auto;
+  padding-top: 8px;
+  padding-bottom: 6px;
+}
+.git-row.head .right {
+  text-align: right;
+}
+.git-row:not(.head):not(.fold) {
+  cursor: pointer;
+}
+.git-row:not(.head):hover {
+  background: rgba(96, 165, 250, 0.05);
+}
+.git-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-row .right {
+  text-align: right;
+}
+.g-gutter {
+  flex: none;
+  display: block;
+}
+.g-branch-name {
+  color: #e8eef5;
+}
+.g-wt-name {
+  color: #b8c4d0;
+}
+.g-wtmark {
+  color: var(--accent);
+  font-size: 11px;
+}
+/* 余白は行の gap が持つ。ここで足すと、その分だけ数の入る幅が減る */
+.g-ahead {
+  color: var(--waiting);
+  font-size: 11px;
+}
+.g-base-name {
+  color: var(--accent);
+  font-weight: 700;
+}
+.g-subject {
+  color: var(--dim);
+}
+.git-row.merge .g-subject {
+  color: var(--fg);
+}
+.g-fold {
+  color: var(--dim);
+  font-style: italic;
+}
+.g-who {
+  display: flex;
+  gap: 4px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.g-date {
+  color: var(--dim);
+  font-size: 11px;
+  text-align: right;
+}
+.g-sha {
+  color: var(--dim);
+  font-size: 11px;
+}
+.g-more {
+  color: var(--dim);
+  font-size: 11px;
+}
+
+/* レーンの線と点(色はレーンごとに黄金角の色相。線は丸キャップ + 滑らかな曲線) */
+.gl {
+  fill: none;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+.gd-merge {
+  fill: var(--accent);
+}
+.gd-hole {
+  fill: var(--bg);
+}
+.gd-commit {
+  fill: #5a6b80;
+}
+.gd-state.active {
+  fill: var(--active);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.gd-state.waiting {
+  fill: var(--waiting);
+}
+
+/* Git 検索: 一致しない行は沈める(グラフは壊さない) */
+.git-row.dim > span:not(:first-child) {
+  opacity: 0.28;
+}
+/* コンフリクト予測: 同じファイルを触っている生きている線の組 */
+.git-conflicts {
+  padding: 8px 14px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.gc-row {
+  color: #f2b8b8;
+  font-size: 11.5px;
+  padding: 2px 0;
+}
+.gc-row .gc-name {
+  font-family: var(--mono);
+  color: var(--fg);
+  cursor: pointer;
+  text-decoration: underline dotted rgba(125, 138, 153, 0.6);
+}
+/* 枝の上の merge-ready は緑。台帳の上の紫と同じ名前だが、意味が違う —
+   台帳は「人がその状態に置いた」、枝は「その枝が統合を待っている」。
+   場所で括らないと、後に書いた方が両方を塗り替える。 */
+#git-rows .chip.st-merge-ready {
+  background: rgba(52, 211, 153, 0.14);
+  color: #6ee7b7;
+}
+.g-behind {
+  color: var(--dim);
+  font-family: var(--mono);
+}
+.g-behind.warn {
+  color: var(--waiting);
+}

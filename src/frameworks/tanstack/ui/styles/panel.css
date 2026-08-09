@@ -1,0 +1,870 @@
+/* ---------- ドロワー。指し・課題・会話の窓 ---------- */
+
+/* ---------- ドロワー(詳細パネル) ----------
+   幅の増減ではなく位置のスライドで開閉する — 幅が変わると本文の折り返しと
+   スクロールバーが動いてしまうため、閉じた状態は右へ滑って隠れるだけにする。 */
+#content {
+  position: relative;
+  overflow: hidden;
+}
+#drawer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 38px;
+  z-index: 5;
+  width: 46%;
+  min-width: 440px;
+  display: flex;
+  flex-direction: row;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  box-shadow: -10px 0 26px rgba(0, 0, 0, 0.4);
+  transform: translateX(calc(100% + 48px));
+  transition: transform 0.22s ease;
+}
+body.drawer-open #drawer {
+  transform: none;
+}
+body.dragging {
+  user-select: none;
+  cursor: col-resize;
+}
+body.dragging #drawer {
+  transition: none;
+}
+
+/* 並置モード(既定): 重ならず、メインエリアを狭めて横に並ぶ。
+   閉じているときはレイアウトから外す(スライドの芝居は重なりモード専用) */
+body.drawer-dock #drawer {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  right: auto;
+  z-index: auto;
+  transform: none;
+  transition: none;
+  box-shadow: none;
+  flex: none;
+}
+body.drawer-dock:not(.drawer-open) #drawer {
+  display: none;
+}
+
+#drawer-grip {
+  flex: none;
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+}
+#drawer-grip:hover,
+body.dragging #drawer-grip {
+  background: var(--accent);
+  opacity: 0.5;
+}
+#drawer-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* パネル自身のコントロール(表示モード切替)は右上に浮かべる */
+#drawer-controls {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  z-index: 7;
+}
+#drawer-controls button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--dim);
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+#drawer-controls button:hover {
+  color: var(--fg);
+  border-color: var(--border);
+  background: var(--panel);
+}
+#detail-header {
+  padding-right: 40px;
+}
+
+#conv-pane,
+#issues-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#rail {
+  flex: none;
+  width: 38px;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 10px;
+  gap: 8px;
+}
+#rail button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--dim);
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+#rail button:hover {
+  color: var(--fg);
+}
+
+#detail-header {
+  flex: none;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 41px;
+}
+#detail-header .title {
+  font-weight: 700;
+  font-size: 13px;
+}
+#detail-header .chip {
+  margin-left: 8px;
+}
+#detail-header .sub {
+  color: var(--dim);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* ヘッダーのエージェント文脈(親・子・bd・git) */
+.agent-ctx {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 6px;
+  white-space: normal;
+}
+.agent-ctx .ctx-g {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.agent-ctx .mk {
+  flex: none;
+}
+
+/* 会話ログも他のビューと同じく列で整列する:
+   [時刻] [▸] [種別アイコン] [名前] [プレビュー 1fr]。subgrid で全イベント横断に揃える。
+   時刻は最初に目に入るよう左端で、縦長の内容でも sticky で見え続ける */
+/* 畳んだ行は目で走らせるものなので、話した中身より 1 段大きい。
+   同じ大きさにすると、どこが手順の切れ目なのかが読み取れなくなる。 */
+#conversation {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+  font-size: 11px;
+  display: grid;
+  grid-template-columns: max-content max-content max-content max-content 1fr;
+  column-gap: 8px;
+  align-content: start;
+}
+#conversation > #older,
+#conversation > #placeholder {
+  grid-column: 1 / -1;
+}
+
+/* ---------- 詳細パネル(issue / git ref) ---------- */
+.detail {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.detail .empty {
+  color: var(--dim);
+  padding: 40px;
+  text-align: center;
+}
+.detail-body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 16px;
+  font-size: 12px;
+}
+.meta-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr max-content 1fr;
+  gap: 4px 12px;
+  margin-bottom: 10px;
+}
+.mk {
+  color: var(--dim);
+  font-size: 11px;
+}
+.lbls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+/* 依存の部分グラフ(自身 + 1 ホップ、GitHub Actions のワークフロー風) */
+.mini-graph {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr max-content 1fr;
+  gap: 10px 40px;
+  align-items: center;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  background: rgba(21, 27, 35, 0.5);
+}
+.mg-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.mg-edge {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+.mg-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  z-index: 1;
+}
+.mg-col.mg-center {
+  align-items: center;
+}
+.mg-node {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  background: var(--panel);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.mg-node:hover {
+  filter: brightness(1.25);
+}
+.mg-node.self {
+  border-color: var(--accent);
+  cursor: default;
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.mg-id {
+  color: #e8eef5;
+  font-size: 11.5px;
+}
+.mg-title {
+  color: var(--dim);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mg-more {
+  color: var(--dim);
+  font-size: 10.5px;
+  margin: -6px 0 12px 4px;
+}
+.mg-legend {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 14px;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+.mg-self-sample {
+  display: inline-block;
+  width: 14px;
+  height: 9px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.dimtxt {
+  color: var(--dim);
+}
+.mv-agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.sec-h {
+  color: var(--dim);
+  font-size: 10.5px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+  margin: 14px 0 8px;
+}
+.cmt {
+  border-left: 2px solid var(--border);
+  padding: 2px 0 2px 10px;
+  margin-bottom: 10px;
+}
+.cmt-h {
+  color: var(--dim);
+  font-size: 10.5px;
+  margin-bottom: 2px;
+}
+.md {
+  overflow-wrap: break-word;
+}
+.ref-commit {
+  display: grid;
+  grid-template-columns: max-content 1fr max-content max-content;
+  gap: 10px;
+  align-items: baseline;
+  padding: 3px 0;
+}
+.ref-commit .rc-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rc-author {
+  color: var(--dim);
+  font-size: 10.5px;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* ref 詳細: 分岐以降の差分サマリーと変更の大きいファイル */
+.ref-stat {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.rs-add {
+  color: #4ade80;
+  font-family: var(--mono);
+}
+.rs-del {
+  color: #f87171;
+  font-family: var(--mono);
+}
+.ref-file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  gap: 10px;
+  padding: 2px 0;
+  font-size: 11.5px;
+  align-items: baseline;
+}
+.ref-file .rf-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+#placeholder {
+  color: var(--dim);
+  padding: 40px;
+  text-align: center;
+}
+#older {
+  display: block;
+  margin: 0 auto 14px;
+  background: var(--panel);
+  color: var(--dim);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 14px;
+  cursor: pointer;
+  font: inherit;
+}
+#older:hover {
+  color: var(--fg);
+}
+
+.event {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  row-gap: 2px;
+  margin: 0 0 10px;
+  max-width: 100%;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid rgba(100, 116, 139, 0.3);
+}
+.event.user {
+  border-left-color: rgba(96, 165, 250, 0.55);
+}
+.event.assistant {
+  border-left-color: rgba(52, 211, 153, 0.5);
+}
+.event.system {
+  border-left-color: rgba(251, 191, 36, 0.4);
+}
+.event .ts {
+  grid-column: 1;
+  justify-self: start;
+  align-self: start;
+  position: sticky;
+  top: 4px;
+  color: var(--dim);
+  font-size: 10px;
+  margin-top: 2px;
+}
+/* 話した中身は、辿るためではなく読むためのものなので、いちばん小さく詰める。
+   ここが窓の中の「本文の大きさ」であり、見出しも引用も表もこの数から決まる。 */
+.event .bubble {
+  grid-column: 2 / -1;
+  min-width: 0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  overflow-wrap: break-word;
+  font-size: 10px;
+}
+
+/* 1 ステップ = 1 行の折りたたみ。summary は display: contents で
+   アイコン・名前・プレビューを親 subgrid の列に直接流し込む */
+.blk {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+}
+.blk summary {
+  display: contents;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+.blk summary::-webkit-details-marker {
+  display: none;
+}
+.blk summary::before {
+  content: "▸";
+  color: var(--dim);
+  font-size: 0.8em;
+  width: 9px;
+}
+.blk[open] summary::before {
+  content: "▾";
+}
+/* 開いた本文は列を跨いで全幅(新しめの Chromium は非 summary 子を ::details-content に包む) */
+.blk::details-content {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.blk > pre {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.blk-ico {
+  width: 16px;
+  text-align: center;
+  font-size: 1em;
+}
+.blk.tool_use .blk-ico {
+  color: var(--accent);
+}
+.blk.tool_result .blk-ico {
+  color: var(--active);
+}
+.blk.thinking .blk-ico {
+  color: var(--input);
+}
+.blk.system .blk-ico {
+  color: var(--waiting);
+}
+/* 名前列は最長名にぴったり合わせるが、MCP の長い名前には上限を置く(超えたら …) */
+.blk-name {
+  color: #e8eef5;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.blk-prev {
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.blk summary:hover .blk-prev {
+  color: var(--fg);
+}
+
+/* markdown レンダリング(会話バブルと詳細パネルの .md すべて) */
+.md {
+  line-height: 1.6;
+}
+.md p {
+  margin: 6px 0;
+}
+.md p:first-child {
+  margin-top: 0;
+}
+.md p:last-child {
+  margin-bottom: 0;
+}
+/* 見出し: 左のアクセントバーで節の切れ目を示し、階層は色相で段階分けする */
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  margin: 14px 0 6px;
+  line-height: 1.35;
+  font-size: 1.125em;
+  color: #e8eef5;
+}
+.md h1 {
+  font-size: 1.34em;
+}
+.md h2 {
+  font-size: 1.21em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 3px;
+  border-left: 3px solid var(--accent);
+  padding-left: 8px;
+}
+.md h3 {
+  border-left: 3px solid rgba(96, 165, 250, 0.55);
+  padding-left: 8px;
+  color: #a8c7e8;
+}
+.md h4,
+.md h5,
+.md h6 {
+  color: #8fb3d9;
+  font-size: 1.04em;
+}
+.md h1:first-child,
+.md h2:first-child,
+.md h3:first-child {
+  margin-top: 0;
+}
+.md ul,
+.md ol {
+  margin: 6px 0;
+  padding-left: 22px;
+}
+.md li {
+  margin: 2px 0;
+}
+.md li::marker {
+  color: #6b93c4;
+}
+.md li > p {
+  margin: 0;
+}
+.md blockquote {
+  margin: 6px 0;
+  padding: 4px 10px;
+  border-left: 3px solid var(--border);
+  color: var(--dim);
+  background: rgba(125, 138, 153, 0.08);
+  border-radius: 0 4px 4px 0;
+}
+.md hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 10px 0;
+}
+.md a {
+  color: var(--accent);
+}
+/* はみ出す表は表自身の中で横スクロールさせる */
+.md table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+  font-size: 1em;
+}
+.md th,
+.md td {
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.md th {
+  background: var(--panel);
+  color: #e8eef5;
+}
+.md tr:nth-child(even) td {
+  background: rgba(42, 52, 65, 0.25);
+}
+/* 強調は「白い太字」ではなく色で読ませる — ラベル行(根拠: 等)が一瞬で拾える */
+.md strong {
+  color: #ecc48d;
+}
+/* コードブロック: 黒箱のまま、余白と角丸で息をさせる(会話・詳細パネル共通) */
+.md pre {
+  max-width: 100%;
+  background: #0b1016;
+  border: 1px solid #232f3d;
+  border-radius: 6px;
+  padding: 9px 12px;
+  overflow-x: auto;
+  font-size: 0.96em;
+  line-height: 1.55;
+  margin: 8px 0;
+  font-family: var(--mono);
+  white-space: pre-wrap;
+}
+.md pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+}
+/* インラインコードはブロックと違う語彙にする — 黒背景だと地の文に沈むので、
+   淡い青灰のチップで「識別子・パス」として浮かせる */
+.md :not(pre) > code {
+  background: rgba(125, 155, 190, 0.12);
+  border: 1px solid rgba(125, 155, 190, 0.22);
+  color: #c9dcf0;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+.event.user .bubble.speech {
+  background: #1c2a3a;
+  border: 1px solid #29405c;
+}
+.event.assistant .bubble.speech {
+  background: #16211c;
+  border: 1px solid #234034;
+}
+.event.system .bubble {
+  background: transparent;
+}
+.event pre {
+  background: #0b1016;
+  border: 1px solid #232f3d;
+  border-radius: 4px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  font-size: 0.96em;
+  margin: 6px 0;
+  white-space: pre-wrap;
+  font-family: var(--mono);
+}
+.event pre code {
+  background: transparent;
+  padding: 0;
+}
+.event details {
+  margin: 2px 0;
+}
+.event details pre {
+  max-height: 320px;
+  overflow: auto;
+}
+.hljs {
+  background: transparent;
+  padding: 0;
+}
+
+/* 日付・時刻・ID・SHA・パスは等幅で(桁が読める・並びが揃う) */
+.sub-id,
+.iid-t,
+.mg-id,
+.g-sha,
+.rs-time,
+.tl-head .tick,
+.sf-ticks,
+.event .ts,
+.col-upd,
+.iupd,
+.g-date,
+.rf-path {
+  font-family: var(--mono);
+}
+
+/* ---------- 共通ラベル(issue / ブランチ / worktree / md 内エージェント) ---------- */
+.ichip {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  color: #a8cdf5;
+  border-radius: 4px;
+  padding: 0 5px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 15px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+.ichip {
+  gap: 3px;
+}
+.ichip .mdi,
+.ichip-i {
+  opacity: 0.75;
+  flex: none;
+}
+.mdi {
+  vertical-align: -1.5px;
+  flex: none;
+}
+.ichip:hover {
+  background: rgba(96, 165, 250, 0.22);
+}
+.ichip.closed {
+  background: rgba(125, 138, 153, 0.09);
+  border-color: rgba(125, 138, 153, 0.26);
+  color: #8b9aab;
+}
+.ichip.closed:hover {
+  background: rgba(125, 138, 153, 0.2);
+}
+
+/* 札に載せたときに、本文の側の該当行を光らせる。
+
+   ここだけ !important を使うのは、**光らせる相手が行そのもの**だからである。
+   行は状態(選択中・変化直後・載せている)で背景を持っており、どれに当たっても
+   同じ強さで光らせないと、状態によって光ったり光らなかったりする。 */
+.tok-hl {
+  /* biome-ignore lint/complexity/noImportantStyles: 行の状態ごとの背景すべてに勝つ必要がある */
+  background: rgba(96, 165, 250, 0.16) !important;
+}
+.refchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(125, 138, 153, 0.12);
+  border: 1px solid rgba(125, 138, 153, 0.3);
+  color: #b8c6d4;
+  border-radius: 4px;
+  padding: 0 5px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 15px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+.refchip:hover {
+  background: rgba(125, 138, 153, 0.24);
+  color: var(--fg);
+}
+.agchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 4px;
+  padding: 0 5px;
+  cursor: pointer;
+  font-size: 10.5px;
+  line-height: 15px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.agchip:hover {
+  border-color: var(--accent);
+}
+.adot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+}
+.adot.active {
+  background: var(--active);
+}
+.adot.waiting {
+  background: var(--waiting);
+}
+.adot.ended {
+  background: #64748b;
+}
+
+/* ---------- 詳細パネルの活動タイムライン ---------- */
+.alanes {
+  display: grid;
+  grid-template-columns: max-content minmax(140px, 1fr);
+  gap: 5px 10px;
+  align-items: center;
+  margin: 4px 0 10px;
+}
+.alane {
+  display: contents;
+}
+.alane-tl {
+  position: relative;
+  height: 12px;
+  background: rgba(42, 52, 65, 0.4);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.alane-tl .bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 2px;
+  min-width: 2px;
+}
+.alane-tl .bar.active {
+  background: var(--active);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.alane-tl .bar.done {
+  background: #46566b;
+}
+.alane-axis {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  color: var(--dim);
+  font-size: 10px;
+  font-family: var(--mono);
+}

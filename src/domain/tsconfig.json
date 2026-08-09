@@ -1,0 +1,23 @@
+// domain が見てよいのは app-kernel だけ。
+// bounded context をまたぐ import は道の上では防げないので、scripts/check-architecture.mjs が見る。
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declarationDir": "../../dist/types/domain",
+    "tsBuildInfoFile": "../../dist/types/domain.tsbuildinfo",
+    "rootDir": ".",
+    "paths": {
+      "~/domain/*": ["./*"],
+      "~/app-kernel/*": ["../app-kernel/*"]
+    }
+  },
+  "include": ["."],
+  "references": [
+    {
+      "path": "../app-kernel"
+    }
+  ]
+}

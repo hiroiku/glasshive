@@ -1,0 +1,66 @@
+{
+  "name": "glasshive",
+  "version": "1.0.0",
+  "description": "Glass-walled observation hive for AI agents — a read-only local dashboard of running sessions, subagents, issues, and git",
+  "license": "MIT",
+  "type": "module",
+  "repository": "github:hiroiku/glasshive",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "bin": {
+    "glasshive": "bin/glasshive.js"
+  },
+  "files": [
+    "bin",
+    "dist/client",
+    "dist/server",
+    "dist/launcher",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "vite dev",
+    "build": "$npm_execpath run build:app && $npm_execpath run build:launcher && $npm_execpath run verify:dist",
+    "build:app": "vite build",
+    "build:launcher": "tsc -p tsconfig.launcher.json",
+    "verify:dist": "node scripts/verify-server-externals.mjs",
+    "start": "node bin/glasshive.js",
+    "typecheck": "node scripts/typecheck.mjs",
+    "arch": "node scripts/check-architecture.mjs",
+    "lint": "biome check .",
+    "fix": "biome check --write .",
+    "test": "vitest run --project unit --project ui",
+    "test:smoke": "vitest run --project smoke",
+    "check": "biome ci . && $npm_execpath run arch && $npm_execpath run typecheck && $npm_execpath run test",
+    "prepublishOnly": "$npm_execpath run build && $npm_execpath run check && $npm_execpath run test:smoke"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.7",
+    "@fontsource-variable/noto-sans-jp": "^5.3.0",
+    "@fontsource-variable/noto-sans-mono": "^5.3.0",
+    "@mdi/js": "^7.4.47",
+    "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-router": "^1.170.23",
+    "@tanstack/react-start": "^1.168.40",
+    "@tanstack/react-table": "^8.21.3",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.12.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.5",
+    "es-module-lexer": "2.3.1",
+    "happy-dom": "^20.11.2",
+    "highlight.js": "^11.11.1",
+    "markdown-it": "^14.3.0",
+    "markdown-it-cjk-friendly": "^2.0.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,0 +1,18 @@
+// 葉である。src の他のどこも import しない — 道が 1 本も引かれていないので、
+// 書いた途端に「その名前は無い」で組み立てが落ちる。
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declarationDir": "../../dist/types/app-kernel",
+    "tsBuildInfoFile": "../../dist/types/app-kernel.tsbuildinfo",
+    "rootDir": ".",
+    "paths": {
+      "~/app-kernel/*": ["./*"]
+    }
+  },
+  "include": ["."],
+  "references": []
+}

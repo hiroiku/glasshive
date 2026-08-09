@@ -1,0 +1,87 @@
+import type { Axis, Scale } from '../../timeline/axis.ts';
+import { SCALES } from '../../timeline/axis.ts';
+import { RangeSlider, TimeInput } from '../timeline/RangeSlider.tsx';
+
+/* 表の帯。探しと絞りと、いま見ている時間帯。
+
+   **`#tree-pane` の直の子であり続けること。** 列の定義は `#tree-pane` が持っており、
+   帯は `grid-column: 1 / -1` で全列を跨いでいる。包みを 1 枚挟むと跨げなくなる。 */
+
+export interface AgentsToolbarProps {
+  readonly query: string;
+  readonly onQuery: (query: string) => void;
+  /** 見えている欄ではなく、正本の中身を探すか */
+  readonly deep: boolean;
+  readonly onDeep: (deep: boolean) => void;
+  readonly attention: boolean;
+  readonly onAttention: (attention: boolean) => void;
+  readonly scale: Scale;
+  readonly onScale: (scale: Scale) => void;
+  /** 時間帯を手で選んでいるか。選んでいる間は目盛りの札を光らせない */
+  readonly picked: boolean;
+  readonly axis: Axis;
+  readonly domain: Axis;
+  readonly onRange: (t0: number, t1: number) => void;
+  readonly onCommitTime: (which: 't0' | 't1') => (atMs: number) => void;
+}
+
+export function AgentsToolbar({
+  query,
+  onQuery,
+  deep,
+  onDeep,
+  attention,
+  onAttention,
+  scale,
+  onScale,
+  picked,
+  axis,
+  domain,
+  onRange,
+  onCommitTime,
+}: AgentsToolbarProps) {
+  return (
+    <div className="view-toolbar">
+      <input
+        className="search"
+        type="search"
+        placeholder={deep ? 'Search transcripts (deep)…' : 'Search agents…'}
+        value={query}
+        onChange={(event) => onQuery(event.target.value)}
+      />
+      <button
+        type="button"
+        className={`fchip ${deep ? 'on' : ''}`}
+        title="正本の中身(末尾 1MiB・直近 7 日)を横断して探す"
+        onClick={() => onDeep(!deep)}
+      >
+        deep
+      </button>
+      <button
+        type="button"
+        className={`fchip ${attention ? 'on' : ''}`}
+        title="要注意だけに絞る: あなたの返事待ち、または 30 分以上動きのない待機"
+        onClick={() => onAttention(!attention)}
+      >
+        ⚠ attention
+      </button>
+      <span className="scale-chips">
+        {SCALES.map((preset) => (
+          <button
+            key={preset.label}
+            type="button"
+            className={`fchip ${!picked && scale === preset.key ? 'on' : ''}`}
+            onClick={() => onScale(preset.key)}
+          >
+            {preset.label}
+          </button>
+        ))}
+      </span>
+      <RangeSlider min={domain.t0} max={domain.t1} a={axis.t0} b={axis.t1} onChange={onRange} />
+      <span className="rs-label">
+        <TimeInput value={axis.t0} onCommit={onCommitTime('t0')} />–
+        <TimeInput value={axis.t1} onCommit={onCommitTime('t1')} />
+      </span>
+    </div>
+  );
+}

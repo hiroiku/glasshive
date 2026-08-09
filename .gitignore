@@ -1,5 +1,8 @@
-# 依存
+# 依存。**錠は package-lock.json 1 本だけ持つ** —
+# 2 本あると、どちらを直したかで入る版が分かれる。bun でも同じ錠を読ませる。
 node_modules/
+bun.lock
+bun.lockb
 
 # ビルド成果物
 dist/
@@ -32,3 +35,6 @@ old/
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# ブラウザーで確かめたときの写し
+.playwright-mcp/

@@ -1,0 +1,18 @@
+/* 見た目の決まり。**1 枚のまま束ねる** — subgrid は親が敷いた筋を子が継ぐので、
+   包む要素も詳細度の順も動かせない。分けたのは読むためであって、
+   囲うためではない。読み込む順が重なりの勝ち負けを決めるので、順を変えない。 */
+
+/* 字そのものを連れてくる。**外へ取りに行かせない** — 配り先の機械に何が入っているかは
+   こちらから見えず、外へ問い合わせないという決めもある。字面の一族(unicode-range)で
+   分けてあるので、ブラウザーが取るのは出す字に要る分だけである。 */
+@import "@fontsource-variable/noto-sans-jp/index.css";
+@import "@fontsource-variable/noto-sans-mono/index.css";
+
+@import "./base.css";
+@import "./chrome.css";
+@import "./agents.css";
+@import "./stats.css";
+@import "./overview.css";
+@import "./git.css";
+@import "./issues.css";
+@import "./panel.css";

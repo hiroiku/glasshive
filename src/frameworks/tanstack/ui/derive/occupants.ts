@@ -1,0 +1,68 @@
+import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
+import { cut } from '../format.ts';
+
+/* 作業場所に居るエージェント。
+
+   記録の側は「どの枝がどこに出ているか」しか言わない。誰がそこで働いているかは
+   観測の側にしかないので、cwd で突き合わせる。
+
+   **終わった手は入れない。** 記録の画面が答えるのは「いまそこに誰か居るか」で、
+   居たことがあるかではない。 */
+
+/** 名札の長さ。線の行は狭いので、木の一覧より短く切る */
+const MAX_LABEL = 20;
+
+/** 並べる順。動いている手を先に出す */
+const STATE_ORDER: Readonly<Record<string, number>> = { active: 0, waiting: 1 };
+
+export interface Occupant {
+  readonly file: string;
+  readonly state: string;
+  readonly label: string;
+}
+
+export type OccupantIndex = ReadonlyMap<string, readonly Occupant[]>;
+
+export function occupantIndex(project: ProjectJson | undefined): OccupantIndex {
+  const index = new Map<string, Occupant[]>();
+  if (project === undefined) return index;
+
+  const add = (cwd: string | null, occupant: Occupant) => {
+    if (cwd === null || cwd === '' || occupant.state === 'ended') return;
+    const found = index.get(cwd) ?? [];
+    if (!found.some((other) => other.file === occupant.file)) found.push(occupant);
+    index.set(cwd, found);
+  };
+
+  for (const session of project.sessions) {
+    add(session.cwd, {
+      file: session.file,
+      state: session.state,
+      label: cut(session.title ?? session.id.slice(0, 8), MAX_LABEL),
+    });
+    for (const subagent of session.subagents) {
+      add(subagent.cwd, {
+        file: subagent.file,
+        state: subagent.state,
+        label: cut(subagent.label, MAX_LABEL),
+      });
+    }
+  }
+  return index;
+}
+
+/* その作業場所と、その下で働いている手。
+
+   下まで見るのは、エージェントが巣の中の一段深いところで動くことがあるからである。
+   区切りを足して比べるのは、名前の先頭が同じだけの別の場所を拾わないため。 */
+export function occupantsOf(index: OccupantIndex, root: string | null): Occupant[] {
+  if (root === null || root === '') return [];
+  const found: Occupant[] = [];
+  for (const [cwd, occupants] of index) {
+    if (cwd !== root && !cwd.startsWith(`${root}/`)) continue;
+    for (const occupant of occupants) {
+      if (!found.some((other) => other.file === occupant.file)) found.push(occupant);
+    }
+  }
+  return found.sort((a, b) => (STATE_ORDER[a.state] ?? 9) - (STATE_ORDER[b.state] ?? 9));
+}

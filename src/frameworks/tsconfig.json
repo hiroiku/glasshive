@@ -1,0 +1,30 @@
+// frameworks は interface の窓と composition の組み立てだけを見る。**application へは道が無い。**
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declarationDir": "../../dist/types/frameworks",
+    "tsBuildInfoFile": "../../dist/types/frameworks.tsbuildinfo",
+    "rootDir": ".",
+    "paths": {
+      "~/frameworks/*": ["./*"],
+      "~/app-kernel/*": ["../app-kernel/*"],
+      "~/interface/*": ["../interface/*"],
+      "~/composition/*": ["../composition/*"]
+    }
+  },
+  "include": ["."],
+  "references": [
+    {
+      "path": "../app-kernel"
+    },
+    {
+      "path": "../interface"
+    },
+    {
+      "path": "../composition"
+    }
+  ]
+}

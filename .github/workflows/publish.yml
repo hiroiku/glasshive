@@ -1,0 +1,43 @@
+name: publish
+
+# 札(tag)からではなく、GitHub のリリースが公開された時だけ出す。
+# 札は間違えて押せるが、リリースは人が一度確かめてから公開する。
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # npm の Trusted Publishing(OIDC)がこの権利で身元を名乗る。
+  # 合言葉(token)を置かないので、盗まれるものが無い。
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Trusted Publishing は npm 11.5.1 以上。Node 24 の同梱がそれを満たす
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      # 札と package.json の版が食い違ったまま出すと、
+      # npm には別の番号が並び、GitHub の札からは辿れなくなる
+      - name: 札と版が合っているか
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$pkg" ]; then
+            echo "札 $tag と版 $pkg が食い違っている"
+            exit 1
+          fi
+
+      - run: npm ci
+      # publish の手前で prepublishOnly が組み立て・門・配りものの検めを全部走らせる。
+      # 落ちれば出ない
+      - run: npm publish

@@ -1,2 +1,0 @@
-# dotagents のマシン固有の生成物(この .gitignore 自体は配布物の一部)
-/.dotagents.json

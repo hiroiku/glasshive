@@ -1,0 +1,293 @@
+/* ---------- 外枠。上部バー・タブ行・下部バー・本文の枠 ---------- */
+
+/* ---------- 上部バー ---------- */
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+#brand {
+  font-weight: 700;
+}
+
+/* ビュー切替(Agents / Beads / Git)— プロジェクトタブの直下、プロジェクト内の概念 */
+#subbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+#subbar-project {
+  color: var(--dim);
+  font-size: 11px;
+}
+#views {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px;
+}
+.vbtn {
+  background: transparent;
+  color: var(--dim);
+  border: none;
+  border-radius: 4px;
+  padding: 2px 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.vbtn:hover {
+  color: var(--fg);
+}
+.vbtn.current {
+  background: var(--panel);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+#scope {
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 34ch;
+}
+#counts {
+  color: var(--dim);
+}
+#counts b.active {
+  color: var(--active);
+}
+#counts b.waiting {
+  color: var(--waiting);
+}
+#counts b.input {
+  color: var(--input);
+}
+#counts b.ended {
+  color: var(--ended);
+}
+#filter-toggle {
+  margin-left: auto;
+  color: var(--dim);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 検索欄(部分一致) */
+.search {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 12px;
+  width: 200px;
+}
+.search::placeholder {
+  color: var(--dim);
+}
+.search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 3 ビュー共通のツールバー */
+.view-toolbar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--dim);
+  font-size: 11.5px;
+}
+#tree-pane > .view-toolbar {
+  grid-column: 1 / -1;
+}
+.fchip {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--dim);
+  padding: 1px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+.fchip:hover {
+  color: var(--fg);
+}
+.fchip.on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* 別の群であることを、間だけで言う。仕切りを引くと帯が段に見える */
+.chip-gap {
+  width: 10px;
+}
+
+/* 画面横断リンク */
+.lnk {
+  color: inherit;
+  text-decoration: underline dotted rgba(125, 138, 153, 0.6);
+  cursor: pointer;
+}
+.lnk:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+#conn {
+  color: var(--ended);
+}
+#conn.on {
+  color: var(--active);
+}
+
+/* ---------- プロジェクトタブ ---------- */
+#tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 10px 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex: none;
+  /* 読み込み中(タブ 0 件)でも高さを確保して CLS を起こさない
+     = 6px 上 padding + タブ 1 個分(12px 文字 × line-height + 上下 5px + border 1px) */
+  min-height: 36px;
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  background: transparent;
+  color: var(--dim);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 5px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+.tab:hover {
+  color: var(--fg);
+}
+.tab.current,
+.tab:has(.tab-link.on) {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--fg);
+}
+.tab .n {
+  color: var(--dim);
+  font-size: 11px;
+}
+.tab .n.input {
+  color: var(--input);
+}
+/* 留めていない巣を観ているあいだの仮の席。留めた席と見分けが付くように傾ける */
+.tab.provisional .tab-link {
+  font-style: italic;
+}
+
+.tab-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+/* 件数の札と外す × を同じ枠に重ねる。**載せても枠の幅が変わらない。**
+   × が現れて行が伸びると隣が動き、押すつもりのなかったタブを外してしまう */
+.tab-slot {
+  position: relative;
+  width: 12px;
+  height: 14px;
+  flex: none;
+}
+.tab-slot > * {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tab-close {
+  background: transparent;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 0;
+  opacity: 0;
+}
+.tab:hover .tab-slot .n {
+  opacity: 0;
+}
+.tab:hover .tab-close {
+  opacity: 1;
+}
+.tab-close:hover {
+  color: var(--fg);
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+}
+.dot.active {
+  background: var(--active);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.dot.waiting {
+  background: var(--waiting);
+}
+.dot.input {
+  background: var(--input);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.dot.ended {
+  background: var(--ended);
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ---------- 本体 ---------- */
+#content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+#view-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}

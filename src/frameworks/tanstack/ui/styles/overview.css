@@ -1,0 +1,167 @@
+/* ---------- 横断ダッシュボード(/) ---------- */
+
+/* ---------- 横断ダッシュボード('/') ---------- */
+#dash {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 22px;
+  font-size: 12px;
+}
+#dash .empty {
+  color: var(--dim);
+  padding: 30px;
+  text-align: center;
+}
+/* 見えなかったことの言い分。**空の一覧と同じ顔をさせない**
+
+   段落だけに効かせる。裸の `.warn` にすると、記録の画面で遅れの数に付けている
+   `.g-behind.warn`(色を変えるだけの印)まで箱で囲われる。 */
+p.warn {
+  color: var(--waiting);
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 6px;
+  padding: 6px 12px;
+  margin-bottom: 10px;
+  max-width: 1160px;
+}
+.dash-head {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+.dash-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.dash-sum {
+  color: var(--dim);
+}
+.dash-sum b {
+  color: var(--fg);
+}
+.dash-sum b.active {
+  color: var(--active);
+}
+.dash-sum b.waiting {
+  color: var(--waiting);
+}
+.dash-sum b.input {
+  color: var(--input);
+}
+/* 7 本 → 8 本。**唯一列数を変えたところ。** 左端に留める印の列を足した。
+   行の属性として状態の点と並べて読めるようにしてある(右端だと消す操作に見える) */
+.dash-grid {
+  display: grid;
+  grid-template-columns:
+    max-content minmax(180px, max-content) max-content max-content max-content max-content
+    minmax(140px, 1fr) max-content;
+  column-gap: 22px;
+  max-width: 1160px;
+}
+.dash-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.dash-row.head {
+  color: var(--dim);
+  font-size: 10.5px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding-bottom: 6px;
+}
+.dash-row:not(.head) {
+  cursor: pointer;
+}
+.dash-row:not(.head):hover {
+  background: rgba(96, 165, 250, 0.07);
+}
+.dash-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.dash-row .mono {
+  font-family: var(--mono);
+}
+.dash-row .inputc {
+  color: var(--input);
+}
+.dash-bar {
+  position: relative;
+  height: 8px;
+  background: rgba(42, 52, 65, 0.5);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.dash-bar i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(96, 165, 250, 0.55);
+  border-radius: 4px;
+}
+.dash-name {
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 留める印。留めていないものは行に載せたときだけ薄く現れる —
+   常に出ていると 40 行ぶんの点が並んで、状態の点と読み違える */
+.pin {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.pin i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  transform: rotate(45deg);
+  border: 1px solid var(--dim);
+  opacity: 0;
+}
+.dash-row:hover .pin i {
+  opacity: 0.55;
+}
+.pin.on i {
+  opacity: 1;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.pin:hover i {
+  opacity: 1;
+  border-color: var(--accent);
+}
+#notify-toggle {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 4px;
+  filter: grayscale(1) opacity(0.6);
+}
+#notify-toggle:hover {
+  filter: grayscale(0.4);
+}
+#notify-toggle.on {
+  filter: none;
+}

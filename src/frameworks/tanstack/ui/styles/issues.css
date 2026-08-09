@@ -1,0 +1,389 @@
+/* ---------- Beads。課題の一覧と依存の線 ---------- */
+
+/* bd 未検出時の案内(何ができるようになるかを添えて活用をうながす)。
+   置き場所は空状態の定石 — ペインの水平中央、上から 1/3(視線が自然に落ちる高さ)。
+   親の #issues-list は多列グリッドなので、全列にまたがらせてから中央へ寄せる */
+.bd-promo {
+  grid-column: 1 / -1;
+  justify-self: center;
+  margin: max(56px, 16vh) 24px 40px;
+  max-width: 500px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 22px;
+  color: var(--fg);
+  line-height: 1.7;
+  font-size: 12px;
+}
+.bd-promo .bp-title {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.bd-promo .bp-title .mdi {
+  color: var(--accent);
+}
+/* #git-view は縦 flex なので、カード自身を中央へ寄せる */
+#git-view > .bd-promo {
+  align-self: center;
+}
+.bd-promo p {
+  color: var(--dim);
+  margin: 0 0 10px;
+}
+.bd-promo code {
+  background: rgba(125, 155, 190, 0.12);
+  border: 1px solid rgba(125, 155, 190, 0.22);
+  padding: 0 4px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #c9dcf0;
+}
+.bd-promo a {
+  color: var(--accent);
+}
+
+/* ---------- bd issues 一覧 ---------- */
+#issues-list {
+  flex: 1;
+  overflow: auto;
+  padding: 0 0 14px;
+  font-size: 12px;
+  display: grid;
+  grid-template-columns:
+    max-content fit-content(190px) minmax(150px, 1fr) max-content max-content max-content
+    minmax(100px, 0.45fr) minmax(150px, 0.8fr) max-content;
+  column-gap: 10px;
+  grid-auto-rows: min-content;
+  align-content: start;
+}
+#issues-list .empty {
+  color: var(--dim);
+  padding: 30px;
+  text-align: center;
+  grid-column: 1 / -1;
+}
+.issue-row.head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  color: var(--dim);
+  font-size: 10.5px;
+  border-bottom: 1px solid var(--border);
+  padding-top: 8px;
+  padding-bottom: 6px;
+}
+.issue-row.head .right {
+  text-align: right;
+}
+
+.issue-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: 28px;
+  padding: 3px 14px 3px 8px;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  position: relative;
+}
+.issue-row:hover {
+  background: rgba(96, 165, 250, 0.06);
+}
+/* 依存線の SVG は絶対配置でレイアウトから外す(固有サイズ 150px が行高に混入するのを防ぎ、
+   行全体 = padding 込みを覆うので縦線が行間で途切れない)。列幅は隣のスペーサーが確保する */
+.dep-gutter {
+  /* 置換要素(svg)は top/bottom 指定でも固有高 150px に留まるため height を明示する */
+  position: absolute;
+  left: 8px;
+  top: 0;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.dep {
+  stroke-width: 1.3;
+  fill: none;
+  opacity: 0.8;
+}
+.ilabels {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+.lbl {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0 7px;
+  font-size: 10.5px;
+  color: var(--dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.lbl:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.issue-row .iid {
+  color: var(--dim);
+  font-size: 11px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  overflow: visible; /* hidden にすると罫線の上下ブリードが刈られて行間が空く */
+}
+.issue-row .iid-t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-mark {
+  color: #46566b;
+  margin-right: 5px;
+}
+
+/* 階層の実線罫線: 行の padding を貫通して隙間なく繋ぐ */
+.tg {
+  flex: none;
+  width: 14px;
+  position: relative;
+  align-self: stretch;
+  margin: -3px 0;
+}
+.tg.cont::before,
+.tg.tee::before,
+.tg.end::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid #3a4756;
+}
+.tg.end::before {
+  bottom: 50%;
+}
+.tg.tee::after,
+.tg.end::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  width: 7px;
+  border-top: 1px solid #3a4756;
+}
+
+/* Priority / Type の色分け */
+.pchip {
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.pchip.p0 {
+  background: rgba(248, 113, 113, 0.18);
+  color: #f87171;
+}
+.pchip.p1 {
+  background: rgba(251, 146, 60, 0.16);
+  color: #fb923c;
+}
+.pchip.p2 {
+  background: rgba(234, 179, 8, 0.14);
+  color: #eab308;
+}
+.pchip.p3 {
+  background: rgba(125, 138, 153, 0.16);
+  color: #9aa8b8;
+}
+.pchip.p4,
+.pchip.px {
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--dim);
+}
+.tchip {
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.tchip.t-bug {
+  background: rgba(248, 113, 113, 0.16);
+  color: #f87171;
+}
+.tchip.t-feature {
+  background: rgba(52, 211, 153, 0.14);
+  color: var(--active);
+}
+.tchip.t-task {
+  background: rgba(96, 165, 250, 0.14);
+  color: var(--accent);
+}
+.tchip.t-chore {
+  background: rgba(148, 163, 184, 0.14);
+  color: #94a3b8;
+}
+.tchip.t-epic {
+  background: rgba(192, 132, 252, 0.16);
+  color: var(--input);
+}
+.issue-row .ititle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.issue-row .iupd {
+  color: var(--dim);
+  font-size: 11px;
+  text-align: right;
+}
+.issue-row.conflict {
+  border-left-color: #f87171;
+}
+
+.chip.st-open {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--accent);
+}
+.chip.st-in_progress {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--active);
+}
+.chip.st-merge-ready {
+  background: rgba(167, 139, 250, 0.18);
+  color: #a78bfa;
+}
+.chip.st-deferred {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--waiting);
+}
+.chip.st-closed {
+  background: rgba(100, 116, 139, 0.2);
+  color: #94a3b8;
+}
+
+.iworkers {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  align-items: center;
+}
+/* 中の要素がテキスト折り返しで行を太らせないように全て 1 行固定 */
+.iworkers > * {
+  flex: none;
+  white-space: nowrap;
+}
+.iworkers .assg {
+  color: var(--dim);
+  font-size: 11px;
+}
+.wk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--fg);
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.wk:hover {
+  border-color: var(--accent);
+}
+.wk .where {
+  color: var(--dim);
+}
+.wk-dup {
+  color: #f87171;
+  font-size: 11px;
+}
+
+/* Beads の累積フロー */
+.flow-chart {
+  padding: 8px 14px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.fl-open {
+  fill: rgba(96, 165, 250, 0.2);
+}
+.fl-closed {
+  fill: none;
+  stroke: var(--active);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.flow-legend {
+  display: flex;
+  gap: 16px;
+  color: var(--dim);
+  font-size: 10.5px;
+  margin-top: 3px;
+}
+.flow-legend .lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+/* epic の進捗バー */
+.epic-prog {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  width: 74px;
+  height: 7px;
+  background: rgba(42, 52, 65, 0.8);
+  border-radius: 4px;
+  position: relative;
+  flex: none;
+  vertical-align: middle;
+}
+.epic-prog i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--active);
+  border-radius: 4px;
+}
+.epic-prog b {
+  position: absolute;
+  left: calc(100% + 5px);
+  font-size: 9.5px;
+  color: var(--dim);
+  font-family: var(--mono);
+  font-weight: 400;
+}
+
+/* Beads 依存線の凡例 */
+.legend {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 12px;
+  align-items: center;
+}
+.legend .lg {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--dim);
+  font-size: 10.5px;
+}

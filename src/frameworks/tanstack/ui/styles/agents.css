@@ -1,0 +1,456 @@
+/* ---------- Agents。木と時間の帯 ---------- */
+
+/* ---------- ツリー(列ぞろえ + タイムライン) ----------
+   全行が #tree-pane のトラックを subgrid で共有する。
+   文字列の列は fit-content — 中身が短いときは中身の幅に密着し(上限つき)、
+   余った幅はすべてタイムライン(唯一の fr)へ流れてウォーターフォールが最大化する。 */
+#tree-pane {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  display: grid;
+  grid-template-columns:
+    fit-content(400px) max-content max-content max-content max-content
+    fit-content(200px) fit-content(170px) fit-content(170px)
+    fit-content(260px) max-content minmax(280px, 1fr);
+  column-gap: 10px;
+  grid-auto-rows: min-content;
+  align-content: start;
+}
+#rows {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  grid-auto-rows: min-content;
+}
+.grid-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  padding: 4px 14px;
+}
+.grid-row.head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  color: var(--dim);
+  font-size: 10.5px;
+  border-bottom: 1px solid var(--border);
+  padding-top: 8px;
+  padding-bottom: 6px;
+}
+.grid-row .right {
+  text-align: right;
+}
+.grid-row > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 並び替え: 列名クリックで切り替え(▲/▼)。タイムライン列は目盛りの色 + 左端の矢印で示す */
+.head .sortable {
+  cursor: pointer;
+}
+.head .dep-sort {
+  white-space: nowrap;
+}
+.head .sortable:hover {
+  color: var(--fg);
+}
+.head .sortable.sorted {
+  color: var(--accent);
+}
+.head .sortable.sorted:not(.tl-head)::after {
+  content: "▲";
+  margin-left: 4px;
+  font-size: 8px;
+}
+.head .sortable.sorted.desc:not(.tl-head)::after {
+  content: "▼";
+}
+.head .tl-head.sorted::before {
+  content: "▲";
+  position: absolute;
+  left: 0;
+  top: 1px;
+  font-size: 8px;
+  color: var(--accent);
+}
+.head .tl-head.sorted.desc::before {
+  content: "▼";
+}
+.head .tl-head.sorted .tick {
+  color: var(--accent);
+}
+.head .tl-head.sorted .tick.first {
+  left: 12px;
+}
+
+/* 変わった行だけの一撃ハイライト。
+   transform の拡大はスクロール可能領域に算入されて横スクロールバーが一瞬出るため使わない
+   (背景と inset shadow はオーバーフローに影響しない)。 */
+@keyframes rowpop {
+  0% {
+    background: rgba(96, 165, 250, 0.34);
+    box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.55);
+  }
+  60% {
+    background: rgba(96, 165, 250, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.row.pop,
+.issue-row.pop {
+  animation: rowpop 0.7s ease-out;
+}
+
+.row {
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  position: relative;
+}
+.row:hover {
+  background: rgba(96, 165, 250, 0.06);
+}
+.row.selected {
+  background: rgba(96, 165, 250, 0.1);
+  border-left-color: var(--accent);
+}
+.row .name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: visible;
+}
+.row .name .t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row.kind-subagent .name .t {
+  color: #b8c4d0;
+}
+.row.state-ended .name .t {
+  color: var(--dim);
+}
+.row .chev {
+  width: 12px;
+  flex: none;
+  color: var(--dim);
+  font-size: 10px;
+}
+.row .sub-id {
+  color: var(--dim);
+  font-size: 10.5px;
+}
+.row .col-model,
+.row .col-eff {
+  color: var(--dim);
+  font-size: 11px;
+}
+.row .col-tok {
+  color: var(--dim);
+  font-size: 11px;
+  font-family: var(--mono);
+  text-align: right;
+}
+.row .col-bd {
+  color: var(--dim);
+  font-size: 11.5px;
+}
+.row .col-wt {
+  color: var(--dim);
+  font-size: 11.5px;
+}
+.row .col-br {
+  color: var(--dim);
+  font-size: 11.5px;
+}
+.row .col-now {
+  color: var(--dim);
+  font-size: 11.5px;
+}
+.row.state-active .col-now {
+  color: #a7d7c2;
+}
+.row .col-now.awaiting {
+  color: var(--input);
+}
+.row .col-now.subwait {
+  color: #7dd3fc;
+}
+.row .col-bd {
+  display: flex;
+  gap: 6px;
+  overflow: hidden;
+}
+.row .bd-actor {
+  flex: none;
+}
+.row .col-upd {
+  color: var(--dim);
+  font-size: 11px;
+  text-align: right;
+}
+
+/* 罫線: セッションのドット直下から縦線を下ろし、サブエージェントのドットへ枝を渡す */
+.row.kind-subagent::before {
+  content: "";
+  position: absolute;
+  left: 38px;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--border);
+}
+.row.kind-subagent.last::before {
+  bottom: 50%;
+}
+.row.kind-subagent::after {
+  content: "";
+  position: absolute;
+  left: 38px;
+  top: 50%;
+  width: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.chip {
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.chip.state-active {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--active);
+}
+.chip.state-waiting {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--waiting);
+}
+.chip.state-input {
+  background: rgba(192, 132, 252, 0.16);
+  color: var(--input);
+}
+.chip.state-ended {
+  background: rgba(100, 116, 139, 0.2);
+  color: #94a3b8;
+}
+
+#rows .empty {
+  color: var(--dim);
+  padding: 30px;
+  text-align: center;
+  grid-column: 1 / -1;
+}
+
+/* タイムライン(ネットワークタブ式のウォーターフォール)
+   overflow は .grid-row > span の hidden より詳細度で勝つ形で visible にする —
+   負けると結線の縦線が 14px 高で切り取られ、行ごとの破線に見えてしまう */
+.tl,
+.tl-head {
+  position: relative;
+  height: 14px;
+}
+.grid-row > .tl,
+.grid-row > .tl-head {
+  overflow: visible;
+}
+/* ウォーターフォール内はドラッグでパンできる(素のクリックは行選択のまま)。
+   帯自体は 14px しかないので、当たり判定は透明な ::before で行のタイムライン領域全体
+   (上下の余白 + 右パディング + 列間ギャップ)へ広げる — 隙間が row の pointer に
+   落ちるとドラッグのつもりがサイドパネルを開いてしまう */
+.row .tl {
+  cursor: grab;
+}
+.row .tl::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  right: -14px;
+  top: -6px;
+  bottom: -6px;
+}
+body.tl-panning {
+  user-select: none;
+}
+body.tl-panning,
+body.tl-panning .row,
+body.tl-panning .row .tl {
+  cursor: grabbing;
+}
+/* 結線レイヤー: グリッドと同じく #rows 全高の 1 枚(行継ぎの節点を出さない) */
+.tl-conn {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+/* 往路・復路とも実線 — 向きの区別は矢印が担う(破線は帯や点線グリッドに紛れて読めない)。
+   色は「会話」を表す空色系 — グリッドと終了帯のスレート系(青紫寄りの灰)から色相で分離する
+   ("waiting on subagents" の表示色と同じ系統)。
+   縦線は行ごとの区間を重ねしろ付きで継ぐため、不透明色にして継ぎ目の濃淡を消す */
+.net-line {
+  stroke: #3d5a68;
+  stroke-width: 1;
+}
+.net-line.end {
+  stroke: #37505d;
+}
+.net-arrow {
+  fill: #5fa8c9;
+}
+.net-arrow.end {
+  fill: #4f92b0;
+}
+.tl .bar.unknown {
+  top: 6px;
+  bottom: 6px;
+  background: rgba(125, 138, 153, 0.35);
+  min-width: 0;
+  border-radius: 1px;
+}
+/* 時間グリッドはキリの良い絶対時刻に、全行を貫く 1 枚のレイヤーで敷く
+   (行ごとの背景だと行間で点線が途切れる)。位置は .tl-grid の inline style が持つ */
+#rows {
+  position: relative;
+}
+.tl-grid {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+.tl-grid > i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: repeating-linear-gradient(180deg, rgba(64, 79, 99, 0.8) 0 1px, transparent 1px 4px);
+}
+.tl .bar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 2px;
+  min-width: 3px;
+}
+.tl .bar.active {
+  background: var(--active);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.tl .bar.waiting {
+  background: var(--waiting);
+  opacity: 0.75;
+}
+.tl .bar.ended {
+  background: #46566b;
+}
+/* 呼吸はいままさに稼働している帯(最後の生きた区間)だけ。
+   .active より後に置く — 前にあると同詳細度の後勝ちで past にも animation が効いてしまう */
+.tl .bar.past {
+  opacity: 0.5;
+  animation: none;
+}
+.tl-head .tick {
+  position: absolute;
+  top: 0;
+  color: var(--dim);
+  font-size: 10px;
+  transform: translateX(-50%);
+}
+.tl-head .tick.first {
+  transform: none;
+}
+.tl-head .tick.last {
+  transform: translateX(-100%);
+}
+
+/* ウォーターフォールのスケール切替 */
+.scale-chips {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 10px;
+}
+
+/* 範囲選択スライダー */
+.rslider {
+  position: relative;
+  flex: 1;
+  min-width: 180px;
+  height: 18px;
+  margin: 0 4px 0 12px;
+}
+.rs-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 8px;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+}
+.rs-fill {
+  position: absolute;
+  top: 6px;
+  height: 7px;
+  background: rgba(96, 165, 250, 0.3);
+  border-radius: 3px;
+  cursor: grab;
+}
+.rs-fill:active {
+  cursor: grabbing;
+}
+.rs-handle {
+  position: absolute;
+  top: 2px;
+  width: 5px;
+  height: 14px;
+  background: var(--accent);
+  border-radius: 2px;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+  z-index: 1;
+}
+.rs-label {
+  color: var(--dim);
+  font-size: 10.5px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+/* 日付は素の表示に見えて、触ると編集できる(hover で枠、focus でパネル背景)。
+   幅は「YYYY-MM-DD HH:MM」の 16ch + padding/border 分(border-box で削られて欠けないように) */
+.rs-time {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 10.5px;
+  padding: 1px 3px;
+  width: calc(16ch + 14px);
+  flex: none;
+  text-align: center;
+}
+.rs-time:hover {
+  border-color: var(--border);
+  color: var(--fg);
+}
+.rs-time:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--panel);
+  color: var(--fg);
+}

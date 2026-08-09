@@ -1,0 +1,24 @@
+// 起動口だけを素の Node ESM に出す。
+//
+// paths を空にしてあるのは意図的で、これが「起動口はアプリ層を知らない」という境界そのものである。
+// ~/ 経由で domain や infrastructure を触った瞬間にコンパイルが落ちる — 起動口は
+// dist/server/server.js を fetch ハンドラーとして呼ぶだけの薄い殻でなければならない。
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "jsx": "preserve",
+    // 起動口は素の Node ESM として出すので、import は .js で書く
+    "allowImportingTsExtensions": false,
+    "noEmit": false,
+    "rootDir": "src/frameworks/node",
+    "outDir": "dist/launcher",
+    "declaration": false,
+    "sourceMap": false,
+    "paths": {}
+  },
+  "include": ["src/frameworks/node"]
+}

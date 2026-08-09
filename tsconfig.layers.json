@@ -1,0 +1,28 @@
+// 層ごとの構成を束ねるだけの一枚。`tsc -b` がここから順に組み立てる。
+// 見てはいけない層へ道が無いので、書いた途端に「その名前は無い」で落ちる。
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./src/app-kernel"
+    },
+    {
+      "path": "./src/domain"
+    },
+    {
+      "path": "./src/application"
+    },
+    {
+      "path": "./src/interface"
+    },
+    {
+      "path": "./src/infrastructure"
+    },
+    {
+      "path": "./src/frameworks"
+    },
+    {
+      "path": "./src/composition"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+// 合成の根。**層をまたいで import してよいのはここだけである。**
+// ここだけが、どの口にどの実装が入るかを知っている。
+// 枠組みは見ない — 枠組みがこちらを使う側なので、見ると輪になる。
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declarationDir": "../../dist/types/composition",
+    "tsBuildInfoFile": "../../dist/types/composition.tsbuildinfo",
+    "rootDir": ".",
+    "paths": {
+      "~/composition/*": ["./*"],
+      "~/app-kernel/*": ["../app-kernel/*"],
+      "~/domain/*": ["../domain/*"],
+      "~/application/*": ["../application/*"],
+      "~/interface/*": ["../interface/*"],
+      "~/infrastructure/*": ["../infrastructure/*"]
+    }
+  },
+  "include": ["."],
+  "references": [
+    {
+      "path": "../app-kernel"
+    },
+    {
+      "path": "../domain"
+    },
+    {
+      "path": "../application"
+    },
+    {
+      "path": "../interface"
+    },
+    {
+      "path": "../infrastructure"
+    }
+  ]
+}

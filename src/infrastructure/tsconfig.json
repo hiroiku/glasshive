@@ -1,0 +1,27 @@
+// infrastructure は application が宣言した口を実装する。**domain へは道が無い。**
+// 読み解きは domain の仕事で、ここは外の世界から素材を持ってくるだけである。
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declarationDir": "../../dist/types/infrastructure",
+    "tsBuildInfoFile": "../../dist/types/infrastructure.tsbuildinfo",
+    "rootDir": ".",
+    "paths": {
+      "~/infrastructure/*": ["./*"],
+      "~/app-kernel/*": ["../app-kernel/*"],
+      "~/application/*": ["../application/*"]
+    }
+  },
+  "include": ["."],
+  "references": [
+    {
+      "path": "../app-kernel"
+    },
+    {
+      "path": "../application"
+    }
+  ]
+}

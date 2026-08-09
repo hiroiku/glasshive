@@ -1,0 +1,4 @@
+* text=auto eol=lf
+
+src/frameworks/tanstack/routeTree.gen.ts linguist-generated=true
+package-lock.json -diff

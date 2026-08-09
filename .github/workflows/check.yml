@@ -1,0 +1,27 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 観るだけの道具なので、CI にも読む以上の権利を渡さない
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # 書式・層の向き・8 構成の型・検め
+      - run: npm run check
+      # 配りものを組んで、外の名前に頼っていないことまで見る
+      - run: npm run build
+      # 組み上がった配りものを外から叩く。ここだけが本当に配るものを見る
+      - run: npm run test:smoke

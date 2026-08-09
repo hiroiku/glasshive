@@ -1,0 +1,27 @@
+// interface は application の出力だけを見る。**domain へは道が無い。**
+// 内側の形が変わっても、外へ出す形は use-case の出力を通してしか動かない。
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declarationDir": "../../dist/types/interface",
+    "tsBuildInfoFile": "../../dist/types/interface.tsbuildinfo",
+    "rootDir": ".",
+    "paths": {
+      "~/interface/*": ["./*"],
+      "~/app-kernel/*": ["../app-kernel/*"],
+      "~/application/*": ["../application/*"]
+    }
+  },
+  "include": ["."],
+  "references": [
+    {
+      "path": "../app-kernel"
+    },
+    {
+      "path": "../application"
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+/* ---------- 土台。色と字と、どの画面にも出る素片 ---------- */
+
+/* 見た目の決まり。1 枚のまま持つ。
+
+   入れ子の格子(subgrid)で列を揃えているので、**親と子の間に包みを挟めない。**
+   部品ごとの決まりに分けると、`#tree-pane > .view-toolbar` のような
+   「親の文脈に依存した子の指定」が境目を跨げず、結局どこかを全体に開くことになる。
+
+   画面に 1 つしかない構造は id で表す。class に落とすと詳細度の逆転で、
+   状態を表す class との優先順位を全部見直す羽目になる。 */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+:root {
+  --bg: #0f1419;
+  --panel: #151b23;
+  --border: #2a3441;
+  --fg: #d5dde6;
+  --dim: #7d8a99;
+  /* 桁を揃える所の書体。地の文と同じ Noto の一族から等幅を採るので、
+     混ざっても字面の質が変わらない。日本語の字は Mono に無いので、地の文へ落とす。 */
+  --mono: "Noto Sans Mono Variable", "Noto Sans JP Variable", ui-monospace, monospace;
+  --active: #34d399;
+  --waiting: #fbbf24;
+  --ended: #64748b;
+  --accent: #60a5fa;
+  --input: #c084fc;
+}
+html,
+body {
+  height: 100%;
+}
+/* 画面は body に直に描かれる。旧実装が #root に持たせていた縦積みをここへ移した —
+   包みを 1 枚増やすと、その 1 枚が subgrid の親子を断ち切る */
+body {
+  background: var(--bg);
+  color: var(--fg);
+  /* 書体は配りものに同梱してある。機械に何が入っているかで字面が変わると、
+     詰め方も折り返しもその機械だけの見え方になる。 */
+  font:
+    12px / 1.5 "Noto Sans JP Variable",
+    system-ui,
+    sans-serif;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 書体は継がれない。button も input も、放っておけば器の既定の書体で出る。
+   **クラスを足して回らない** — 足し忘れた札だけが別の書体で残り、
+   その 1 つを見つけるには画面を歩いて計るしかなくなる。要素で一度だけ断つ。 */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* 等幅も同じで、器が自分の等幅を連れてくる。親に var(--mono) を敷いても、
+   その中の code だけが器の既定へ戻る(<pre> の中の <code> がまさにそれ)。
+   大きさは親から継がせる — 継がせないと、本文を詰めてもここだけ動かない。 */
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--mono);
+  font-size: inherit;
+}
+
+/* 押しどころは button で置く。button が連れてくる残りの見た目もここで落とす。
+   色や枠は、この後それぞれの札の決まりが自分で敷く。
+   **appearance はここでしか落とさない** — input まで巻き込むと、
+   チェックボックスが枡そのものを失って何も出なくなる。 */
+.wk,
+.ichip,
+.refchip,
+.sortable,
+.gc-name,
+.lnk,
+.lbl,
+.mg-node {
+  appearance: none;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+}
+
+/* 鍵盤で辿っている場所を見せる。押しどころは行と札で、印が無いとどこに居るか読めない。
+   **載せたときの見た目には触らない** — 触ると、手で操る人の画面が動く。 */
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* ---------- スクロールバー ----------
+   トラックは透明、つまみは丸い細身(透明ボーダー + background-clip で内側に浮かせる)。
+   注意: 標準の scrollbar-color を設定すると Chromium は ::-webkit-scrollbar 装飾を
+   無効化するため、標準プロパティは非対応環境(Firefox)にだけ当てる。 */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(125, 138, 153, 0.35) transparent;
+  }
+}
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(125, 138, 153, 0.22);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  min-height: 32px;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(125, 138, 153, 0.38);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background: rgba(96, 165, 250, 0.55);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+#tabs::-webkit-scrollbar {
+  height: 5px;
+}
+#tabs::-webkit-scrollbar-thumb {
+  border-width: 1px;
+}

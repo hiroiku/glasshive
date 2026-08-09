@@ -1,0 +1,26 @@
+// application は domain を組み立てる。外の世界に要るものは ports/ で宣言する。
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declarationDir": "../../dist/types/application",
+    "tsBuildInfoFile": "../../dist/types/application.tsbuildinfo",
+    "rootDir": ".",
+    "paths": {
+      "~/application/*": ["./*"],
+      "~/app-kernel/*": ["../app-kernel/*"],
+      "~/domain/*": ["../domain/*"]
+    }
+  },
+  "include": ["."],
+  "references": [
+    {
+      "path": "../app-kernel"
+    },
+    {
+      "path": "../domain"
+    }
+  ]
+}

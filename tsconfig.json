@@ -1,0 +1,43 @@
+// 編集器と束ね役が読む一枚。ここでは `~/*` が src の全部に届く。
+//
+// **層の決まりを守らせるのはこの構成ではない。** それは `tsconfig.layers.json` の仕事で、
+// 層ごとに見てよい先への道しか引いていない。ここが全部に届くのは、
+// 編集器と Vite が「どのファイルか」を解けなければ何も動かないからである。
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+    "types": ["vite/client", "node"],
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // 未使用の検出は biome の noUnusedVariables / noUnusedImports に任せる(二重報告を避ける)
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    // import に .ts を書く。どのファイルを指しているかが、解決の決まりを知らなくても読める
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+
+    // TypeScript 7 で baseUrl は消えた。paths は tsconfig の在り処からの相対で解かれる。
+    "paths": {
+      "~/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "test", "vite.config.ts", "vitest.config.ts"],
+  "exclude": ["old", "dist", "node_modules"]
+}
