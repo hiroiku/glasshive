@@ -47,7 +47,10 @@ describe('足の格子を組む', () => {
 
     const midnight = new Date(NOW);
     midnight.setHours(0, 0, 0, 0);
-    expect((fromMs - midnight.getTime()) % (15 * 60_000)).toBe(0);
+    /* 真夜中から足の長さの倍数だけ離れていること。**符号は問わない** —
+       窓は真夜中より前から始まることがあり、負の余りの 0 は -0 になる。
+       時間帯によって符号が変わるので、そのまま 0 と見比べると走らせる場所で結果が変わる。 */
+    expect(Math.abs((fromMs - midnight.getTime()) % (15 * 60_000))).toBe(0);
   });
 
   it('本数は上限を越えない', () => {
