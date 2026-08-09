@@ -51,10 +51,23 @@ function linkifyTokens(
     return null;
   };
 
+  /* `code` と `pre` の中には入らない。
+
+     あそこは書かれたとおりに出す場所である。道や命令の途中に課題の id が挟まっていても、
+     そこを札に差し替えると**引用が引用でなくなる** — 読み手は書かれた字を見に来ている。
+     見た目にも壊れる。札は自前の余白と地色を持つので、等幅の一続きの中に置くと
+     枠を突き破って隣の行に重なる。 */
+  let verbatim = 0;
+
   return html
     .split(/(<[^>]+>)/g)
     .map((segment) => {
-      if (segment.startsWith('<')) return segment;
+      if (segment.startsWith('<')) {
+        if (/^<(code|pre)[\s>]/.test(segment)) verbatim++;
+        else if (/^<\/(code|pre)>/.test(segment) && verbatim > 0) verbatim--;
+        return segment;
+      }
+      if (verbatim > 0) return segment;
       return segment.replace(WORD, (word) => {
         const hit = chipOf(word);
         if (hit !== null) return hit;
