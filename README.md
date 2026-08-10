@@ -33,9 +33,9 @@ dependencies. You need Node.js 22.12 or newer and at least one Claude Code sessi
 
 ### Overview
 
-Every project an agent has worked in, wherever you started glasshive from. The ones waiting on you
-come first, then the ones still running. Filter by name, state, or time span, and pin the projects
-you care about to the tab bar.
+Every project an agent has worked in, wherever you started glasshive from. The ones waiting for your
+input come first, then the ones still running. Filter by name, state, or time span, and pin the
+projects you care about to the tab bar.
 
 ![Overview](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/overview.png)
 
@@ -49,7 +49,7 @@ Token and concurrency statistics sit underneath, scoped to the same window.
 
 ### Git
 
-Live branches and worktrees drawn over the default branch, so you can see who is where. Pairs that
+Live branches and worktrees drawn over the main worktree's branch, so you can see who is where. Pairs that
 are heading for the same files are lifted to the top of the list. Pick a ref to get its commits,
 diff stats, and which agents have been active on it.
 
@@ -88,8 +88,6 @@ rendered; the raw transcript is never rewritten.
 - **Bad options fail loudly.** An unreadable flag exits with an error instead of silently falling
   back to a default.
 
-See [ADR 0001](docs/adr/0001-read-only.md) and [ADR 0003](docs/adr/0003-viewer-chooses-scope.md).
-
 ## Options
 
 ```sh
@@ -118,22 +116,13 @@ replaces `⌘` on non-Apple keyboards.
 
 ```sh
 npm install
-npm run dev     # http://127.0.0.1:4484
+npm run dev     # http://127.0.0.1:4483
 npm run check   # format, layer boundaries, types, tests
 npm run build
 ```
 
 [Bun](https://bun.com/) works as-is — swap `npm` for `bun`. See [CONTRIBUTING.md](CONTRIBUTING.md)
 for the architecture, the quality gates, and how to work on this.
-
-## Design decisions
-
-- [ADR 0001 — Derive everything from the transcripts, write nothing back](docs/adr/0001-read-only.md)
-- [ADR 0002 — TanStack Start in SPA mode, clean architecture](docs/adr/0002-tanstack-start-spa.md)
-- [ADR 0003 — Drop the scope flag, let the viewer choose](docs/adr/0003-viewer-chooses-scope.md)
-- [What changed from the previous implementation](docs/differences.md)
-
-(These are written in Japanese.)
 
 ## Support
 

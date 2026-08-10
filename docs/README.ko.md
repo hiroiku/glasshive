@@ -31,7 +31,7 @@ npx glasshive
 
 ### Overview
 
-glasshive를 어디에서 실행했든, 에이전트가 작업한 모든 프로젝트. 당신을 기다리고 있는 것이 먼저 오고,
+glasshive를 어디에서 실행했든, 에이전트가 작업한 모든 프로젝트. 당신의 입력을 기다리는 것이 먼저 오고,
 그다음이 아직 실행 중인 것입니다. 이름, 상태, 기간으로 걸러내고, 신경 쓰는 프로젝트는 탭 바에
 고정하세요.
 
@@ -47,7 +47,7 @@ worktree, 지금 실행 중인 도구, 그리고 좌우로 끌고 확대·축소
 
 ### Git
 
-기본 브랜치 위에 그려진, 살아 있는 브랜치와 worktree. 누가 어디에 있는지 보입니다. 같은 파일로
+메인 worktree의 브랜치 위에 그려진, 살아 있는 브랜치와 worktree. 누가 어디에 있는지 보입니다. 같은 파일로
 향하고 있는 짝은 목록 위쪽으로 올라옵니다. ref를 고르면 그 커밋, diff 통계, 그리고 어떤 에이전트가 그
 위에서 활동했는지를 볼 수 있습니다.
 
@@ -86,8 +86,6 @@ worktree, 지금 실행 중인 도구, 그리고 좌우로 끌고 확대·축소
 - **잘못된 옵션은 요란하게 실패합니다.** 해석할 수 없는 플래그는 조용히 기본값으로 되돌아가지 않고,
   오류와 함께 종료합니다.
 
-[ADR 0001](adr/0001-read-only.md)과 [ADR 0003](adr/0003-viewer-chooses-scope.md)을 참고하세요.
-
 ## 옵션
 
 ```sh
@@ -116,22 +114,13 @@ npx glasshive --config-dir ~/somewhere  # preferences.json을 둘 곳
 
 ```sh
 npm install
-npm run dev     # http://127.0.0.1:4484
+npm run dev     # http://127.0.0.1:4483
 npm run check   # 포맷, 레이어 경계, 타입, 테스트
 npm run build
 ```
 
 [Bun](https://bun.com/)도 그대로 동작합니다 — `npm`을 `bun`으로 바꾸면 됩니다. 아키텍처, 품질 게이트,
 그리고 이 프로젝트에서 작업하는 방법은 [CONTRIBUTING.md](../CONTRIBUTING.md)를 보세요.
-
-## 설계 결정
-
-- [ADR 0001 — 모든 것을 트랜스크립트에서 끌어내고, 아무것도 되쓰지 않는다](adr/0001-read-only.md)
-- [ADR 0002 — TanStack Start를 SPA 모드로, 클린 아키텍처](adr/0002-tanstack-start-spa.md)
-- [ADR 0003 — 범위 플래그를 없애고, 보는 사람이 고르게 한다](adr/0003-viewer-chooses-scope.md)
-- [이전 구현에서 달라진 점](differences.md)
-
-(이 문서들은 일본어로 쓰여 있습니다.)
 
 ## 지원
 

@@ -34,7 +34,7 @@ sesión de Claude Code dentro de `~/.claude/projects`.
 ### Overview
 
 Cada proyecto en el que ha trabajado un agente, desde donde sea que hayas arrancado glasshive. Van
-primero los que están esperándote a ti, y luego los que siguen en marcha. Filtra por nombre, estado
+primero los que esperan tu respuesta, y luego los que siguen en marcha. Filtra por nombre, estado
 o intervalo de tiempo, y fija en la barra de pestañas los proyectos que te importan.
 
 ![Overview](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/overview.png)
@@ -50,7 +50,7 @@ concurrencia, acotadas a la misma ventana.
 
 ### Git
 
-Las ramas y los worktrees activos dibujados sobre la rama por defecto, para que veas quién está
+Las ramas y los worktrees activos dibujados sobre la rama del worktree principal, para que veas quién está
 dónde. Los pares que se dirigen a los mismos archivos suben al principio de la lista. Elige una ref
 para ver sus commits, sus estadísticas de diff y qué agentes han estado activos en ella.
 
@@ -90,8 +90,6 @@ código y las llamadas a herramientas se renderizan; la transcripción original 
 - **Las opciones erróneas fallan a gritos.** Una opción que no se puede interpretar termina con un
   error en lugar de recurrir en silencio a un valor por defecto.
 
-Consulta el [ADR 0001](adr/0001-read-only.md) y el [ADR 0003](adr/0003-viewer-chooses-scope.md).
-
 ## Opciones
 
 ```sh
@@ -120,7 +118,7 @@ que no son de Apple, `Ctrl` sustituye a `⌘`.
 
 ```sh
 npm install
-npm run dev     # http://127.0.0.1:4484
+npm run dev     # http://127.0.0.1:4483
 npm run check   # formato, límites entre capas, tipos, pruebas
 npm run build
 ```
@@ -128,15 +126,6 @@ npm run build
 [Bun](https://bun.com/) funciona tal cual: cambia `npm` por `bun`. Consulta
 [CONTRIBUTING.md](../CONTRIBUTING.md) para la arquitectura, las puertas de calidad y cómo trabajar en
 esto.
-
-## Decisiones de diseño
-
-- [ADR 0001 — Derivarlo todo de las transcripciones, no escribir nada de vuelta](adr/0001-read-only.md)
-- [ADR 0002 — TanStack Start en modo SPA, arquitectura limpia](adr/0002-tanstack-start-spa.md)
-- [ADR 0003 — Quitar la opción de alcance, que elija quien mira](adr/0003-viewer-chooses-scope.md)
-- [Qué cambió respecto a la implementación anterior](differences.md)
-
-(Están escritos en japonés.)
 
 ## Soporte
 

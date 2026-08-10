@@ -34,8 +34,8 @@ mindestens eine Session von Claude Code unter `~/.claude/projects`.
 ### Overview
 
 Jedes Projekt, in dem ein Agent gearbeitet hat, egal von wo aus du glasshive gestartet hast. Die, die
-auf dich warten, kommen zuerst, dann die, die noch laufen. Filtere nach Name, Zustand oder Zeitraum
-und hefte die Projekte, die dich interessieren, an die Tab-Leiste.
+auf deine Eingabe warten, kommen zuerst, dann die, die noch laufen. Filtere nach Name, Zustand oder
+Zeitraum und hefte die Projekte, die dich interessieren, an die Tab-Leiste.
 
 ![Overview](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/overview.png)
 
@@ -50,7 +50,7 @@ denselben Zeitraum.
 
 ### Git
 
-Laufende Branches und Worktrees, über den Default-Branch gezeichnet, damit du siehst, wer wo ist.
+Laufende Branches und Worktrees, über den Branch des Haupt-Worktrees gezeichnet, damit du siehst, wer wo ist.
 Paare, die auf dieselben Dateien zusteuern, rücken an den Anfang der Liste. Wähle eine Ref, und du
 bekommst ihre Commits, Diff-Statistiken und die Agenten, die auf ihr aktiv waren.
 
@@ -91,8 +91,6 @@ Tool-Aufrufe werden gerendert; das rohe Transkript wird nie umgeschrieben.
 - **Falsche Optionen scheitern laut.** Ein nicht lesbares Flag beendet das Programm mit einem Fehler,
   statt still auf einen Standardwert zurückzufallen.
 
-Siehe [ADR 0001](adr/0001-read-only.md) und [ADR 0003](adr/0003-viewer-chooses-scope.md).
-
 ## Optionen
 
 ```sh
@@ -122,22 +120,13 @@ Nicht-Apple-Tastaturen ersetzt `Ctrl` das `⌘`.
 
 ```sh
 npm install
-npm run dev     # http://127.0.0.1:4484
+npm run dev     # http://127.0.0.1:4483
 npm run check   # Format, Schichtgrenzen, Typen, Tests
 npm run build
 ```
 
 [Bun](https://bun.com/) funktioniert unverändert – ersetze `npm` durch `bun`. Die Architektur, die
 Quality Gates und wie man hier arbeitet, stehen in [CONTRIBUTING.md](../CONTRIBUTING.md).
-
-## Design-Entscheidungen
-
-- [ADR 0001 — Alles aus den Transkripten ableiten, nichts zurückschreiben](adr/0001-read-only.md)
-- [ADR 0002 — TanStack Start im SPA-Modus, Clean Architecture](adr/0002-tanstack-start-spa.md)
-- [ADR 0003 — Das Scope-Flag streichen, den Betrachter wählen lassen](adr/0003-viewer-chooses-scope.md)
-- [Was sich gegenüber der vorherigen Implementierung geändert hat](differences.md)
-
-(Diese sind auf Japanisch geschrieben.)
 
 ## Support
 

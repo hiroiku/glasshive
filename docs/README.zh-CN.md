@@ -45,7 +45,7 @@ npx glasshive
 
 ### Git
 
-当前的分支和 worktree 画在默认分支之上，让你看清谁在哪里。正在改动同一批文件的组合会被提到列表顶部。
+当前的分支和 worktree 画在主 worktree 所在分支之上，让你看清谁在哪里。正在改动同一批文件的组合会被提到列表顶部。
 选中一个 ref，就能看到它的提交、差异统计，以及哪些智能体在它上面活动过。
 
 ![Git](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/git.png)
@@ -77,8 +77,6 @@ open/closed 随时间的流动。不使用 `bd` 的项目会得到一条简短�
   安静的屏幕从不含糊。
 - **错误的选项会大声失败。** 读不懂的参数会带着错误退出，而不是悄悄回退到默认值。
 
-参见 [ADR 0001](adr/0001-read-only.md) 和 [ADR 0003](adr/0003-viewer-chooses-scope.md)。
-
 ## 选项
 
 ```sh
@@ -106,22 +104,13 @@ npx glasshive --config-dir ~/somewhere  # preferences.json 的存放位置
 
 ```sh
 npm install
-npm run dev     # http://127.0.0.1:4484
+npm run dev     # http://127.0.0.1:4483
 npm run check   # 格式、层边界、类型、测试
 npm run build
 ```
 
 [Bun](https://bun.com/) 可以直接用 —— 把 `npm` 换成 `bun` 即可。架构、质量门禁，以及如何参与开发，
 见 [CONTRIBUTING.md](../CONTRIBUTING.md)。
-
-## 设计决策
-
-- [ADR 0001 —— 一切都从会话记录推导，不回写任何东西](adr/0001-read-only.md)
-- [ADR 0002 —— TanStack Start 的 SPA 模式，整洁架构](adr/0002-tanstack-start-spa.md)
-- [ADR 0003 —— 去掉 scope 选项，交给查看者来选](adr/0003-viewer-chooses-scope.md)
-- [与上一版实现相比有哪些变化](differences.md)
-
-（这些文档是用日语写的。）
 
 ## 支持
 

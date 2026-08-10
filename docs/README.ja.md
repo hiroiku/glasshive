@@ -33,9 +33,9 @@ npx glasshive
 
 ### Overview
 
-glasshive をどこで起動しても、エージェントが作業したすべてのプロジェクトが出る。あなたを
-待っているものが先に、次にまだ動いているものが並ぶ。名前・状態・時間の幅で絞り込み、気に
-なるプロジェクトをタブバーに留められる。
+glasshive をどこで起動しても、エージェントが作業したすべてのプロジェクトが出る。あなたの
+入力を待っているものが先に、次にまだ動いているものが並ぶ。名前・状態・時間の幅で絞り込み、
+気になるプロジェクトをタブバーに留められる。
 
 ![Overview](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/overview.png)
 
@@ -49,7 +49,7 @@ glasshive をどこで起動しても、エージェントが作業したすべ�
 
 ### Git
 
-生きているブランチと worktree を既定のブランチの上に描くので、誰がどこにいるかが見える。
+生きているブランチと worktree を主たる worktree が出しているブランチの上に描くので、誰がどこにいるかが見える。
 同じファイルへ向かっている組は一覧の上へ持ち上がる。ref を選べば、そのコミット、差分の統計、
 そこで動いていたエージェントが出る。
 
@@ -66,8 +66,8 @@ glasshive をどこで起動しても、エージェントが作業したすべ�
 ### Side panel
 
 会話、issue、ref は右のパネルに開く。何を開いているかは URL に入るので、そのリンクを貼れば
-他の人の画面でも同じものが開く。Markdown、コード、ツールの呼び出しは描くが、生の記録を
-書き換えることはしない。
+他の人の画面でも同じものが開く。Markdown、コード、ツールの呼び出しは描くが、生のセッション
+ログを書き換えることはしない。
 
 ![Side panel](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/conversation.png)
 
@@ -77,18 +77,16 @@ glasshive をどこで起動しても、エージェントが作業したすべ�
   (`~/.claude/projects/**/*.jsonl`)、beads の台帳(`<project>/.beads/issues.jsonl`)、そして `git`。
   セッションログも台帳もリポジトリも、書き換えられることはない。
 - **書く 1 つのファイルは、自分のものだけ。** `~/.config/glasshive/preferences.json` に、留めた
-  タブと表示の好みが入る。書く前に glasshive は、そのパスが `~/.claude`、セッションログの置き場、観ている
-  `.beads` や `.git` のディレクトリの中に無いことを確かめ、中にあれば断る — 観ている先へ書かない
-  ことは、約束ではなく造りで塞いである。
+  タブと表示の好みが入る。書く前に glasshive は、そのパスが `~/.claude`、セッションログの
+  ルートディレクトリ、観測している `.beads` や `.git` のディレクトリの中に無いことを確かめ、
+  中にあれば断る — 観測している先へ書かないことは、約束ではなく仕組みで塞いである。
 - **何もこの機械から出ない。** `127.0.0.1` に結び、`Host` ヘッダーがローカルでない要求は
   拒み(敵意のあるページが DNS リバインディングで届かないように)、外へは何も投げず、
   フォントは CDN から取らずに自分で抱えている。
 - **「無い」と「読めなかった」が同じに見えることはない。** 読めなかった欄は理由を添えた
   `null` として運ばれるので、静かな画面が曖昧になることはない。
-- **おかしなオプションは大きな音で失敗する。** 読めない指定は、黙って既定へ落ちるのではなく
+- **不正なオプションは、はっきり失敗する。** 読めない指定は、黙って既定へ落ちるのではなく
   エラーで終わる。
-
-[ADR 0001](adr/0001-read-only.md) と [ADR 0003](adr/0003-viewer-chooses-scope.md) を参照。
 
 ## オプション
 
@@ -100,7 +98,7 @@ npx glasshive --active-threshold 120  # 最後の書き込みから何秒まで�
 npx glasshive --config-dir ~/somewhere  # preferences.json を置く場所
 ```
 
-全部の一覧は `glasshive --help` で。観る範囲は起動時のオプションではない。エージェントが
+全部の一覧は `glasshive --help` で。観測する範囲は起動時のオプションではない。エージェントが
 作業したすべてのプロジェクトが並び、どれをタブにするかはあなたが選ぶ。
 
 ### キーボード
@@ -111,27 +109,20 @@ npx glasshive --config-dir ~/somewhere  # preferences.json を置く場所
 | `Tab` | 行、チップ、並べ替えの見出し、つまみを順に辿る |
 | `Esc` | パネルを閉じる |
 
-すべてキーボードから届き、焦点のある要素には必ず輪郭が付く。Apple 以外のキーボードでは
+すべてキーボードから届き、フォーカスのある要素には必ず輪郭が付く。Apple 以外のキーボードでは
 `⌘` の代わりに `Ctrl` を使う。
 
 ## 開発
 
 ```sh
 npm install
-npm run dev     # http://127.0.0.1:4484
+npm run dev     # http://127.0.0.1:4483
 npm run check   # フォーマット・レイヤー境界・型・テスト
 npm run build
 ```
 
 [Bun](https://bun.com/) もそのまま動く — `npm` を `bun` に置き換えるだけだ。アーキテクチャ、
-品質の関門、進め方は [CONTRIBUTING.md](../CONTRIBUTING.md) を参照。
-
-## 設計の判断
-
-- [ADR 0001 — 正本から導き、何も書かない](adr/0001-read-only.md)
-- [ADR 0002 — TanStack Start(SPA)とクリーンアーキテクチャ](adr/0002-tanstack-start-spa.md)
-- [ADR 0003 — 観る範囲をやめ、観る人に渡す](adr/0003-viewer-chooses-scope.md)
-- [意図して変えたこと](differences.md)
+品質ゲート、進め方は [CONTRIBUTING.md](../CONTRIBUTING.md) を参照。
 
 ## サポート
 

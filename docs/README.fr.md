@@ -33,9 +33,9 @@ Claude Code sous `~/.claude/projects`.
 
 ### Overview
 
-Chaque projet dans lequel un agent a travaillé, d'où que vous ayez lancé glasshive. Ceux qui vous
-attendent viennent en premier, puis ceux qui tournent encore. Filtrez par nom, par état ou par
-période, et épinglez à la barre d'onglets les projets qui comptent pour vous.
+Chaque projet dans lequel un agent a travaillé, d'où que vous ayez lancé glasshive. Ceux qui
+attendent votre réponse viennent en premier, puis ceux qui tournent encore. Filtrez par nom, par
+état ou par période, et épinglez à la barre d'onglets les projets qui comptent pour vous.
 
 ![Overview](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/overview.png)
 
@@ -50,7 +50,7 @@ sur la même fenêtre de temps.
 
 ### Git
 
-Les branches et worktrees actifs tracés par-dessus la branche par défaut, pour voir qui est où. Les
+Les branches et worktrees actifs tracés par-dessus la branche du worktree principal, pour voir qui est où. Les
 paires qui se dirigent vers les mêmes fichiers remontent en haut de la liste. Choisissez une ref pour
 obtenir ses commits, ses statistiques de diff et les agents qui y ont été actifs.
 
@@ -91,8 +91,6 @@ code et les appels d'outils sont rendus ; la transcription brute n'est jamais r�
 - **Les mauvaises options échouent bruyamment.** Un drapeau illisible sort en erreur au lieu de se
   rabattre silencieusement sur une valeur par défaut.
 
-Voir [ADR 0001](adr/0001-read-only.md) et [ADR 0003](adr/0003-viewer-chooses-scope.md).
-
 ## Options
 
 ```sh
@@ -122,7 +120,7 @@ sur les claviers non Apple.
 
 ```sh
 npm install
-npm run dev     # http://127.0.0.1:4484
+npm run dev     # http://127.0.0.1:4483
 npm run check   # format, frontières de couches, types, tests
 npm run build
 ```
@@ -130,15 +128,6 @@ npm run build
 [Bun](https://bun.com/) fonctionne tel quel — remplacez `npm` par `bun`. Voir
 [CONTRIBUTING.md](../CONTRIBUTING.md) pour l'architecture, les contrôles qualité et la façon de
 travailler dessus.
-
-## Décisions de conception
-
-- [ADR 0001 — Tout dériver des transcriptions, ne rien réécrire](adr/0001-read-only.md)
-- [ADR 0002 — TanStack Start en mode SPA, architecture propre](adr/0002-tanstack-start-spa.md)
-- [ADR 0003 — Abandonner le drapeau de portée, laisser choisir celui qui regarde](adr/0003-viewer-chooses-scope.md)
-- [Ce qui a changé par rapport à l'implémentation précédente](differences.md)
-
-(Ces documents sont rédigés en japonais.)
 
 ## Support
 

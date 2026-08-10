@@ -45,7 +45,7 @@ worktree、此刻正在執行的工具，以及可以平移和縮放的活動時
 
 ### Git
 
-使用中的 branch 與 worktree 疊畫在預設分支上，讓你看得出誰在哪裡。正在動到同一批檔案的組合會被提到
+使用中的 branch 與 worktree 疊畫在主 worktree 所在的 branch 上，讓你看得出誰在哪裡。正在動到同一批檔案的組合會被提到
 清單最上面。點一個 ref，就會看到它的 commit、diff 統計，以及有哪些代理程式在上面活動過。
 
 ![Git](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/git.png)
@@ -79,8 +79,6 @@ open/closed 隨時間的流動。沒有使用 `bd` 的專案會看到一段簡�
   所以安靜的畫面不會有歧義。
 - **錯誤的選項會大聲失敗。** 無法解讀的旗標會以錯誤結束，而不是默默退回預設值。
 
-參見 [ADR 0001](adr/0001-read-only.md) 與 [ADR 0003](adr/0003-viewer-chooses-scope.md)。
-
 ## 選項
 
 ```sh
@@ -108,22 +106,13 @@ npx glasshive --config-dir ~/somewhere  # preferences.json 的存放位置
 
 ```sh
 npm install
-npm run dev     # http://127.0.0.1:4484
+npm run dev     # http://127.0.0.1:4483
 npm run check   # 格式、層邊界、型別、測試
 npm run build
 ```
 
 [Bun](https://bun.com/) 可以直接使用——把 `npm` 換成 `bun` 即可。架構、品質關卡，以及該怎麼參與開發，
 請見 [CONTRIBUTING.md](../CONTRIBUTING.md)。
-
-## 設計決策
-
-- [ADR 0001 — 一切都從 transcript 推導出來，什麼都不寫回去](adr/0001-read-only.md)
-- [ADR 0002 — TanStack Start 的 SPA 模式，clean architecture](adr/0002-tanstack-start-spa.md)
-- [ADR 0003 — 拿掉 scope 旗標，交給檢視的人選](adr/0003-viewer-chooses-scope.md)
-- [與前一版實作相比改了什麼](differences.md)
-
-（這些文件是用日文寫的。）
 
 ## 支援
 
