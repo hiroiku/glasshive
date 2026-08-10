@@ -22,10 +22,9 @@ agent.
 npx glasshive
 ```
 
-It serves on `127.0.0.1:4483` only (4483 spells `HIVE` on a phone keypad) and opens your browser.
-No install step, no configuration, no network access — the published package has zero runtime
-dependencies. You need Node.js 22.12 or newer and at least one Claude Code session under
-`~/.claude/projects`.
+It serves on `127.0.0.1:4483` only and opens your browser. No install step, no configuration, no
+network access — the published package has zero runtime dependencies. You need Node.js 22.12 or
+newer and at least one Claude Code session under `~/.claude/projects`.
 
 ![glasshive walkthrough](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 

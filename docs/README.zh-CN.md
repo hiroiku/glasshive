@@ -20,9 +20,9 @@ glasshive 从不写入 `~/.claude`、你的仓库或你的 issue 追踪器，也
 npx glasshive
 ```
 
-它只在 `127.0.0.1:4483` 上提供服务（4483 在电话键盘上拼出 `HIVE`），并打开你的浏览器。没有安装步骤，
-没有配置，不访问网络 —— 发布出来的包没有任何运行时依赖。你需要 Node.js 22.12 或更新的版本，以及
-`~/.claude/projects` 下至少一个 Claude Code 会话。
+它只在 `127.0.0.1:4483` 上提供服务，并打开你的浏览器。没有安装步骤，没有配置，不访问网络 ——
+发布出来的包没有任何运行时依赖。你需要 Node.js 22.12 或更新的版本，以及 `~/.claude/projects`
+下至少一个 Claude Code 会话。
 
 ![glasshive walkthrough](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 

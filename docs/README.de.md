@@ -22,10 +22,10 @@ Issue-Tracker, und es kann einen Agenten weder starten noch stoppen noch steuern
 npx glasshive
 ```
 
-Es lauscht ausschließlich auf `127.0.0.1:4483` (4483 buchstabiert `HIVE` auf einer Telefontastatur)
-und öffnet deinen Browser. Kein Installationsschritt, keine Konfiguration, kein Netzwerkzugriff – das
-veröffentlichte Paket hat null Laufzeitabhängigkeiten. Du brauchst Node.js 22.12 oder neuer und
-mindestens eine Session von Claude Code unter `~/.claude/projects`.
+Es lauscht ausschließlich auf `127.0.0.1:4483` und öffnet deinen Browser. Kein Installationsschritt,
+keine Konfiguration, kein Netzwerkzugriff – das veröffentlichte Paket hat null
+Laufzeitabhängigkeiten. Du brauchst Node.js 22.12 oder neuer und mindestens eine Session von
+Claude Code unter `~/.claude/projects`.
 
 ![glasshive walkthrough](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 

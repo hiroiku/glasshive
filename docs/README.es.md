@@ -22,10 +22,9 @@ issues, y no puede arrancar, detener ni dirigir a un agente.
 npx glasshive
 ```
 
-Sirve solo en `127.0.0.1:4483` (4483 deletrea `HIVE` en el teclado de un teléfono) y abre tu
-navegador. Sin paso de instalación, sin configuración, sin acceso a la red: el paquete publicado
-tiene cero dependencias en tiempo de ejecución. Necesitas Node.js 22.12 o posterior y al menos una
-sesión de Claude Code dentro de `~/.claude/projects`.
+Sirve solo en `127.0.0.1:4483` y abre tu navegador. Sin paso de instalación, sin configuración, sin
+acceso a la red: el paquete publicado tiene cero dependencias en tiempo de ejecución. Necesitas
+Node.js 22.12 o posterior y al menos una sesión de Claude Code dentro de `~/.claude/projects`.
 
 ![glasshive walkthrough](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 

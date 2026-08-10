@@ -21,9 +21,9 @@ glasshive는 [Claude Code](https://claude.com/claude-code)를 위한 읽기 전�
 npx glasshive
 ```
 
-`127.0.0.1:4483`에서만 서비스하고(4483은 전화 키패드에서 `HIVE`), 브라우저를 엽니다. 설치 단계도,
-설정도, 네트워크 접근도 없습니다 — 배포된 패키지에는 런타임 의존성이 하나도 없습니다. Node.js
-22.12 이상과, `~/.claude/projects` 아래에 최소 하나의 Claude Code 세션이 필요합니다.
+`127.0.0.1:4483`에서만 서비스하고, 브라우저를 엽니다. 설치 단계도, 설정도, 네트워크 접근도
+없습니다 — 배포된 패키지에는 런타임 의존성이 하나도 없습니다. Node.js 22.12 이상과,
+`~/.claude/projects` 아래에 최소 하나의 Claude Code 세션이 필요합니다.
 
 ![glasshive 둘러보기](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 

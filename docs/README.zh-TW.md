@@ -20,9 +20,9 @@ glasshive 絕不寫入 `~/.claude`、你的儲存庫或你的 issue 追蹤器，
 npx glasshive
 ```
 
-它只在 `127.0.0.1:4483` 上提供服務（4483 在電話鍵盤上拼出 `HIVE`），並開啟你的瀏覽器。
-不需安裝步驟、不需設定、不需網路連線——發佈的套件沒有任何執行期相依套件。你需要 Node.js 22.12
-或更新的版本，以及 `~/.claude/projects` 底下至少一個 Claude Code 的 session。
+它只在 `127.0.0.1:4483` 上提供服務，並開啟你的瀏覽器。不需安裝步驟、不需設定、不需網路連線——
+發佈的套件沒有任何執行期相依套件。你需要 Node.js 22.12 或更新的版本，以及 `~/.claude/projects`
+底下至少一個 Claude Code 的 session。
 
 ![glasshive 導覽](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 

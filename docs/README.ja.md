@@ -22,10 +22,9 @@ glasshive は [Claude Code](https://claude.com/claude-code) のための、読�
 npx glasshive
 ```
 
-待ち受けるのは `127.0.0.1:4483` だけで(4483 は電話のキーパッドで `HIVE` になる)、ブラウザーを
-開く。インストールの手順も、設定も、ネットワークへのアクセスも無い — 公開しているパッケージ
-の実行時の依存はゼロだ。要るのは Node.js 22.12 以降と、`~/.claude/projects` の下に少なくとも
-1 つの Claude Code のセッション。
+待ち受けるのは `127.0.0.1:4483` だけで、ブラウザーを開く。インストールの手順も、設定も、
+ネットワークへのアクセスも無い — 公開しているパッケージの実行時の依存はゼロだ。要るのは
+Node.js 22.12 以降と、`~/.claude/projects` の下に少なくとも 1 つの Claude Code のセッション。
 
 ![glasshive の一巡り](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 

@@ -22,10 +22,9 @@ de tickets, et il ne peut ni démarrer, ni arrêter, ni piloter un agent.
 npx glasshive
 ```
 
-Il n'écoute que sur `127.0.0.1:4483` (4483 épelle `HIVE` sur un clavier de téléphone) et ouvre votre
-navigateur. Aucune installation, aucune configuration, aucun accès réseau — le paquet publié n'a
-aucune dépendance d'exécution. Il vous faut Node.js 22.12 ou plus récent et au moins une session
-Claude Code sous `~/.claude/projects`.
+Il n'écoute que sur `127.0.0.1:4483` et ouvre votre navigateur. Aucune installation, aucune
+configuration, aucun accès réseau — le paquet publié n'a aucune dépendance d'exécution. Il vous faut
+Node.js 22.12 ou plus récent et au moins une session Claude Code sous `~/.claude/projects`.
 
 ![glasshive walkthrough](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 
