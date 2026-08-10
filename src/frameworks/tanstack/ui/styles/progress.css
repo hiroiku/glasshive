@@ -1,0 +1,63 @@
+/* ---------- 読んでいる最中の表示 ---------- */
+
+/* 親は縦に積む flex なので、`margin: auto` だけで縦横とも中央に来る。
+   包む要素を足さないのは、`#view-pane` の子として置かれるからである。 */
+.rp {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 30px;
+  /* バーより広い言葉が来ても、バーの幅は動かさない */
+  max-width: 320px;
+  text-align: center;
+}
+
+/* 塗る要素を持たないバー。輪郭だけで「読んでいる最中である」を言う。
+   中を走る光は `::after` で描く — 要素を足すと、割合を持つバーと見分けが付かなくなる。 */
+.rp-track {
+  width: 220px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+  position: relative;
+}
+.rp-track::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: rp-sweep 1.4s ease-in-out infinite;
+}
+
+/* 端から端へ 1 本だけ走らせる。**光の位置は進み具合ではない** —
+   左端から右端まで同じ速さで動くので、どこに在っても読み取れる量は増えない。 */
+@keyframes rp-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+.rp-label {
+  color: var(--fg);
+}
+.rp-note {
+  color: var(--dim);
+}
+
+/* 動きを減らす設定のとき。**言葉は消さない** — 待っていることを伝えているのは
+   動きではなく言葉のほうで、動きだけが飾りである。 */
+@media (prefers-reduced-motion: reduce) {
+  .rp-track::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.35;
+  }
+}

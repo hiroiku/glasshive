@@ -20,8 +20,9 @@ glasshive 从不写入 `~/.claude`、你的仓库或你的 issue 追踪器，也
 npx glasshive
 ```
 
-它只在 `127.0.0.1:4483` 上提供服务，并打开你的浏览器。没有安装步骤，没有配置，不访问网络 ——
-发布出来的包没有任何运行时依赖。你需要 Node.js 22.12 或更新的版本，以及 `~/.claude/projects`
+它只在 `127.0.0.1:4483` 上提供服务，并打开你的浏览器。没有安装步骤，没有配置，
+在你打开 GitHub 视图之前没有任何东西离开你的机器 —— 发布出来的包没有任何运行时依赖。
+你需要 Node.js 22.12 或更新的版本，以及 `~/.claude/projects`
 下至少一个 Claude Code 会话。构建和验证都在 macOS 与 Linux 上进行；在 Windows 上，存活 agent
 的数量会以「无法观察」返回，因为读取它需要 `ps`，以及 `/proc/<pid>/cwd` 或 `lsof` 之一。
 
@@ -44,19 +45,19 @@ npx glasshive
 
 ![Agents](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/agents.png)
 
-### Git
+### Work
 
-当前的分支和 worktree 画在主 worktree 所在分支之上，让你看清谁在哪里。正在改动同一批文件的组合会被提到列表顶部。
-选中一个 ref，就能看到它的提交、差异统计，以及哪些智能体在它上面活动过。
+issue、分支和 milestone 放在同一块屏幕上，因为它们本来就是同一份工作的三个侧面。在它们之间切换，
+不用离开当前视图。
 
-![Git](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/git.png)
+issue 来自 GitHub，通过 [`gh`](https://cli.github.com) CLI 读取 —— glasshive 会问 `gh` 你的 remote
+指向哪个仓库，判断方式和 `gh` 自己一样 —— 也可以来自 [`bd`](https://github.com/gastownhall/beads)
+账本。sub-issue 会嵌套，`blocked by` 会画成依赖关系的连线，issue 类型、标签、milestone 和负责人也
+一并带来。
 
-### Beads
-
-来自 [`bd`](https://github.com/gastownhall/beads) 的 issue 账本，带依赖关系的连线、父子嵌套，以及
-open/closed 随时间的流动。不使用 `bd` 的项目会得到一条简短说明，而不是一块空屏幕。
-
-![Beads](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/beads.png)
+分支和 worktree 画在主 worktree 所在分支之上，让你看清谁在哪里。正在改动同一批文件的组合会被提到
+顶部。选中一个 ref，就能看到它的提交、差异统计，以及哪些智能体在它上面活动过。issue 和分支只靠
+pull request 的 head 分支相连 —— 差一点点对上的，宁可留着不连，也不去猜。
 
 ### Side panel
 
@@ -67,8 +68,9 @@ open/closed 随时间的流动。不使用 `bd` 的项目会得到一条简短�
 
 ## 设计上只读
 
-- **它读三样东西，一样都不写。** Claude Code 的会话记录（`~/.claude/projects/**/*.jsonl`）、beads
-  账本（`<project>/.beads/issues.jsonl`），以及 `git`。任何会话记录、账本或仓库都不会被修改。
+- **它读四样东西，一样都不写。** Claude Code 的会话记录（`~/.claude/projects/**/*.jsonl`）、beads
+  账本（`<project>/.beads/issues.jsonl`）、`git`，以及 —— 通过 `gh` CLI —— 你的 remote 指向的
+  GitHub 仓库的 issue。任何会话记录、账本、仓库或 issue 都不会被修改。
 - **它唯一会写的文件是它自己的。** `~/.config/glasshive/preferences.json` 保存你固定的标签和视图偏好。
   写入之前，glasshive 会检查这个路径不在 `~/.claude`、会话记录的根目录，或任何被观察的 `.beads` 或
   `.git` 目录里面，只要在就拒绝 —— 不写入自己观察的东西，是由构造挡住的，不是靠约定。
@@ -76,8 +78,12 @@ open/closed 随时间的流动。不使用 `bd` 的项目会得到一条简短�
 - **发布出来的包可以追溯到这个仓库。** 每个版本都由 GitHub Actions 通过 OIDC 发布，并带有
   provenance attestation，所以 `npm audit signatures` 能把你装到的包，对上构建它的 workflow
   和 commit。
-- **没有东西离开你的机器。** 它绑定到 `127.0.0.1`，拒绝 `Host` 头不是本地的请求（这样恶意页面无法
-  通过 DNS 重绑定够到它），不发出任何对外请求，并且自带字体，而不是从 CDN 取。
+- **离开你机器的只有两件事，而且都跟你本来就能看到的 issue 有关。** glasshive 绑定到 `127.0.0.1`，
+  拒绝 `Host` 头不是本地的请求（这样恶意页面无法通过 DNS 重绑定够到它），并且自带字体，而不是从
+  CDN 取。仅有的两次对外调用都出自 GitHub 视图：一次是 issue 查询，通过 `gh` 发出 —— glasshive
+  从不读取、持有或保存自己的 token —— 另一次是负责人的头像，由 glasshive 自己的进程从
+  `avatars.githubusercontent.com` 取，不带凭据，而且只放在内存里，所以你的浏览器从不会拿到任何
+  GitHub 的 URL。你的会话里的任何东西都不会被送到任何地方。
 - **“空”和“读不到”永远不会长得一样。** 读不到的字段会以 `null` 的形式带上原因一起传下来，所以一块
   安静的屏幕从不含糊。
 - **错误的选项会大声失败。** 读不懂的参数会带着错误退出，而不是悄悄回退到默认值。

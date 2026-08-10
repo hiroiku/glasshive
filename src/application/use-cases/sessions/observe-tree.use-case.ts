@@ -1,20 +1,16 @@
-import { mapObserved } from '~/app-kernel/observation.ts';
 import { ok, type Result } from '~/app-kernel/result.ts';
-import type { AgentProcessIntegration } from '~/application/ports/integrations/sessions/agent-process.integration.ts';
+import type { TranscriptGroup } from '~/application/ports/repositories/sessions/transcript.repository.ts';
+import type { TranscriptDraftService } from '~/application/services/sessions/transcript-draft.service.ts';
+import type { TranscriptIndexService } from '~/application/services/sessions/transcript-index.service.ts';
 import type {
-  TranscriptGroup,
-  TranscriptRepository,
-} from '~/application/ports/repositories/sessions/transcript.repository.ts';
+  ObservedProject,
+  ProjectIndex,
+  ProjectTree,
+} from '~/domain/entities/sessions/observed-project.entity.ts';
+import type { IndexedProject } from '~/domain/services/sessions/project-index.service.ts';
 import {
-  createTranscriptDrafts,
-  type TranscriptDraftService,
-} from '~/application/services/sessions/transcript-draft.service.ts';
-import type { ProjectTree } from '~/domain/entities/sessions/observed-project.entity.ts';
-import {
-  buildProjectTree,
-  type DraftProject,
+  buildObservedProject,
   type DraftSession,
-  deriveProjectPath,
 } from '~/domain/services/sessions/project-tree.service.ts';
 
 /* 木をスナップショット 1 つぶん観測する。
@@ -23,12 +19,18 @@ import {
    パースする。1 周目が軽いので、どの `transcript` をどこまで読むかを、読む前に決められる。
 
    **どれか 1 つが読めなくても、木は返す。** 読めなかった事実はその欄に残す。
-   欠けたところだけが黙り、残りは今までどおり見える、というのが観測ツールのあるべき姿である。 */
+   欠けたところだけが黙り、残りは今までどおり見える、というのが観測ツールのあるべき姿である。
+
+   配り方は 2 通りある。`execute` は最後まで読んでから 1 枚を返し、`observe` は読めた
+   プロジェクトから順に配る。**導出は 1 本しかない** — `execute` は `observe` を最後まで
+   汲んだものである。2 本持つと、逐次で見た木と最後に届く木が食い違い得る。 */
 
 /* ここに並ぶ名前が、この use-case の出力である。**外はこれだけを見る。**
    内側の形が変わっても、外へ出す経路はここを通るので、写す側は巻き込まれない。 */
 export type {
   ObservedProject,
+  ProjectIndex,
+  ProjectStub,
   ProjectTree,
 } from '~/domain/entities/sessions/observed-project.entity.ts';
 export type { TranscriptSession } from '~/domain/entities/sessions/session.entity.ts';
@@ -40,8 +42,30 @@ export type {
   SubagentState,
 } from '~/domain/value-objects/sessions/session-state.value-object.ts';
 
+/* ストリームに流れる 1 つ。**索引が必ず先に来る。**
+
+   索引には行の識別が全部入っている。先に配ることで、後から届くプロジェクトは既に在る行を
+   埋めるだけになり、行が増えも減りも改名もしない。 */
+export type TreeDelta =
+  | { readonly kind: 'index'; readonly index: ProjectIndex }
+  | {
+      readonly kind: 'project';
+      readonly project: ObservedProject;
+      /** ここまでに読み終えた `transcript` の数 */
+      readonly readTranscripts: number;
+      /** 索引が数えた `transcript` の総数 */
+      readonly totalTranscripts: number;
+    };
+
 export interface ObserveTreeUseCase {
   execute(nowMs: number): Promise<Result<ProjectTree>>;
+  /* 読めたプロジェクトから順に配る。最後に木を 1 枚返す。
+
+     **配る単位はプロジェクト 1 つまるごとである。** セッションの状態も子の系統も
+     プロジェクトの中で閉じているので、途中で描いた木はどれも真になる。
+     セッション単位まで刻むと、まだ読んでいない兄弟が居る状態で待機を配ることになり、
+     動いているセッションが「終わった」ものとして並ぶ。 */
+  observe(nowMs: number): AsyncGenerator<TreeDelta, Result<ProjectTree>, void>;
 }
 
 /** いま `~/.claude/projects` に在る `transcript` すべて。子も含める — キャッシュは 1 本ごとに持っている */
@@ -57,59 +81,86 @@ function liveFilesOf(groups: readonly TranscriptGroup[]): ReadonlySet<string> {
 }
 
 export function createObserveTree(deps: {
-  readonly transcripts: TranscriptRepository;
-  readonly processes: AgentProcessIntegration;
+  readonly index: TranscriptIndexService;
+  readonly drafts: TranscriptDraftService;
   readonly activeThresholdMs: number;
-  /* パース結果のキャッシュを外から渡せるようにしてある。統計は木と同じ素材を見るので、
-     同じものを渡せば 8MiB を二度読まずに済む。渡されなければ自分で作る。 */
-  readonly drafts?: TranscriptDraftService;
 }): ObserveTreeUseCase {
-  const { transcripts, processes, activeThresholdMs } = deps;
-  const drafts: TranscriptDraftService =
-    deps.drafts ?? createTranscriptDrafts({ transcripts, activeThresholdMs });
+  const { index, drafts, activeThresholdMs } = deps;
 
-  async function readGroup(group: TranscriptGroup, nowMs: number): Promise<DraftProject> {
-    /* `transcript` は 1 つずつ読む。**一度に始めると、読み取ったテキストが全部いっぺんに居座る。**
-       `~/.claude/projects` を読むのに待ち時間は無いので、まとめて始めても速くはならない。
-       速くならないかわりに、`transcript` の数だけテキストが積み上がってメモリを食い尽くす。 */
-    const sessions: DraftSession[] = [];
-    for (const source of group.sessions) sessions.push(await drafts.readSession(source, nowMs));
-    /* パスの書き表し方の揺れは、ここで正規化しておく。正規化せずに木へ渡すと、
-       同じ実体のプロジェクトが別名のまま二つに並び、プロセスの帰属も割れる。
+  async function* generate(nowMs: number): AsyncGenerator<TreeDelta, Result<ProjectTree>, void> {
+    const snapshot = await index.get();
+    if (!snapshot.ok) return snapshot;
+    const { index: projectIndex, groups } = snapshot.value;
 
-       **正規化できなかったことは null のまま渡す。** 渡された文字列で代えるのは木を組む側の
-       決め事で(`MergeableProject.canonicalPath`)、ここでも代えると同じ判断が
-       二か所に散る。散ったほうは誰にも見えないので、片方だけ変わっても気付けない。 */
-    const path = deriveProjectPath(sessions);
-    const canonical = path === null ? null : await transcripts.canonicalize(path);
-    return {
-      slug: group.slug,
-      canonicalPath: canonical !== null && canonical.kind === 'observed' ? canonical.value : null,
-      sessions,
-    };
+    /* 走査できた周だけキャッシュを掃除する。走査できなかった周に落とすと、
+       `~/.claude/projects` が一瞬読めなかっただけでキャッシュが全部消え、
+       次の周に全部を読み直すことになる。 */
+    if (projectIndex.sources.kind === 'observed') drafts.keepOnly(liveFilesOf(groups));
+
+    yield { kind: 'index', index: projectIndex };
+
+    const bySlug = new Map(groups.map((group) => [group.slug, group]));
+    const total = projectIndex.stubs.reduce((sum, stub) => sum + stub.transcriptCount, 0);
+    const projects: ObservedProject[] = [];
+    let read = 0;
+
+    /* 索引の並びで配る。並べ替えは索引が済ませてあるので、後から届いた行が既に落ち着いた
+       行を押しのけることが無い。 */
+    for (const stub of projectIndex.stubs) {
+      const sessions: DraftSession[] = [];
+      /* `transcript` は 1 つずつ読む。**一度に始めると、読み取ったテキストが全部いっぺんに居座る。**
+         `~/.claude/projects` を読むのに待ち時間は無いので、まとめて始めても速くはならない。
+         速くならないかわりに、`transcript` の数だけテキストが積み上がってメモリを食い尽くす。 */
+      for (const slug of stub.slugs) {
+        const group = bySlug.get(slug);
+        if (group === undefined) continue;
+        for (const source of group.sessions) sessions.push(await drafts.readSession(source, nowMs));
+      }
+
+      /* 束ねる作業は索引が済ませてある。ここで組み直さないのは、組み直せば同じ問いに
+         二度答えることになり、答えが割れたときに行の識別が入れ替わるからである。 */
+      const merged: IndexedProject<DraftSession> = {
+        id: stub.id,
+        slugs: stub.slugs,
+        path: stub.path,
+        canonicalPath: stub.canonicalPath,
+        name: stub.name,
+        liveProcessCount: stub.liveProcessCount,
+        latestActivityMs: stub.latestActivityMs,
+        sessions,
+      };
+      const project = buildObservedProject(merged, nowMs, activeThresholdMs);
+      projects.push(project);
+      read += stub.transcriptCount;
+      yield {
+        kind: 'project',
+        project,
+        readTranscripts: read,
+        totalTranscripts: total,
+      };
+    }
+
+    /* 断る理由が無い。観測できなかったことは木の中の `Observation` に残るので、
+       呼び出しそのものは必ず受理される。 */
+    return ok({
+      generatedAtMs: nowMs,
+      activeThresholdMs,
+      sources: projectIndex.sources,
+      processes: projectIndex.processes,
+      projects,
+    });
   }
 
   return {
+    observe: generate,
+
+    /* 最後まで汲む。**別の導出を持たない** — 逐次で見た木と、最後に届く木が食い違わない
+       ことを、実装の形で保証している。 */
     async execute(nowMs) {
-      const [groups, live] = await Promise.all([transcripts.listTranscripts(), processes.list()]);
-      const found: readonly TranscriptGroup[] = groups.kind === 'observed' ? groups.value : [];
-      /* 走査できた周だけキャッシュを掃除する。走査できなかった周に落とすと、
-         `~/.claude/projects` が一瞬読めなかっただけでキャッシュが全部消え、
-         次の周に全部を読み直すことになる。 */
-      if (groups.kind === 'observed') drafts.keepOnly(liveFilesOf(found));
-      const projects: DraftProject[] = [];
-      for (const group of found) projects.push(await readGroup(group, nowMs));
-      /* 断る理由が無い。観測できなかったことは木の中の `Observation` に残るので、
-         呼び出しそのものは必ず受理される。 */
-      return ok(
-        buildProjectTree({
-          drafts: projects,
-          processes: live,
-          sources: mapObserved(groups, (walked) => walked.length),
-          nowMs,
-          activeThresholdMs,
-        }),
-      );
+      const stream = generate(nowMs);
+      let step = await stream.next();
+      while (!step.done) step = await stream.next();
+      return step.value;
     },
   };
 }

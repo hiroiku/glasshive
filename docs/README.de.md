@@ -23,11 +23,11 @@ npx glasshive
 ```
 
 Es lauscht ausschließlich auf `127.0.0.1:4483` und öffnet deinen Browser. Kein Installationsschritt,
-keine Konfiguration, kein Netzwerkzugriff – das veröffentlichte Paket hat null
-Laufzeitabhängigkeiten. Du brauchst Node.js 22.12 oder neuer und mindestens eine Session von
-Claude Code unter `~/.claude/projects`. Gebaut und getestet wird auf macOS und Linux; unter Windows
-kommt die Zahl der lebenden Agenten als „nicht beobachtbar“ zurück, denn sie zu lesen braucht `ps`
-und entweder `/proc/<pid>/cwd` oder `lsof`.
+keine Konfiguration, und nichts verlässt deinen Rechner, bis du die GitHub-Ansicht öffnest – das
+veröffentlichte Paket hat null Laufzeitabhängigkeiten. Du brauchst Node.js 22.12 oder neuer und
+mindestens eine Session von Claude Code unter `~/.claude/projects`. Gebaut und getestet wird auf
+macOS und Linux; unter Windows kommt die Zahl der lebenden Agenten als „nicht beobachtbar“ zurück,
+denn sie zu lesen braucht `ps` und entweder `/proc/<pid>/cwd` oder `lsof`.
 
 ![glasshive walkthrough](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 
@@ -50,21 +50,22 @@ denselben Zeitraum.
 
 ![Agents](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/agents.png)
 
-### Git
+### Work
 
-Laufende Branches und Worktrees, über den Branch des Haupt-Worktrees gezeichnet, damit du siehst, wer wo ist.
-Paare, die auf dieselben Dateien zusteuern, rücken an den Anfang der Liste. Wähle eine Ref, und du
-bekommst ihre Commits, Diff-Statistiken und die Agenten, die auf ihr aktiv waren.
+Issues, Branches und Milestones auf einem Bildschirm, denn sie sind dieselbe Arbeit aus drei
+Blickwinkeln. Wechsle zwischen ihnen, ohne die Ansicht zu verlassen.
 
-![Git](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/git.png)
+Issues kommen von GitHub über die [`gh`](https://cli.github.com)-CLI – glasshive fragt `gh`, auf
+welches Repository deine Remotes zeigen, genauso, wie `gh` es selbst bestimmt – oder aus einem
+[`bd`](https://github.com/gastownhall/beads)-Register. Sub-Issues verschachteln sich, `blocked by`
+wird als Abhängigkeitskante gezeichnet, und Issue-Typen, Labels, Milestones und Zuständige kommen
+mit.
 
-### Beads
-
-Das Issue-Register aus [`bd`](https://github.com/gastownhall/beads), mit Abhängigkeitskanten,
-Eltern-Kind-Verschachtelung und dem Verlauf von offen und geschlossen über die Zeit. Projekte, die
-`bd` nicht verwenden, bekommen einen kurzen Hinweis statt eines leeren Bildschirms.
-
-![Beads](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/beads.png)
+Branches und Worktrees werden über den Branch des Haupt-Worktrees gezeichnet, damit du siehst, wer
+wo ist. Paare, die auf dieselben Dateien zusteuern, rücken an den Anfang. Wähle eine Ref, und du
+bekommst ihre Commits, Diff-Statistiken und die Agenten, die auf ihr aktiv waren. Ein Issue und ein
+Branch werden nur über den Head-Branch eines Pull Requests verbunden – ein Beinahe-Treffer bleibt
+unverbunden, statt auf Verdacht verknüpft zu werden.
 
 ### Side panel
 
@@ -76,9 +77,10 @@ Tool-Aufrufe werden gerendert; das rohe Transkript wird nie umgeschrieben.
 
 ## Nur lesend, per Design
 
-- **Es liest drei Dinge und schreibt in keines davon.** Die Session-Logs von Claude Code
-  (`~/.claude/projects/**/*.jsonl`), das beads-Register (`<project>/.beads/issues.jsonl`) und `git`.
-  Kein Transkript, kein Register und kein Repository wird je verändert.
+- **Es liest vier Dinge und schreibt in keines davon.** Die Session-Logs von Claude Code
+  (`~/.claude/projects/**/*.jsonl`), das beads-Register (`<project>/.beads/issues.jsonl`), `git`
+  und – über die `gh`-CLI – die Issues des GitHub-Repositorys, auf das deine Remotes zeigen. Kein
+  Transkript, kein Register, kein Repository und kein Issue wird je verändert.
 - **Die einzige Datei, die es schreibt, ist seine eigene.** `~/.config/glasshive/preferences.json`
   enthält deine angehefteten Tabs und Ansichtseinstellungen. Vor dem Schreiben prüft glasshive, dass
   der Pfad nicht in `~/.claude`, im Wurzelverzeichnis der Transkripte oder in einem beobachteten
@@ -89,10 +91,15 @@ Tool-Aufrufe werden gerendert; das rohe Transkript wird nie umgeschrieben.
   aus GitHub Actions über OIDC veröffentlicht und trägt eine Provenance-Attestation, sodass
   `npm audit signatures` das installierte Paket gegen den Workflow und den Commit prüfen kann, aus
   denen es gebaut wurde.
-- **Nichts verlässt deinen Rechner.** Es bindet an `127.0.0.1`, weist Anfragen ab, deren
-  `Host`-Header nicht lokal ist (damit eine feindselige Seite es nicht per DNS-Rebinding erreicht),
-  stellt keine ausgehenden Anfragen und bringt seine Schriften selbst mit, statt sie von einem CDN zu
-  holen.
+- **Zwei Dinge verlassen deinen Rechner, und bei beiden geht es um Issues, die du ohnehin schon
+  siehst.** glasshive bindet an `127.0.0.1`, weist Anfragen ab, deren `Host`-Header nicht lokal ist
+  (damit eine feindselige Seite es nicht per DNS-Rebinding erreicht), und bringt seine Schriften
+  selbst mit, statt sie von einem CDN zu holen. Die GitHub-Ansicht macht die beiden einzigen
+  ausgehenden Aufrufe, die es gibt: die Issue-Abfrage, die über `gh` läuft – glasshive liest, hält
+  und speichert nie ein eigenes Token –, und die Avatare der Zuständigen, die glasshives eigener
+  Prozess ohne mitgesendete Zugangsdaten von `avatars.githubusercontent.com` holt und nur im
+  Arbeitsspeicher hält, sodass dein Browser nie eine GitHub-URL bekommt. Nichts aus deinen Sessions
+  wird irgendwohin gesendet.
 - **„Leer“ und „nicht lesbar“ sehen nie gleich aus.** Ein Feld, das nicht gelesen werden konnte, wird
   als `null` mitgeführt, mit dem Grund daran – ein stiller Bildschirm ist damit nie mehrdeutig.
 - **Falsche Optionen scheitern laut.** Ein nicht lesbares Flag beendet das Programm mit einem Fehler,

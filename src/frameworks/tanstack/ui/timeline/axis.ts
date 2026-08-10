@@ -1,3 +1,5 @@
+import { DAY_MS, type TimeWindow } from '../derive/timeWindow.ts';
+
 /* 時間の軸。**純関数だけ。**
 
    軸の取り方は「どの稼働区間が読めるか」を決めてしまうので、ここが狂うと画面全体が嘘になる。
@@ -12,22 +14,11 @@ export interface TimelineNode {
   readonly intervals: readonly (readonly [string, string])[];
 }
 
-export type Scale = 'auto' | number;
-
-export const SCALES: readonly {
-  readonly key: Scale;
-  readonly label: string;
-}[] = [
-  { key: 'auto', label: 'Auto' },
-  { key: 15 * 60_000, label: '15m' },
-  { key: 60 * 60_000, label: '1h' },
-  { key: 6 * 3_600_000, label: '6h' },
-  { key: 24 * 3_600_000, label: '24h' },
-  { key: 7 * 86_400_000, label: '7d' },
-];
+/* 見る幅は Tokens と同じ語彙を使う。**同じ時間軸の上に在るものを、別の刻みで選ばせない** */
+export type Scale = TimeWindow;
 
 /** Auto が遡る上限。これより古い稼働区間に軸を引き伸ばされると、いま動いている区間が潰れる */
-const AUTO_SPAN_MS = 24 * 3_600_000;
+const AUTO_SPAN_MS = DAY_MS;
 
 /** これより狭い表示範囲は作らない。1 分未満の軸には目盛りが置けない */
 const MIN_SPAN_MS = 60_000;

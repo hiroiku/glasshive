@@ -48,6 +48,20 @@ const project = (id: string, canonicalPath: string | null): Snapshot['projects']
   recentTokens: observed(0),
 });
 
+/* 木 1 枚から、本物と同じ順に配る索引のチャンクを起こす。
+   本物も索引を先に配るので、偽物もその順を守っておく。 */
+const indexChunkOf = (tree: Snapshot) =>
+  ({
+    kind: 'index' as const,
+    index: {
+      generatedAtMs: tree.generatedAtMs,
+      activeThresholdMs: tree.activeThresholdMs,
+      sources: tree.sources,
+      processes: tree.processes,
+      stubs: [],
+    },
+  }) as const;
+
 /** スナップショットの偽物。触られたかどうかが分かるよう、覗いた回数を数える */
 function fakeTree(projects: readonly Snapshot['projects'][number][] = []) {
   let looks = 0;
@@ -62,6 +76,12 @@ function fakeTree(projects: readonly Snapshot['projects'][number][] = []) {
         projects,
       });
     },
+    // この controller が見るのは `get` だけである。`stream` は形を満たすためだけに置く
+    async *stream() {
+      const answer = await service.get();
+      if (answer.ok) yield indexChunkOf(answer.value);
+      return answer;
+    },
     invalidate() {},
   };
   return { service, lookCount: () => looks };
@@ -72,6 +92,11 @@ function blindTree() {
   const service: Deps['tree'] = {
     async get() {
       return err(new TreeError('`transcript` のルートを読めなかった'));
+    },
+    // この controller が見るのは `get` だけである。`stream` は形を満たすためだけに置く
+    // biome-ignore lint/correctness/useYield: 木を起こせない偽物なので、配るものが 1 つも無い
+    async *stream() {
+      return await service.get();
     },
     invalidate() {},
   };

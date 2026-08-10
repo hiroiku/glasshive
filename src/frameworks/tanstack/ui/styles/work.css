@@ -1,0 +1,155 @@
+/* ---------- Work の画面。単位の切り替えと、観測できなかったことの伝え方 ---------- */
+
+/* 行の単位を選ぶ切り替え。**タブではなく、ツールバーの中の 1 要素として置く** —
+   タブにすると階層が増え、上のプロジェクトタブとビューのタブと合わせて 3 階層になる */
+.unit-switch {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.ubtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  color: var(--dim);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.ubtn + .ubtn {
+  border-left: 1px solid var(--border);
+}
+.ubtn:hover {
+  color: var(--fg);
+}
+.ubtn.on {
+  background: var(--panel);
+  color: var(--fg);
+}
+.ubtn .n {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.ubtn.on .n {
+  color: var(--accent);
+}
+
+/* 並べ方の切り替え。右端に置く — 左端が「何を見るか」、右端が「どう並べるか」 */
+/* 凡例が右へ寄せているので、ここは寄せ直さない。凡例が出ないときのために `auto` を残す */
+.layout-switch {
+  display: inline-flex;
+  flex: none;
+  margin-left: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.lbtn {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: var(--dim);
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.lbtn + .lbtn {
+  border-left: 1px solid var(--border);
+}
+.lbtn:hover {
+  color: var(--fg);
+}
+.lbtn.on {
+  background: var(--panel);
+  color: var(--accent);
+}
+
+/* 観測できなかったことを伝える板。
+
+   **空の一覧と同じ顔をさせない。** ここに出るのは「何も無かった」ではなく
+   「見に行けなかった」で、読む人がすべきことが在る。 */
+/* 置き場所は空状態の定石 —— 横は中央、上から 1/8 ほど。親がグリッドのことも縦の flex の
+   こともあるので、どちらでも中央へ寄るように両方の指定を書いてある */
+.not-observed {
+  grid-column: 1 / -1;
+  justify-self: center;
+  align-self: center;
+  margin: max(48px, 12vh) auto 40px;
+  max-width: 560px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 22px;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.no-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.no-head .mdi {
+  color: var(--accent);
+  flex: none;
+}
+.not-observed.partial .no-head .mdi {
+  color: var(--waiting);
+}
+.no-title {
+  flex: 1;
+  min-width: 0;
+}
+.no-code {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--dim);
+  background: rgba(125, 155, 190, 0.12);
+  border: 1px solid rgba(125, 155, 190, 0.22);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+.no-detail {
+  color: var(--dim);
+  margin: 0 0 12px;
+}
+/* 手立ては順序のある一覧にする。上から順に打てば見えるようになる、という約束である */
+.no-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.no-steps li {
+  color: var(--fg);
+}
+.no-steps code {
+  display: inline-block;
+  margin-left: 8px;
+  background: rgba(125, 155, 190, 0.12);
+  border: 1px solid rgba(125, 155, 190, 0.22);
+  padding: 0 6px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #c9dcf0;
+  user-select: all;
+}
+.no-steps a {
+  margin-left: 8px;
+  color: var(--accent);
+}

@@ -22,8 +22,9 @@ agent.
 npx glasshive
 ```
 
-It serves on `127.0.0.1:4483` only and opens your browser. No install step, no configuration, no
-network access — the published package has zero runtime dependencies. You need Node.js 22.12 or
+It serves on `127.0.0.1:4483` only and opens your browser. No install step, no configuration, and
+nothing leaves your machine until you open the GitHub view — the published package has zero runtime
+dependencies. You need Node.js 22.12 or
 newer and at least one Claude Code session under `~/.claude/projects`. It is built and tested on
 macOS and Linux; on Windows the live agent count comes back as unobservable, because reading it
 needs `ps` and either `/proc/<pid>/cwd` or `lsof`.
@@ -48,21 +49,20 @@ Token and concurrency statistics sit underneath, scoped to the same window.
 
 ![Agents](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/agents.png)
 
-### Git
+### Work
 
-Live branches and worktrees drawn over the main worktree's branch, so you can see who is where. Pairs that
-are heading for the same files are lifted to the top of the list. Pick a ref to get its commits,
-diff stats, and which agents have been active on it.
+Issues, branches, and milestones on one screen, because they are the same work seen from three
+sides. Switch between them without leaving the view.
 
-![Git](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/git.png)
+Issues come from GitHub through the [`gh`](https://cli.github.com) CLI — glasshive asks `gh` which
+repository your remotes point at, the same way `gh` decides it — or from a
+[`bd`](https://github.com/gastownhall/beads) ledger. Sub-issues nest, `blocked by` is drawn as a
+dependency edge, and issue types, labels, milestones and assignees come along.
 
-### Beads
-
-The issue ledger from [`bd`](https://github.com/gastownhall/beads), with dependency edges,
-parent–child nesting, and open/closed flow over time. Projects that do not use `bd` get a short
-note instead of an empty screen.
-
-![Beads](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/beads.png)
+Branches and worktrees are drawn over the main worktree's branch, so you can see who is where.
+Pairs heading for the same files are lifted to the top. Pick a ref to get its commits, diff stats,
+and which agents have been active on it. An issue and a branch are joined only by a pull request's
+head branch — a near-miss is left unjoined rather than guessed.
 
 ### Side panel
 
@@ -74,9 +74,10 @@ rendered; the raw transcript is never rewritten.
 
 ## Read-only by design
 
-- **It reads three things and writes to none of them.** Claude Code session logs
-  (`~/.claude/projects/**/*.jsonl`), the beads ledger (`<project>/.beads/issues.jsonl`), and `git`.
-  No transcript, ledger, or repository is ever modified.
+- **It reads four things and writes to none of them.** Claude Code session logs
+  (`~/.claude/projects/**/*.jsonl`), the beads ledger (`<project>/.beads/issues.jsonl`), `git`, and —
+  through the `gh` CLI — the issues of the GitHub repository your remotes point at. No transcript,
+  ledger, repository, or issue is ever modified.
 - **The one file it writes is its own.** `~/.config/glasshive/preferences.json` holds your pinned
   tabs and view preferences. Before writing, glasshive checks that the path is not inside `~/.claude`,
   the transcripts root, or any observed `.beads` or `.git` directory, and refuses if it is — writing
@@ -85,9 +86,14 @@ rendered; the raw transcript is never rewritten.
 - **The published package is traceable to this repository.** Every version is published from GitHub
   Actions over OIDC and carries a provenance attestation, so `npm audit signatures` can check the
   package you installed against the workflow and the commit it was built from.
-- **Nothing leaves your machine.** It binds to `127.0.0.1`, rejects requests whose `Host` header is
-  not local (so a hostile page cannot reach it by DNS rebinding), makes no outbound requests, and
-  bundles its own fonts instead of fetching them from a CDN.
+- **Two things leave your machine, and both are about issues you can already see.** glasshive binds
+  to `127.0.0.1`, rejects requests whose `Host` header is not local (so a hostile page cannot reach
+  it by DNS rebinding), and bundles its own fonts instead of fetching them from a CDN. The GitHub
+  view makes the two outbound calls there are: the issue query, which goes through `gh` — so
+  glasshive never reads, holds, or stores a token of its own — and the assignee avatars, which
+  glasshive's own process fetches from `avatars.githubusercontent.com` with credentials omitted and
+  keeps in memory only, so your browser is never handed a GitHub URL. Nothing about your sessions is
+  ever sent anywhere.
 - **"Empty" and "could not read" never look the same.** A field that could not be read is carried as
   `null` with the reason attached, so a quiet screen is never ambiguous.
 - **Bad options fail loudly.** An unreadable flag exits with an error instead of silently falling

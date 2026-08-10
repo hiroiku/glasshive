@@ -3,7 +3,8 @@ import { useMemo, useState } from 'react';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { usageQuery } from '../../../queries/sessions.query.ts';
 import { type ConcurrencyNode, concurrency } from '../../derive/concurrency.ts';
-import { binUsage, byModel, gridOf, quotaWindow, totalsOf } from '../../derive/usage.ts';
+import { autoWindow, type TimeWindow } from '../../derive/timeWindow.ts';
+import { binUsage, byModel, footFor, gridOf, quotaWindow, totalsOf } from '../../derive/usage.ts';
 import { ByModelPanel } from './ByModelPanel.tsx';
 import { ConcurrencyPanel } from './ConcurrencyPanel.tsx';
 import { TokensPanel } from './TokensPanel.tsx';
@@ -14,13 +15,9 @@ import { WindowsPanel } from './WindowsPanel.tsx';
    分け合っているのはバー 1 本の長さと期間の始まりと本数の 3 つだけなので、4 枚を 1 つの
    ファイルにする理由が無い。ここは 3 つを配るだけである。 */
 
-const DEFAULT_FOOT_MS = 15 * 60_000;
-
 export function StatsFooter({ project, nowMs }: { project: ProjectJson; nowMs: number }) {
-  const [footMs, setFootMs] = useState(DEFAULT_FOOT_MS);
+  const [window, setWindow] = useState<TimeWindow>('auto');
   const usage = useQuery(usageQuery(project.id));
-
-  const { fromMs, bars } = useMemo(() => gridOf(nowMs, footMs), [nowMs, footMs]);
 
   const buckets = useMemo(() => {
     const response = usage.data;
@@ -28,6 +25,22 @@ export function StatsFooter({ project, nowMs }: { project: ProjectJson; nowMs: n
     if (response === undefined || !response.ok || response.body.state !== 'observed') return [];
     return response.body.buckets;
   }, [usage.data]);
+
+  /* `auto` は「実際に消費が在るところがちょうど収まる幅」。**空のバケットは数えない** ——
+     数えると、素材が遡る 7 日ぶんが常に選ばれて、いつも同じ幅になる。 */
+  const oldestMs = useMemo(() => {
+    let oldest: number | null = null;
+    for (const bucket of buckets) {
+      if (bucket.i + bucket.o + bucket.cw <= 0) continue;
+      if (oldest === null || bucket.t < oldest) oldest = bucket.t;
+    }
+    return oldest;
+  }, [buckets]);
+
+  const spanMs = window === 'auto' ? autoWindow(oldestMs, nowMs) : window;
+  const footMs = footFor(spanMs);
+
+  const { fromMs, bars } = useMemo(() => gridOf(nowMs, footMs, spanMs), [nowMs, footMs, spanMs]);
 
   const inRange = useMemo(() => buckets.filter((bucket) => bucket.t >= fromMs), [buckets, fromMs]);
   const bins = useMemo(
@@ -69,8 +82,9 @@ export function StatsFooter({ project, nowMs }: { project: ProjectJson; nowMs: n
         fromMs={fromMs}
         footMs={footMs}
         bars={bars}
+        window={window}
         nowMs={nowMs}
-        onFoot={setFootMs}
+        onWindow={setWindow}
       />
       <ConcurrencyPanel
         counts={counts}

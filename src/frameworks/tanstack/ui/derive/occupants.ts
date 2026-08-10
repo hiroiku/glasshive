@@ -66,3 +66,35 @@ export function occupantsOf(index: OccupantIndex, root: string | null): Occupant
   }
   return found.sort((a, b) => (STATE_ORDER[a.state] ?? 9) - (STATE_ORDER[b.state] ?? 9));
 }
+
+/* ブランチの名前で、そこに居るエージェントを引く。
+
+   **cwd だけでは足りない。** worktree を切らずにブランチを渡り歩く使い方では、どの
+   セッションも同じ cwd を指すので、全員が本流の行に集まって「誰がどのブランチに居るか」が
+   消える。`transcript` はブランチ名も書いているので、そちらでも引けるようにする。 */
+export function occupantsOnBranch(
+  project: ProjectJson | undefined,
+  branch: string,
+): readonly Occupant[] {
+  if (project === undefined || branch === '') return [];
+  const found: Occupant[] = [];
+  const add = (name: string | null, occupant: Occupant) => {
+    if (name !== branch || occupant.state === 'ended') return;
+    if (!found.some((other) => other.file === occupant.file)) found.push(occupant);
+  };
+  for (const session of project.sessions) {
+    add(session.git_branch, {
+      file: session.file,
+      state: session.state,
+      label: cut(session.title ?? session.id.slice(0, 8), MAX_LABEL),
+    });
+    for (const subagent of session.subagents) {
+      add(subagent.git_branch, {
+        file: subagent.file,
+        state: subagent.state,
+        label: cut(subagent.label, MAX_LABEL),
+      });
+    }
+  }
+  return found.sort((a, b) => (STATE_ORDER[a.state] ?? 9) - (STATE_ORDER[b.state] ?? 9));
+}

@@ -1,5 +1,4 @@
 import { mapObserved, type Observation, observed } from '~/app-kernel/observation.ts';
-import { pathBasename } from '~/app-kernel/path.ts';
 import type {
   ObservedProject,
   ProjectTree,
@@ -8,9 +7,8 @@ import type { TranscriptSession } from '~/domain/entities/sessions/session.entit
 import type { SubagentSession } from '~/domain/entities/sessions/subagent.entity.ts';
 import type { AgentProcess } from '~/domain/value-objects/sessions/agent-process.value-object.ts';
 import { placeByLineage } from './agent-lineage.service.ts';
-import { attributeProcesses } from './process-attribution.service.ts';
-import { type MergeableProject, mergeProjects } from './project-merge.service.ts';
-import { sortByLastActivityDesc, sortByLatestActivityDesc } from './session-ordering.service.ts';
+import { deriveGroupPath, type IndexedProject, indexProjects } from './project-index.service.ts';
+import { sortByLastActivityDesc } from './session-ordering.service.ts';
 import { deriveSessionStates, isWithinThreshold } from './session-state.service.ts';
 import { combineTokens } from './token-usage.service.ts';
 
@@ -52,20 +50,9 @@ export interface DraftProject {
 
 /* プロジェクトのパスは、`transcript` に書かれた作業ディレクトリから導く。
 
-   **最も新しいセッションから順に見て、最初に見つかったパスを採る。** どのセッションも
-   同じプロジェクトを指しているはずだが、パスの書き表し方は時とともに変わり得るので、
-   新しいものを信じる。
-
-   並べる前に探すと結果が変わる。渡す順に頼らずここで並べるのは、そのためである。 */
-export function deriveProjectPath(sessions: readonly DraftSession[]): string | null {
-  for (const session of sortByLastActivityDesc(sessions)) {
-    if (session.cwd !== null && session.cwd !== '') return session.cwd;
-  }
-  return null;
-}
-
-const latestOf = (sessions: readonly DraftSession[]): number =>
-  sessions.reduce((latest, session) => Math.max(latest, session.lastActivityMs), 0);
+   導き方そのものは索引と同じである。**同じ問いに二度答えない** — 索引が言うパスと木が
+   言うパスが違えば、行の識別が途中で入れ替わる。 */
+export const deriveProjectPath = deriveGroupPath;
 
 /** セッションとサブエージェント、`transcript` ひとつひとつの数を並べる。まとめ方は `combineTokens` が知っている */
 const recentPartsOf = (sessions: readonly DraftSession[]): Observation<number>[] =>
@@ -86,78 +73,75 @@ export function buildProjectTree(input: {
 }): ProjectTree {
   const { drafts, processes, nowMs, activeThresholdMs } = input;
 
-  // セッションを 1 つも持たない slug は、プロジェクトとして数えない
-  const mergeable: MergeableProject<DraftSession>[] = drafts
-    .filter((draft) => draft.sessions.length > 0)
-    .map((draft) => ({
-      slug: draft.slug,
-      path: deriveProjectPath(draft.sessions),
-      canonicalPath: draft.canonicalPath,
-      latestActivityMs: latestOf(draft.sessions),
-      sessions: draft.sessions,
-    }));
-
-  const merged = mergeProjects(mergeable);
-
-  /* 帰属は解決済みのパスで測る。OS が教える作業ディレクトリは解決済みなので、
-     生の表記と突き合わせると、書き表し方の揺れているところで取りこぼす。 */
-  const counts = attributeProcesses(
-    merged.map((project) => project.canonicalPath),
-    processes.kind === 'observed' ? processes.value : [],
-  );
-
-  const projects: ObservedProject[] = merged.map((project, index) => {
-    const sessions = sortByLastActivityDesc(project.sessions);
-    const assignments = deriveSessionStates({
-      sessions: sessions.map((session) => ({
-        lastActivityMs: session.lastActivityMs,
-        ownMtimeMs: session.ownMtimeMs,
-        awaitingCandidate: session.awaitingCandidate,
-        subagentMtimesMs: session.subagents.map((subagent) => subagent.lastActivityMs),
-      })),
-      liveProcessCount: counts[index] ?? 0,
-      nowMs,
-      activeThresholdMs,
-    });
-
-    return {
-      id: project.id,
-      slugs: project.slugs,
-      path: project.path,
-      canonicalPath: project.canonicalPath,
-      name: project.path === null ? project.id : pathBasename(project.path),
-      liveProcessCount: counts[index] ?? 0,
-      latestActivityMs: project.latestActivityMs,
-      recentTokens: combineTokens(recentPartsOf(sessions)),
-      sessions: sessions.map((session, at) => {
-        const { awaitingCandidate, recentTokens, ...rest } = session;
-        return {
-          ...rest,
-          state: assignments[at]?.state ?? 'ended',
-          awaiting: assignments[at]?.awaiting ?? null,
-          /* 新しい順に並べてから、呼んだ親の下へ入れ直す。**順序が先で、木が後である。**
-             入れ直した後に並べ替えると親子が離れ、深さだけが残って読めなくなる。
-             `placeByLineage` は兄弟どうしの順を渡されたまま保つので、この順で通せば
-             「兄弟の中では新しいものが上、子は親のすぐ下」の両方が立つ。 */
-          subagents: placeByLineage(sortByLastActivityDesc(session.subagents)).map(
-            ({ node: { recentTokens: _recent, ...subagent }, depth }) => ({
-              ...subagent,
-              depth,
-              state: isWithinThreshold(nowMs, subagent.lastActivityMs, activeThresholdMs)
-                ? ('active' as const)
-                : ('ended' as const),
-            }),
-          ),
-        };
-      }),
-    };
+  const indexed = indexProjects({
+    groups: drafts,
+    processes: processes.kind === 'observed' ? processes.value : [],
   });
+
+  const projects: ObservedProject[] = indexed.map((project) =>
+    buildObservedProject(project, nowMs, activeThresholdMs),
+  );
 
   return {
     generatedAtMs: nowMs,
     activeThresholdMs,
     sources: input.sources ?? observed(drafts.length),
     processes: mapObserved(processes, (found) => found.length),
-    projects: sortByLatestActivityDesc(projects),
+    projects,
+  };
+}
+
+/* 束ねて数え終えたプロジェクト 1 つを、観測できたプロジェクトに仕立てる。
+
+   **この関数はプロジェクト 1 つの中で閉じている。** 状態の割り当ても子の系統も、外の
+   プロジェクトを一切見ない。だから 1 つずつ配ってよく、途中で描いた木がどれも真になる。 */
+export function buildObservedProject(
+  project: IndexedProject<DraftSession>,
+  nowMs: number,
+  activeThresholdMs: number,
+): ObservedProject {
+  const sessions = sortByLastActivityDesc(project.sessions);
+  const assignments = deriveSessionStates({
+    sessions: sessions.map((session) => ({
+      lastActivityMs: session.lastActivityMs,
+      ownMtimeMs: session.ownMtimeMs,
+      awaitingCandidate: session.awaitingCandidate,
+      subagentMtimesMs: session.subagents.map((subagent) => subagent.lastActivityMs),
+    })),
+    liveProcessCount: project.liveProcessCount,
+    nowMs,
+    activeThresholdMs,
+  });
+
+  return {
+    id: project.id,
+    slugs: project.slugs,
+    path: project.path,
+    canonicalPath: project.canonicalPath,
+    name: project.name,
+    liveProcessCount: project.liveProcessCount,
+    latestActivityMs: project.latestActivityMs,
+    recentTokens: combineTokens(recentPartsOf(sessions)),
+    sessions: sessions.map((session, at) => {
+      const { awaitingCandidate, recentTokens, ...rest } = session;
+      return {
+        ...rest,
+        state: assignments[at]?.state ?? 'ended',
+        awaiting: assignments[at]?.awaiting ?? null,
+        /* 新しい順に並べてから、呼んだ親の下へ入れ直す。**順序が先で、木が後である。**
+             入れ直した後に並べ替えると親子が離れ、深さだけが残って読めなくなる。
+             `placeByLineage` は兄弟どうしの順を渡されたまま保つので、この順で通せば
+             「兄弟の中では新しいものが上、子は親のすぐ下」の両方が立つ。 */
+        subagents: placeByLineage(sortByLastActivityDesc(session.subagents)).map(
+          ({ node: { recentTokens: _recent, ...subagent }, depth }) => ({
+            ...subagent,
+            depth,
+            state: isWithinThreshold(nowMs, subagent.lastActivityMs, activeThresholdMs)
+              ? ('active' as const)
+              : ('ended' as const),
+          }),
+        ),
+      };
+    }),
   };
 }

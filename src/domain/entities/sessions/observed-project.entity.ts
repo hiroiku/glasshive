@@ -25,6 +25,37 @@ export interface ObservedProject {
   readonly recentTokens: Observation<number>;
 }
 
+/* 中身を読む前のプロジェクト 1 つ。**行の識別だけが決まっている。**
+
+   ここに在る値はどれも、一覧全体を見ないと決まらない。`id` と名前は同じ解決済みパスを持つ
+   slug を束ねた組の代表で決まり、`liveProcessCount` は一覧の中で最も深いプロジェクトを
+   選んだ結果である。だから読み終えたプロジェクトから順に出すのではなく、これを先に
+   全部そろえてから配る。**そうしないと、行が後から改名も併合も消滅もする。** */
+export interface ProjectStub {
+  readonly id: string;
+  readonly slugs: readonly string[];
+  readonly path: string | null;
+  readonly canonicalPath: string | null;
+  readonly name: string;
+  readonly liveProcessCount: number;
+  readonly latestActivityMs: number;
+  /* このプロジェクトが持つ `transcript` の数。セッションと子を合わせる。
+
+     読み終えた数を数えるときの分母である。**バイト数は分母にしない** — `transcript` には
+     読み取り範囲の上限が掛かっているので、大きいファイルではごく一部しか読まず、小さい
+     ファイルでは読み取り範囲どうしが重なって、大きさより多く読むことになる。 */
+  readonly transcriptCount: number;
+}
+
+/* 中身を読む前の一覧。何が並ぶかだけが決まっていて、1 行ごとの数値はまだ無い。 */
+export interface ProjectIndex {
+  readonly generatedAtMs: number;
+  readonly activeThresholdMs: number;
+  readonly sources: Observation<number>;
+  readonly processes: Observation<number>;
+  readonly stubs: readonly ProjectStub[];
+}
+
 /** ある時点で観測したプロジェクトぜんぶ */
 export interface ProjectTree {
   readonly generatedAtMs: number;

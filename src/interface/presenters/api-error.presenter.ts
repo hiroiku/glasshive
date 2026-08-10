@@ -65,6 +65,12 @@ const STATUS_BY_CODE: Record<string, ApiStatus> = {
   'git.denied': 503,
   'git.timeout': 503,
   'git.exit_nonzero': 503,
+  /* 課題トラッカーの側の事情。**そのプロジェクトが GitHub を指していないことはここへ来ない** —
+     観測はできたうえで無かったのだから、200 と空の値で返る。 */
+  'tracker.not_installed': 503,
+  'tracker.denied': 503,
+  'tracker.timeout': 503,
+  'tracker.exit_nonzero': 503,
 };
 
 /** リクエストの側の落ち度として返す HTTP ステータス。ここに無いステータスは、こちらの側の事情である */

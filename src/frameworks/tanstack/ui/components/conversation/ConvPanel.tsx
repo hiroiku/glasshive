@@ -3,9 +3,11 @@ import type {
   SessionJson,
   SubagentJson,
 } from '~/interface/presenters/sessions/tree.presenter.ts';
+import { conversationTrouble } from '../../derive/trouble.ts';
 import { cut, worktreeName } from '../../format.ts';
 import { useTranscriptWindow } from '../../hooks/useTranscriptWindow.ts';
 import { AgentChip, IssueChip, RefChip } from '../chips/Chips.tsx';
+import { NotObserved } from '../primitives/NotObserved.tsx';
 import { EventView } from './EventView.tsx';
 
 /* 会話パネル。ヘッダーに「誰の会話か」、下に会話そのもの。
@@ -173,7 +175,7 @@ function Conversation({
   return (
     <div id="conversation" ref={window.boxRef}>
       {/* 読み込みに失敗したことを、空の会話で表さない */}
-      {window.failed && <div id="placeholder">Failed to load</div>}
+      {window.failed && <NotObserved {...conversationTrouble()} />}
       {window.hasOlder && (
         <button type="button" id="older" onClick={window.loadOlder}>
           Load older

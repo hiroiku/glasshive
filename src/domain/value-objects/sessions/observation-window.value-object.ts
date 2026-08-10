@@ -39,6 +39,12 @@ export const MESSAGE_SCAN_BYTES = 4 * 1024 * 1024;
    ここまで当たったら、残りは見に行かずに打ち切る。 */
 export const SEARCH_MAX_FILES = 200;
 
+/* 検索が 1 回で開く `transcript` の数。**当たった数ではなく、開いた数で数える。**
+
+   候補を全部読み切ってから答えると、`transcript` が数百在るプロジェクトでは最初の 1 件が
+   出るまで何も出ない。ここで区切って、読めたところから返す。 */
+export const SEARCH_SCAN_FILES = 48;
+
 /** これより短い語では探さない。短すぎる語は全部に当たって意味を成さない */
 export const SEARCH_MIN_QUERY_CHARS = 2;
 

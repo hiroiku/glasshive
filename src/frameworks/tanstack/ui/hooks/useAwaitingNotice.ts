@@ -15,6 +15,12 @@ export function useAwaitingNotice(tree: TreeJson | undefined, enabled: boolean):
 
   useEffect(() => {
     if (tree === undefined) return;
+    /* 途中の木では動かさない。**鳴らした知らせは取り消せない。**
+
+       読めたプロジェクトから順に届くので、途中で動かすと 2 つ目のプロジェクトが届いた
+       時点で「1 巡目ではない」と見えてしまい、開いた瞬間に既に待っていた分が全部鳴る。
+       控えのほうも埋めない — 埋めると、最初の完全な木が「何も変わっていない」に見える。 */
+    if (!tree.complete) return;
     const previous = previousRef.current;
     const first = previous.size === 0;
 

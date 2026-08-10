@@ -7,6 +7,7 @@ bun.lockb
 # ビルド成果物
 dist/
 .output/
+.tanstack/
 *.tsbuildinfo
 
 # ルーターの生成物(dev / build で作り直される)
@@ -19,6 +20,8 @@ coverage/
 .env
 .env.*.local
 *.local
+# 機械ごとの許可設定。`.claude/settings.json` は共有するが、こちらは共有しない
+.claude/settings.local.json
 
 # OS / エディター
 .DS_Store

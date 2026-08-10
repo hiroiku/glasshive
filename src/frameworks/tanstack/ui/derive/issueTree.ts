@@ -80,7 +80,11 @@ export interface Edge {
   readonly a: number;
   /** 下側の行 */
   readonly b: number;
-  /** 矢じりを置く側。依存されている側ではなく、依存する先を指す */
+  /* 矢じりを置く側。**堰き止めている側から、待っている側へ向ける。**
+
+     依存の向きをそのまま描くと矢は「何を待っているか」を指すが、読みたいのは
+     着手の順である。先に済むものから後に来るものへ向けておけば、矢を辿るだけで
+     取りかかる順になる。 */
   readonly to: number;
   readonly type: string;
   readonly lane: number;
@@ -106,7 +110,8 @@ export function buildEdges(shown: readonly IssueSummaryJson[]): {
       raw.push({
         a: Math.min(from, to),
         b: Math.max(from, to),
-        to,
+        // `from` が `dependency.on` を待っている。だから矢じりは待っている `from` の側
+        to: from,
         type: dependency.type ?? '',
       });
     }
@@ -183,4 +188,32 @@ export function childProgress(all: readonly IssueSummaryJson[]): Map<string, Chi
     }
   }
   return progress;
+}
+
+/* 行どうしの繋がり。**依存も親子も、向きを問わず 1 つの集合にする。**
+
+   ホバーで残すのは「この課題と関わりのある行」であって、依存の向きではない。向きで
+   分けると、自分を待っている課題が沈んで、片付けた先が見えなくなる。 */
+export function relatedIndex(
+  shown: readonly IssueSummaryJson[],
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const index = new Map<string, Set<string>>();
+  const link = (a: string, b: string) => {
+    if (a === b) return;
+    const found = index.get(a) ?? new Set<string>();
+    found.add(b);
+    index.set(a, found);
+  };
+  const present = new Set(shown.map((issue) => issue.id));
+  for (const issue of shown) {
+    const id = issue.id;
+    if (id === null) continue;
+    for (const dependency of issue.deps) {
+      const on = dependency.on;
+      if (on === null || !present.has(on)) continue;
+      link(id, on);
+      link(on, id);
+    }
+  }
+  return index;
 }

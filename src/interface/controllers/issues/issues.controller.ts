@@ -1,10 +1,11 @@
 import { err, type Result } from '~/app-kernel/result.ts';
-import type { TreeSnapshotService } from '~/application/services/sessions/tree-snapshot.service.ts';
+import type { TranscriptIndexService } from '~/application/services/sessions/transcript-index.service.ts';
 import {
-  fromTree,
+  fromIndex,
   resolveProject,
 } from '~/application/services/workspace/readable-scope.service.ts';
 import type { GetIssueUseCase } from '~/application/use-cases/issues/get-issue.use-case.ts';
+import type { ListGithubIssuesUseCase } from '~/application/use-cases/issues/list-github-issues.use-case.ts';
 import type { ListIssuesUseCase } from '~/application/use-cases/issues/list-issues.use-case.ts';
 import { own, projectIdOf } from '~/interface/controllers/sessions/project-query.controller.ts';
 import { InvalidSessionsRequestError } from '~/interface/errors/sessions/request.error.ts';
@@ -28,20 +29,32 @@ export type IssueResponse = ApiResponse<IssueJson>;
 export interface IssuesDeps {
   readonly list: ListIssuesUseCase;
   readonly get: GetIssueUseCase;
-  readonly tree: TreeSnapshotService;
+  readonly index: TranscriptIndexService;
 }
 
-/** 名指されたプロジェクトの、解決済みのパス。引けない id は、形が違うのも一覧に無いのも同じ断り方 */
-async function locate(tree: TreeSnapshotService, input: unknown): Promise<Result<string>> {
+export interface GithubIssuesDeps {
+  readonly list: ListGithubIssuesUseCase;
+  readonly index: TranscriptIndexService;
+}
+
+/* 名指されたプロジェクトの、解決済みのパス。引けない id は、形が違うのも一覧に無いのも同じ断り方。
+
+   **木ではなく索引を引く。** 要るのは「この id はどこに在るか」だけで、それは中身を読む前に
+   決まっている。木を組んでから引くと、台帳を 1 つ読むために `~/.claude/projects` を
+   全部読むことになる — この画面が待たされていたのは台帳ではなく、その前のここである。 */
+async function locate(index: TranscriptIndexService, input: unknown): Promise<Result<string>> {
   const projectId = projectIdOf(input);
   if (!projectId.ok) return err(projectId.error);
-  const snapshot = await tree.get();
+  const snapshot = await index.get();
   if (!snapshot.ok) return err(snapshot.error);
-  return resolveProject(fromTree(snapshot.value), projectId.value);
+  return resolveProject(
+    fromIndex(snapshot.value.index, snapshot.value.transcriptFiles),
+    projectId.value,
+  );
 }
 
 export async function listIssues(deps: IssuesDeps, input: unknown): Promise<IssuesResponse> {
-  const path = await locate(deps.tree, input);
+  const path = await locate(deps.index, input);
   if (!path.ok) return { ok: false, ...presentError(path.error) };
 
   // 載せるかどうかだけの指定なので、読めない値は「載せない」に倒してよい
@@ -54,8 +67,23 @@ export async function listIssues(deps: IssuesDeps, input: unknown): Promise<Issu
   return { ok: true, body: presentIssues(ledger.value) };
 }
 
+/* GitHub の課題を一覧にする。**受け取るのは台帳のときと同じ id だけである。**
+   どのリポジトリを尋ねるかは、観測したプロジェクトの remote が決める。 */
+export async function listGithubIssues(
+  deps: GithubIssuesDeps,
+  input: unknown,
+): Promise<IssuesResponse> {
+  const path = await locate(deps.index, input);
+  if (!path.ok) return { ok: false, ...presentError(path.error) };
+
+  const includeClosed = own(input, 'includeClosed') === true;
+  const ledger = await deps.list.execute({ projectPath: path.value, includeClosed });
+  if (!ledger.ok) return { ok: false, ...presentError(ledger.error) };
+  return { ok: true, body: presentIssues(ledger.value) };
+}
+
 export async function getIssue(deps: IssuesDeps, input: unknown): Promise<IssueResponse> {
-  const path = await locate(deps.tree, input);
+  const path = await locate(deps.index, input);
   if (!path.ok) return { ok: false, ...presentError(path.error) };
 
   const id = own(input, 'id');

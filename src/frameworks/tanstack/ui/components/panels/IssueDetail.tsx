@@ -2,16 +2,20 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type { JsonValue } from '~/interface/presenters/issues/issues.presenter.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
-import { issueQuery, issuesQuery } from '../../../queries/issues.query.ts';
+import { githubIssuesQuery, issueQuery, issuesQuery } from '../../../queries/issues.query.ts';
 import { agentTokens } from '../../derive/tokens.ts';
-import { workerIndex } from '../../derive/workers.ts';
+import { issueTrouble, transportTrouble } from '../../derive/trouble.ts';
+import { viaLabel, workerIndex, workersOn } from '../../derive/workers.ts';
 import { absTime, formatSinceIso } from '../../format.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import { ActivityLanes, resolveActivityRows } from '../activity/ActivityLanes.tsx';
 import { AgentChip } from '../chips/Chips.tsx';
 import { type GraphNode, MiniGraph } from '../issues/MiniGraph.tsx';
+import { NotObserved } from '../primitives/NotObserved.tsx';
+import { ReadProgress } from '../primitives/ReadProgress.tsx';
 import { MdView } from '../text/MdView.tsx';
 import { SubjectText } from '../text/SubjectText.tsx';
+import { GithubIssueDetail } from './GithubIssueDetail.tsx';
 
 /* 課題 1 件のパネル。台帳が言うことと、観測が言うことを並べて置く。
 
@@ -57,17 +61,50 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
   const slug = project?.id ?? '';
   const one = useQuery({ ...issueQuery(slug, id), enabled: slug !== '' });
   const ledger = useQuery({ ...issuesQuery(slug, false), enabled: slug !== '' });
+  /* GitHub の課題を開いたときの受け皿。**同じ `queryKey` を使う** —— Work の画面が既に
+     取ってあるので、ここで開いても `gh` はもう一度動かない。 */
+  const tracker = useQuery({ ...githubIssuesQuery(slug, true), enabled: slug !== '' });
   const workers = useMemo(() => workerIndex(project), [project]);
   /* コメントの書き手は名前でしか書かれていない。命名規則を頼りに会話へ辿る */
   const actors = useMemo(() => agentTokens(project), [project]);
 
   const answer = one.data;
-  if (answer === undefined) return <div className="empty">Loading…</div>;
-  if (!answer.ok) return <div className="empty">Failed to load issue ({answer.body.code})</div>;
-  if (answer.body.state !== 'observed' || answer.body.issue === null) {
-    return <div className="empty">Issue not found in the ledger export</div>;
+  /* 台帳と GitHub は、同じ画面が並べて出す 2 つの出所である。**台帳に無いことは失敗ではない**
+     —— GitHub の課題を開けば、台帳には最初から居ない。 */
+  const tracked =
+    tracker.data?.ok === true && tracker.data.body.state === 'observed'
+      ? tracker.data.body.issues
+      : [];
+  const github = tracked.find((issue) => issue.id === id);
+
+  const ledgerRecord =
+    answer?.ok === true && answer.body.state === 'observed' ? answer.body.issue : null;
+
+  if (ledgerRecord === null) {
+    if (github !== undefined) {
+      return (
+        <GithubIssueDetail issue={github} all={tracked} project={project} nowMs={Date.now()} />
+      );
+    }
+    /* 断りも「無かった」も `.detail` の中に出す。外に出すと余白も中央寄せも無い素の文字が
+       左上に残る。 */
+    if (one.error !== null) {
+      return (
+        <div className="detail">
+          <NotObserved {...transportTrouble('this issue')} />
+        </div>
+      );
+    }
+    if (answer === undefined || tracker.data === undefined) {
+      return <ReadProgress label="Reading the issue" />;
+    }
+    return (
+      <div className="detail">
+        <NotObserved {...issueTrouble(id, answer.ok ? null : answer.body.code)} />
+      </div>
+    );
   }
-  const record = answer.body.issue;
+  const record = ledgerRecord;
   const status = str(record, 'status') ?? 'open';
   const title = str(record, 'title');
   const labels = strings(record, 'labels');
@@ -99,7 +136,9 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
     title: issue.title,
   }));
 
-  const found = [...(workers.get(id) ?? [])].sort(
+  /* 台帳の一覧に居ないなら、PR の欄も無い。**id の鍵だけで引くことになる** —
+     GitHub の課題をここで開いたときがそれで、繋がりは会話の中の名指しだけになる。 */
+  const found = [...workersOn(workers, { id, github: byId.get(id)?.github ?? null })].sort(
     (a, b) => (a.state === 'ended' ? 1 : 0) - (b.state === 'ended' ? 1 : 0),
   );
   const lanes = resolveActivityRows(project, found.slice(0, MAX_ACTIVITY_ROWS));
@@ -139,7 +178,7 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
             {assignee === null ? (
               <span className="dimtxt">—</span>
             ) : (
-              <button type="button" className="lnk" onClick={() => nav.gotoBeads(assignee)}>
+              <button type="button" className="lnk" onClick={() => nav.gotoIssues(assignee)}>
                 {assignee}
               </button>
             )}
@@ -159,6 +198,7 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
                     state={worker.state}
                     label={worker.label}
                     where={worker.where}
+                    via={viaLabel(worker)}
                   />
                 ))}
                 {found.length > MAX_LISTED_WORKERS && (
@@ -185,7 +225,7 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
                 type="button"
                 key={label}
                 className="lbl"
-                onClick={() => nav.gotoBeads(label)}
+                onClick={() => nav.gotoIssues(label)}
               >
                 {label}
               </button>

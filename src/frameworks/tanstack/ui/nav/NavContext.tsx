@@ -15,10 +15,14 @@ export interface Nav {
   openConv(file: string): void;
   openIssue(id: string): void;
   openRef(rev: string, label: string): void;
-  /** Git の画面へ移り、その語で絞る */
-  gotoGit(token: string): void;
-  /** 課題の画面へ移り、その語で絞る */
-  gotoBeads(token: string): void;
+  /** Work の画面のブランチへ移り、その語で絞る */
+  gotoBranch(token: string): void;
+  /** Work の画面の課題へ移り、その語で絞る */
+  gotoIssues(token: string): void;
+  /** Work の画面の課題へ移り、そのマイルストーンだけに絞る */
+  gotoMilestone(title: string): void;
+  /** Work の画面のマイルストーンの一覧へ移る */
+  gotoMilestones(): void;
   closePanel(): void;
 }
 
@@ -36,11 +40,13 @@ export function NavProvider({ slug, children }: { slug: string; children: React.
         search: (prev: ProjectSearch) => ({ ...prev, ...next }),
       });
     };
-    const toView = (view: 'git' | 'beads', token: string) => {
+    /* 単位まで指して移る。**画面は 1 つなので、行き先は単位の切り替えである** —
+       ブランチの語で課題の一覧へ落とすと、当たらない絞り込みだけが残る。 */
+    const toWork = (unit: ProjectSearch['unit'], token: string) => {
       void navigate({
-        to: `/projects/$slug/${view}`,
+        to: '/projects/$slug/work',
         params: { slug },
-        search: (prev: ProjectSearch) => ({ ...prev, q: token }),
+        search: (prev: ProjectSearch) => ({ ...prev, unit, q: token }),
       });
     };
 
@@ -48,8 +54,31 @@ export function NavProvider({ slug, children }: { slug: string; children: React.
       openConv: (file) => patch({ panel: 'conv', pv: file, pl: undefined }),
       openIssue: (id) => patch({ panel: 'issue', pv: id, pl: undefined }),
       openRef: (rev, label) => patch({ panel: 'ref', pv: rev, pl: label }),
-      gotoGit: (token) => toView('git', token),
-      gotoBeads: (token) => toView('beads', token),
+      gotoBranch: (token) => toWork('branches', token),
+      gotoIssues: (token) => toWork(undefined, token),
+      /* マイルストーンから課題へ落とすときは、単位も検索語も置き換える。**`q` は消す** —
+         前の単位で打った語がそのまま残ると、絞り込みが二重に掛かって空の一覧になる。 */
+      gotoMilestone: (title) =>
+        void navigate({
+          to: '/projects/$slug/work',
+          params: { slug },
+          search: (prev: ProjectSearch): ProjectSearch => ({
+            ...prev,
+            unit: undefined,
+            ms: title,
+            q: undefined,
+          }),
+        }),
+      gotoMilestones: () =>
+        void navigate({
+          to: '/projects/$slug/work',
+          params: { slug },
+          search: (prev: ProjectSearch): ProjectSearch => ({
+            ...prev,
+            unit: 'milestones',
+            q: undefined,
+          }),
+        }),
       closePanel: () => patch({ panel: undefined, pv: undefined, pl: undefined }),
     };
   }, [navigate, slug]);

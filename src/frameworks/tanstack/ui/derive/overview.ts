@@ -16,24 +16,88 @@ export interface OverviewRow {
      いつも出すと画面が文字で埋まるので、名前がぶつかったときだけ持たせる。 */
   readonly parent: string | null;
   /** 自分と子を合わせて動いている数 */
-  readonly active: number;
-  readonly waiting: number;
+  /* この行の中身を読み終えているか。**読む前は、数がどれも `null` である。**
+
+     `0` にしない。読んでいないことを「1 つも動いていない」と書くのは、
+     観測できなかったことを「無かった」と書くのと同じ取り違えである。 */
+  readonly read: boolean;
+  readonly active: number | null;
+  readonly waiting: number | null;
   /** 人の入力を待っている数。**glasshive のいちばんの用事** */
-  readonly input: number;
+  readonly input: number | null;
   readonly tokens24h: number | null;
   readonly tokens24hState: ObservationState;
   readonly lastActivityMs: number | null;
   readonly liveProcess: boolean;
+  /** プロジェクトの中で何かが動いていた時間の和集合。読む前は空 */
+  readonly spans: readonly Span[];
+  /** 稼働区間を全部見られたか。読む前は「見ていない」ので偽 */
+  readonly spansComplete: boolean;
 }
 
 /** 行の頭に置く点の色。人待ちを最優先に見せる */
-export type RowDotState = 'input' | 'active' | 'waiting' | 'ended';
+export type RowDotState = 'input' | 'active' | 'waiting' | 'ended' | 'unknown';
 
+/* まだ読んでいない行は `unknown` に倒す。**`ended` に落としてはいけない。**
+
+   `ended` の点は「このプロジェクトでは何も動いていない」という断定である。読む前の行は
+   数を 1 つも持っていないので、その断定はできない。塗らずに輪郭だけを出す。 */
 export const dotStateOf = (row: OverviewRow): RowDotState => {
-  if (row.input > 0) return 'input';
-  if (row.active > 0) return 'active';
+  if (!row.read) return 'unknown';
+  if ((row.input ?? 0) > 0) return 'input';
+  if ((row.active ?? 0) > 0) return 'active';
   return row.liveProcess ? 'waiting' : 'ended';
 };
+
+/** 稼働区間 1 つ。`[始まり, 終わり]` のミリ秒 */
+export type Span = readonly [number, number];
+
+/* プロジェクトの中で何かが動いていた時間の**和集合**。
+
+   セッションもサブエージェントも 1 本にまとめる。誰が動いていたかは一覧の欄が数で言うので、
+   ここで要るのは「このプロジェクトは、いつ動いていたか」だけである。
+
+   重なりを潰さずに描くと、同時に 3 つ動いていた時間が 3 本の線になって、
+   ずっと動き続けていたプロジェクトと見分けが付かなくなる。 */
+export function unionSpans(project: ProjectJson): readonly Span[] {
+  const raw: Span[] = [];
+  const take = (intervals: readonly [string, string][]) => {
+    for (const [from, to] of intervals) {
+      const fromMs = Date.parse(from);
+      const toMs = Date.parse(to);
+      if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) continue;
+      raw.push([fromMs, Math.max(toMs, fromMs)]);
+    }
+  };
+  for (const session of project.sessions) {
+    take(session.intervals);
+    for (const subagent of session.subagents) take(subagent.intervals);
+  }
+
+  raw.sort((a, b) => a[0] - b[0]);
+  const merged: Span[] = [];
+  for (const span of raw) {
+    const last = merged[merged.length - 1];
+    if (last !== undefined && span[0] <= last[1]) {
+      merged[merged.length - 1] = [last[0], Math.max(last[1], span[1])];
+      continue;
+    }
+    merged.push(span);
+  }
+  return merged;
+}
+
+/* 稼働区間を全部見られたか。**1 つでも欠けていれば、欠けていると言う** —
+   途切れた絵を「静かだった」として出すと、観測できなかったことが無かったことになる。 */
+const spansCompleteOf = (project: ProjectJson): boolean =>
+  project.sessions.every(
+    (session) =>
+      session.intervals_complete &&
+      session.intervals_state === 'observed' &&
+      session.subagents.every(
+        (subagent) => subagent.intervals_complete && subagent.intervals_state === 'observed',
+      ),
+  );
 
 const latestMsOf = (project: ProjectJson): number | null => {
   let latest: number | null = null;
@@ -70,6 +134,27 @@ export function deriveRows(projects: readonly ProjectJson[]): readonly OverviewR
   const ambiguous = duplicatedNames(projects);
 
   return projects.map((project) => {
+    /* 読む前の行は、識別だけを持って数を持たない。ここで 0 を作ると、
+       画面はそれを「静かなプロジェクト」として描く。 */
+    if (!project.read) {
+      return {
+        id: project.id,
+        name: project.name,
+        path: project.path,
+        parent: ambiguous.has(project.name) ? parentNameOf(project.path) : null,
+        read: false,
+        active: null,
+        waiting: null,
+        input: null,
+        tokens24h: null,
+        tokens24hState: project.tokens_24h_state,
+        lastActivityMs: null,
+        liveProcess: project.live_process,
+        spans: [],
+        spansComplete: false,
+      };
+    }
+
     let active = 0;
     let waiting = 0;
     let input = 0;
@@ -89,6 +174,7 @@ export function deriveRows(projects: readonly ProjectJson[]): readonly OverviewR
       name: project.name,
       path: project.path,
       parent: ambiguous.has(project.name) ? parentNameOf(project.path) : null,
+      read: true,
       active,
       waiting,
       input,
@@ -96,6 +182,8 @@ export function deriveRows(projects: readonly ProjectJson[]): readonly OverviewR
       tokens24hState: project.tokens_24h_state,
       lastActivityMs: latestMsOf(project),
       liveProcess: project.live_process,
+      spans: unionSpans(project),
+      spansComplete: spansCompleteOf(project),
     };
   });
 }
@@ -121,9 +209,9 @@ const tokensRank = (row: OverviewRow): number => row.tokens24h ?? -1;
 /* 立ち位置の重み。人待ち > 稼働 > 待機 > それ以外。
    同じ重みの中では最終活動の新しい順になるよう、比較関数が続けて時刻を見る。 */
 const standingRank = (row: OverviewRow): number => {
-  if (row.input > 0) return 3;
-  if (row.active > 0) return 2;
-  if (row.waiting > 0 || row.liveProcess) return 1;
+  if ((row.input ?? 0) > 0) return 3;
+  if ((row.active ?? 0) > 0) return 2;
+  if ((row.waiting ?? 0) > 0 || row.liveProcess) return 1;
   return 0;
 };
 
@@ -131,12 +219,15 @@ const rankOf = (row: OverviewRow, key: SortKey): number => {
   switch (key) {
     case 'standing':
       return standingRank(row);
+    /* 読む前の行には数が無い。**0 として並べない** — 並べ替えた一覧の中で、
+       読んでいない行が「1 つも動いていない行」と同じ場所に置かれることになる。
+       -1 に落として、どの向きでも読めた行の外側へ出す。 */
     case 'active':
-      return row.active;
+      return row.active ?? -1;
     case 'waiting':
-      return row.waiting;
+      return row.waiting ?? -1;
     case 'input':
-      return row.input;
+      return row.input ?? -1;
     case 'tokens':
       return tokensRank(row);
     default:
@@ -160,6 +251,27 @@ export function sortRows(
   });
 }
 
+/* 覚えていた並びのまま出し直す。**順位付けそのものは変えない。**
+
+   既定の並びは人待ち・稼働・最終活動から作られるので、変更通知が届くたびに行が入れ替わる。
+   ピン留めは行を狙って押す操作なので、狙った行がその瞬間に動くと押し間違える。
+
+   覚えていない行は末尾へ回す。途中へ差し込むと、やはりカーソルの下で行が動く。
+   覚えていた行がもう居なければ、そのまま落ちる —— 並びを覚えているだけで、
+   観測を覚えているわけではない。 */
+export function holdOrder(
+  rows: readonly OverviewRow[],
+  remembered: readonly string[],
+): readonly OverviewRow[] {
+  if (remembered.length === 0) return rows;
+  const at = new Map(remembered.map((id, index) => [id, index]));
+  return [...rows].sort((a, b) => {
+    const left = at.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+    const right = at.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+    return left !== right ? left - right : a.id.localeCompare(b.id);
+  });
+}
+
 /* 一覧に出す期間。**既定は 30 日。**
 
    一覧には `~`(ホームディレクトリ)の下で観測できたプロジェクトが全部並ぶので、絞らないと、
@@ -171,7 +283,7 @@ export const DEFAULT_SPAN: OverviewSpan = '30d';
 
 const DAY_MS = 86_400_000;
 
-const SPAN_MS: Record<OverviewSpan, number | null> = {
+export const SPAN_MS: Record<OverviewSpan, number | null> = {
   '24h': DAY_MS,
   '7d': 7 * DAY_MS,
   '30d': 30 * DAY_MS,
@@ -213,6 +325,8 @@ export interface OverviewTotals {
   readonly tokens: number;
   /** 1 つでも観測できなかったプロジェクトがあったか。合計を「これで全部だ」と出さないためのフラグ */
   readonly tokensPartial: boolean;
+  /** 数え落とした行が在るか。**在るなら、この合計はまだ最終ではない** */
+  readonly partial: boolean;
 }
 
 export function totalsOf(rows: readonly OverviewRow[]): OverviewTotals {
@@ -221,12 +335,21 @@ export function totalsOf(rows: readonly OverviewRow[]): OverviewTotals {
   let input = 0;
   let tokens = 0;
   let tokensPartial = false;
+  /* まだ読み終えていない行が混じっているか。合計そのものは出すが、断定はさせない */
+  let partial = false;
   for (const row of rows) {
-    active += row.active;
-    waiting += row.waiting;
-    input += row.input;
+    /* 読んでいない行は、どの合計にも足さない。**足さないことを黙らない** —
+       まだ全部を数えていない合計を、数え終えた合計と同じ顔で出すと、
+       その数はいつまでも小さいまま正しく見える。 */
+    if (!row.read) {
+      partial = true;
+      continue;
+    }
+    active += row.active ?? 0;
+    waiting += row.waiting ?? 0;
+    input += row.input ?? 0;
     if (row.tokens24h === null) tokensPartial = tokensPartial || row.tokens24hState !== 'absent';
     else tokens += row.tokens24h;
   }
-  return { active, waiting, input, tokens, tokensPartial };
+  return { active, waiting, input, tokens, tokensPartial: tokensPartial || partial, partial };
 }

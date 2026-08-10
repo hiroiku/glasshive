@@ -103,7 +103,7 @@ describe('プロジェクト 1 つぶんの課題を一覧にする', () => {
       '読めたうえで 1 件も無いのは、観測できなかったのとは別の事実である',
     ).toEqual({
       kind: 'observed',
-      value: { issues: [], counts: {} },
+      value: { issues: [], counts: {}, truncated: false },
     });
   });
 });

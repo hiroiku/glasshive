@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AppError } from '~/app-kernel/error.ts';
 import { observed, unobservable } from '~/app-kernel/observation.ts';
+import { buildProjectIndex } from '~/domain/services/sessions/project-index.service.ts';
 import {
   buildProjectTree,
   type DraftProject,
@@ -444,5 +445,59 @@ describe('直近の消費をプロジェクトごとにまとめる', () => {
       '集計期間の長さは一覧の都合であって、セッションの性質ではない',
     ).toBe(false);
     expect(first?.subagents[0] && 'recentTokens' in first.subagents[0]).toBe(false);
+  });
+});
+
+/* 索引が言う行と、木が言う行。
+
+   一覧はまず索引で行を敷き、読み終えたプロジェクトを `id` で置き換えていく。**片方にしか
+   無い `id` が 1 つでもあると、その行は置き換わらないまま「読んでいない」で残る。** 並びが
+   違えば、読み終えるたびに行が跳ねる。どちらも `indexProjects` を通ることで防いでいるので、
+   同じ入力から同じ行が同じ順で出ることをここで固定する。 */
+describe('索引と木は同じ行を名指す', () => {
+  const drafts = [
+    project({ slug: '-work-beta', canonicalPath: '/work/beta', sessions: [session(T0 - SEC)] }),
+    project({ slug: '-work-alpha', canonicalPath: '/work/alpha', sessions: [session(T0)] }),
+    /* 同じ実体を指す別の slug。併合の代表がどちらでも、索引と木で同じでなければならない */
+    project({
+      slug: '-work-alpha-2',
+      canonicalPath: '/work/alpha',
+      sessions: [session(T0 - 2 * SEC)],
+    }),
+    // セッションを持たない slug。どちらも行として数えない
+    project({ slug: '-work-empty', canonicalPath: '/work/empty', sessions: [] }),
+  ];
+  const processes = observed([{ pid: 1, cwd: '/work/alpha' }]);
+
+  const index = buildProjectIndex({
+    groups: drafts,
+    processes,
+    sources: observed(drafts.length),
+    nowMs: T0,
+    activeThresholdMs: THRESHOLD,
+    transcriptsOf: () => 1,
+  });
+  const tree = buildProjectTree({ drafts, processes, nowMs: T0, activeThresholdMs: THRESHOLD });
+
+  it('`id` が同じ順で並ぶ', () => {
+    expect(index.stubs.map((stub) => stub.id)).toEqual(tree.projects.map((found) => found.id));
+  });
+
+  it('名前とパスも食い違わない', () => {
+    expect(index.stubs.map((stub) => [stub.name, stub.path, stub.canonicalPath])).toEqual(
+      tree.projects.map((found) => [found.name, found.path, found.canonicalPath]),
+    );
+  });
+
+  it('帰属したプロセスの数も食い違わない', () => {
+    expect(index.stubs.map((stub) => stub.liveProcessCount)).toEqual(
+      tree.projects.map((found) => found.liveProcessCount),
+    );
+  });
+
+  it('束ねた slug も食い違わない', () => {
+    expect(index.stubs.map((stub) => stub.slugs)).toEqual(
+      tree.projects.map((found) => found.slugs),
+    );
   });
 });

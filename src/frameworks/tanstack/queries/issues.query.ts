@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
-import { getIssue, getIssues } from '../functions/issues.ts';
+import { getGithubIssues, getIssue, getIssues } from '../functions/issues.ts';
 
 /* 課題の問い合わせ。
 
@@ -16,6 +16,15 @@ export const issuesQuery = (projectId: string, includeClosed: boolean) =>
     queryFn: () => getIssues({ data: { projectId, includeClosed } }),
     /* 台帳は人の手で動く。`transcript` ほど頻繁には変わらないので、変更通知を待たずに少し置く */
     staleTime: 60_000,
+  });
+
+/* GitHub の課題。台帳より置く時間を長くしてある — 相手はネットワークの向こうで、
+   取り直すたびに `gh` の起動と API の呼び出しが要る。 */
+export const githubIssuesQuery = (projectId: string, includeClosed: boolean) =>
+  queryOptions({
+    queryKey: ['github-issues', projectId, includeClosed] as const,
+    queryFn: () => getGithubIssues({ data: { projectId, includeClosed } }),
+    staleTime: 300_000,
   });
 
 export const issueQuery = (projectId: string, id: string) =>

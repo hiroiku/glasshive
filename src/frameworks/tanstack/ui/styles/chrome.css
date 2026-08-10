@@ -21,33 +21,38 @@
   user-select: none;
 }
 
-/* ビュー切替(Agents / Beads / Git)— プロジェクトタブの直下、プロジェクト内の概念 */
+/* ビュー切替(Agents / Work)— プロジェクトタブの直下、プロジェクト内の概念。
+
+   **バーそのものがタブ行である。** 中に別の囲いを作らない —— 上のプロジェクトタブと
+   合わせて枠が二重になり、同じ「今どこを見ているか」を 2 通りの形で言うことになる。
+   選ばれているタブは下の境界線を切って、本文と地続きに見せる。 */
 #subbar {
   flex: none;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 12px;
-  padding: 6px 14px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
 }
 #views {
   display: inline-flex;
-  gap: 2px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px;
+  align-items: stretch;
 }
 /* 中身は <a> なので、放っておくと既定の下線が出る。ここは押しどころの群れであって
    本文の中のリンクではないので、下線は姿を壊すだけ(#brand と同じ理由)。
    出ている文字はビューの名前であって観測ではないから、続けて押しても選択されない。 */
 .vbtn {
+  display: inline-flex;
+  align-items: center;
   background: transparent;
   color: var(--dim);
   border: none;
-  border-radius: 4px;
-  padding: 2px 12px;
+  /* 下の境界線と同じ太さで場所を取っておく。選ばれた側だけ色を載せると、
+     文字が上下に跳ねない */
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 9px 14px;
   cursor: pointer;
   font: inherit;
   font-size: 12px;
@@ -58,9 +63,8 @@
   color: var(--fg);
 }
 .vbtn.current {
-  background: var(--panel);
   color: var(--fg);
-  box-shadow: inset 0 0 0 1px var(--border);
+  border-bottom-color: var(--accent);
 }
 #scope {
   color: var(--dim);
@@ -180,6 +184,8 @@
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   flex: none;
+  /* 掴んでいる間に引く線を、タブ行そのものを基準に置くため */
+  position: relative;
   /* 読み込み中(タブ 0 件)でも高さを確保して CLS を起こさない
      = 6px 上 padding + タブ 1 個分(12px 文字 × line-height + 上下 5px + border 1px) */
   min-height: 36px;
@@ -217,6 +223,25 @@
 /* ピン留めしていないプロジェクトを見ているあいだの暫定タブ。留めたタブと見分けが付くように傾ける */
 .tab.provisional .tab-link {
   font-style: italic;
+}
+
+/* 掴んでいるタブと、置く場所の線。**隣を押しのけない** —
+   隣が動くと、狙っていた場所そのものが動いて、置きたいところに置けない。 */
+.tab.grabbed {
+  opacity: 0.4;
+}
+.tab-drop {
+  position: absolute;
+  top: 6px;
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+/* 掴んでいる間はタブの上でも掴んだ手のままにする。列の幅を変える操作ではない */
+body.dragging #tabs {
+  cursor: grabbing;
 }
 
 .tab-link {

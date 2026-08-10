@@ -30,11 +30,11 @@
 /* 比は横幅の配り方で、min-width は「これ以下なら折り返せ」の線。
    基準幅が 0 なので、min-width を書かないかぎり 4 枚は 0 に向かって細り続け、
    flex-wrap も効かない(基準の合計が線を超えないので折り返す理由が生まれない)。
-   線はそれぞれの中で一番縮まない行から採る — Tokens は刻みのラベルの列、
-   Agents と Windows と By model は目盛りと表の最小の桁 */
+   線はそれぞれの中で一番縮まない行から採る — Tokens は見出しの行(足 6 つと範囲 2 つの
+   チップは縮まない)、Agents と Windows と By model は目盛りと表の最小の桁 */
 .sf-chart {
   flex: 2 1 0;
-  min-width: 340px;
+  min-width: 450px;
 }
 .sf-conc {
   flex: 1.4 1 0;
@@ -65,6 +65,12 @@
   align-items: baseline;
   gap: 6px;
   color: var(--dim);
+}
+/* 範囲のチップが足を決めているとき、その足は押されて効いているのではない。
+   `on` と同じ見た目にすると、どちらのチップが効いているのか読めなくなる */
+.fchip.auto {
+  color: var(--fg);
+  border-style: dashed;
 }
 .sf-title {
   font-size: 10.5px;
@@ -127,12 +133,18 @@
   vector-effect: non-scaling-stroke;
 }
 /* 両端と真ん中の 3 つ。間を空けておかないと、狭いときに端の 2 つが真ん中へ寄って触れる */
+/* 時間軸の目盛り。**両端揃えではなく、時刻そのものの位置に置く** —
+   刻みは `d3-scale` が期間から決めるので、等間隔に並ぶとは限らない */
 .sf-ticks {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  position: relative;
+  height: 13px;
   color: var(--dim);
   font-size: 10px;
+}
+.sf-ticks span {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
 }
 .sf-stack {
   display: flex;

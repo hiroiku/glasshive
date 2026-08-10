@@ -23,10 +23,11 @@ npx glasshive
 ```
 
 Il n'écoute que sur `127.0.0.1:4483` et ouvre votre navigateur. Aucune installation, aucune
-configuration, aucun accès réseau — le paquet publié n'a aucune dépendance d'exécution. Il vous faut
-Node.js 22.12 ou plus récent et au moins une session Claude Code sous `~/.claude/projects`. Il est
-construit et testé sur macOS et Linux ; sous Windows le compte des agents vivants revient comme
-« non observable », car le lire demande `ps` et soit `/proc/<pid>/cwd`, soit `lsof`.
+configuration, et rien ne quitte votre machine tant que vous n'ouvrez pas la vue GitHub — le paquet
+publié n'a aucune dépendance d'exécution. Il vous faut Node.js 22.12 ou plus récent et au moins une
+session Claude Code sous `~/.claude/projects`. Il est construit et testé sur macOS et Linux ; sous
+Windows le compte des agents vivants revient comme « non observable », car le lire demande `ps` et
+soit `/proc/<pid>/cwd`, soit `lsof`.
 
 ![glasshive walkthrough](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 
@@ -49,21 +50,22 @@ sur la même fenêtre de temps.
 
 ![Agents](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/agents.png)
 
-### Git
+### Work
 
-Les branches et worktrees actifs tracés par-dessus la branche du worktree principal, pour voir qui est où. Les
-paires qui se dirigent vers les mêmes fichiers remontent en haut de la liste. Choisissez une ref pour
-obtenir ses commits, ses statistiques de diff et les agents qui y ont été actifs.
+Les tickets, les branches et les milestones sur un seul écran, parce qu'il s'agit du même travail
+vu sous trois angles. Passez de l'un à l'autre sans quitter la vue.
 
-![Git](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/git.png)
+Les tickets viennent de GitHub via la CLI [`gh`](https://cli.github.com) — glasshive demande à `gh`
+vers quel dépôt pointent vos remotes, exactement comme `gh` le décide — ou d'un registre
+[`bd`](https://github.com/gastownhall/beads). Les sous-tickets s'imbriquent, `blocked by` est tracé
+comme une arête de dépendance, et les types de ticket, les labels, les milestones et les assignés
+suivent.
 
-### Beads
-
-Le registre de tickets de [`bd`](https://github.com/gastownhall/beads), avec les arêtes de dépendance,
-l'imbrication parent–enfant et le flux ouvert/fermé dans le temps. Les projets qui n'utilisent pas
-`bd` reçoivent une courte note au lieu d'un écran vide.
-
-![Beads](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/beads.png)
+Les branches et les worktrees sont tracés par-dessus la branche du worktree principal, pour voir
+qui est où. Les paires qui se dirigent vers les mêmes fichiers remontent en haut. Choisissez une ref
+pour obtenir ses commits, ses statistiques de diff et les agents qui y ont été actifs. Un ticket et
+une branche ne sont reliés que par la branche head d'une pull request — en cas de correspondance
+approximative, le lien est laissé de côté plutôt que deviné.
 
 ### Side panel
 
@@ -75,9 +77,10 @@ code et les appels d'outils sont rendus ; la transcription brute n'est jamais r�
 
 ## En lecture seule par conception
 
-- **Il lit trois choses et n'écrit dans aucune.** Les journaux de session de Claude Code
-  (`~/.claude/projects/**/*.jsonl`), le registre beads (`<project>/.beads/issues.jsonl`) et `git`.
-  Aucune transcription, aucun registre, aucun dépôt n'est jamais modifié.
+- **Il lit quatre choses et n'écrit dans aucune.** Les journaux de session de Claude Code
+  (`~/.claude/projects/**/*.jsonl`), le registre beads (`<project>/.beads/issues.jsonl`), `git` et —
+  via la CLI `gh` — les tickets du dépôt GitHub vers lequel pointent vos remotes. Aucune
+  transcription, aucun registre, aucun dépôt, aucun ticket n'est jamais modifié.
 - **Le seul fichier qu'il écrit est le sien.** `~/.config/glasshive/preferences.json` conserve vos
   onglets épinglés et vos préférences d'affichage. Avant d'écrire, glasshive vérifie que le chemin
   n'est ni dans `~/.claude`, ni dans la racine des transcriptions, ni dans un répertoire `.beads` ou
@@ -87,10 +90,15 @@ code et les appels d'outils sont rendus ; la transcription brute n'est jamais r�
 - **Le paquet publié remonte jusqu'à ce dépôt.** Chaque version est publiée depuis GitHub Actions
   via OIDC et porte une attestation de provenance ; `npm audit signatures` peut donc confronter le
   paquet que vous avez installé au workflow et au commit à partir desquels il a été construit.
-- **Rien ne quitte votre machine.** Il écoute sur `127.0.0.1`, rejette les requêtes dont l'en-tête
-  `Host` n'est pas local (pour qu'une page hostile ne puisse pas l'atteindre par DNS rebinding),
-  n'émet aucune requête sortante et embarque ses propres polices au lieu de les récupérer depuis
-  un CDN.
+- **Deux choses quittent votre machine, et toutes deux concernent des tickets que vous pouvez déjà
+  voir.** glasshive écoute sur `127.0.0.1`, rejette les requêtes dont l'en-tête `Host` n'est pas
+  local (pour qu'une page hostile ne puisse pas l'atteindre par DNS rebinding) et embarque ses
+  propres polices au lieu de les récupérer depuis un CDN. La vue GitHub fait les deux seuls appels
+  sortants qui existent : la requête des tickets, qui passe par `gh` — de sorte que glasshive ne lit,
+  ne détient ni ne stocke jamais de jeton qui lui soit propre — et les avatars des assignés, que le
+  processus de glasshive récupère lui-même depuis `avatars.githubusercontent.com` sans transmettre
+  d'identifiants et ne garde qu'en mémoire, si bien que votre navigateur ne reçoit jamais d'URL
+  GitHub. Rien de ce qui concerne vos sessions n'est jamais envoyé où que ce soit.
 - **« Vide » et « lecture impossible » ne se ressemblent jamais.** Un champ qui n'a pas pu être lu est
   porté comme `null` avec la raison attachée, si bien qu'un écran silencieux n'est jamais ambigu.
 - **Les mauvaises options échouent bruyamment.** Un drapeau illisible sort en erreur au lieu de se

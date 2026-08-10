@@ -1,0 +1,85 @@
+import { mdiAlertOutline, mdiSourceBranch } from '@mdi/js';
+import { ARROW, arrowPoints } from '../../derive/edgeShape.ts';
+import { edgeColorOf } from '../../derive/issueTree.ts';
+import { Icon } from '../primitives/Icon.tsx';
+
+/* 読み方の凡例。**画面の下に置く。**
+
+   一覧でもグラフでも、線とチップの意味は同じところに在るべきである。上のツールバーへ混ぜると
+   絞り込みの操作と読み方の説明が同じ列に並び、どちらも見つけにくくなる。 */
+
+/** 線の見本。**本物と同じ矢じりを描く** —— 別に作ると、本物と違う形が説明として並ぶ */
+export function EdgeSample({
+  color,
+  dashed = false,
+}: {
+  readonly color: string;
+  readonly dashed?: boolean;
+}) {
+  const width = 24;
+  return (
+    <svg className="ln-svg" width={width} height={ARROW.half * 2} aria-hidden="true">
+      <line
+        x1={0}
+        y1={ARROW.half}
+        x2={width - ARROW.length}
+        y2={ARROW.half}
+        stroke={color}
+        strokeWidth={1.6}
+        strokeDasharray={dashed ? '4 4' : undefined}
+      />
+      <polygon points={arrowPoints(width, ARROW.half)} fill={color} />
+    </svg>
+  );
+}
+
+/* 一覧の読み方。行に出るものを全部並べる。
+
+   **弧の矢じりは着手の順を指している。** 依存の向きをそのまま描くと矢は「何を待っているか」を
+   指すが、読みたいのは取りかかる順である。 */
+export function IssuesLegend({ complete }: { readonly complete: boolean }) {
+  return (
+    <div className="legend-bar">
+      <span>
+        <span className="tree-mark">└</span> parent-child
+      </span>
+      <span>
+        <EdgeSample color={edgeColorOf('blocks')} /> blocks — the arrow points at what comes later
+      </span>
+      <span>
+        <EdgeSample color={edgeColorOf('')} /> other
+      </span>
+      <span>
+        <b className="iunlock">+n</b> finishing it frees n issues
+      </span>
+      <span>
+        <b className="brstate">
+          <Icon path={mdiSourceBranch} size={10} />
+          <b>↑n</b>
+          <i>↓n</i>
+        </b>{' '}
+        its branch is n ahead and n behind the base
+      </span>
+      <span>
+        <b className="prchip open">#n</b> the pull request that closes it
+      </span>
+      <span>
+        <b className="wk-dup">
+          <Icon path={mdiAlertOutline} size={10} /> n concurrent
+        </b>{' '}
+        more than one agent is on it right now
+      </span>
+      <span>
+        <b className="wk-dup">
+          <Icon path={mdiAlertOutline} size={10} /> stalled
+        </b>{' '}
+        in progress with no agent on it
+      </span>
+      {!complete && (
+        <span className="dg-cut" title="Some blocking issues were not fetched">
+          some dependencies were not fetched — arcs may be missing
+        </span>
+      )}
+    </div>
+  );
+}

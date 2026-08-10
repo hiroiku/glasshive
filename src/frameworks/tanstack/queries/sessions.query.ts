@@ -15,12 +15,13 @@ export const usageQuery = (projectId: string) =>
     staleTime: 60_000,
   });
 
-export const searchQuery = (projectId: string, query: string) =>
-  queryOptions({
-    queryKey: ['search', projectId, query] as const,
-    queryFn: () => findTranscripts({ data: { projectId, query } }),
-    staleTime: 30_000,
-  });
+/* 検索の 1 区切り。**これも `useQuery` に載せない。**
+
+   ページのキーが読み始める位置で、打ち込むたびに走っている読み取りを捨てて最初からやり直す。
+   当たりは区切りをまたいで貯めるので、キャッシュに置くのは 1 区切りぶんの答えでしかない。
+   状態は `useDeepSearch` が持つ。 */
+export const fetchSearch = (projectId: string, query: string, offset: number) =>
+  findTranscripts({ data: { projectId, query, offset } });
 
 /* 会話の 1 ページ。**これは `useQuery` に載せない。**
 

@@ -29,6 +29,19 @@ export const formatSinceIso = (iso: string | null, nowMs: number): string => {
   return Number.isFinite(atMs) ? formatSince(atMs, nowMs) : '';
 };
 
+/* 期日までの残り。**`formatSince` を使い回さない** —— あちらは過ぎた時刻を読むためのもので、
+   先の時刻を渡すと負の差が 0 に潰れ、来月の期日が「0s ago」として出る。
+
+   日より細かくは刻まない。期日は日で切られたものなので、時間で出すと在りもしない精度が付く。 */
+export function formatDue(iso: string | null, nowMs: number): string {
+  if (iso === null) return '';
+  const atMs = Date.parse(iso);
+  if (!Number.isFinite(atMs)) return '';
+  const days = Math.round((atMs - nowMs) / 86_400_000);
+  if (days === 0) return 'today';
+  return days > 0 ? `in ${days}d` : `${-days}d overdue`;
+}
+
 const pad = (n: number): string => String(n).padStart(2, '0');
 
 /* ローカルタイムで「年-月-日 時:分」。

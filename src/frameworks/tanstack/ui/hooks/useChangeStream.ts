@@ -47,7 +47,10 @@ export function useChangeStream(): boolean {
       if (typeof change !== 'object' || change === null) return;
       const kind = (change as { kind?: unknown }).kind;
       if (kind === 'tree') {
-        void client.invalidateQueries({ queryKey: treeQueryKey });
+        /* **走っている取り直しを打ち切らない。** 木はストリームで届くので、既定のように
+           打ち切ると、最初の走査の途中で `transcript` が 1 本書かれただけでそこまでの
+           途中経過が捨てられ、止まった数のまま画面が残る。走らせきってから取り直す。 */
+        void client.invalidateQueries({ queryKey: treeQueryKey }, { cancelRefetch: false });
         return;
       }
       if (kind === 'file') {

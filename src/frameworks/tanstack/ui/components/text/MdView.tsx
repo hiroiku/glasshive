@@ -137,7 +137,7 @@ export function MdView({
     if (issue !== undefined) nav.openIssue(issue);
     else if (file !== undefined) nav.openConv(decodeURIComponent(file));
     else if (rev !== undefined) nav.openRef(rev, label ?? rev);
-    else if (git !== undefined) nav.gotoGit(git);
+    else if (git !== undefined) nav.gotoBranch(git);
   };
 
   const light = (target: EventTarget | null, on: boolean) => {

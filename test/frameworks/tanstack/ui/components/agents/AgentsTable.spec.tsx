@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AgentsTable,
   type AgentsTableProps,
@@ -23,14 +23,11 @@ vi.mock('~/frameworks/tanstack/ui/nav/NavContext.tsx', () => ({
   useNav: () => nav,
 }));
 
-/* 検索の問い合わせはサーバー側のコードを連れてくる。deep を押していない限り呼ばれないので、
-   形だけを置いて、画面の側だけを見る */
-vi.mock('~/frameworks/tanstack/queries/sessions.query.ts', () => ({
-  searchQuery: (projectId: string, query: string) => ({
-    queryKey: ['search', projectId, query],
-    queryFn: () => Promise.resolve(null),
-  }),
-}));
+/* 検索の問い合わせはサーバー側のコードを連れてくる。中身の検索は常に走るので、
+   ここで返事を差し替えて、画面の側だけを見る */
+const { fetchSearch } = vi.hoisted(() => ({ fetchSearch: vi.fn() }));
+
+vi.mock('~/frameworks/tanstack/queries/sessions.query.ts', () => ({ fetchSearch }));
 
 const NOW = Date.parse('2026-08-09T12:00:00Z');
 const AT = new Date(NOW - 60_000).toISOString();
@@ -104,6 +101,7 @@ function project(sessions: SessionJson[]): ProjectJson {
     live_process_count: 1,
     tokens_24h: null,
     tokens_24h_state: 'observed',
+    read: true,
     sessions,
   };
 }
@@ -147,6 +145,15 @@ const indentOf = (label: string): string => {
 
 const labels = (): string[] =>
   [...document.querySelectorAll('.row .name .t')].map((el) => el.textContent ?? '');
+
+beforeEach(() => {
+  fetchSearch.mockReset();
+  // 中身の当たりが 1 つも無い、読み切った答え
+  fetchSearch.mockResolvedValue({
+    ok: true,
+    body: { state: 'observed', reason: null, files: [], scanned: 0, total: 0, done: true },
+  });
+});
 
 /** 親 → 子 → 孫。実データに在る深さ 3 をそのまま置く */
 const three = project([
@@ -219,6 +226,58 @@ describe('折り畳んだ親と一緒に、下の代まで隠れる', () => {
     fireEvent.click(rowOf('child'));
 
     expect(labels()).toEqual(['sess', 'child', 'sibling']);
+  });
+});
+
+/* 見出しの一致は即座に、中身の一致は読み進むにつれて。**足すのであって、置き換えない。** */
+describe('見出しの一致と、`transcript` の中身の一致を足し合わせる', () => {
+  it('中身を読み終える前でも、見出しで当たった行は出ている', () => {
+    mount({ project: three, query: 'grandchild' });
+
+    expect(labels(), '中身を読むあいだ、見出しの一致が消えてはいけない').toEqual([
+      'sess',
+      'grandchild',
+    ]);
+  });
+
+  it('見出しでは当たらない行も、中身が当たれば足される', async () => {
+    fetchSearch.mockResolvedValue({
+      ok: true,
+      body: {
+        state: 'observed',
+        reason: null,
+        files: ['/x/child.jsonl'],
+        scanned: 3,
+        total: 3,
+        done: true,
+      },
+    });
+
+    mount({ project: three, query: 'needle' });
+    expect(labels(), '中身を読む前は、見出しで当たった行だけが出る').toEqual([]);
+
+    await waitFor(() => expect(labels()).toEqual(['sess', 'child']), { timeout: 2000 });
+  });
+
+  it('読んでいる途中は、どこまで見たかを出す', async () => {
+    fetchSearch.mockResolvedValue({
+      ok: true,
+      body: { state: 'observed', reason: null, files: [], scanned: 8, total: 40, done: false },
+    });
+
+    mount({ project: three, query: 'needle' });
+
+    await waitFor(
+      () => expect(document.querySelector('.deep-note')?.textContent).toBe('8 / 40 transcripts'),
+      { timeout: 2000 },
+    );
+  });
+
+  it('読み切ったら、進み具合は消える', async () => {
+    mount({ project: three, query: 'needle' });
+
+    await waitFor(() => expect(fetchSearch).toHaveBeenCalled(), { timeout: 2000 });
+    await waitFor(() => expect(document.querySelector('.deep-note')).toBeNull());
   });
 });
 

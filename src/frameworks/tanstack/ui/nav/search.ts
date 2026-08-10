@@ -29,7 +29,24 @@ export interface ProjectSearch {
   /** 並べ替えの列と向き */
   sort?: string | undefined;
   dir?: 'asc' | 'desc' | undefined;
+  /* Work の画面で、1 行が何を指すか。無ければ課題である。
+
+     **画面を分けずにここで切り替える。** 課題とブランチは同じ作業を別の側から見たもので、
+     PR がその 2 つを繋いでいる。別々のタブに置くと、繋ぎ目を人が頭の中で持つことになる。 */
+  unit?: WorkUnit | undefined;
+  /* マイルストーンの名前で絞る。**検索語とは別の欄に置く** — 名前がそのまま課題の題名に
+     出てくることがあり、`q` に載せると関係のない課題まで残る。 */
+  ms?: string | undefined;
+  /* 課題の並べ方。**同じデータの見方を変えるだけ**なので、載せておけば URL を渡した先でも
+     同じ見方で開く。無ければ一覧である。着手順は一覧の `sort=start` がそのまま担う。 */
+  view?: IssueView | undefined;
 }
+
+/** Work の画面の行が指すもの。無ければ課題 */
+export type WorkUnit = 'branches' | 'milestones';
+
+/** 課題の見方。一覧か、依存グラフか */
+export type IssueView = 'graph';
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value !== '' ? value : undefined;
@@ -41,6 +58,8 @@ const asString = (value: unknown): string | undefined =>
 export function parseProjectSearch(raw: Record<string, unknown>): ProjectSearch {
   const panel = raw.panel;
   const dir = raw.dir;
+  const view = raw.view;
+  const unit = raw.unit;
   return {
     panel: panel === 'conv' || panel === 'issue' || panel === 'ref' ? panel : undefined,
     pv: asString(raw.pv),
@@ -52,6 +71,9 @@ export function parseProjectSearch(raw: Record<string, unknown>): ProjectSearch 
     closed: raw.closed === true || raw.closed === 'true' ? true : undefined,
     sort: asString(raw.sort),
     dir: dir === 'asc' || dir === 'desc' ? dir : undefined,
+    unit: unit === 'branches' || unit === 'milestones' ? unit : undefined,
+    ms: asString(raw.ms),
+    view: view === 'graph' ? view : undefined,
   };
 }
 

@@ -1,5 +1,5 @@
+import { WINDOWS } from '../../derive/timeWindow.ts';
 import type { Axis, Scale } from '../../timeline/axis.ts';
-import { SCALES } from '../../timeline/axis.ts';
 import { RangeSlider, TimeInput } from '../timeline/RangeSlider.tsx';
 
 /* 表のツールバー。検索と絞り込みと、いま見ている時間帯。
@@ -10,9 +10,14 @@ import { RangeSlider, TimeInput } from '../timeline/RangeSlider.tsx';
 export interface AgentsToolbarProps {
   readonly query: string;
   readonly onQuery: (query: string) => void;
-  /** 見えている欄ではなく、`transcript` の中身を検索するか */
-  readonly deep: boolean;
-  readonly onDeep: (deep: boolean) => void;
+  /* `transcript` の中身をどこまで読んだか。読み終えていれば null。
+
+     **途中の結果を全部だと思わせない。** 中身の一致は読み進むにつれて足されていくので、
+     まだ読んでいる間はどこまで見たかを出す。 */
+  readonly deepNote: {
+    readonly scanned: number;
+    readonly total: number;
+  } | null;
   /** エージェント間メッセージの矢印を、稼働区間のバーの上に重ねるか */
   readonly talk: boolean;
   readonly onTalk: (talk: boolean) => void;
@@ -40,8 +45,7 @@ export interface AgentsToolbarProps {
 export function AgentsToolbar({
   query,
   onQuery,
-  deep,
-  onDeep,
+  deepNote,
   talk,
   onTalk,
   talkNote,
@@ -60,18 +64,21 @@ export function AgentsToolbar({
       <input
         className="search"
         type="search"
-        placeholder={deep ? 'Search transcripts (deep)…' : 'Search agents…'}
+        placeholder="Search agents and transcripts…"
         value={query}
         onChange={(event) => onQuery(event.target.value)}
       />
-      <button
-        type="button"
-        className={`fchip ${deep ? 'on' : ''}`}
-        title="Search inside transcripts (last 1 MiB · last 7 days)"
-        onClick={() => onDeep(!deep)}
-      >
-        deep
-      </button>
+      {/* 読み終えるまで出し続ける。消えたときが、全部を見終えたときである */}
+      {deepNote !== null && (
+        <span
+          className="deep-note"
+          title="Reading inside transcripts (last 1 MiB · last 7 days). Matches are added as they are read"
+        >
+          {deepNote.total === 0
+            ? 'reading transcripts…'
+            : `${deepNote.scanned} / ${deepNote.total} transcripts`}
+        </span>
+      )}
       <button
         type="button"
         className={`fchip ${talk ? 'on' : ''}`}
@@ -96,11 +103,12 @@ export function AgentsToolbar({
         ⚠ attention
       </button>
       <span className="scale-chips">
-        {SCALES.map((preset) => (
+        {WINDOWS.map((preset) => (
           <button
             key={preset.label}
             type="button"
             className={`fchip ${!picked && scale === preset.key ? 'on' : ''}`}
+            title={preset.title}
             onClick={() => onScale(preset.key)}
           >
             {preset.label}

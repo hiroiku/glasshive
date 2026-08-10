@@ -9,6 +9,9 @@ import { createFileRoute, Link, Outlet, useNavigate } from '@tanstack/react-rout
 import { lazy, Suspense, useEffect, useRef } from 'react';
 import { treeQuery } from '../queries/tree.query.ts';
 import { Icon } from '../ui/components/primitives/Icon.tsx';
+import { NotObserved } from '../ui/components/primitives/NotObserved.tsx';
+import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
+import { projectTrouble } from '../ui/derive/trouble.ts';
 import { NavProvider, useNav } from '../ui/nav/NavContext.tsx';
 import { openPanelOf, type ProjectSearch, parseProjectSearch } from '../ui/nav/search.ts';
 import { usePrefs } from '../ui/prefs/PrefsContext.tsx';
@@ -49,8 +52,7 @@ const RefDetailPanel = lazy(() =>
    ルートを消したり名前を変えたりしたときに気付けなくなる。 */
 const VIEWS = [
   { to: '/projects/$slug/agents', label: 'Agents' },
-  { to: '/projects/$slug/git', label: 'Git' },
-  { to: '/projects/$slug/beads', label: 'Beads' },
+  { to: '/projects/$slug/work', label: 'Work' },
 ] as const;
 
 function ProjectLayout() {
@@ -111,8 +113,11 @@ function ProjectChrome({ slug }: { slug: string }) {
     document.addEventListener('mouseup', up);
   };
 
-  if (tree.data !== undefined && project === undefined) {
-    return <p className="empty">Project not observed</p>;
+  /* **読み終えるまで「観測していない」と言わない。** 索引が届いた時点で `tree.data` は
+     在るが、そこに並んでいるのは行だけである。ここは `<Outlet/>` より前に return するので、
+     `complete` で守らないと、どのプロジェクトの URL を直に開いても一瞬こう出る。 */
+  if (tree.data?.complete === true && project === undefined) {
+    return <NotObserved {...projectTrouble(slug)} />;
   }
 
   return (
@@ -173,7 +178,7 @@ function ProjectChrome({ slug }: { slug: string }) {
             {/* 閉じている間は描かない。閉じたパネルの中身を持ち続けても誰にも見えない */}
             <div id="conv-pane">
               {panel !== null && (
-                <Suspense fallback={<div className="empty">Loading…</div>}>
+                <Suspense fallback={<ReadProgress label="Opening the panel" />}>
                   {panel.kind === 'issue' && <IssueDetail id={panel.id} project={project} />}
                   {panel.kind === 'ref' && (
                     <RefDetailPanel rev={panel.rev} label={panel.label} project={project} />

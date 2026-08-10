@@ -1,22 +1,41 @@
-import { type Bin, FEET, MAX_BARS, rangeLabel, WINDOW_MS } from '../../derive/usage.ts';
+import { scaleLinear } from 'd3-scale';
+import { curveStepAfter, line } from 'd3-shape';
+import { type TimeWindow, WINDOWS } from '../../derive/timeWindow.ts';
+import { type Bin, footLabel, rangeLabel } from '../../derive/usage.ts';
 import { formatTokens, mdhm } from '../../format.ts';
 import { useChartHover } from '../../hooks/useChartHover.ts';
+import { TimeTicks } from '../primitives/TimeTicks.tsx';
 
 /* 消費の推移と、その積み上がり。
 
-   バー 1 本の長さを選ばせるのはローソク足チャートと同じ考え方である。範囲ではなく
-   1 本の長さを選ぶと、「いま何を見ているか」が本数 × 長さで読める。 */
+   選ぶのは一度に見る幅だけで、選択肢はウォーターフォールと同じである。足(ローソク足 1 本の
+   長さ)は幅から決まるので、いま何本 × 何分を見ているかは見出しの右に出す。
+
+   目盛りの位置は `d3-scale` が決める。**両端と真ん中の 3 つを手で置かない** —— 幅を
+   30 分から 7 日まで動かすので、置き場所を固定すると、どの幅でも中途半端な時刻が並ぶ。
+
+   積み上がりの線は `curveStepAfter` で階段にする。足 1 本ぶんの間の値は観測していない。 */
 
 export interface TokensPanelProps {
   readonly bins: readonly Bin[];
   readonly fromMs: number;
   readonly footMs: number;
   readonly bars: number;
+  /** 選ばれている幅。`auto` なら実際に在るものに合わせてある */
+  readonly window: TimeWindow;
   readonly nowMs: number;
-  readonly onFoot: (footMs: number) => void;
+  readonly onWindow: (window: TimeWindow) => void;
 }
 
-export function TokensPanel({ bins, fromMs, footMs, bars, nowMs, onFoot }: TokensPanelProps) {
+export function TokensPanel({
+  bins,
+  fromMs,
+  footMs,
+  bars,
+  window,
+  nowMs,
+  onWindow,
+}: TokensPanelProps) {
   const hover = useChartHover(bars);
   const heights = bins.map((bin) => bin.total);
   const total = heights.reduce((sum, value) => sum + value, 0);
@@ -24,6 +43,15 @@ export function TokensPanel({ bins, fromMs, footMs, bars, nowMs, onFoot }: Token
 
   let running = 0;
   const cumulative = heights.map((value) => (running += value));
+
+  const y = scaleLinear().domain([0, ceiling]).range([56, 4]);
+  const yTotal = scaleLinear()
+    .domain([0, Math.max(1, total)])
+    .range([55, 5]);
+  const stack = line<number>()
+    .x((_, index) => index * 10 + 5)
+    .y((value) => yTotal(value))
+    .curve(curveStepAfter);
   /* バーごとの位置と高さを先に組む。**React のキーに添字を使わない** —
      バーの並びは期間を動かすたびに丸ごと入れ替わるので、添字では別のバーと取り違える。 */
   const columns = bins.map((bin, index) => ({
@@ -31,7 +59,6 @@ export function TokensPanel({ bins, fromMs, footMs, bars, nowMs, onFoot }: Token
     x: index * 10,
     total: bin.total,
   }));
-  const rangeMs = nowMs - fromMs;
   const at = hover.at;
   const bin = at === null ? undefined : bins[at.bar];
 
@@ -39,19 +66,19 @@ export function TokensPanel({ bins, fromMs, footMs, bars, nowMs, onFoot }: Token
     <div className="sf-panel sf-chart">
       <div className="sf-h">
         <span className="sf-title">Tokens</span>
-        {FEET.map((foot) => (
+        {WINDOWS.map((preset) => (
           <button
-            key={foot.label}
+            key={preset.label}
             type="button"
-            className={`fchip ${footMs === foot.key ? 'on' : ''}`}
-            title={`1 bar = ${foot.label} (window ${rangeLabel(Math.min(WINDOW_MS, foot.key * MAX_BARS))})`}
-            onClick={() => onFoot(foot.key)}
+            className={window === preset.key ? 'fchip on' : 'fchip'}
+            title={preset.title}
+            onClick={() => onWindow(preset.key)}
           >
-            {foot.label}
+            {preset.label}
           </button>
         ))}
         <span className="sf-dim">
-          × {bars} = {rangeLabel(rangeMs)}
+          {footLabel(footMs)} × {bars} = {rangeLabel(footMs * bars)}
         </span>
         <span className="sf-big" title="input + output + cache write">
           {formatTokens(total)}
@@ -75,20 +102,13 @@ export function TokensPanel({ bins, fromMs, footMs, bars, nowMs, onFoot }: Token
                 key={column.at}
                 x={column.x + 1}
                 width={8}
-                y={56 - (column.total / ceiling) * 52}
-                height={(column.total / ceiling) * 52}
+                y={y(column.total)}
+                height={56 - y(column.total)}
                 className="sf-bar"
               />
             ) : null,
           )}
-          {total > 0 && (
-            <polyline
-              className="sf-line"
-              points={cumulative
-                .map((value, index) => `${index * 10 + 5},${55 - (value / total) * 50}`)
-                .join(' ')}
-            />
-          )}
+          {total > 0 && <path className="sf-line" d={stack([...cumulative]) ?? ''} />}
         </svg>
 
         {at !== null && bin !== undefined && (
@@ -117,13 +137,7 @@ export function TokensPanel({ bins, fromMs, footMs, bars, nowMs, onFoot }: Token
         )}
       </div>
 
-      {/* 年は要らない。期間はいちばん長くても 18h で、年をまたぐ読み方をしない。
-          「YYYY-MM-DD HH:MM」を 3 つ並べると、それだけでパネル 1 枚の幅を超える */}
-      <div className="sf-ticks">
-        <span>{mdhm(fromMs)}</span>
-        <span>{mdhm(fromMs + rangeMs / 2)}</span>
-        <span>{mdhm(nowMs)}</span>
-      </div>
+      <TimeTicks fromMs={fromMs} toMs={nowMs} />
     </div>
   );
 }

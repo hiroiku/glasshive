@@ -139,7 +139,21 @@ describe('パッケージを外から叩く', () => {
   it('HTML シェルには、ローディング表示が焼かれている', async () => {
     const shell = fs.readFileSync(path.join(ROOT, 'dist', 'client', '_shell.html'), 'utf8');
     expect(shell, '空の HTML シェルを hydration させると、木が丸ごと作り直される').toContain(
-      'Loading…',
+      'class="rp"',
+    );
+  });
+
+  /* 焼かれたローディング表示が、進み具合を主張していないこと。
+
+     シェルはビルドのときに描かれるので、そこに割合が焼かれていたら、それはどの機械で
+     何を読むより前に決まった数である。**観測していない量を最初の画面が断定することになる。** */
+  it('焼かれたローディング表示は、進み具合を主張しない', async () => {
+    const shell = fs.readFileSync(path.join(ROOT, 'dist', 'client', '_shell.html'), 'utf8');
+    expect(shell, '分母を持たないのに塗る要素が在ると、幅が観測した量に見える').not.toContain(
+      'rp-fill',
+    );
+    expect(shell, '読み上げに割合を渡すと、目に見えない側だけが嘘を聞く').not.toContain(
+      'aria-valuenow',
     );
   });
 

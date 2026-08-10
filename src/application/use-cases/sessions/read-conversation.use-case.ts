@@ -5,10 +5,10 @@ import type {
   TranscriptEventsRepository,
   TranscriptPage,
 } from '~/application/ports/repositories/sessions/transcript-events.repository.ts';
-import type { TreeSnapshotService } from '~/application/services/sessions/tree-snapshot.service.ts';
+import type { TranscriptIndexService } from '~/application/services/sessions/transcript-index.service.ts';
 import {
   allowsTranscript,
-  fromTree,
+  fromIndex,
 } from '~/application/services/workspace/readable-scope.service.ts';
 import type { ConversationEvent } from '~/domain/entities/sessions/conversation-event.entity.ts';
 import { reduceEvent } from '~/domain/services/sessions/conversation.service.ts';
@@ -49,17 +49,17 @@ export interface ReadConversationUseCase {
 }
 
 export function createReadConversation(deps: {
-  readonly tree: TreeSnapshotService;
+  readonly index: TranscriptIndexService;
   readonly events: TranscriptEventsRepository;
 }): ReadConversationUseCase {
-  const { tree, events } = deps;
+  const { index, events } = deps;
 
   return {
     async execute({ file, from, to }) {
-      const snapshot = await tree.get();
+      const snapshot = await index.get();
       if (!snapshot.ok) return snapshot;
 
-      const scope = fromTree(snapshot.value);
+      const scope = fromIndex(snapshot.value.index, snapshot.value.transcriptFiles);
       /* 在るか無いかは答えない。断り方を分けると、尋ねて回るだけで
          `~/.claude/projects` に何が在るかが分かってしまう。 */
       if (!allowsTranscript(scope, file)) {

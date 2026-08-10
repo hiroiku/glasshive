@@ -268,6 +268,7 @@ describe('台帳を一覧にする', () => {
     expect(parseLedger('', { includeClosed: false })).toEqual({
       issues: [],
       counts: {},
+      truncated: false,
     });
   });
 });

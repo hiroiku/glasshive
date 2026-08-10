@@ -6,6 +6,8 @@ import type {
   TranscriptGroup,
   TranscriptRepository,
 } from '~/application/ports/repositories/sessions/transcript.repository.ts';
+import { createTranscriptDrafts } from '~/application/services/sessions/transcript-draft.service.ts';
+import { createTranscriptIndex } from '~/application/services/sessions/transcript-index.service.ts';
 import { createObserveTree } from '~/application/use-cases/sessions/observe-tree.use-case.ts';
 
 /* 木ひと目ぶんの組み立て。パースは下書きの側で確かめてあるので、
@@ -62,11 +64,26 @@ function createStub(overrides: {
   const processes: AgentProcessIntegration = {
     list: async () => overrides.processes ?? observed([]),
   };
+  /* 索引と本読みは同じ `drafts` を分け合う。**分けると、索引が読んだ先頭と末尾を
+     本読みがもう一度開く。** 本番の組み立てと同じ形にしておく。 */
+  const drafts = createTranscriptDrafts({
+    transcripts,
+    activeThresholdMs: ACTIVE_THRESHOLD_MS,
+  });
+  const index = createTranscriptIndex({
+    transcripts,
+    processes,
+    drafts,
+    activeThresholdMs: ACTIVE_THRESHOLD_MS,
+    clock: { now: () => NOW },
+    // 覚えさせない。1 つのテストの中で 2 度観測したときに、1 度目の索引が返ると読み違える
+    ttlMs: 0,
+  });
   return {
     asked,
     observe: createObserveTree({
-      transcripts,
-      processes,
+      index,
+      drafts,
       activeThresholdMs: ACTIVE_THRESHOLD_MS,
     }),
   };
@@ -172,11 +189,7 @@ describe('木をひと目ぶん観測する', () => {
         return absent('no-source');
       },
     };
-    const observe = createObserveTree({
-      transcripts,
-      processes: { list: async () => observed([]) },
-      activeThresholdMs: ACTIVE_THRESHOLD_MS,
-    });
+    const observe = observeWith(transcripts);
     const result = await observe.execute(NOW);
     if (!result.ok) throw result.error;
 
@@ -247,14 +260,31 @@ describe('木をひと目ぶん観測する', () => {
         return observed(target);
       },
     };
-    const observe = createObserveTree({
-      transcripts,
-      processes: { list: async () => observed([]) },
-      activeThresholdMs: ACTIVE_THRESHOLD_MS,
-    });
+    const observe = observeWith(transcripts);
 
     const result = await observe.execute(NOW);
     expect(result.ok).toBe(true);
     expect(peak, '同時に開いた読み取りが 1 つを超えたら、`transcript` の数だけ積み上がる').toBe(1);
   });
 });
+
+/* 走査の作りが 1 つずつ違うテストのための組み立て。**本番と同じ順で組む** —
+   索引と本読みが同じ `drafts` を分け合わないと、先頭と末尾を二度開くことになる。 */
+function observeWith(transcripts: TranscriptRepository) {
+  const drafts = createTranscriptDrafts({
+    transcripts,
+    activeThresholdMs: ACTIVE_THRESHOLD_MS,
+  });
+  return createObserveTree({
+    index: createTranscriptIndex({
+      transcripts,
+      processes: { list: async () => observed([]) },
+      drafts,
+      activeThresholdMs: ACTIVE_THRESHOLD_MS,
+      clock: { now: () => NOW },
+      ttlMs: 0,
+    }),
+    drafts,
+    activeThresholdMs: ACTIVE_THRESHOLD_MS,
+  });
+}

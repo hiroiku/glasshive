@@ -22,8 +22,8 @@ glasshive は [Claude Code](https://claude.com/claude-code) のための、読�
 npx glasshive
 ```
 
-待ち受けるのは `127.0.0.1:4483` だけで、ブラウザーを開く。インストールの手順も、設定も、
-ネットワークへのアクセスも無い — 公開しているパッケージの実行時の依存はゼロだ。要るのは
+待ち受けるのは `127.0.0.1:4483` だけで、ブラウザーを開く。インストールの手順も、設定も無く、
+GitHub ビューを開くまで外へは何も出ない — 公開しているパッケージの実行時の依存はゼロだ。要るのは
 Node.js 22.12 以降と、`~/.claude/projects` の下に少なくとも 1 つの Claude Code のセッション。
 組み立てと動作の確認は macOS と Linux でしている。Windows では生きているエージェントの数が
 「観測できなかった」として返る — 数えるのに `ps` と、`/proc/<pid>/cwd` か `lsof` が要るからだ。
@@ -48,21 +48,21 @@ glasshive をどこで起動しても、エージェントが作業したすべ�
 
 ![Agents](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/agents.png)
 
-### Git
+### Work
 
-生きているブランチと worktree を主たる worktree が出しているブランチの上に描くので、誰がどこにいるかが見える。
-同じファイルへ向かっている組は一覧の上へ持ち上がる。ref を選べば、そのコミット、差分の統計、
-そこで動いていたエージェントが出る。
+issue、ブランチ、マイルストーンを 1 つの画面に。どれも同じ仕事を 3 つの側面から見たものだからだ。
+画面を離れないまま行き来できる。
 
-![Git](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/git.png)
+issue は [`gh`](https://cli.github.com) CLI 越しに GitHub から、あるいは
+[`bd`](https://github.com/gastownhall/beads) の台帳から読む。どのリポジトリを見るかは、remote が
+指している先を `gh` に尋ねて決める — `gh` 自身が決めるのと同じやり方だ。sub-issue は入れ子
+になり、`blocked by` は依存の辺として描かれ、issue の種類・ラベル・マイルストーン・担当も
+付いてくる。
 
-### Beads
-
-[`bd`](https://github.com/gastownhall/beads) の issue の台帳を、依存の辺、親子の入れ子、
-時間に沿った open/closed の流れとともに。`bd` を使っていないプロジェクトには、空の画面では
-なく短い断りが出る。
-
-![Beads](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/beads.png)
+ブランチと worktree は主たる worktree が出しているブランチの上に描くので、誰がどこにいるかが
+見える。同じファイルへ向かっている組は一覧の上へ持ち上がる。ref を選べば、そのコミット、差分の
+統計、そこで動いていたエージェントが出る。issue とブランチが結びつくのは pull request の head
+ブランチを介したときだけで、惜しい一致は推測せず、結ばないままにする。
 
 ### Side panel
 
@@ -74,9 +74,10 @@ glasshive をどこで起動しても、エージェントが作業したすべ�
 
 ## 読み取り専用という設計
 
-- **読むのは 3 つ、そのどれにも書かない。** Claude Code のセッションログ
-  (`~/.claude/projects/**/*.jsonl`)、beads の台帳(`<project>/.beads/issues.jsonl`)、そして `git`。
-  セッションログも台帳もリポジトリも、書き換えられることはない。
+- **読むのは 4 つ、そのどれにも書かない。** Claude Code のセッションログ
+  (`~/.claude/projects/**/*.jsonl`)、beads の台帳(`<project>/.beads/issues.jsonl`)、`git`、
+  そして `gh` CLI 越しに、remote が指している GitHub リポジトリの issue。セッションログも
+  台帳もリポジトリも issue も、書き換えられることはない。
 - **書く 1 つのファイルは、自分のものだけ。** `~/.config/glasshive/preferences.json` に、留めた
   タブと表示の好みが入る。書く前に glasshive は、そのパスが `~/.claude`、セッションログの
   ルートディレクトリ、観測している `.beads` や `.git` のディレクトリの中に無いことを確かめ、
@@ -85,9 +86,14 @@ glasshive をどこで起動しても、エージェントが作業したすべ�
 - **公開しているパッケージは、このリポジトリまで辿れる。** どのバージョンも GitHub Actions から
   OIDC で publish していて provenance の attestation が付くので、`npm audit signatures` で、
   手元に入れたパッケージを、組み立てた workflow とコミットまで照合できる。
-- **何もこの機械から出ない。** `127.0.0.1` に結び、`Host` ヘッダーがローカルでない要求は
-  拒み(敵意のあるページが DNS リバインディングで届かないように)、外へは何も投げず、
-  フォントは CDN から取らずに自分で抱えている。
+- **この機械から出ていくのは 2 つ、どちらもすでに見えている issue についてのものだ。**
+  glasshive は `127.0.0.1` に結び、`Host` ヘッダーがローカルでない要求は拒み(敵意のある
+  ページが DNS リバインディングで届かないように)、フォントは CDN から取らずに自分で
+  抱えている。外へ出るのは GitHub ビューからの 2 つだけだ。1 つは issue の問い合わせで、
+  これは `gh` に任せる — glasshive はトークンを読みも持ちも保存もしない。もう 1 つは担当の
+  アバターで、glasshive 自身のプロセスが `avatars.githubusercontent.com` から認証情報を
+  付けずに取り、メモリーの中にだけ置く — ブラウザーに GitHub の URL が渡ることは無い。
+  セッションの中身がどこかへ送られることは無い。
 - **「無い」と「読めなかった」が同じに見えることはない。** 読めなかった欄は理由を添えた
   `null` として運ばれるので、静かな画面が曖昧になることはない。
 - **不正なオプションは、はっきり失敗する。** 読めない指定は、黙って既定へ落ちるのではなく

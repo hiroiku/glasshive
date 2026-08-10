@@ -177,3 +177,14 @@
 .g-behind.warn {
   color: var(--waiting);
 }
+
+/* ブランチの行に並べる、その PR とその PR が閉じる課題。**題名の列は flex ではない** ——
+   ブランチ名の省略を効かせるために素の行の流れのままにしてあるので、間隔は margin で取る */
+.git-row .g-title .prchip,
+.git-row .g-title .g-more {
+  margin-left: 6px;
+}
+/* 担当の顔とエージェントのチップが同じ欄に並ぶ。課題の一覧と同じ間隔で置く */
+.git-row .g-who .av-stack + .wk {
+  margin-left: 4px;
+}

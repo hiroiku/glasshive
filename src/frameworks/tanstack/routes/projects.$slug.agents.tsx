@@ -4,7 +4,10 @@ import type { SortingState } from '@tanstack/react-table';
 import { useRef } from 'react';
 import { treeQuery } from '../queries/tree.query.ts';
 import { AgentsTable } from '../ui/components/agents/AgentsTable.tsx';
+import { NotObserved } from '../ui/components/primitives/NotObserved.tsx';
+import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
 import { StatsFooter } from '../ui/components/stats/StatsFooter.tsx';
+import { projectTrouble, treeTrouble } from '../ui/derive/trouble.ts';
 import { useNowMs } from '../ui/hooks/useNowMs.ts';
 import { openPanelOf, type ProjectSearch } from '../ui/nav/search.ts';
 import { usePrefs } from '../ui/prefs/PrefsContext.tsx';
@@ -58,8 +61,11 @@ function AgentsView() {
   const selectedFile = panel?.kind === 'conv' ? panel.file : null;
 
   if (project === undefined) {
-    // 木がまだ届いていないだけかもしれない。無いと言い切らずに黙って待つ
-    return <p className="empty">{tree.data === undefined ? 'Loading…' : 'Project not observed'}</p>;
+    /* 木を読めなかったのと、読めた上でこのプロジェクトが無かったのは別の事実である。
+       読めなかったほうを「無かった」と言うと、観測できなかったことが消える。 */
+    if (tree.error !== null) return <NotObserved {...treeTrouble()} />;
+    if (tree.data === undefined) return <ReadProgress label="Reading transcripts" />;
+    return <NotObserved {...projectTrouble(slug)} />;
   }
 
   return (

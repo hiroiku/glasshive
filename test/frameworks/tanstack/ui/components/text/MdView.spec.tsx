@@ -13,7 +13,7 @@ vi.mock('~/frameworks/tanstack/ui/nav/NavContext.tsx', () => ({
     openIssue: vi.fn(),
     openConv: vi.fn(),
     openRef: vi.fn(),
-    gotoGit: vi.fn(),
+    gotoBranch: vi.fn(),
   }),
 }));
 

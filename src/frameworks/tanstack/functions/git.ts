@@ -13,7 +13,7 @@ import {
 
 const deps = (): GitDeps => {
   const kernel = getKernel();
-  return { overview: kernel.gitOverview, ref: kernel.gitRef, tree: kernel.tree };
+  return { overview: kernel.gitOverview, ref: kernel.gitRef, index: kernel.index };
 };
 
 export const getGit = createServerFn({ method: 'GET' })

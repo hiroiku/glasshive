@@ -1,3 +1,5 @@
+import type { GithubIssueExtra } from './github-issue.entity.ts';
+
 /* 課題台帳の中身。
 
    台帳の実体は bd が書き出す `<project>/.beads/issues.jsonl` で、こちらは読むだけである。
@@ -29,6 +31,14 @@ export interface IssueSummary {
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
   readonly deps: readonly IssueDependency[];
+  /* 掛かっている先を全部見られたか。
+
+     GitHub は 1 件あたりの依存にも上限を掛けて返すので、上限に当たれば辺が足りない。
+     **足りないまま「これが全部だ」と描かない** — 依存グラフで 1 本欠けた絵は、
+     着手できないものを着手できると言う。ファイルの台帳はいつも全部を読むので `true` である。 */
+  readonly depsComplete: boolean;
+  /** GitHub にしか無い欄。台帳から読んだ課題には付かない */
+  readonly github: GithubIssueExtra | null;
 }
 
 /* 1 件を引いたときの記録。台帳に書かれていた欄をそのまま持つ。
@@ -43,4 +53,10 @@ export interface IssueLedger {
   /* 状態ごとの件数。**一覧から落とした課題も、ここには数える。**
      閉じたものを隠していても「いくつ閉じたか」はユーザーに見せるためである。 */
   readonly counts: Readonly<Record<string, number>>;
+  /* 上限に当たって、その先を読んでいないか。
+
+     ファイルの台帳はいつも全部を読むので、必ず `false` である。件数の決まらない相手から
+     取ってくるときだけ `true` になりうる。**黙って切ると、上限より後ろの課題が
+     「無かった」ことになる** — glasshive が最もついてはいけない嘘である。 */
+  readonly truncated: boolean;
 }

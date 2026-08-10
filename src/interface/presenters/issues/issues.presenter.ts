@@ -1,6 +1,10 @@
 import type { Observation } from '~/app-kernel/observation.ts';
 import type { IssueRecord } from '~/application/use-cases/issues/get-issue.use-case.ts';
 import type {
+  GithubActor,
+  GithubIssueExtra,
+} from '~/application/use-cases/issues/list-github-issues.use-case.ts';
+import type {
   IssueLedger,
   IssueSummary,
 } from '~/application/use-cases/issues/list-issues.use-case.ts';
@@ -21,6 +25,44 @@ export interface IssueDependencyJson {
   type: string | null;
 }
 
+export interface GithubLabelJson {
+  name: string;
+  /** `#` の付かない 6 桁。GitHub が付けた色をそのまま運ぶ */
+  color: string | null;
+}
+
+/* 人 1 人。**GitHub の顔の URL そのものは外へ出さない。**
+
+   出せば画面が GitHub の CDN へ直に取りに行き、機械から外へつながる先が 2 か所になる。
+   外へ渡すのは `avatar` —— こちらが読んだ顔を指す、同じ origin の URL を組む鍵である。 */
+export interface GithubActorJson {
+  login: string;
+  /** 同じ origin のアバターの URL を組む鍵。読める顔が無ければ `null` */
+  avatar: string | null;
+}
+
+export interface GithubPullRequestJson {
+  number: number;
+  state: string;
+  is_draft: boolean;
+  review_decision: string | null;
+  /** PR が乗っているブランチ。セッションの `git_branch` と突き合わせる鍵 */
+  head_ref_name: string | null;
+}
+
+export interface GithubIssueJson {
+  url: string | null;
+  labels: GithubLabelJson[];
+  assignees: GithubActorJson[];
+  author: GithubActorJson | null;
+  milestone: { title: string; due_on: string | null } | null;
+  issue_type_color: string | null;
+  sub_issues: { total: number; completed: number } | null;
+  pull_requests: GithubPullRequestJson[];
+  comments: number;
+  reactions: number;
+}
+
 /** 一覧の 1 件。`description` は入らない — 本文は 1 件を引いたときだけ返る */
 export interface IssueSummaryJson {
   id: string | null;
@@ -34,6 +76,10 @@ export interface IssueSummaryJson {
   created_at: string | null;
   updated_at: string | null;
   deps: IssueDependencyJson[];
+  /** 掛かっている先を全部見られたか。欠けたまま「これが全部だ」と描かせないための欄 */
+  deps_complete: boolean;
+  /** GitHub にしか無い欄。台帳から読んだ課題では `null` */
+  github: GithubIssueJson | null;
 }
 
 export interface IssuesJson {
@@ -43,6 +89,8 @@ export interface IssuesJson {
   issues: IssueSummaryJson[];
   /** 状態ごとの件数。一覧から落とした閉じた課題も、ここには出る */
   counts: Record<string, number>;
+  /** 上限に当たって、その先を読んでいないか。読めなかったときは、切れた先が在るとは言えないので `false` */
+  truncated: boolean;
 }
 
 /* 台帳から出てきた値。**JSON でしかありえない。**
@@ -72,6 +120,41 @@ const reasonOf = <T>(observation: Observation<T>): string | null => {
   return null;
 };
 
+/* 人 1 人を外の形にする。
+
+   **GitHub の顔の URL は落とす。** 代わりに載せるのは `avatar` —— アバターの URL を組む鍵で、
+   実体は login である。読める顔が無ければ `null` で、そのときは頭文字だけを描かせる。
+   GitHub の URL をそのまま渡すと、画面が CDN へ直に取りに行く。 */
+const presentActor = (actor: GithubActor): GithubActorJson => ({
+  login: actor.login,
+  avatar: actor.avatarUrl === null ? null : actor.login,
+});
+
+const presentGithub = (extra: GithubIssueExtra): GithubIssueJson => ({
+  url: extra.url,
+  labels: extra.labels.map((label) => ({ name: label.name, color: label.color })),
+  assignees: extra.assignees.map(presentActor),
+  author: extra.author === null ? null : presentActor(extra.author),
+  milestone:
+    extra.milestone === null
+      ? null
+      : { title: extra.milestone.title, due_on: extra.milestone.dueOn },
+  issue_type_color: extra.issueTypeColor,
+  sub_issues:
+    extra.subIssues === null
+      ? null
+      : { total: extra.subIssues.total, completed: extra.subIssues.completed },
+  pull_requests: extra.pullRequests.map((pull) => ({
+    number: pull.number,
+    state: pull.state,
+    is_draft: pull.isDraft,
+    review_decision: pull.reviewDecision,
+    head_ref_name: pull.headRefName,
+  })),
+  comments: extra.comments,
+  reactions: extra.reactions,
+});
+
 const presentSummary = (issue: IssueSummary): IssueSummaryJson => ({
   id: issue.id,
   title: issue.title,
@@ -87,6 +170,8 @@ const presentSummary = (issue: IssueSummary): IssueSummaryJson => ({
     on: dependency.on,
     type: dependency.type,
   })),
+  deps_complete: issue.depsComplete,
+  github: issue.github === null ? null : presentGithub(issue.github),
 });
 
 /* 観測できなかったときも、この形で言える。
@@ -100,6 +185,7 @@ export function presentIssues(ledger: Observation<IssueLedger>): IssuesJson {
     reason: reasonOf(ledger),
     issues: ledger.kind === 'observed' ? ledger.value.issues.map(presentSummary) : [],
     counts: ledger.kind === 'observed' ? { ...ledger.value.counts } : {},
+    truncated: ledger.kind === 'observed' && ledger.value.truncated,
   };
 }
 

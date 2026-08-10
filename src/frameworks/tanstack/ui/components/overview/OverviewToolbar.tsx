@@ -16,6 +16,11 @@ export interface OverviewToolbarProps {
   /** 絞り込んだ後に何も残らなかったときのために、絞り込む前の数も見せる */
   readonly shown: number;
   readonly total: number;
+  /* どこまで読んだか。読み終えていれば `null`。
+
+     **合計を出しながら黙らないためにここへ渡す。** 読み終える前の合計は、読めた行しか
+     数えていない。数え終えた合計と同じ顔で出すと、その数はいつまでも小さいまま正しく見える。 */
+  readonly progress: { readonly read: number; readonly total: number } | null;
 }
 
 const CHIPS: readonly {
@@ -48,7 +53,17 @@ export function OverviewToolbar({
   totals,
   shown,
   total,
+  progress,
 }: OverviewToolbarProps) {
+  const partialTitle = totals.partial
+    ? 'Counted from the projects read so far'
+    : 'Some transcripts could not be read';
+  /* まだ数え終えていない合計にはその旨を添える。**付けないと、途中の数が最終の数に見える。** */
+  const partialMark = totals.partial ? (
+    <span className="dimtxt" title={partialTitle}>
+      +?
+    </span>
+  ) : null;
   return (
     <div className="view-toolbar">
       <input
@@ -92,23 +107,31 @@ export function OverviewToolbar({
       ))}
 
       <span className="dash-sum">
+        {/* まだ全部を読んでいないなら、どこまで読んだかを数で言う */}
+        {progress !== null && (
+          <span className="dimtxt" title="Reading the transcripts of each project">
+            {progress.read} of {progress.total} projects read ·{' '}
+          </span>
+        )}
         {shown < total && (
           <span className="dimtxt">
             {shown}/{total} ·{' '}
           </span>
         )}
-        active <b className="active">{totals.active}</b> · waiting{' '}
-        <b className="waiting">{totals.waiting}</b>
+        active <b className="active">{totals.active}</b>
+        {partialMark}· waiting <b className="waiting">{totals.waiting}</b>
+        {partialMark}
         {totals.input > 0 && (
           <>
             {' '}
             · input <b className="input">{totals.input}</b>
+            {partialMark}
           </>
         )}{' '}
         · tokens 24h <b>{formatTokens(totals.tokens)}</b>
         {/* 欠けのある合計に「これで全部だ」という顔をさせない */}
         {totals.tokensPartial && (
-          <span className="dimtxt" title="Some transcripts could not be read">
+          <span className="dimtxt" title={partialTitle}>
             {' '}
             +?
           </span>

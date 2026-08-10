@@ -1,4 +1,7 @@
 import type { UsageBucketJson } from '~/interface/presenters/sessions/usage.presenter.ts';
+import { MAX_WINDOW_MS, QUOTA_WINDOW_MS } from './timeWindow.ts';
+
+export { QUOTA_WINDOW_MS };
 
 /* 消費のバケットから、画面に出す形を導く。純関数。
 
@@ -8,23 +11,37 @@ import type { UsageBucketJson } from '~/interface/presenters/sessions/usage.pres
 
 export const spendOf = (bucket: UsageBucketJson): number => bucket.i + bucket.o + bucket.cw;
 
-/** ローソク足と同じ語彙: 範囲ではなく足の長さを選ぶ。素材が 5 分のバケットなので 5m が最小 */
+/* 見え方は、一度に見る幅ひとつで決まる。**足(ローソク足 1 本の長さ)は選ばせない** ——
+   幅を選べば、その幅を `MAX_BARS` 本以内で覆えるいちばん細かい足が決まる。2 つ選ばせると、
+   効いているのがどちらなのかが読めなくなる。 */
+
+/** 足の長さのラベル。1 時間より短い足は分で読む */
+export const footLabel = (ms: number): string =>
+  ms < 3_600_000 ? `${Math.round(ms / 60_000)}m` : `${Math.round(ms / 3_600_000)}h`;
+
+/** 7 日を `MAX_BARS` 本以内で覆える、いちばん短い足 */
+const LONGEST_FOOT_MS = 4 * 3_600_000;
+
+/** 足の長さ。素材が 5 分のバケットなので 5m が最小 */
 export const FEET: readonly { readonly key: number; readonly label: string }[] = [
-  { key: 5 * 60_000, label: '5m' },
-  { key: 15 * 60_000, label: '15m' },
-  { key: 30 * 60_000, label: '30m' },
-  { key: 3_600_000, label: '1h' },
-  { key: 2 * 3_600_000, label: '2h' },
-];
+  5 * 60_000,
+  15 * 60_000,
+  30 * 60_000,
+  3_600_000,
+  2 * 3_600_000,
+  LONGEST_FOOT_MS,
+].map((key) => ({ key, label: footLabel(key) }));
 
 /** 一度に出す足の本数の上限 */
 export const MAX_BARS = 72;
 
-/** 素材が遡る範囲 */
-export const WINDOW_MS = 7 * 86_400_000;
+/** 素材が遡る範囲。見る幅の上限と同じで、これより古いバケットは持っていない */
+export const WINDOW_MS = MAX_WINDOW_MS;
 
-/** 定額枠の期間の長さ。`transcript` から観測できる範囲での近似で、課金側の正とは一致しないことがある */
-export const QUOTA_WINDOW_MS = 5 * 3_600_000;
+/** その範囲を `MAX_BARS` 本以内で覆える、いちばん短い足 */
+export const footFor = (spanMs: number): number =>
+  FEET.find((foot) => Math.ceil(Math.min(spanMs, WINDOW_MS) / foot.key) <= MAX_BARS)?.key ??
+  LONGEST_FOOT_MS;
 
 export interface Bin {
   total: number;
@@ -37,13 +54,20 @@ export interface Bin {
 /* 足の境目は現在からの相対ではなく、キリの良い時刻に置く。
 
    ローカルタイムの深夜を起点に足の倍数で区切り、**最新の 1 本だけが「直前の境目〜現在」の
-   形成中の足**になる。相対に置くと、描き直すたびに全部の足が少しずつ横へ流れる。 */
-export function gridOf(nowMs: number, footMs: number): { fromMs: number; bars: number } {
+   形成中の足**になる。相対に置くと、描き直すたびに全部の足が少しずつ横へ流れる。
+
+   `spanMs` は見たい範囲で、足 × 本数がちょうどそれを覆う。素材は `WINDOW_MS` までしか
+   遡れないので、それより広く頼まれても広げない。 */
+export function gridOf(
+  nowMs: number,
+  footMs: number,
+  spanMs: number = WINDOW_MS,
+): { fromMs: number; bars: number } {
   const midnight = new Date(nowMs);
   midnight.setHours(0, 0, 0, 0);
   const anchor = midnight.getTime();
   const lastBoundary = anchor + Math.floor((nowMs - anchor) / footMs) * footMs;
-  const bars = Math.max(2, Math.min(MAX_BARS, Math.floor(WINDOW_MS / footMs) + 1));
+  const bars = Math.max(2, Math.min(MAX_BARS, Math.ceil(Math.min(spanMs, WINDOW_MS) / footMs)));
   return { fromMs: lastBoundary - (bars - 1) * footMs, bars };
 }
 

@@ -21,7 +21,6 @@ import {
   visibleSubagents,
 } from '~/interface/presenters/sessions/visibility.presenter.ts';
 import { messagesQuery } from '../../../queries/messages.query.ts';
-import { searchQuery } from '../../../queries/sessions.query.ts';
 import {
   agentTypeShort,
   cut,
@@ -30,6 +29,7 @@ import {
   modelShort,
   worktreeName,
 } from '../../format.ts';
+import { useDeepSearch } from '../../hooks/useDeepSearch.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import { popStyleOf, prunePops, touchFingerprint } from '../../phase.ts';
 import { pressable } from '../../pressable.ts';
@@ -177,11 +177,7 @@ export function AgentsTable({
 }: AgentsTableProps) {
   const nav = useNav();
   const [expanded, setExpanded] = useState<ExpandedState>(true);
-  /* deep 検索は URL の検索パラメータに載せない。**載せると、開いた途端に数百の
-     `transcript` を末尾まで読むことになる。** ブックマークを開いただけでそれが走るのは、
-     読むだけのツールの振る舞いではない。 */
-  const [deep, setDeep] = useState(false);
-  /* エージェント間メッセージも URL の検索パラメータに載せない。**メッセージは
+  /* エージェント間メッセージは URL の検索パラメータに載せない。**メッセージは
      `transcript` のどこにでも現れる**ので、拾うにはセッションの `transcript` を
      サブエージェントごと丸ごと読むしかない。ブックマークを開いただけでは走らせない。 */
   const [talk, setTalk] = useState(false);
@@ -190,17 +186,10 @@ export function AgentsTable({
   const [picked, setPicked] = useState<Axis | null>(null);
 
   const trimmed = query.trim().toLowerCase();
-  const deepSearch = useQuery({
-    ...searchQuery(project.id, trimmed),
-    enabled: deep && trimmed.length >= 2,
-  });
-  const deepFiles = useMemo(() => {
-    if (!deep) return null;
-    const found = deepSearch.data;
-    // 検索できなかったときは絞らない。空の結果として扱うと、全部が消えて「無い」に見える
-    if (found === undefined || found === null || !found.ok) return null;
-    return new Set(found.body.files);
-  }, [deep, deepSearch.data]);
+  /* 中身の検索は常に走る。見出しの一致はその場で出て、
+     中身の一致は読み進むにつれて**足されていく**。 */
+  const deep = useDeepSearch(project.id, trimmed);
+  const deepFiles = deep.files;
 
   /* 結ぶ線を行の境目まで正しく届かせるための行の実際の高さと、
      全行を貫く時間のグリッドを敷くための、時間列の位置と幅を測る。 */
@@ -233,32 +222,32 @@ export function AgentsTable({
       if (attention && !needsAttention(session)) continue;
       let subs = visibleSubagents(session, showAll, nowMs);
 
-      if (deepFiles !== null) {
-        // deep 検索: 中身が一致した `transcript` だけを残す
-        if (!deepFiles.has(session.file)) {
-          subs = subs.filter((subagent) => deepFiles.has(subagent.file));
-          if (subs.length === 0) continue;
-        }
-      } else if (trimmed !== '') {
-        const own = hits(trimmed, [
-          session.title,
-          session.id,
-          session.actor,
-          session.git_branch,
-          session.current,
-          worktreeName(session.cwd),
-          ...session.issues,
-        ]);
+      if (trimmed !== '') {
+        /* 見出しの一致と中身の一致を足し合わせる。**片方をもう片方で置き換えない** —
+           中身を読み終える前に置き換えると、見えている欄で当たっていた行が一度消える。 */
+        const own =
+          deepFiles.has(session.file) ||
+          hits(trimmed, [
+            session.title,
+            session.id,
+            session.actor,
+            session.git_branch,
+            session.current,
+            worktreeName(session.cwd),
+            ...session.issues,
+          ]);
         if (!own) {
           // 親が当たらなくても、当たった子は親ごと残す
-          subs = subs.filter((subagent) =>
-            hits(trimmed, [
-              subagent.label,
-              subagent.issue,
-              subagent.git_branch,
-              subagent.current,
-              worktreeName(subagent.cwd),
-            ]),
+          subs = subs.filter(
+            (subagent) =>
+              deepFiles.has(subagent.file) ||
+              hits(trimmed, [
+                subagent.label,
+                subagent.issue,
+                subagent.git_branch,
+                subagent.current,
+                worktreeName(subagent.cwd),
+              ]),
           );
           if (subs.length === 0) continue;
         }
@@ -621,8 +610,13 @@ export function AgentsTable({
       <AgentsToolbar
         query={query}
         onQuery={onQuery}
-        deep={deep}
-        onDeep={setDeep}
+        /* 読み切ったら消す。読み切る前に止まったときは残す — 残っている数が、
+           まだ全部を見ていないことを言う */
+        deepNote={
+          deep.running || (deep.total > 0 && deep.scanned < deep.total)
+            ? { scanned: deep.scanned, total: deep.total }
+            : null
+        }
         talk={talk}
         onTalk={setTalk}
         talkNote={

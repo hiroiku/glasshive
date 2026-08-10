@@ -1,5 +1,6 @@
 import { mdiHomeOutline } from '@mdi/js';
 import { Link } from '@tanstack/react-router';
+import { useRef, useState } from 'react';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import {
   projectDotState,
@@ -20,9 +21,22 @@ import { Icon } from '../primitives/Icon.tsx';
    キーボードから選べることは、ホバー時の `title` で言う。行の見た目は変えない —
    番号を文字として出すと、幅がタブごとに変わって位置が動く。 */
 
+/** 掴んだと見なすまでの横の移動。これより小さい動きは、押しただけとして扱う */
+const DRAG_SLOP = 4;
+
+/** 掴んだ後の押下を飲む。置いた場所のタブが開いてしまうのを止める */
+const swallow = (event: Event) => {
+  event.preventDefault();
+  event.stopPropagation();
+};
+
 export interface TabBarProps {
   /** タブに出す id。**ピン留めの一覧そのものではない** — 観測に在るものだけが渡ってくる */
   readonly visible: readonly string[];
+  /** ピン留めの並び。動かす先はこちらの位置で言う — 観測から消えたものもここには残る */
+  readonly pinned: readonly string[];
+  readonly onPin: (id: string) => void;
+  readonly onMove: (id: string, toIndex: number) => void;
   /* 観測できたプロジェクト。**まだ木が届いていない間は `undefined` である。**
      空の配列へ潰すと「1 つも観測できなかった」と見分けが付かなくなり、
      届くのを待っているだけのタブまで、消えたタブとして落ちる。 */
@@ -36,7 +50,16 @@ export interface TabBarProps {
   readonly showAll: boolean;
 }
 
-export function TabBar({ visible, projects, onUnpin, current, showAll }: TabBarProps) {
+export function TabBar({
+  visible,
+  pinned,
+  projects,
+  onUnpin,
+  onPin,
+  onMove,
+  current,
+  showAll,
+}: TabBarProps) {
   const byId = new Map((projects ?? []).map((project) => [project.id, project]));
   /* 木が届いているか。**届く前と、届いた上で見つからないのは別である。**
      前者は待っているだけなのでタブを出す。後者は観測から消えた id なので落とす。 */
@@ -60,8 +83,54 @@ export function TabBar({ visible, projects, onUnpin, current, showAll }: TabBarP
     </>
   );
 
+  /* 掴んで並べ替える。**押しただけと掴んだのを、動いた距離で分ける** —— タブは押して開く
+     ものでもあるので、少しでも動いたら掴んだことにすると、開くつもりの押下が並べ替えになる。
+
+     置く先は掴んだものを除いた並びで数える。`onMove` の `toIndex` も、掴んだものを抜いた後の
+     位置で受けるので、そのまま渡せる。掴んでいる間は隣を動かさず、入る場所に線を 1 本引く —
+     隣を押しのけると、狙っていた場所そのものが動く。 */
+  const [drop, setDrop] = useState<{ id: string; x: number } | null>(null);
+  const navRef = useRef<HTMLElement>(null);
+
+  const grab = (id: string) => (event: React.MouseEvent) => {
+    const nav = navRef.current;
+    if (event.button !== 0 || nav === null) return;
+    const x0 = event.clientX;
+    const origin = nav.getBoundingClientRect().left - nav.scrollLeft;
+    const others = [...nav.querySelectorAll<HTMLElement>('.tab[data-pin]')]
+      .filter((tab) => tab.dataset.pin !== id)
+      .map((tab) => ({ id: tab.dataset.pin ?? '', rect: tab.getBoundingClientRect() }));
+
+    let at: number | null = null;
+
+    const move = (moved: MouseEvent) => {
+      if (at === null && Math.abs(moved.clientX - x0) < DRAG_SLOP) return;
+      document.body.classList.add('dragging');
+      at = others.filter((other) => other.rect.left + other.rect.width / 2 < moved.clientX).length;
+      const edge = at === 0 ? (others[0]?.rect.left ?? 0) : (others[at - 1]?.rect.right ?? origin);
+      setDrop({ id, x: edge - origin });
+    };
+
+    const up = () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      document.body.classList.remove('dragging');
+      setDrop(null);
+      if (at === null) return;
+      /* タブを掴んで放した後の押下は、開くための押下ではない。飲まないと、置いた瞬間にそこへ移動する */
+      document.addEventListener('click', swallow, { capture: true, once: true });
+      const before = others[at]?.id;
+      const rest = pinned.filter((other) => other !== id);
+      const toIndex = before === undefined ? rest.length : rest.indexOf(before);
+      if (toIndex >= 0) onMove(id, toIndex);
+    };
+
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  };
+
   return (
-    <nav id="tabs" aria-label="Pinned projects">
+    <nav id="tabs" ref={navRef} aria-label="Pinned projects">
       {/* Overview へ戻るタブ。**ピン留めが空でも消えない** — 消えると戻る手段が無くなる */}
       <span className="tab">
         {hydrated ? (
@@ -91,13 +160,22 @@ export function TabBar({ visible, projects, onUnpin, current, showAll }: TabBarP
         const name = project?.name ?? id;
         const shown = project === undefined ? 0 : visibleSessions(project, showAll, nowMs).length;
         return (
-          <span key={id} className="tab">
+          // biome-ignore lint/a11y/noStaticElementInteractions: 掴むのは並べ替えの手立てで、開くのは中の `Link` が受ける
+          <span
+            key={id}
+            className={`tab${drop?.id === id ? ' grabbed' : ''}`}
+            data-pin={id}
+            onMouseDown={grab(id)}
+          >
             <Link
               to="/projects/$slug"
               params={{ slug: id }}
               className="tab-link"
               activeProps={{ className: 'tab-link on' }}
-              title={`${project?.path ?? id}${slotMark(index + 2)}`}
+              title={`${project?.path ?? id}${slotMark(index + 2)} — drag to reorder`}
+              /* リンクは既定でブラウザーの掴み方を持っている。切らないと、掴んだ瞬間に
+                 そちらが始まって `mousemove` も `mouseup` も来なくなる */
+              draggable={false}
             >
               <Dot state={project === undefined ? 'unknown' : projectDotState(project)} />
               <span>{name}</span>
@@ -118,13 +196,18 @@ export function TabBar({ visible, projects, onUnpin, current, showAll }: TabBarP
         );
       })}
 
+      {drop !== null && <span className="tab-drop" style={{ left: drop.x }} />}
+
+      {/* 暫定タブはダブルクリックで留める。**押しただけでは留めない** —
+          Overview から開いただけのプロジェクトが、見ただけでタブに残り続けることになる */}
       {provisional !== null && (
-        <span className="tab provisional">
+        // biome-ignore lint/a11y/noStaticElementInteractions: 留めるのは中の `Link` の上での二度押しで、これ自体は開く場所ではない
+        <span className="tab provisional" onDoubleClick={() => onPin(provisional)}>
           <Link
             to="/projects/$slug"
             params={{ slug: provisional }}
             className="tab-link on"
-            title={byId.get(provisional)?.path ?? provisional}
+            title={`${byId.get(provisional)?.path ?? provisional} — double-click to pin`}
           >
             {(() => {
               const project = byId.get(provisional);

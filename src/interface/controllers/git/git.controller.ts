@@ -1,7 +1,7 @@
 import { err, type Result } from '~/app-kernel/result.ts';
-import type { TreeSnapshotService } from '~/application/services/sessions/tree-snapshot.service.ts';
+import type { TranscriptIndexService } from '~/application/services/sessions/transcript-index.service.ts';
 import {
-  fromTree,
+  fromIndex,
   resolveProject,
 } from '~/application/services/workspace/readable-scope.service.ts';
 import type { ObserveRefUseCase } from '~/application/use-cases/git/observe-ref.use-case.ts';
@@ -31,26 +31,33 @@ export type GitRefResponse = ApiResponse<GitRefLogJson>;
 export interface GitDeps {
   readonly overview: ObserveRepositoryUseCase;
   readonly ref: ObserveRefUseCase;
-  readonly tree: TreeSnapshotService;
+  readonly index: TranscriptIndexService;
 }
 
-/** 名指されたプロジェクトの、解決済みのパス。引けない id は、形が違うのも一覧に無いのも同じ断り方 */
-async function locate(tree: TreeSnapshotService, input: unknown): Promise<Result<string>> {
+/* 名指されたプロジェクトの、解決済みのパス。引けない id は、形が違うのも一覧に無いのも同じ断り方。
+
+   **木ではなく索引を引く。** 要るのは「この id はどこに在るか」だけで、それは中身を読む前に
+   決まっている。木を組んでから引くと、`git` を 1 本走らせるために `~/.claude/projects` を
+   全部読むことになる。 */
+async function locate(index: TranscriptIndexService, input: unknown): Promise<Result<string>> {
   const projectId = projectIdOf(input);
   if (!projectId.ok) return err(projectId.error);
-  const snapshot = await tree.get();
+  const snapshot = await index.get();
   if (!snapshot.ok) return err(snapshot.error);
-  return resolveProject(fromTree(snapshot.value), projectId.value);
+  return resolveProject(
+    fromIndex(snapshot.value.index, snapshot.value.transcriptFiles),
+    projectId.value,
+  );
 }
 
 export async function readGitOverview(deps: GitDeps, input: unknown): Promise<GitOverviewResponse> {
-  const path = await locate(deps.tree, input);
+  const path = await locate(deps.index, input);
   if (!path.ok) return { ok: false, ...presentError(path.error) };
   return presentGitOverview(await deps.overview.execute(path.value));
 }
 
 export async function readGitRef(deps: GitDeps, input: unknown): Promise<GitRefResponse> {
-  const path = await locate(deps.tree, input);
+  const path = await locate(deps.index, input);
   if (!path.ok) return { ok: false, ...presentError(path.error) };
 
   const rev = own(input, 'rev');

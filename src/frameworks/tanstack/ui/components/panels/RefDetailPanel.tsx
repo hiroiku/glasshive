@@ -3,10 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { gitRefQuery } from '../../../queries/git.query.ts';
+import { refTrouble, transportTrouble } from '../../derive/trouble.ts';
 import { cut, formatSinceIso, worktreeName } from '../../format.ts';
 import { ActivityLanes, resolveActivityRows } from '../activity/ActivityLanes.tsx';
 import { AgentChip } from '../chips/Chips.tsx';
 import { Icon } from '../primitives/Icon.tsx';
+import { NotObserved } from '../primitives/NotObserved.tsx';
+import { ReadProgress } from '../primitives/ReadProgress.tsx';
 import { SubjectText } from '../text/SubjectText.tsx';
 
 /* `ref` 1 つのパネル。何が変わったか、誰が触っているか。
@@ -83,12 +86,31 @@ export function RefDetailPanel({
   const nowMs = Date.now();
 
   const answer = ref.data;
-  if (answer === undefined) return <div className="empty">Loading…</div>;
-  if (!answer.ok) return <div className="empty">Failed to load ref ({answer.body.code})</div>;
+  /* 断りも「無かった」も `.detail` の中に出す。外に出すと `.detail .empty` に当たらず、
+     余白も中央寄せも無い素の文字が左上に残る。 */
+  if (ref.error !== null) {
+    return (
+      <div className="detail">
+        <NotObserved {...transportTrouble('this ref')} />
+      </div>
+    );
+  }
+  if (answer === undefined) return <ReadProgress label="Reading commits" />;
+  if (!answer.ok) {
+    return (
+      <div className="detail">
+        <NotObserved {...refTrouble(answer.body.code)} />
+      </div>
+    );
+  }
 
   const detail = answer.body;
   if (detail.state === 'absent') {
-    return <div className="empty">No commits found for this ref</div>;
+    return (
+      <div className="detail">
+        <NotObserved {...refTrouble(null)} />
+      </div>
+    );
   }
 
   const lanes = resolveActivityRows(project, agents.slice(0, MAX_ACTIVITY_ROWS));

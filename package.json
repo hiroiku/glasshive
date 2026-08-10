@@ -1,10 +1,13 @@
 {
   "name": "glasshive",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Glass-walled observation hive for AI agents — a read-only local dashboard of running sessions, subagents, issues, and git",
   "license": "MIT",
   "type": "module",
-  "repository": "github:hiroiku/glasshive",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hiroiku/glasshive.git"
+  },
   "engines": {
     "node": ">=22.12.0"
   },
@@ -47,11 +50,15 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
+    "@types/d3-scale": "^4.0.9",
+    "@types/d3-shape": "^3.1.8",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^22.12.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.0.5",
+    "d3-scale": "^4.0.2",
+    "d3-shape": "^3.2.0",
     "es-module-lexer": "2.3.1",
     "happy-dom": "^20.11.2",
     "highlight.js": "^11.11.1",

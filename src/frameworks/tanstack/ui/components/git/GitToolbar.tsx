@@ -1,4 +1,5 @@
 import { mdiSourceBranch } from '@mdi/js';
+import type React from 'react';
 import { Icon } from '../primitives/Icon.tsx';
 
 /* Git 画面のツールバー。検索と、比較の相手と、いま見えている数。
@@ -16,6 +17,11 @@ export interface GitToolbarProps {
   readonly tips: number;
   readonly worktrees: number;
   readonly branches: number;
+  /* 検索欄より先に置くもの。Work の画面で行の単位を選ぶ切り替えがここへ入る。
+
+     **一致件数はここから出し続ける。** 数え方を表と分けると、沈んだ行の数と
+     ツールバーに出た数が食い違い、どちらが本当か分からなくなる。 */
+  readonly lead?: React.ReactNode | undefined;
 }
 
 export function GitToolbar({
@@ -26,9 +32,11 @@ export function GitToolbar({
   tips,
   worktrees,
   branches,
+  lead,
 }: GitToolbarProps) {
   return (
     <div className="view-toolbar">
+      {lead}
       <input
         className="search"
         type="search"

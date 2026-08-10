@@ -173,8 +173,11 @@ function Chrome() {
 
       <TabBar
         visible={tabs.visibleTabs}
+        pinned={tabs.selection.pinned}
         projects={tree.data?.projects}
         onUnpin={tabs.togglePin}
+        onPin={tabs.togglePin}
+        onMove={tabs.movePin}
         current={current}
         showAll={prefs.showAll}
       />

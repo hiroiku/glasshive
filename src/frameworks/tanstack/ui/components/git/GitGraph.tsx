@@ -1,16 +1,29 @@
-import { mdiHomeOutline } from '@mdi/js';
+import { mdiHomeOutline, mdiRhombus } from '@mdi/js';
 import { useMemo } from 'react';
 import type { GitOverviewJson } from '~/interface/presenters/git/git.presenter.ts';
+import type {
+  GithubActorJson,
+  IssueSummaryJson,
+} from '~/interface/presenters/issues/issues.presenter.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import type { GraphRow, TipSortKey } from '../../derive/gitGraph.ts';
 import { layoutOf, sortTips } from '../../derive/gitGraph.ts';
-import { type Occupant, occupantIndex, occupantsOf } from '../../derive/occupants.ts';
-import { formatSinceIso } from '../../format.ts';
+import { milestonesOnBranch } from '../../derive/milestones.ts';
+import {
+  type Occupant,
+  occupantIndex,
+  occupantsOf,
+  occupantsOnBranch,
+} from '../../derive/occupants.ts';
+import { workerIndex, workersOn } from '../../derive/workers.ts';
+import type { WorkJoin } from '../../derive/workJoin.ts';
+import { cut, formatSinceIso } from '../../format.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import { laneColor } from '../../palette.ts';
 import { pulseDelay } from '../../phase.ts';
 import { pressable } from '../../pressable.ts';
 import { AgentChip } from '../chips/Chips.tsx';
+import { AvatarStack } from '../primitives/Avatar.tsx';
 import { Icon } from '../primitives/Icon.tsx';
 import { SubjectText } from '../text/SubjectText.tsx';
 import { GitGutter } from './GitGutter.tsx';
@@ -36,6 +49,12 @@ const BEHIND_WARN = 50;
 /** 表の上に出すコンフリクトの数 */
 const MAX_LISTED_CONFLICTS = 4;
 
+/** 1 行に並べる課題の数。ブランチ 1 本が何十件も閉じることは無いので、これで足りる */
+const MAX_LISTED_ISSUES = 3;
+
+/** 1 行に並べる顔の数 */
+const MAX_LISTED_FACES = 3;
+
 export interface GitOrder {
   readonly key: TipSortKey;
   readonly direction: 'asc' | 'desc';
@@ -51,6 +70,10 @@ export interface GitGraphProps {
   readonly order: GitOrder;
   readonly onSort: (key: TipSortKey) => void;
   readonly nowMs: number;
+  /** ツールバーの先頭に置くもの。行の単位を選ぶ切り替えがここへ入る */
+  readonly lead?: React.ReactNode | undefined;
+  /** 課題とブランチの突き合わせ。無ければブランチの行に課題が出ないだけ */
+  readonly join?: WorkJoin | undefined;
 }
 
 export function GitGraph({
@@ -62,9 +85,14 @@ export function GitGraph({
   order,
   onSort,
   nowMs,
+  lead,
+  join,
 }: GitGraphProps) {
   const nav = useNav();
   const occupants = useMemo(() => occupantIndex(project), [project]);
+  /* 課題の id で結んだエージェント。**cwd とブランチだけでは足りない** —— 会話の中で
+     この課題を名指しているのに、別の場所で動いているエージェントが居る */
+  const workers = useMemo(() => workerIndex(project), [project]);
   const layout = useMemo(
     () => layoutOf(overview.mainline, sortTips(overview.tips, order.key, order.direction)),
     [overview.mainline, overview.tips, order.key, order.direction],
@@ -119,6 +147,7 @@ export function GitGraph({
         tips={overview.tips.length}
         worktrees={overview.worktrees.length}
         branches={overview.branches.length}
+        lead={lead}
       />
       <div id="git-rows">
         {overview.conflicts.length > 0 && (
@@ -156,7 +185,7 @@ export function GitGraph({
         <div className="git-row head">
           <span style={{ width }} />
           <SortHead label="Ref / Commit" sortKey="name" order={order} onSort={onSort} />
-          <span>Agents</span>
+          <span>Assignee / Agents</span>
           <SortHead label="Ahead" sortKey="ahead" order={order} onSort={onSort} right />
           <SortHead label="Updated" sortKey="date" order={order} onSort={onSort} right />
           <span>SHA</span>
@@ -169,7 +198,34 @@ export function GitGraph({
 
           if (row.type === 'tip') {
             const tip = row.tip;
-            const here = occupantsOf(occupants, tip.worktree);
+            /* worktree に居る者と、そのブランチに居る者。**両方を見る** —— worktree を
+               切らない使い方では cwd が全員同じになり、誰がどのブランチに居るかが消える */
+            const here: Present[] = [...occupantsOf(occupants, tip.worktree)];
+            for (const found of occupantsOnBranch(project, tip.name)) {
+              if (!here.some((other) => other.file === found.file)) here.push(found);
+            }
+
+            /* このブランチの PR が閉じる課題と、その PR と、その担当。**推測ではなく PR が
+               言っている** —— 名前の似ているところから探しに行くと、別の課題を結ぶ。 */
+            const closes = join?.byBranch.get(tip.name) ?? [];
+            const pull = join?.pullByBranch.get(tip.name) ?? null;
+            const assignees = actorsOf(closes);
+
+            /* 課題の側から辿れるエージェントも並べる。ここに居るのとは繋がり方が違うので、
+               どの課題で結んだのかを添える。 */
+            for (const issue of closes) {
+              for (const worker of workersOn(workers, issue)) {
+                if (worker.state === 'ended') continue;
+                if (here.some((other) => other.file === worker.file)) continue;
+                here.push({
+                  file: worker.file,
+                  state: worker.state,
+                  label: worker.label,
+                  via: `named ${issue.id ?? ''} in its conversation`,
+                });
+              }
+            }
+
             const rev = tip.kind === 'branch' ? tip.name : tip.sha;
             const worktreeLeaf = tip.worktree?.split('/').pop() ?? '';
             return (
@@ -206,8 +262,53 @@ export function GitGraph({
                       merge-ready
                     </span>
                   )}
+                  {pull !== null && (
+                    <span
+                      className={`prchip ${pull.is_draft ? 'draft' : pull.state.toLowerCase()}`}
+                      title={`Pull request #${pull.number} — ${pull.is_draft ? 'draft' : pull.state.toLowerCase()}${
+                        pull.review_decision === null
+                          ? ''
+                          : `, ${pull.review_decision.toLowerCase()}`
+                      }`}
+                    >
+                      #{pull.number}
+                      {pull.is_draft && ' draft'}
+                    </span>
+                  )}
+                  {closes.slice(0, MAX_LISTED_ISSUES).map((issue) => (
+                    <ClosesChip key={issue.id} issue={issue} />
+                  ))}
+                  {closes.length > MAX_LISTED_ISSUES && (
+                    <span
+                      className="g-more"
+                      title={closes
+                        .slice(MAX_LISTED_ISSUES)
+                        .map((issue) => `${issue.id ?? ''} ${issue.title ?? ''}`)
+                        .join('\n')}
+                    >
+                      +{closes.length - MAX_LISTED_ISSUES}
+                    </span>
+                  )}
+                  {/* このブランチが関わっている区切り。**ブランチ自身は持っていない** —
+                      持っているのは、その PR が閉じる課題のほうである。 */}
+                  {milestonesOnBranch(tip.name, closes).map((title) => (
+                    <button
+                      key={title}
+                      type="button"
+                      className="mschip"
+                      title={`Milestone: ${title} — show just this milestone`}
+                      {...pressable(() => nav.gotoMilestone(title), { stopPropagation: true })}
+                    >
+                      {cut(title, 18)}
+                    </button>
+                  ))}
                 </span>
                 <span className="g-who">
+                  {/* 台帳の担当と、いま動いているエージェント。課題の一覧と同じ並べ方にする —
+                      同じ 2 つを見ているので、単位が違っても読み方は変えない */}
+                  {assignees.length > 0 && (
+                    <AvatarStack actors={assignees} max={MAX_LISTED_FACES} />
+                  )}
                   <Occupants here={here} />
                 </span>
                 <span className="g-ahead right">
@@ -275,7 +376,22 @@ export function GitGraph({
   );
 }
 
-function Occupants({ here }: { here: readonly Occupant[] }) {
+/* 行に出すエージェント。**なぜここに出したかを持たせる** —— worktree に居るのと、
+   その課題を会話で名指しているのとは、同じ「関わっている」でも強さが違う。 */
+type Present = Occupant & { readonly via?: string | null };
+
+/** 閉じる課題たちの担当を、重複なく 1 列に */
+function actorsOf(issues: readonly IssueSummaryJson[]): readonly GithubActorJson[] {
+  const found = new Map<string, GithubActorJson>();
+  for (const issue of issues) {
+    for (const actor of issue.github?.assignees ?? []) {
+      if (!found.has(actor.login)) found.set(actor.login, actor);
+    }
+  }
+  return [...found.values()];
+}
+
+function Occupants({ here }: { here: readonly Present[] }) {
   return (
     <>
       {here.slice(0, MAX_LISTED_OCCUPANTS).map((occupant) => (
@@ -284,6 +400,7 @@ function Occupants({ here }: { here: readonly Occupant[] }) {
           file={occupant.file}
           state={occupant.state}
           label={occupant.label}
+          via={occupant.via}
         />
       ))}
       {here.length > MAX_LISTED_OCCUPANTS && (
@@ -314,6 +431,28 @@ function SortHead({ label, sortKey, order, onSort, right }: HeadProps) {
   return (
     <button type="button" className={className} onClick={() => onSort(sortKey)}>
       {label}
+    </button>
+  );
+}
+
+/* このブランチの PR が閉じる課題。押すと課題のパネルが開く。
+
+   **状態を出す。** 閉じた課題を閉じるためのブランチが残っているのは、片付け忘れという
+   読める事実で、開いた課題と同じ顔で並べるとそれが消える。 */
+function ClosesChip({ issue }: { readonly issue: IssueSummaryJson }) {
+  const nav = useNav();
+  const id = issue.id ?? '';
+  const closed = issue.status === 'closed';
+  return (
+    <button
+      type="button"
+      className={`ichip closes${closed ? ' closed' : ''}`}
+      title={`${id} ${issue.title ?? ''} — closed by the pull request on this branch`}
+      aria-label={`Open issue ${id}`}
+      {...pressable(() => nav.openIssue(id), { stopPropagation: true })}
+    >
+      <Icon path={mdiRhombus} size={9} className="ichip-i" />
+      {id}
     </button>
   );
 }

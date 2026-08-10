@@ -1,5 +1,15 @@
 /* ---------- Agents。木とタイムラインの稼働区間 ---------- */
 
+/* `transcript` をどこまで読んだか。押せないので、チップと同じ形にはしない。
+   数が伸び縮みするたびにツールバーの他のチップが動かないよう、幅は最小値で固定する。 */
+.deep-note {
+  color: var(--dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-width: 130px;
+  user-select: none;
+}
+
 /* ---------- ツリー(列ぞろえ + タイムライン) ----------
    全行が #tree-pane のトラックを subgrid で共有する。
    文字列の列は fit-content — 中身が短いときは中身の幅に密着し(上限つき)、

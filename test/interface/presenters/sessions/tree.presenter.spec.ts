@@ -417,11 +417,13 @@ describe('内側だけの欄', () => {
 
   it('木とプロジェクトに在る欄はこれで全部', () => {
     const presented = presentTree(tree());
-    expect(Object.keys(presented), '木の直下に在るのはこの 5 つだけ').toEqual([
+    expect(Object.keys(presented), '木の直下に在るのはこの 7 つだけ').toEqual([
       'generated_at',
       'active_threshold_secs',
       'sources',
       'processes',
+      'complete',
+      'progress',
       'projects',
     ]);
     expect(
@@ -436,6 +438,7 @@ describe('内側だけの欄', () => {
       'live_process_count',
       'tokens_24h',
       'tokens_24h_state',
+      'read',
       'sessions',
     ]);
   });

@@ -1,3 +1,4 @@
+import { ARROW, arrowPoints, EDGE_CORNER } from '../../derive/edgeShape.ts';
 import { type Edge, edgeColorOf, LANE_WIDTH } from '../../derive/issueTree.ts';
 
 /* 行の左の余白に、依存の弧を引く。
@@ -10,9 +11,6 @@ import { type Edge, edgeColorOf, LANE_WIDTH } from '../../derive/issueTree.ts';
 
 /** 1 行の中での線の高さ。1 行に収めたときの文字の中心 */
 const ROW_MID = 14;
-
-/** 角の丸み */
-const CORNER = 6;
 
 export function EdgeGutter({
   row,
@@ -37,11 +35,17 @@ export function EdgeGutter({
     const isEnd = edge.a === row || edge.b === row;
     const mid = isEnd ? (edge.to === row ? ROW_MID - 3 : ROW_MID + 3) : ROW_MID;
 
+    /* どの行とどの行を結ぶ弧かを、形そのものに書いておく。**沈めるのは DOM の側でやる** ——
+       React の状態に載せると、ホバーのたびに 200 行が丸ごと描き直される。 */
+    const ends = `${edge.a}-${edge.b}`;
+
     const arrow = (id: string) =>
       shapes.push(
         <polygon
           key={id}
-          points={`${width - 7},${mid - 2.5} ${width - 2.5},${mid} ${width - 7},${mid + 2.5}`}
+          className="dep-cap"
+          data-edge={ends}
+          points={arrowPoints(width - ARROW.half, mid)}
           fill={color}
         />,
       );
@@ -49,6 +53,8 @@ export function EdgeGutter({
       shapes.push(
         <circle
           key={id}
+          className="dep-cap"
+          data-edge={ends}
           cx={width - 5}
           cy={mid}
           r={2.4}
@@ -63,15 +69,17 @@ export function EdgeGutter({
         <path
           key={`c${key}`}
           className="dep"
+          data-edge={ends}
           stroke={color}
-          d={`M ${width - 4} ${mid} L ${x + CORNER} ${mid} Q ${x} ${mid} ${x} ${mid + CORNER}`}
+          d={`M ${width - 4} ${mid} L ${x + EDGE_CORNER} ${mid} Q ${x} ${mid} ${x} ${mid + EDGE_CORNER}`}
         />,
         <line
           key={`v${key}`}
           className="dep"
+          data-edge={ends}
           stroke={color}
           x1={x}
-          y1={mid + CORNER}
+          y1={mid + EDGE_CORNER}
           x2={x}
           y2="100%"
         />,
@@ -83,7 +91,16 @@ export function EdgeGutter({
 
     if (row > edge.a && row < edge.b) {
       shapes.push(
-        <line key={`v${key}`} className="dep" stroke={color} x1={x} y1={0} x2={x} y2="100%" />,
+        <line
+          key={`v${key}`}
+          className="dep"
+          data-edge={ends}
+          stroke={color}
+          x1={x}
+          y1={0}
+          x2={x}
+          y2="100%"
+        />,
       );
       continue;
     }
@@ -93,17 +110,19 @@ export function EdgeGutter({
         <line
           key={`v${key}`}
           className="dep"
+          data-edge={ends}
           stroke={color}
           x1={x}
           y1={0}
           x2={x}
-          y2={mid - CORNER}
+          y2={mid - EDGE_CORNER}
         />,
         <path
           key={`c${key}`}
           className="dep"
+          data-edge={ends}
           stroke={color}
-          d={`M ${x} ${mid - CORNER} Q ${x} ${mid} ${x + CORNER} ${mid} L ${width - 4} ${mid}`}
+          d={`M ${x} ${mid - EDGE_CORNER} Q ${x} ${mid} ${x + EDGE_CORNER} ${mid} L ${width - 4} ${mid}`}
         />,
       );
       if (edge.to === edge.b) arrow(`p${key}`);

@@ -8,18 +8,24 @@ import {
   type OverviewFilter,
   OverviewToolbar,
 } from '../ui/components/overview/OverviewToolbar.tsx';
+import { Dot } from '../ui/components/primitives/Dot.tsx';
+import { NotObserved } from '../ui/components/primitives/NotObserved.tsx';
+import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
 import {
   DEFAULT_SORT,
   DEFAULT_SPAN,
   deriveRows,
   filterRows,
+  holdOrder,
   type OverviewSpan,
   type SortKey,
   type SortOrder,
+  SPAN_MS,
   sortRows,
   totalsOf,
   withinSpan,
 } from '../ui/derive/overview.ts';
+import { treeTrouble } from '../ui/derive/trouble.ts';
 import { useTabSelection } from '../ui/hooks/useTabSelection.ts';
 
 export const Route = createFileRoute('/')({
@@ -48,20 +54,42 @@ function Overview() {
   const nowMs = tree.data === undefined ? 0 : Date.parse(tree.data.generated_at);
 
   const rows = useMemo(() => (tree.data ? deriveRows(tree.data.projects) : []), [tree.data]);
+  const complete = tree.data?.complete ?? false;
 
   const shown = useMemo(() => {
     const byChip = withinSpan(rows, span, nowMs).filter((row) => {
-      if (filter === 'input') return row.input > 0;
-      if (filter === 'active') return row.active > 0;
+      /* 読んでいない行は、どちらの絞り込みにも残す。**落とすと集合の断定になる** —
+         「人待ちはこれで全部」と言えるのは全部を読んだ後だけで、それまでは
+         まだ読んでいない行のほうに在るかもしれない。 */
+      if (filter === 'input') return !row.read || (row.input ?? 0) > 0;
+      if (filter === 'active') return !row.read || (row.active ?? 0) > 0;
       if (filter === 'pinned') return tabs.pinned.has(row.id);
       return true;
     });
-    return sortRows(filterRows(byChip, query), order);
-  }, [rows, filter, span, nowMs, query, order, tabs.pinned]);
+    /* 読み終えるまで並べ替えない。**部分集合に順位を付けない。**
+
+       既定の並びは人待ち・稼働・待機から作られるが、それは最後に届く値である。届くたびに
+       並べ直すと、まだ読んでいない行が読まれた瞬間に上へ割り込み、既に落ち着いた行が
+       カーソルの下で動く。索引の並び(最終活動の新しい順)のまま待つ。 */
+    const filtered = filterRows(byChip, query);
+    return complete ? sortRows(filtered, order) : filtered;
+  }, [rows, filter, span, nowMs, query, order, tabs.pinned, complete]);
 
   const totals = useMemo(() => totalsOf(rows), [rows]);
 
+  /* 触っている間は並びを止める。**順位付けは変えない** —— 覚えた並びで出し直すだけである。
+
+     既定の並びは人待ち・稼働・最終活動から作られるので、変更通知が届くたびに行が動く。
+     ピンは行を狙って押す操作なので、狙った行がその瞬間に入れ替わると押し間違える。
+     絞り込みと並べ替えを変えたときは覚えを捨てる —— そこで止めたままにすると、
+     押した並べ替えが効かなかったように見える。 */
+  const [held, setHeld] = useState<readonly string[] | null>(null);
+  const ordered = held === null ? shown : holdOrder(shown, held);
+  const hold = () => setHeld((current) => current ?? shown.map((row) => row.id));
+  const thaw = () => setHeld(null);
+
   const onSort = (key: SortKey) => {
+    thaw();
     /* 同じ列をもう一度押したら向きが返る。別の列なら、その列で自然な向きから始める。
        名前だけは昇順が自然で、数と時刻は多い順・新しい順が自然である。 */
     setOrder((current) =>
@@ -71,8 +99,15 @@ function Overview() {
     );
   };
 
-  if (tree.isPending) return <p className="empty">Loading…</p>;
-  if (tree.error !== null) return <p className="empty">Failed to load</p>;
+  if (tree.error !== null) return <NotObserved {...treeTrouble()} />;
+  if (tree.isPending) {
+    return (
+      <ReadProgress
+        label="Reading transcripts"
+        slowNote="A large ~/.claude/projects takes a moment on the first read"
+      />
+    );
+  }
 
   const { projects, sources, processes } = tree.data;
 
@@ -81,17 +116,35 @@ function Overview() {
       {/* ツールバーは本文の外に置く。中に入れるとスクロールと一緒に流れて、検索欄が見えなくなる */}
       <OverviewToolbar
         query={query}
-        onQuery={setQuery}
+        onQuery={(next) => {
+          thaw();
+          setQuery(next);
+        }}
         filter={filter}
-        onFilter={setFilter}
+        onFilter={(next) => {
+          thaw();
+          setFilter(next);
+        }}
         span={span}
-        onSpan={setSpan}
+        onSpan={(next) => {
+          thaw();
+          setSpan(next);
+        }}
         totals={totals}
         shown={shown.length}
         total={rows.length}
+        progress={
+          tree.data.progress === null
+            ? null
+            : {
+                read: rows.filter((row) => row.read).length,
+                total: rows.length,
+              }
+        }
       />
 
-      <div id="dash">
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: 並びを止めるだけで、押せる場所ではない */}
+      <div id="dash" onMouseMove={hold} onMouseLeave={thaw} onFocusCapture={hold}>
         {/* 観測できなかったことは、見えた振りをせずにそのまま言う */}
         {sources.state === 'unobservable' && (
           <p className="warn">
@@ -111,24 +164,69 @@ function Overview() {
         {tabs.error !== null && <p className="warn">{tabs.error}</p>}
 
         {projects.length === 0 ? (
-          <p className="empty">
-            {sources.state === 'observed'
-              ? 'No projects yet — run Claude Code and they show up here'
-              : 'Could not count projects'}
-          </p>
+          /* **読み終えるまで「1 つも無い」と言わない。** 索引がまだ届いていないだけかもしれず、
+             「無かった」と「まだ観測していない」を同じ画面にすると見分けが付かない。 */
+          !tree.data.complete ? (
+            <ReadProgress label="Reading transcripts" />
+          ) : (
+            <p className="empty">
+              {/* 「無かった」と「観測できなかった」を同じ文にしない。**片方は 0 で、
+                  もう片方は不明である。** 同じに書くと、読む人は在るものを無いと読む */}
+              {sources.state === 'observed'
+                ? 'No projects yet — run Claude Code and they show up here'
+                : sources.state === 'absent'
+                  ? 'Nothing to read yet — ~/.claude/projects is not there'
+                  : 'Unknown — the projects could not be counted'}
+            </p>
+          )
         ) : shown.length === 0 ? (
-          // 絞って何も残らなかったことを、プロジェクトが 1 つも無いことと同じ表示にしない
-          <p className="empty">No matching projects (0 of {rows.length})</p>
+          /* 絞って何も残らなかったことを、プロジェクトが 1 つも無いことと同じ表示にしない。
+             読み終えていないなら、まだ読んでいない行のほうに在るかもしれないと言う。 */
+          <p className="empty">
+            {tree.data.complete
+              ? `No matching projects (0 of ${rows.length})`
+              : `No matches yet among the projects read so far (0 of ${rows.length})`}
+          </p>
         ) : (
           <OverviewTable
-            rows={shown}
+            rows={ordered}
             order={order}
             onSort={onSort}
             pinned={tabs.pinned}
             onTogglePin={tabs.togglePin}
             nowMs={nowMs}
+            spanMs={SPAN_MS[span]}
           />
         )}
+      </div>
+
+      {/* 凡例は画面の下。**説明を書かない色やトラックを出さない** —
+          読めない絵は、読む人にとって在っても無くても同じである */}
+      <div className="legend-bar">
+        <span>
+          <Dot state="input" /> waiting for you
+        </span>
+        <span>
+          <Dot state="active" /> an agent is working
+        </span>
+        <span>
+          <Dot state="waiting" /> idle, but the process is alive
+        </span>
+        <span>
+          <Dot state="ended" /> nothing running
+        </span>
+        <span>
+          <Dot state="unknown" /> not read yet
+        </span>
+        <span>
+          <i className="lg-bar" /> share of the tokens spent in the last 24h
+        </span>
+        <span>
+          <i className="lg-act" /> when anything in the project was running, over the {span} window
+        </span>
+        <span>
+          <i className="lg-act cut" /> some of that activity could not be read
+        </span>
       </div>
     </>
   );

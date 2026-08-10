@@ -22,9 +22,12 @@ const LEDGER = {
       createdAt: '2026-08-01T00:00:00Z',
       updatedAt: '2026-08-02T00:00:00Z',
       deps: [{ on: 'x-0', type: 'blocks' }],
+      depsComplete: true,
+      github: null,
     },
   ],
   counts: { open: 1, closed: 1 },
+  truncated: false,
 };
 
 describe('一覧を外の形へ写す', () => {
@@ -45,9 +48,12 @@ describe('一覧を外の形へ写す', () => {
           created_at: '2026-08-01T00:00:00Z',
           updated_at: '2026-08-02T00:00:00Z',
           deps: [{ on: 'x-0', type: 'blocks' }],
+          deps_complete: true,
+          github: null,
         },
       ],
       counts: { open: 1, closed: 1 },
+      truncated: false,
     });
   });
 
@@ -67,9 +73,12 @@ describe('一覧を外の形へ写す', () => {
             createdAt: null,
             updatedAt: null,
             deps: [{ on: null, type: 'parent-child' }],
+            depsComplete: true,
+            github: null,
           },
         ],
         counts: { '': 1 },
+        truncated: false,
       }),
     );
 
@@ -88,6 +97,10 @@ describe('一覧を外の形へ写す', () => {
       created_at: null,
       updated_at: null,
       deps: [{ on: null, type: 'parent-child' }],
+      // 台帳はいつも全部を読むので、掛かっている先は欠けない
+      deps_complete: true,
+      // GitHub にしか無い欄は、台帳から読んだ課題では無い
+      github: null,
     });
   });
 
@@ -99,7 +112,7 @@ describe('一覧を外の形へ写す', () => {
       ['constructor', 2],
     ]);
 
-    const presented = presentIssues(observed({ issues: [], counts }));
+    const presented = presentIssues(observed({ issues: [], counts, truncated: false }));
     /* コピーは `Object.assign` ではなく展開で作る。`assign` は setter を起こすので、
        `__proto__` の欄が黙って消え、件数が 1 つ足りない一覧が外へ出る。 */
     expect(
@@ -112,7 +125,13 @@ describe('一覧を外の形へ写す', () => {
     expect(
       presentIssues(absent('no-source')),
       '空の一覧だけを返すと、bd を使っていないプロジェクトと課題が 1 件も無いプロジェクトが同じに見える',
-    ).toEqual({ state: 'absent', reason: 'no-source', issues: [], counts: {} });
+    ).toEqual({
+      state: 'absent',
+      reason: 'no-source',
+      issues: [],
+      counts: {},
+      truncated: false,
+    });
   });
 
   it('観測できなかったことも、空の一覧として黙らせない', () => {
@@ -121,6 +140,7 @@ describe('一覧を外の形へ写す', () => {
       'エラーコードをそのまま言う',
     ).toEqual({
       state: 'unobservable',
+      truncated: false,
       reason: 'ledger.unreadable',
       issues: [],
       counts: {},

@@ -25,30 +25,37 @@ const glow = (token: string) => ({
   onBlur: () => hoverTok(token, false),
 });
 
-/** エージェントのチップ。状態の点と名前と worktree。押すと会話パネルが開く */
+/* エージェントのチップ。状態の点と名前と worktree。押すと会話パネルが開く。
+
+   `via` が付くのは、課題の id ではなく PR のブランチで結び付いたときである。**ブランチの
+   アイコンを出す** —— 訳を `title` だけに隠すと、会話で名指しされた相手と見分けが付かない。 */
 export function AgentChip({
   file,
   state,
   label,
   where,
+  via,
 }: {
   file: string;
   state: string;
   label: string;
-  where?: string | null;
+  where?: string | null | undefined;
+  via?: string | null | undefined;
 }) {
   const nav = useNav();
+  const reason = via === null || via === undefined || via === '' ? null : via;
   return (
     <button
       type="button"
-      className="wk"
-      title={file}
+      className={`wk${reason === null ? '' : ' via'}`}
+      title={reason === null ? file : `${file} — ${reason}`}
       aria-label={`Open conversation for ${label}`}
       // 行そのもののクリックを乗っ取らない。チップはチップとして押される
       {...pressable(() => nav.openConv(file), { stopPropagation: true })}
       {...glow(file)}
     >
       <Dot state={state} />
+      {reason !== null && <Icon path={mdiSourceBranch} size={9} className="wk-via" />}
       {label}
       {where !== null && where !== undefined && where !== '' && (
         <span className="where">@{where}</span>
@@ -113,7 +120,7 @@ export function RefChip({ name, kind = 'branch' }: { name: string; kind?: 'branc
       className="refchip"
       title={name}
       aria-label={`View ${name} in Git`}
-      {...pressable(() => nav.gotoGit(name), { stopPropagation: true })}
+      {...pressable(() => nav.gotoBranch(name), { stopPropagation: true })}
       {...glow(name)}
     >
       <Icon path={kind === 'worktree' ? mdiHomeOutline : mdiSourceBranch} size={10} />

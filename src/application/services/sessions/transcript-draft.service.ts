@@ -12,6 +12,7 @@ import {
 import type { UsageBucket } from '~/domain/entities/sessions/token-usage.entity.ts';
 import { deriveActivity } from '~/domain/services/sessions/activity-interval.service.ts';
 import { placeByLineage } from '~/domain/services/sessions/agent-lineage.service.ts';
+import type { LocatedSession } from '~/domain/services/sessions/project-index.service.ts';
 import type {
   DraftSession,
   DraftSubagent,
@@ -91,6 +92,14 @@ function runScopedLabel(runId: string | null, label: string): string {
 
 export interface TranscriptDraftService {
   readSession(source: SessionSource, nowMs: number): Promise<DraftSession>;
+  /* 作業ディレクトリだけを求める。**中身の読み取りは、この後の本読みと共有される。**
+
+     読むのは先頭と末尾だけで、それは `readSession` が最初にやることと同じ範囲である。
+     結果は同じキーで覚えてあるので、本読みは開き直さない。索引のための読みは、
+     総量としては足されない。 */
+  readLocation(
+    source: SessionSource,
+  ): Promise<LocatedSession & { readonly transcriptCount: number }>;
   /* `transcript` ひとつぶんのバケット。**木を組んだときのキャッシュをそのまま使う。**
 
      別にキャッシュを持つと、同じ 8MiB を二度読んで二度抱えることになる。統計が見たいのは
@@ -255,6 +264,26 @@ export function createTranscriptDrafts(deps: {
   return {
     keepOnly(live) {
       memo.keepOnly(live);
+    },
+
+    async readLocation(source) {
+      /* 数え方を `readSession` と揃える。子のディレクトリには子の `transcript` でないものが
+         混じり得るので、同じ述語で落とす。**落とし方が違うと、読み終えた数が総数を追い越す。** */
+      const subagentSources = source.subagents.filter((child) =>
+        isSubagentFileName(child.fileName),
+      );
+      const meta = await readSessionMeta(source);
+      const found = meta.kind === 'observed' ? meta.value : undefined;
+      return {
+        file: source.file,
+        cwd: found?.cwd ?? null,
+        // 木の並びは、自分と子のうち最も新しい書き込みで決まる。`readSession` と同じ測り方
+        lastActivityMs: subagentSources.reduce(
+          (latest, child) => Math.max(latest, child.mtimeMs),
+          source.mtimeMs,
+        ),
+        transcriptCount: 1 + subagentSources.length,
+      };
     },
 
     async readBuckets(file, nowMs) {

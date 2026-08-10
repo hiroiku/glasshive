@@ -20,11 +20,11 @@ glasshive 絕不寫入 `~/.claude`、你的儲存庫或你的 issue 追蹤器，
 npx glasshive
 ```
 
-它只在 `127.0.0.1:4483` 上提供服務，並開啟你的瀏覽器。不需安裝步驟、不需設定、不需網路連線——
-發佈的套件沒有任何執行期相依套件。你需要 Node.js 22.12 或更新的版本，以及 `~/.claude/projects`
-底下至少一個 Claude Code 的 session。建置與驗證都在 macOS 與 Linux 上進行；在 Windows 上，
-存活 agent 的數量會以「無法觀察」回傳，因為讀取它需要 `ps`，以及 `/proc/<pid>/cwd` 或 `lsof`
-其中之一。
+它只在 `127.0.0.1:4483` 上提供服務，並開啟你的瀏覽器。不需安裝步驟、不需設定，在你開啟
+GitHub 檢視之前，不會有任何東西離開你的機器——發佈的套件沒有任何執行期相依套件。
+你需要 Node.js 22.12 或更新的版本，以及 `~/.claude/projects` 底下至少一個 Claude Code 的 session。
+建置與驗證都在 macOS 與 Linux 上進行；在 Windows 上，存活 agent 的數量會以「無法觀察」回傳，
+因為讀取它需要 `ps`，以及 `/proc/<pid>/cwd` 或 `lsof` 其中之一。
 
 ![glasshive 導覽](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 
@@ -45,19 +45,19 @@ worktree、此刻正在執行的工具，以及可以平移和縮放的活動時
 
 ![Agents](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/agents.png)
 
-### Git
+### Work
 
-使用中的 branch 與 worktree 疊畫在主 worktree 所在的 branch 上，讓你看得出誰在哪裡。正在動到同一批檔案的組合會被提到
-清單最上面。點一個 ref，就會看到它的 commit、diff 統計，以及有哪些代理程式在上面活動過。
+issue、branch 與 milestone 在同一個畫面上，因為它們本來就是同一件工作的三個面向。在同一個檢視裡
+就能互相切換，不必離開。
 
-![Git](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/git.png)
+issue 透過 [`gh`](https://cli.github.com) CLI 從 GitHub 來——glasshive 會問 `gh` 你的 remote
+指向哪個儲存庫，判斷方式和 `gh` 自己一樣——或是來自 [`bd`](https://github.com/gastownhall/beads)
+帳本。sub-issue 會巢狀排列，`blocked by` 會畫成相依邊，issue 類型、標籤、milestone 與負責人
+也一併帶來。
 
-### Beads
-
-來自 [`bd`](https://github.com/gastownhall/beads) 的 issue 帳本，含相依邊、父子巢狀結構，以及
-open/closed 隨時間的流動。沒有使用 `bd` 的專案會看到一段簡短說明，而不是空白畫面。
-
-![Beads](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/beads.png)
+branch 與 worktree 疊畫在主 worktree 所在的 branch 上，讓你看得出誰在哪裡。正在動到同一批檔案的
+組合會被提到最上面。點一個 ref，就會看到它的 commit、diff 統計，以及有哪些代理程式在上面活動過。
+issue 與 branch 只靠 pull request 的 head branch 相接——差一點對上的就讓它保持不相接，而不是用猜的。
 
 ### Side panel
 
@@ -68,9 +68,10 @@ open/closed 隨時間的流動。沒有使用 `bd` 的專案會看到一段簡�
 
 ## 設計上唯讀
 
-- **它讀三樣東西，一樣都不寫。** Claude Code 的 session 記錄
-  （`~/.claude/projects/**/*.jsonl`）、beads 帳本（`<project>/.beads/issues.jsonl`），以及 `git`。
-  任何 transcript、帳本或儲存庫都不會被修改。
+- **它讀四樣東西，一樣都不寫。** Claude Code 的 session 記錄
+  （`~/.claude/projects/**/*.jsonl`）、beads 帳本（`<project>/.beads/issues.jsonl`）、`git`，
+  以及——透過 `gh` CLI——你的 remote 指向的 GitHub 儲存庫的 issue。任何 transcript、帳本、
+  儲存庫或 issue 都不會被修改。
 - **它唯一會寫的檔案是它自己的。** `~/.config/glasshive/preferences.json` 存放你釘選的分頁與檢視偏好。
   寫入之前，glasshive 會檢查該路徑不在 `~/.claude`、transcript 根目錄，或任何被觀察的 `.beads` 或 `.git`
   目錄底下，若在其中就拒絕——寫入自己觀察的對象是由結構擋下的，不是靠慣例。
@@ -78,9 +79,12 @@ open/closed 隨時間的流動。沒有使用 `bd` 的專案會看到一段簡�
 - **發佈的套件可以追溯到這個儲存庫。** 每個版本都由 GitHub Actions 透過 OIDC 發佈，並帶有
   provenance attestation，所以 `npm audit signatures` 能把你裝到的套件，對上建置它的 workflow
   與 commit。
-- **沒有任何東西離開你的機器。** 它只綁定 `127.0.0.1`，拒絕 `Host` 標頭不是本機的請求
-  （因此惡意網頁無法透過 DNS rebinding 觸及它），不發出任何對外請求，
-  字型也是自行打包而不是從 CDN 抓取。
+- **離開你機器的有兩件事，而且兩件都跟你早就看得到的 issue 有關。** glasshive 只綁定 `127.0.0.1`，
+  拒絕 `Host` 標頭不是本機的請求（因此惡意網頁無法透過 DNS rebinding 觸及它），字型也是自行打包
+  而不是從 CDN 抓取。所有的對外呼叫就是 GitHub 檢視發出的那兩次：一次是 issue 查詢，透過 `gh`
+  發出——所以 glasshive 從不讀取、持有或儲存自己的 token；另一次是負責人的頭像，由 glasshive
+  自己的行程從 `avatars.githubusercontent.com` 抓取，不帶任何認證資訊，而且只留在記憶體裡，
+  所以你的瀏覽器不會拿到任何 GitHub 的 URL。跟你的 session 有關的任何東西，都不會被送到任何地方。
 - **「空的」和「讀不到」不會長得一樣。** 讀不到的欄位會以 `null` 帶著原因一起傳遞，
   所以安靜的畫面不會有歧義。
 - **錯誤的選項會大聲失敗。** 無法解讀的旗標會以錯誤結束，而不是默默退回預設值。

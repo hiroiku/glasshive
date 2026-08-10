@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { absent, observed } from '~/app-kernel/observation.ts';
 import {
   allowsTranscript,
+  fromIndex,
   fromTree,
   resolveProject,
 } from '~/application/services/workspace/readable-scope.service.ts';
@@ -13,6 +14,8 @@ import {
    ここは通ったままになる。** */
 
 type ProjectTree = Parameters<typeof fromTree>[0];
+type ProjectIndex = Parameters<typeof fromIndex>[0];
+type ProjectStub = ProjectIndex['stubs'][number];
 type ObservedProject = ProjectTree['projects'][number];
 type TranscriptSession = ObservedProject['sessions'][number];
 type SubagentSession = TranscriptSession['subagents'][number];
@@ -111,6 +114,29 @@ function tree(projects: readonly ObservedProject[]): ProjectTree {
     sources: observed(projects.length),
     processes: observed(0),
     projects,
+  };
+}
+
+function stub(id: string, canonicalPath: string | null): ProjectStub {
+  return {
+    id,
+    slugs: [id],
+    path: canonicalPath,
+    canonicalPath,
+    name: id,
+    liveProcessCount: 0,
+    latestActivityMs: 0,
+    transcriptCount: 0,
+  };
+}
+
+function index(stubs: readonly ProjectStub[]): ProjectIndex {
+  return {
+    generatedAtMs: 0,
+    activeThresholdMs: 60_000,
+    sources: observed(stubs.length),
+    processes: observed(0),
+    stubs,
   };
 }
 
@@ -307,5 +333,65 @@ describe('範囲の出所は観測した木だけ', () => {
   it('新しい範囲を作っても、前の範囲は変わらない', () => {
     fromTree(tree([beta]));
     expect(allowsTranscript(scope, ALPHA_MAIN), '範囲は作った時点の木そのもの').toBe(true);
+  });
+});
+
+/* 中身を読む前の索引から作る範囲。issues と git と会話はこちらを使う。
+
+   **木から作る範囲と食い違ってはいけない。** 片方だけが通すパスが在れば、そのパスは
+   「木では読めないのに索引では読める」ものになる。同じ入力からは同じ集合が出ること、
+   そして断る決まりが両方で同じであることを、ここで固定する。 */
+describe('索引から作る範囲', () => {
+  const observedFiles = new Set([ALPHA_MAIN, ALPHA_CHILD, BETA_MAIN]);
+  const fromStubs = fromIndex(
+    index([stub(ALPHA_SLUG, ALPHA_PATH), stub(BETA_SLUG, BETA_PATH)]),
+    observedFiles,
+  );
+
+  it('木から作る範囲と同じものを通す', () => {
+    expect([...fromStubs.projectsById].sort()).toEqual([...scope.projectsById].sort());
+    expect([...fromStubs.transcriptFiles].sort()).toEqual([...scope.transcriptFiles].sort());
+  });
+
+  it('知らない id は、木のときと同じ断り方をする', () => {
+    expect(codeOf(resolveProject(fromStubs, '-Users-me-work-gamma'))).toBe('project.not_observed');
+    expect(codeOf(resolveProject(fromStubs, ALPHA_PATH))).toBe('project.not_observed');
+    expect(codeOf(resolveProject(fromStubs, `../${ALPHA_SLUG}`))).toBe('project.not_observed');
+  });
+
+  it('正規化すると表記が変わるパスは覚えない', () => {
+    const forged = fromIndex(
+      index([
+        stub('-forged', `${ALPHA_PATH}/../../../../etc`),
+        stub('-linked', `${ALPHA_PATH}/link/../secrets`),
+        stub('-nameless', null),
+      ]),
+      new Set(),
+    );
+    expect(forged.projectsById.size, '書かれた文字列は観測ではない').toBe(0);
+  });
+
+  it('渡された `transcript` でも、正規化すると表記が変わるものは入れない', () => {
+    const folded = fromIndex(
+      index([stub(ALPHA_SLUG, ALPHA_PATH)]),
+      new Set([
+        `${ROOT}/${ALPHA_SLUG}/../${ALPHA_SLUG}/s1.jsonl`,
+        `${ROOT}//${ALPHA_SLUG}/s2.jsonl`,
+      ]),
+    );
+    expect(
+      folded.transcriptFiles.size,
+      '覚える側で正規化するのも、照らす側で正規化するのと同じ穴である',
+    ).toBe(0);
+    expect(allowsTranscript(folded, ALPHA_MAIN)).toBe(false);
+  });
+
+  it('`transcript` は渡された集合から取る', () => {
+    /* 走査結果をそのまま入れると、子として数えない名前のファイルまで通る。
+       範囲に入るのは、索引を組んだ側が `transcript` として数えたものだけである。 */
+    const narrow = fromIndex(index([stub(ALPHA_SLUG, ALPHA_PATH)]), new Set([ALPHA_MAIN]));
+    expect(allowsTranscript(narrow, ALPHA_MAIN)).toBe(true);
+    expect(allowsTranscript(narrow, ALPHA_CHILD)).toBe(false);
+    expect(allowsTranscript(narrow, `${ROOT}/${ALPHA_SLUG}/s1/subagents/other.jsonl`)).toBe(false);
   });
 });

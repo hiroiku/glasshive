@@ -85,6 +85,9 @@ pre {
 .gc-name,
 .lnk,
 .lbl,
+.brstate,
+.mschip,
+.msbr,
 .mg-node {
   appearance: none;
   background: none;

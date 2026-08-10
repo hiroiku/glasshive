@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { QUOTA_WINDOW_MS, WINDOWS } from '~/frameworks/tanstack/ui/derive/timeWindow.ts';
 import {
   binUsage,
   byModel,
+  FEET,
+  footFor,
   gridOf,
   MAX_BARS,
   quotaWindow,
   spendOf,
   totalsOf,
+  WINDOW_MS,
 } from '~/frameworks/tanstack/ui/derive/usage.ts';
 
 /* 消費のバケットから画面に出す形を導く。
@@ -62,6 +66,38 @@ describe('足のグリッドを組む', () => {
 
     expect(bars).toBeLessThanOrEqual(MAX_BARS);
     expect(NOW - fromMs).toBeLessThanOrEqual(7 * 86_400_000);
+  });
+
+  it('範囲を渡さなければ、素材が遡れるところまでを見る', () => {
+    expect(gridOf(NOW, 15 * 60_000)).toEqual(gridOf(NOW, 15 * 60_000, WINDOW_MS));
+  });
+
+  it('5 時間を頼まれたら、足 × 本数がちょうど 5 時間になる', () => {
+    const footMs = footFor(QUOTA_WINDOW_MS);
+    const { fromMs, bars } = gridOf(NOW, footMs, QUOTA_WINDOW_MS);
+
+    expect(footMs * bars).toBe(QUOTA_WINDOW_MS);
+    // 現在は最後の 1 本の中に居る。前へずれると、いま消費しているぶんが図から落ちる
+    expect(NOW).toBeGreaterThanOrEqual(fromMs + (bars - 1) * footMs);
+    expect(NOW).toBeLessThan(fromMs + bars * footMs);
+  });
+
+  it('素材が遡れるより広い範囲を頼まれても、広げて答えない', () => {
+    const footMs = footFor(WINDOW_MS);
+    const { fromMs, bars } = gridOf(NOW, footMs, 30 * 86_400_000);
+
+    expect(footMs * bars).toBeLessThanOrEqual(WINDOW_MS);
+    expect(NOW - fromMs).toBeLessThanOrEqual(WINDOW_MS);
+  });
+
+  it('範囲を選んでも、足の境目はキリの良い時刻のまま', () => {
+    const footMs = footFor(QUOTA_WINDOW_MS);
+    const { fromMs } = gridOf(NOW, footMs, QUOTA_WINDOW_MS);
+
+    const midnight = new Date(NOW);
+    midnight.setHours(0, 0, 0, 0);
+    // 負の余りの 0 は -0 になるので、符号は問わない
+    expect(Math.abs((fromMs - midnight.getTime()) % footMs)).toBe(0);
   });
 });
 
@@ -144,5 +180,34 @@ describe('内訳を束ねる', () => {
     const sum = totalsOf([bucket({ i: 1, o: 2, cr: 3, cw: 4 }), bucket({ i: 10 })]);
 
     expect(sum).toEqual({ total: 17, input: 11, output: 2, cacheRead: 3, cacheWrite: 4 });
+  });
+});
+
+describe('見る幅と足', () => {
+  const NOW = Date.parse('2026-08-09T12:34:56.000Z');
+
+  it.each(
+    WINDOWS.filter((preset) => typeof preset.key === 'number').map(
+      (preset) => [preset.label, preset.key as number] as const,
+    ),
+  )('%s は足 × 本数でちょうど覆える', (_label, spanMs) => {
+    const footMs = footFor(spanMs);
+    const { bars } = gridOf(NOW, footMs, spanMs);
+
+    expect(bars).toBeLessThanOrEqual(MAX_BARS);
+    expect(footMs * bars, '頼まれた幅より狭くも広くもしない').toBe(spanMs);
+  });
+
+  it('足は用意してあるものから選ぶ', () => {
+    const picked = WINDOWS.filter((preset) => typeof preset.key === 'number').map((preset) =>
+      footFor(preset.key as number),
+    );
+
+    expect(picked.every((footMs) => FEET.some((foot) => foot.key === footMs))).toBe(true);
+  });
+
+  it('覆えるなかでいちばん短い足を選ぶ', () => {
+    expect(footFor(QUOTA_WINDOW_MS), '5 時間は 5m 足 60 本で覆える').toBe(5 * 60_000);
+    expect(footFor(WINDOW_MS), '7 日を 72 本以内で覆えるのは 4h 足から').toBe(4 * 3_600_000);
   });
 });

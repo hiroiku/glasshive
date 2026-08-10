@@ -3,6 +3,7 @@ import {
   buildEdges,
   buildHierarchy,
   childProgress,
+  relatedIndex,
   startRanker,
 } from '~/frameworks/tanstack/ui/derive/issueTree.ts';
 
@@ -28,6 +29,9 @@ const issue = (id: string, over: Partial<Issue> = {}): Issue => ({
   created_at: null,
   updated_at: null,
   deps: [],
+  deps_complete: true,
+  github: null,
+
   ...over,
 });
 
@@ -85,7 +89,26 @@ describe('依存を弧にする', () => {
     ]);
 
     expect(edges).toHaveLength(1);
-    expect(edges[0]).toMatchObject({ a: 0, b: 1, to: 0, type: 'blocks' });
+    expect(edges[0]).toMatchObject({ a: 0, b: 1, to: 1, type: 'blocks' });
+  });
+
+  /* 依存の向きをそのまま描くと、矢は「何を待っているか」を指す。読みたいのは着手の順である。 */
+  it('矢を上から下へ辿ると、着手順になる', () => {
+    const { edges } = buildEdges([issue('a'), issue('b', { deps: [dep('a', 'blocks')] })]);
+
+    expect(edges[0]?.to, '矢じりは、堰き止めている `a` ではなく、待っている `b` の側に付く').toBe(
+      1,
+    );
+  });
+
+  it('待っている行が上に在っても、矢じりはその行の側に付く', () => {
+    const { edges } = buildEdges([issue('b', { deps: [dep('a', 'blocks')] }), issue('a')]);
+
+    expect(edges[0], '`to` は行の上下ではなく、依存を持っている行の添字である').toMatchObject({
+      a: 0,
+      b: 1,
+      to: 0,
+    });
   });
 
   it('重なる弧は別のトラックへ寄せる', () => {
@@ -166,5 +189,49 @@ describe('束ねた課題の消化', () => {
     const progress = childProgress([issue('c1', { deps: [dep('epic', 'blocks')] })]);
 
     expect(progress.size).toBe(0);
+  });
+});
+
+/* ホバーで残すのは「この課題と関わりのある行」であって、依存の向きではない。 */
+describe('行どうしの繋がり', () => {
+  const related = (index: ReturnType<typeof relatedIndex>, id: string) => [
+    ...(index.get(id) ?? []),
+  ];
+
+  it('依存は両向きとも入る', () => {
+    const index = relatedIndex([issue('a'), issue('b', { deps: [dep('a', 'blocks')] })]);
+
+    expect(related(index, 'b')).toEqual(['a']);
+    expect(related(index, 'a'), '向きで分けると、自分を待っている課題が沈む').toEqual(['b']);
+  });
+
+  /* 親子は階層で見せるが、繋がりであることに変わりはない。 */
+  it('親子も繋がりとして残る', () => {
+    const index = relatedIndex([issue('a'), issue('b', { deps: [dep('a', 'parent-child')] })]);
+
+    expect(related(index, 'a')).toEqual(['b']);
+  });
+
+  it('一覧に出ていない相手は入らない', () => {
+    const index = relatedIndex([issue('b', { deps: [dep('gone', 'blocks')] })]);
+
+    expect(index.get('b'), '画面の外へは線を引かない').toBeUndefined();
+    expect(index.get('gone')).toBeUndefined();
+  });
+
+  it('自分自身は入らない', () => {
+    const index = relatedIndex([issue('a', { deps: [dep('a', 'blocks')] })]);
+
+    expect(index.get('a'), '自分に繋がっていると、ホバーで一覧の何も絞れない').toBeUndefined();
+  });
+
+  it('相手が複数居ても、取りこぼさない', () => {
+    const index = relatedIndex([
+      issue('a'),
+      issue('b', { deps: [dep('a', 'blocks')] }),
+      issue('c', { deps: [dep('a', 'parent-child')] }),
+    ]);
+
+    expect(related(index, 'a').sort()).toEqual(['b', 'c']);
   });
 });

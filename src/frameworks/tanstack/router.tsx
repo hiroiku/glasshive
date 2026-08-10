@@ -1,6 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { routeTree } from './routeTree.gen';
+import { NotObserved } from './ui/components/primitives/NotObserved.tsx';
+import { ReadProgress } from './ui/components/primitives/ReadProgress.tsx';
+import { crashTrouble, routeTrouble } from './ui/derive/trouble.ts';
 
 /* ルーターの組み立て。
 
@@ -32,10 +35,17 @@ export function getRouter() {
        **これを置かないと、シェルは空のままビルドされる。** ブラウザーは hydrate のときに
        ルートの中身を描くので、空のシェルと食い違い、React が DOM を丸ごと作り直す。
        同じものを両側で描かせておけば、hydrate は静かに済む。 */
-    defaultPendingComponent: () => <p className="empty">Loading…</p>,
+    defaultPendingComponent: () => <ReadProgress label="Starting glasshive" />,
     /* 待ちの表示を、間を置いてからではなく最初から出す。HTML シェルには既に描かれて
        いるので、ここで間を置くと、その間だけブラウザー側が空になって食い違う。 */
     defaultPendingMs: 0,
+
+    /* 落ちたときと、無い URL を開いたとき。**ルーターの既定の画面をそのまま出さない** ——
+       素の英文とスタックだけが出て、観測できなかったのか glasshive が壊れたのかが読み分けられない。 */
+    defaultErrorComponent: ({ error }) => <NotObserved {...crashTrouble(error)} />,
+    defaultNotFoundComponent: () => (
+      <NotObserved {...routeTrouble(globalThis.location?.pathname ?? '')} />
+    ),
 
     context: { queryClient },
     Wrap: ({ children }) => (

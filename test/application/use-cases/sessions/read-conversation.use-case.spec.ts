@@ -5,8 +5,7 @@ import type {
   TranscriptEventsRepository,
   TranscriptPage,
 } from '~/application/ports/repositories/sessions/transcript-events.repository.ts';
-import type { TreeSnapshotService } from '~/application/services/sessions/tree-snapshot.service.ts';
-import type { ProjectTree } from '~/application/use-cases/sessions/observe-tree.use-case.ts';
+import type { TranscriptIndexService } from '~/application/services/sessions/transcript-index.service.ts';
 import { createReadConversation } from '~/application/use-cases/sessions/read-conversation.use-case.ts';
 
 /* 会話を読む呼び出しを、受けてよいかどうか。
@@ -17,76 +16,32 @@ import { createReadConversation } from '~/application/use-cases/sessions/read-co
 const OBSERVED_FILE = '/nest/projects/a/session.jsonl';
 const OBSERVED_SUB = '/nest/projects/a/session/subagents/sub.jsonl';
 
-function treeWith(files: readonly string[]): ProjectTree {
-  const [first, ...rest] = files;
-  return {
-    generatedAtMs: 0,
-    activeThresholdMs: 60_000,
-    sources: observed(1),
-    processes: observed(0),
-    projects: [
-      {
-        id: 'a',
-        slugs: ['a'],
-        path: '/nest/a',
-        canonicalPath: '/nest/a',
-        name: 'a',
-        liveProcessCount: 0,
-        latestActivityMs: 0,
-        recentTokens: observed(0),
-        sessions:
-          first === undefined
-            ? []
-            : [
-                {
-                  id: 'session',
-                  file: first,
-                  state: 'ended',
-                  awaiting: null,
-                  title: null,
-                  startedRaw: null,
-                  lastActivityMs: 0,
-                  ownMtimeMs: 0,
-                  tokens: observed(0),
-                  model: null,
-                  effort: null,
-                  gitBranch: null,
-                  cwd: null,
-                  actor: null,
-                  issues: [],
-                  current: null,
-                  activity: observed({ intervals: [], complete: true }),
-                  sizeBytes: 0,
-                  subagents: rest.map((file, index) => ({
-                    id: `sub-${index}`,
-                    label: `sub-${index}`,
-                    agentType: null,
-                    name: null,
-                    toolUseId: null,
-                    parentId: null,
-                    depth: 1,
-                    file,
-                    state: 'ended' as const,
-                    startedRaw: null,
-                    lastActivityMs: 0,
-                    tokens: observed(0),
-                    model: null,
-                    effort: null,
-                    gitBranch: null,
-                    cwd: null,
-                    issue: null,
-                    current: null,
-                    activity: observed({ intervals: [], complete: true }),
-                  })),
-                },
-              ],
+/* 観測できた `transcript` だけを持つ索引。**この use-case が見るのはこれだけである。**
+   会話を読むのに要るのは「そのパスを観測したか」で、木を組む必要はどこにも無い。 */
+const indexWith = (files: readonly string[]): TranscriptIndexService => ({
+  get: async () =>
+    ok({
+      index: {
+        generatedAtMs: 0,
+        activeThresholdMs: 60_000,
+        sources: observed(1),
+        processes: observed(0),
+        stubs: [
+          {
+            id: 'a',
+            slugs: ['a'],
+            path: '/nest/a',
+            canonicalPath: '/nest/a',
+            name: 'a',
+            liveProcessCount: 0,
+            latestActivityMs: 0,
+            transcriptCount: files.length,
+          },
+        ],
       },
-    ],
-  };
-}
-
-const snapshotOf = (tree: ProjectTree): TreeSnapshotService => ({
-  get: async () => ok(tree),
+      transcriptFiles: new Set(files),
+      groups: [],
+    }),
   invalidate: () => undefined,
 });
 
@@ -107,7 +62,7 @@ describe('会話を 1 ページぶん読む', () => {
   it('観測した `transcript` なら開く', async () => {
     const events = spyEvents();
     const useCase = createReadConversation({
-      tree: snapshotOf(treeWith([OBSERVED_FILE])),
+      index: indexWith([OBSERVED_FILE]),
       events,
     });
 
@@ -120,7 +75,7 @@ describe('会話を 1 ページぶん読む', () => {
   it('サブエージェントの `transcript` も開く', async () => {
     const events = spyEvents();
     const useCase = createReadConversation({
-      tree: snapshotOf(treeWith([OBSERVED_FILE, OBSERVED_SUB])),
+      index: indexWith([OBSERVED_FILE, OBSERVED_SUB]),
       events,
     });
 
@@ -133,7 +88,7 @@ describe('会話を 1 ページぶん読む', () => {
   it('観測していないパスは断る', async () => {
     const events = spyEvents();
     const useCase = createReadConversation({
-      tree: snapshotOf(treeWith([OBSERVED_FILE])),
+      index: indexWith([OBSERVED_FILE]),
       events,
     });
 
@@ -150,7 +105,7 @@ describe('会話を 1 ページぶん読む', () => {
   it('観測した `transcript` の隣に置いただけのものは通さない', async () => {
     const events = spyEvents();
     const useCase = createReadConversation({
-      tree: snapshotOf(treeWith([OBSERVED_FILE])),
+      index: indexWith([OBSERVED_FILE]),
       events,
     });
 
@@ -169,7 +124,7 @@ describe('会話を 1 ページぶん読む', () => {
   it('`..` を含むパスは、正規化せずに断る', async () => {
     const events = spyEvents();
     const useCase = createReadConversation({
-      tree: snapshotOf(treeWith([OBSERVED_FILE])),
+      index: indexWith([OBSERVED_FILE]),
       events,
     });
 

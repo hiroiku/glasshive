@@ -1,10 +1,14 @@
+import { scaleLinear } from 'd3-scale';
+import { area as areaOf, curveStepAfter, line as lineOf } from 'd3-shape';
 import { mdhm } from '../../format.ts';
 import { useChartHover } from '../../hooks/useChartHover.ts';
+import { TimeTicks } from '../primitives/TimeTicks.tsx';
 
 /* 同時に動いていたエージェントの数。
 
    階段状の面で描くのは、**この数が整数だから**である。滑らかに繋ぐと、
-   3 と 4 の間に「3.5 エージェント」の時間が在ったように見える。 */
+   3 と 4 の間に「3.5 エージェント」の時間が在ったように見える。`d3-shape` の
+   `curveStepAfter` がその階段そのもので、高さの物差しは `d3-scale` が持つ。 */
 
 export interface ConcurrencyPanelProps {
   readonly counts: readonly number[];
@@ -28,13 +32,21 @@ export function ConcurrencyPanel({
   const peak = Math.max(0, ...counts);
   const ceiling = Math.max(1, peak);
 
-  const yOf = (value: number) => 55 - (value / ceiling) * 50;
-  const top = counts
-    .flatMap((value, index) => [`${index * 10},${yOf(value)}`, `${(index + 1) * 10},${yOf(value)}`])
-    .join(' ');
-  const area = `M 0 56 ${counts
-    .map((value, index) => `L ${index * 10} ${yOf(value)} L ${(index + 1) * 10} ${yOf(value)}`)
-    .join(' ')} L ${bars * 10} 56 Z`;
+  const y = scaleLinear().domain([0, ceiling]).range([55, 5]);
+  const x = scaleLinear()
+    .domain([0, counts.length])
+    .range([0, bars * 10]);
+  const stepArea = areaOf<number>()
+    .x((_, index) => x(index))
+    .y0(56)
+    .y1((value) => y(value))
+    .curve(curveStepAfter);
+  const stepLine = lineOf<number>()
+    .x((_, index) => x(index))
+    .y((value) => y(value))
+    .curve(curveStepAfter);
+  const area = stepArea([...counts]) ?? '';
+  const top = stepLine([...counts]) ?? '';
 
   const at = hover.at;
 
@@ -60,7 +72,7 @@ export function ConcurrencyPanel({
         >
           <title>Agents concurrent over time</title>
           <path d={area} className="sf-carea" />
-          <polyline points={top} className="sf-cline" />
+          <path d={top} className="sf-cline" />
         </svg>
 
         {at !== null && (
@@ -84,12 +96,8 @@ export function ConcurrencyPanel({
         )}
       </div>
 
-      {/* 目盛りは Tokens と同じ表記で揃える。2 枚は同じ `footMs` と同じ期間を見ている */}
-      <div className="sf-ticks">
-        <span>{mdhm(fromMs)}</span>
-        <span>{mdhm(fromMs + (nowMs - fromMs) / 2)}</span>
-        <span>{mdhm(nowMs)}</span>
-      </div>
+      {/* 目盛りは Tokens と同じものを使う。2 枚は同じ `footMs` と同じ期間を見ている */}
+      <TimeTicks fromMs={fromMs} toMs={nowMs} />
     </div>
   );
 }

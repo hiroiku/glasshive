@@ -3,7 +3,10 @@ import type { AppError } from '~/app-kernel/error.ts';
 import { isSafeAbsolutePath } from '~/app-kernel/path.ts';
 import { err, ok, type Result } from '~/app-kernel/result.ts';
 import { ProjectNotObservedError } from '~/application/errors/sessions/not-observed.error.ts';
-import type { ProjectTree } from '~/domain/entities/sessions/observed-project.entity.ts';
+import type {
+  ProjectIndex,
+  ProjectTree,
+} from '~/domain/entities/sessions/observed-project.entity.ts';
 import type { ReadableScope } from '~/domain/entities/workspace/readable-scope.entity.ts';
 
 /* 読んでよいパスを、観測した木 1 枚から作る。
@@ -50,6 +53,35 @@ export function fromTree(tree: ProjectTree): ReadableScope {
     for (const session of project.sessions) {
       addTranscript(session.file);
       for (const subagent of session.subagents) addTranscript(subagent.file);
+    }
+  }
+
+  return { projectsById, transcriptFiles };
+}
+
+/* 読んでよいパスを、中身を読む前の索引から作る。
+
+   **`fromTree` と同じ既定拒否の集合を作る。** 木から作る範囲と食い違うと、木では読めない
+   ファイルが索引では読める、という穴になる。だから `transcript` の集合は索引を組んだ側から
+   受け取る — 走査結果をそのまま入れると、子として数えない名前のファイルまで通る。 */
+export function fromIndex(
+  index: ProjectIndex,
+  observedTranscripts: ReadonlySet<string>,
+): ReadableScope {
+  const projectsById = new Map<string, string>();
+  const transcriptFiles = new Set<string>();
+
+  for (const file of observedTranscripts) {
+    // パスとして使えない文字列は、この先どこへも渡さない
+    if (!isSafeAbsolutePath(file) || !isFolded(file)) continue;
+    transcriptFiles.add(file);
+  }
+
+  for (const stub of index.stubs) {
+    /* パスの分からないプロジェクトは引けないままにする。当てずっぽうのパスを与えない。 */
+    const location = stub.canonicalPath;
+    if (location !== null && isSafeAbsolutePath(location) && isFolded(location)) {
+      projectsById.set(stub.id, location);
     }
   }
 

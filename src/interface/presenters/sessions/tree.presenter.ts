@@ -3,6 +3,8 @@ import type {
   ActivityIntervalSet,
   AwaitingKind,
   ObservedProject,
+  ProjectIndex,
+  ProjectStub,
   ProjectTree,
   SessionState,
   SubagentSession,
@@ -103,6 +105,12 @@ export interface ProjectJson {
   tokens_24h: number | null;
   /** 数が無いとき、静かだったのか観測できなかったのかを分ける */
   tokens_24h_state: ObservationState;
+  /* この行の中身を読み終えているか。**読む前と読んだ後を、画面が見分けられるようにする。**
+
+     読む前の行にも `id` も名前もパスも入っている(索引で確定している)が、セッションは空で
+     数値は `null` である。この欄が無いと、画面はそれを「静かなプロジェクト」として描く —
+     まだ観測していないことを、何も動いていないことと言い換えてしまう。 */
+  read: boolean;
   sessions: SessionJson[];
 }
 
@@ -115,8 +123,41 @@ export interface TreeJson {
   /* 生きているプロセスを数えられたか。数えられなくても木は返るので、
      数が 0 なのか数え損ねたのかは、この欄でしか分からない。 */
   processes: ObservationStatusJson;
+  /* 全部の行を読み終えたか。**`false` の間、この木から数えたものは断定に使えない。**
+
+     並んでいる行そのものは索引で確定しているので増えも減りもしないが、1 行ごとの数値は
+     まだ揃っていない。合計も絞り込みも並べ替えも、読み終えた行しか見ていない。 */
+  complete: boolean;
+  /* どこまで読んだか。読み終えていれば `null`。
+
+     数えるのは `transcript` の本数である。**バイト数では数えない** — 読み取り範囲に上限が
+     掛かっているので、読む量はファイルの大きさに比例しない。 */
+  progress: TreeProgressJson | null;
   projects: ProjectJson[];
 }
+
+/** 読み終えた `transcript` の数と、索引が数えた総数 */
+export interface TreeProgressJson {
+  read_transcripts: number;
+  total_transcripts: number;
+}
+
+/* ストリームに流れる 1 つ。
+
+   **木が丸ごと 1 枚、必ず先に来る。** そこに行が全部入っているので、後から届く
+   プロジェクトは既に在る行を埋めるだけになり、行が増えも減りも改名もしない。
+
+   `tree` が運ぶのは、まだ中身を読んでいない索引のときと、覚えていた 1 枚をそのまま
+   返すときの両方である。どちらなのかは `TreeJson.complete` が言う。 */
+export type TreeChunkJson =
+  | { kind: 'tree'; tree: TreeJson }
+  | {
+      kind: 'project';
+      project: ProjectJson;
+      read_transcripts: number;
+      total_transcripts: number;
+    }
+  | { kind: 'complete' };
 
 /* エポックのミリ秒を、秒までの表記にする。
 
@@ -212,7 +253,7 @@ const presentSession = (session: TranscriptSession): SessionJson => ({
   subagents: session.subagents.map(presentSubagent),
 });
 
-const presentProject = (project: ObservedProject): ProjectJson => ({
+export const presentProject = (project: ObservedProject): ProjectJson => ({
   id: project.id,
   slug: project.id,
   path: project.path,
@@ -221,8 +262,42 @@ const presentProject = (project: ObservedProject): ProjectJson => ({
   live_process_count: project.liveProcessCount,
   tokens_24h: tokensOf(project.recentTokens),
   tokens_24h_state: project.recentTokens.kind,
+  read: true,
   sessions: project.sessions.map(presentSession),
 });
+
+/* 中身を読む前の行。**識別だけが入っていて、数値は入っていない。**
+
+   `tokens_24h` に `0` を置かない。読んでいないことを「消費が無かった」と書くのは、
+   `absent` と `unobservable` の取り違えが欄の中で起きているのと同じである。 */
+const presentStub = (stub: ProjectStub): ProjectJson => ({
+  id: stub.id,
+  slug: stub.id,
+  path: stub.path,
+  name: stub.name,
+  live_process: stub.liveProcessCount > 0,
+  live_process_count: stub.liveProcessCount,
+  tokens_24h: null,
+  tokens_24h_state: 'absent',
+  read: false,
+  sessions: [],
+});
+
+/* 索引 1 枚を、まだ 1 行も読んでいない木として写す。
+
+   **`active_threshold_secs` を捏造しない。** 索引もこの値を持っているので、そのまま写す。 */
+export function presentIndexTree(index: ProjectIndex): TreeJson {
+  const total = index.stubs.reduce((sum, stub) => sum + stub.transcriptCount, 0);
+  return {
+    generated_at: iso(index.generatedAtMs),
+    active_threshold_secs: Math.round(index.activeThresholdMs / 1000),
+    sources: statusOf(index.sources),
+    processes: statusOf(index.processes),
+    complete: false,
+    progress: { read_transcripts: 0, total_transcripts: total },
+    projects: index.stubs.map(presentStub),
+  };
+}
 
 export function presentTree(tree: ProjectTree): TreeJson {
   return {
@@ -231,6 +306,9 @@ export function presentTree(tree: ProjectTree): TreeJson {
     active_threshold_secs: Math.round(tree.activeThresholdMs / 1000),
     sources: statusOf(tree.sources),
     processes: statusOf(tree.processes),
+    // 1 枚で返す経路は、返した時点で全部を読み終えている
+    complete: true,
+    progress: null,
     projects: tree.projects.map(presentProject),
   };
 }

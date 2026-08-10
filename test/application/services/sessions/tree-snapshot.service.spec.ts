@@ -39,6 +39,7 @@ function scene() {
           pending.push(() => resolve(ok(tree(at))));
         });
       },
+      observe: streamOf(tree),
     },
   });
 
@@ -59,6 +60,27 @@ function scene() {
     },
   };
 }
+
+/* この service が見るのは `execute` だけである。`observe` は形を満たすためだけに置く。
+   置かずに済ませられないのは、逐次で配る経路と 1 枚で返す経路が同じ use-case に
+   同居しているからで、それは「導出を 2 本持たない」ための同居である。 */
+const streamOf = (build: (at: number) => ProjectTree) =>
+  async function* (nowMs: number) {
+    const built = build(nowMs);
+    /* 索引を先に配るのは本物と同じである。この木はプロジェクトを持たないので、
+       行の無い索引を配るのが正確な写しになる。 */
+    yield {
+      kind: 'index' as const,
+      index: {
+        generatedAtMs: built.generatedAtMs,
+        activeThresholdMs: built.activeThresholdMs,
+        sources: built.sources,
+        processes: built.processes,
+        stubs: [],
+      },
+    };
+    return ok(built);
+  };
 
 describe('ひと目ぶんの観測を分け合う', () => {
   it('短い間は走査し直さない', async () => {
@@ -110,6 +132,7 @@ describe('ひと目ぶんの観測を分け合う', () => {
           calls++;
           return calls === 1 ? err(refused) : ok(tree(at));
         },
+        observe: streamOf(tree),
       },
     });
 
@@ -129,6 +152,20 @@ describe('ひと目ぶんの観測を分け合う', () => {
     expect(a).toBe(b);
   });
 
+  it('覚えている 1 枚が在るなら、`stream` は 1 つも配らずにそれを返す', async () => {
+    const s = scene();
+    await s.snapshot.get();
+
+    const step = await s.snapshot.stream().next();
+    if (!step.done) throw new Error('覚えている 1 枚が在るのに、途中経過を配り直した');
+
+    expect(s.walks, '既に全部が在るので走査し直さない').toBe(1);
+    /* 返るのは、配らなかった木そのものである。**受け取る側はこれを配る責任を負う** ——
+       読み終えたことだけを伝えると、受け取る側は初期値のまま読み終えたことになり、
+       プロジェクトが 1 つも無い木を描く。 */
+    expect(step.value).toEqual(ok(tree(1000)));
+  });
+
   it('走査が投げても、次の呼び出しで詰まらない', async () => {
     let calls = 0;
     const snapshot = createTreeSnapshot({
@@ -140,6 +177,7 @@ describe('ひと目ぶんの観測を分け合う', () => {
           if (calls === 1) throw new Error('走査できなかった');
           return ok(tree(at));
         },
+        observe: streamOf(tree),
       },
     });
     await expect(snapshot.get()).rejects.toThrow('走査できなかった');

@@ -93,6 +93,7 @@ const project = (sessions: SessionJson[]): ProjectJson => ({
   live_process_count: 0,
   tokens_24h: null,
   tokens_24h_state: 'observed',
+  read: true,
   sessions,
 });
 

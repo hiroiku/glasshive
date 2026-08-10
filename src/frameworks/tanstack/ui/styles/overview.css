@@ -1,5 +1,3 @@
-/* ---------- 横断ダッシュボード(/) ---------- */
-
 /* ---------- 横断ダッシュボード('/') ---------- */
 #dash {
   flex: 1;
@@ -24,7 +22,7 @@ p.warn {
   border-radius: 6px;
   padding: 6px 12px;
   margin-bottom: 10px;
-  max-width: 1160px;
+  max-width: 1400px;
 }
 .dash-head {
   display: flex;
@@ -51,15 +49,15 @@ p.warn {
 .dash-sum b.input {
   color: var(--input);
 }
-/* 左端にピン留めの列を置くので、列は 8 本になる。
+/* 左端にピン留めの列を置くので、列は 9 本になる。
    行の属性として状態の点と並べて読めるようにしてある(右端だと消す操作に見える) */
 .dash-grid {
   display: grid;
   grid-template-columns:
     max-content minmax(180px, max-content) max-content max-content max-content max-content
-    minmax(140px, 1fr) max-content;
+    minmax(90px, 0.6fr) minmax(180px, 1.4fr) max-content;
   column-gap: 22px;
-  max-width: 1160px;
+  max-width: 1400px;
 }
 .dash-row {
   display: grid;
@@ -108,6 +106,32 @@ p.warn {
   bottom: 0;
   background: rgba(96, 165, 250, 0.55);
   border-radius: 4px;
+}
+
+/* プロジェクトの中で動いていた時間。行をまたいで同じ軸に載っているので、並べて比べられる */
+.dash-act {
+  position: relative;
+  height: 10px;
+  background: rgba(42, 52, 65, 0.35);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.dash-act i {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  background: var(--active);
+  border-radius: 1px;
+  opacity: 0.75;
+}
+/* 全部を見られていないトラック。**途切れた絵をそのまま出さない** —
+   読めなかった時間が「静かだった時間」として並ぶ */
+.dash-act.cut {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(42, 52, 65, 0.35) 0 4px,
+    rgba(251, 191, 36, 0.12) 4px 8px
+  );
 }
 .dash-name {
   color: inherit;
@@ -164,4 +188,28 @@ p.warn {
 }
 #notify-toggle.on {
   filter: none;
+}
+
+/* 一覧の凡例の見本。**行に出るものと同じ描き方から採る** — 作り直すと本物とずれる */
+.legend-bar i.lg-bar,
+.legend-bar i.lg-act {
+  width: 22px;
+  height: 8px;
+  border-radius: 2px;
+  flex: none;
+}
+.legend-bar i.lg-bar {
+  background: rgba(96, 165, 250, 0.55);
+}
+.legend-bar i.lg-act {
+  background: var(--active);
+  opacity: 0.75;
+}
+.legend-bar i.lg-act.cut {
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(42, 52, 65, 0.35) 0 4px,
+    rgba(251, 191, 36, 0.12) 4px 8px
+  );
+  opacity: 1;
 }

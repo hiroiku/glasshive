@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import viteReact from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
@@ -30,9 +31,26 @@ export default defineConfig({
         resolve: { alias },
       },
       {
-        // 画面。`vite.config.ts` は継いでいない — `tanstackStart` はルートの生成と
-        // エントリーの解決を伴うので、テストランナーに混ぜると壊れる。
-        plugins: [viteReact()],
+        /* 画面。`vite.config.ts` は継がず、要るプラグインだけを並べ直す。
+
+           `tanstackStart` を入れてあるのは、ルートのファイルが `createFileRoute` を
+           そのままでは解決できないからである。**エントリーと出力の指定は `vite.config.ts` と
+           揃えておく** — 揃えないと、テストの側が別の場所へルートの木を書き出す。 */
+        plugins: [
+          tanstackStart({
+            srcDirectory: 'src',
+            start: { entry: './frameworks/tanstack/start.ts' },
+            router: {
+              entry: './frameworks/tanstack/router.tsx',
+              routesDirectory: 'frameworks/tanstack/routes',
+              generatedRouteTree: 'frameworks/tanstack/routeTree.gen.ts',
+            },
+            client: { entry: './frameworks/tanstack/client.tsx' },
+            server: { entry: './frameworks/tanstack/server.ts' },
+            spa: { enabled: true },
+          }),
+          viteReact(),
+        ],
         test: {
           name: 'ui',
           pool,

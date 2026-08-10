@@ -67,6 +67,10 @@ function toSummary(record: JsonRecord, status: string): IssueSummary {
     createdAt: asString(record, 'created_at') ?? null,
     updatedAt: asString(record, 'updated_at') ?? null,
     deps: toDependencies(record),
+    // ファイルの台帳はいつも全部を読むので、掛かっている先が欠けることはない
+    depsComplete: true,
+    // GitHub にしか無い欄。台帳には書かれていない
+    github: null,
     // description はここに載せない。1 件を引くときだけ全部を返す
   };
 }
@@ -93,7 +97,8 @@ export function parseLedger(text: string, options: { includeClosed: boolean }): 
     issues.push(toSummary(record, status));
   }
 
-  return { issues, counts };
+  // ファイルの台帳は全部を読む。読み取り範囲を掛けないので、切れる余地が無い
+  return { issues, counts, truncated: false };
 }
 
 /* 1 件を引く。見付からなければ投げずに `null` を返す。

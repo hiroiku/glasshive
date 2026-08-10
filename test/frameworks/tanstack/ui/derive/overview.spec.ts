@@ -5,10 +5,12 @@ import {
   deriveRows,
   dotStateOf,
   filterRows,
+  holdOrder,
   type OverviewRow,
   sortRows,
   tokensCeiling,
   totalsOf,
+  unionSpans,
   withinSpan,
 } from '~/frameworks/tanstack/ui/derive/overview.ts';
 
@@ -85,6 +87,7 @@ function project(overrides: Partial<ProjectJson> = {}): ProjectJson {
     live_process_count: 0,
     tokens_24h: 0,
     tokens_24h_state: 'observed',
+    read: true,
     sessions: [session()],
     ...overrides,
   };
@@ -96,6 +99,7 @@ function row(overrides: Partial<OverviewRow> = {}): OverviewRow {
     name: 'p',
     path: '/work/p',
     parent: null,
+    read: true,
     active: 0,
     waiting: 0,
     input: 0,
@@ -103,6 +107,8 @@ function row(overrides: Partial<OverviewRow> = {}): OverviewRow {
     tokens24hState: 'observed',
     lastActivityMs: T,
     liveProcess: false,
+    spans: [],
+    spansComplete: true,
     ...overrides,
   };
 }
@@ -382,7 +388,19 @@ describe('バーと合計', () => {
       input: 1,
       tokens: 150,
       tokensPartial: false,
+      partial: false,
     });
+  });
+
+  it('読んでいない行は、どの合計にも足さない', () => {
+    const totals = totalsOf([
+      row({ active: 1, waiting: 2, input: 1, tokens24h: 100 }),
+      row({ read: false, active: null, waiting: null, input: null, tokens24h: null }),
+    ]);
+
+    expect(totals.active, '読んでいない行を 0 として足すと、合計が最終の数に見える').toBe(1);
+    expect(totals.partial, '数え落とした行が在ることを黙らない').toBe(true);
+    expect(totals.tokensPartial, '欠けのある合計に「これで全部だ」という顔をさせない').toBe(true);
   });
 
   it('読めないプロジェクトが混ざったら、合計が全部でないことを示す', () => {
@@ -402,5 +420,104 @@ describe('バーと合計', () => {
     ]);
 
     expect(totals.tokensPartial, '静かだったことは分かっている').toBe(false);
+  });
+});
+
+/* ピンは行を狙って押す操作なので、狙った行がその瞬間に動くと押し間違える。
+   覚えた並びで出し直すだけで、順位付けそのものには手を付けない。 */
+describe('覚えていた並びのまま出し直す', () => {
+  it('覚えている行は、覚えていた順に戻す', () => {
+    const rows = [row({ id: 'c' }), row({ id: 'a' }), row({ id: 'b' })];
+
+    expect(holdOrder(rows, ['a', 'b', 'c']).map((held) => held.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('覚えていない行は末尾へ回す', () => {
+    const rows = [row({ id: 'new' }), row({ id: 'a' })];
+
+    expect(
+      holdOrder(rows, ['a']).map((held) => held.id),
+      '途中へ差し込むと、やはりカーソルの下で行が動く',
+    ).toEqual(['a', 'new']);
+  });
+
+  it('覚えていた行がもう居なくても、増やさない', () => {
+    const rows = [row({ id: 'a' })];
+
+    expect(holdOrder(rows, ['gone', 'a']).map((held) => held.id)).toEqual(['a']);
+  });
+
+  it('何も覚えていなければ、そのまま返す', () => {
+    const rows = [row({ id: 'b' }), row({ id: 'a' })];
+
+    expect(holdOrder(rows, []), '止めていないときに並べ替えると、順位付けが効かなくなる').toBe(
+      rows,
+    );
+  });
+});
+
+/* 一覧の稼働のトラックは、プロジェクトの中で動いていた時間の和集合である。
+   重なりを潰さないと、同時に 3 つ動いていた時間が 3 本の線になり、
+   ずっと動き続けていたプロジェクトと見分けが付かなくなる。 */
+describe('プロジェクトの稼働を 1 本にまとめる', () => {
+  const at = (minutes: number) => iso(T + minutes * 60_000);
+
+  it('重なる区間をまとめる', () => {
+    const merged = unionSpans(
+      project({
+        sessions: [
+          session({
+            intervals: [
+              [at(0), at(10)],
+              [at(5), at(20)],
+            ],
+          }),
+        ],
+      }),
+    );
+
+    expect(merged).toEqual([[T, T + 20 * 60_000]]);
+  });
+
+  it('サブエージェントの区間も同じ 1 本に入れる', () => {
+    const merged = unionSpans(
+      project({
+        sessions: [
+          session({
+            intervals: [[at(0), at(10)]],
+            subagents: [subagent({ intervals: [[at(8), at(30)]] })],
+          }),
+        ],
+      }),
+    );
+
+    expect(merged, '子だけが動いていた時間を落とすと、静かだった時間になる').toEqual([
+      [T, T + 30 * 60_000],
+    ]);
+  });
+
+  it('離れた区間はまとめない', () => {
+    const merged = unionSpans(
+      project({
+        sessions: [
+          session({
+            intervals: [
+              [at(0), at(10)],
+              [at(60), at(70)],
+            ],
+          }),
+        ],
+      }),
+    );
+
+    expect(merged, '間の 50 分は静かだった。繋ぐと動き続けていたことになる').toHaveLength(2);
+  });
+
+  it('読めない時刻の区間は採らない', () => {
+    const merged = unionSpans(
+      project({ sessions: [session({ intervals: [['not a time', at(10)]] })] }),
+    );
+
+    expect(merged).toEqual([]);
   });
 });

@@ -186,7 +186,8 @@ body.dragging #drawer-grip {
   align-content: start;
 }
 #conversation > #older,
-#conversation > #placeholder {
+#conversation > #placeholder,
+#conversation > .not-observed {
   grid-column: 1 / -1;
 }
 
