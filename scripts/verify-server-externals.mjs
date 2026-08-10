@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 
+// 配る前にビルド成果物を検証する。外部依存に頼っていないことと、
+// 取り込んだパッケージのライセンス表示が在ることの 2 つ。
+
+// ── 外部依存 ──
+//
 // パッケージが外部依存に頼っていないことを確かめる。
 //
 // glasshive は `dependencies` を持たない。`npx` で入れた先には `node_modules` が無いので、
@@ -15,6 +20,7 @@ import { init, parse } from 'es-module-lexer';
 
 const SERVER_DIR = path.resolve('dist/server');
 const LAUNCHER_DIR = path.resolve('dist/launcher');
+const NOTICES_FILE = path.resolve('THIRD-PARTY-NOTICES.md');
 
 const builtin = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)]);
 
@@ -73,4 +79,29 @@ if (offenders.size > 0) {
   process.exit(1);
 }
 
+// ── ライセンス表示 ──
+//
+// 取り込んだパッケージのライセンス表示が書き出されていることを確かめる。
+//
+// 依存をバンドルに取り込むのは再配布であり、MIT も BSD-3-Clause も OFL も、著作権表示と
+// 許諾条項を一緒に配ることを条件にしている。表示は `vite.config.ts` のプラグインが
+// `THIRD-PARTY-NOTICES.md` へ書き出すもので、git には入れていない。
+//
+// **黙って止まりうる。** プラグインを外しても、フックの名前が変わっても、ビルドは緑のまま通り、
+// 表示を持たないパッケージがそのまま出ていく。誰も気付かないので、ここで赤にする。
+
+const notices = fs.existsSync(NOTICES_FILE) ? fs.readFileSync(NOTICES_FILE, 'utf8') : '';
+
+// 中身の正しさまでは見ないが、パッケージの節が 1 つも無いファイルは書き出しに失敗している
+const sections = notices.match(/^## \S+@\S+$/gm) ?? [];
+
+if (sections.length === 0) {
+  console.error(
+    'THIRD-PARTY-NOTICES.md が無いか、パッケージの節を 1 つも持っていません。\n' +
+      'vite.config.ts の thirdPartyNotices() が動いているか確かめてください。',
+  );
+  process.exit(1);
+}
+
 console.log('ビルド成果物は Node の組み込みだけで完結しています');
+console.log(`取り込んだ ${sections.length} 個のパッケージのライセンス表示が在ります`);

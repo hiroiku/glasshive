@@ -14,7 +14,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
    **`preferences.json` の保存先は必ず一時ディレクトリへ向ける。** 走らせた人の本物の設定を
    書き換えない。 */
 
-const ROOT = path.resolve(import.meta.dirname, '..', '..');
+/* 叩く先は `GLASSHIVE_SMOKE_ROOT` で差し替えられる。既定は作業ツリーなので、
+   `npm run test:smoke` はそのまま動く。
+
+   CI は `npm pack` した tgz を展開した `package/` をここへ渡す。作業ツリーの `dist/` だけを
+   叩いていると、`package.json` の `files` から抜け落ちたパスを誰も見ない — **CI は緑のまま、
+   起動しないパッケージが出ていく。** */
+const ROOT = process.env.GLASSHIVE_SMOKE_ROOT
+  ? path.resolve(process.env.GLASSHIVE_SMOKE_ROOT)
+  : path.resolve(import.meta.dirname, '..', '..');
 
 /** 空いているポートを OS に選ばせる。決め打ちだと、他が使っている機械で落ちる */
 async function freePort(): Promise<number> {
@@ -55,7 +63,7 @@ describe('パッケージを外から叩く', () => {
 
   beforeAll(async () => {
     if (!fs.existsSync(path.join(ROOT, 'dist', 'launcher', 'index.js'))) {
-      throw new Error('先に npm run build を済ませること');
+      throw new Error(`${ROOT} にビルド成果物が無い。先に npm run build を済ませること`);
     }
     const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'glasshive-smoke-'));
     configDir = path.join(sandbox, 'config');

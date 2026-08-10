@@ -12,11 +12,20 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      # engines は >=22.12.0 と言っている。その下限を走らせないと、22.12 に無い API が
+      # ランチャーやサーバーバンドルへ紛れ込んでも、24 しか見ていない CI は緑のまま通す。
+      # publish.yml は Trusted Publishing に要る npm のバージョンのために 24 のままにしてある
+      matrix:
+        node: ['22.12.0', 24]
+      # 片方が落ちても、もう片方は最後まで走らせる。
+      # 下限だけで落ちたのか両方で落ちたのかが、そのまま分かる
+      fail-fast: false
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
       # **ビルドが先。** ルートの一覧(routeTree.gen.ts)はビルドが生成するもので、
@@ -24,5 +33,25 @@ jobs:
       - run: npm run build
       # 書式・層の依存の向き・8 構成の型・テスト
       - run: npm run check
-      # ビルドしたパッケージを外から叩く。ここだけが実際に配布するものを検証する
+      # ビルドしたパッケージを外から叩く
       - run: npm run test:smoke
+
+      # npm pack した tgz を展開して、その中身をもう一度外から叩く。
+      #
+      # 作業ツリーの dist/ だけを叩いていると、package.json の files から抜け落ちたパスを
+      # 誰も見ない。壊れ方は「配った先で起動しない」なので、こちらでは再現しない。
+      #
+      # 展開した先に node_modules は無い。glasshive は dependencies を持たないので、
+      # tgz の中身だけで起動する。起動しないなら、それはここで落とすべき欠落である
+      #
+      # tgz の名前は npm pack が標準出力へ書くが、拾わずに空のディレクトリと glob で受ける。
+      # 何をどう書くかは npm のバージョンで変わり、この matrix は 2 つ走らせている
+      - name: tgz を展開する
+        run: |
+          mkdir -p "$RUNNER_TEMP/pack" "$RUNNER_TEMP/packed"
+          npm pack --pack-destination "$RUNNER_TEMP/pack"
+          tar -xzf "$RUNNER_TEMP"/pack/*.tgz -C "$RUNNER_TEMP/packed"
+      - name: 展開したパッケージを外から叩く
+        run: npm run test:smoke
+        env:
+          GLASSHIVE_SMOKE_ROOT: ${{ runner.temp }}/packed/package

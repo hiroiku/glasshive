@@ -17,9 +17,12 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      # このジョブは id-token: write を持つので、action はタグではなくコミット SHA で固定する。
+      # v7 のようなタグは後から別のコミットへ動かせて、動いた先のコードは npm へ publish できる
+      # 身元をそのまま受け取る。SHA なら中身が変わった時点で別の SHA になる。
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Trusted Publishing は npm 11.5.1 以上。Node 24 の同梱がそれを満たす
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
@@ -45,6 +48,17 @@ jobs:
           fi
           echo "VERSION=$pkg" >> "$GITHUB_ENV"
 
+          # dist-tag はバージョンの文字列そのものから決める。github.event.release.prerelease で
+          # 決めると workflow_dispatch にはその値が無く、そこだけ latest に落ちる —
+          # 1.3.0-rc.1 が npm install glasshive の既定になり、戻すには手で latest を打ち直すしかない。
+          # SemVer のプレリリースはハイフンの後ろに付くので、それを持つものは next へ回す。
+          case "$pkg" in
+            *-*) npm_tag=next ;;
+            *) npm_tag=latest ;;
+          esac
+          echo "NPM_TAG=$npm_tag" >> "$GITHUB_ENV"
+          echo "$pkg を $npm_tag として出す"
+
       - run: npm ci
 
       # npm の trusted publisher はパッケージが在って初めて設定できるので、
@@ -52,17 +66,50 @@ jobs:
       # 「同じバージョンは出せない」で赤を出さずに済ませる。
       # バージョンを上げ忘れて素通りすることは無い — 同じタグは二度打てないので、
       # ここへ来る時点でバージョンはもう新しい
+      #
+      # **無かったのか、確かめられなかったのかを分ける。** npm view の失敗をまとめて
+      # 「まだ出ていない」と読むと、レジストリの 5xx やネットワークの障害でも publish へ進む。
+      # E404 だけを「まだ出ていない」とし、それ以外は落として人に見せる。
       - name: このバージョンは既に出ているか
         id: registry
         run: |
-          if npm view "glasshive@$VERSION" version >/dev/null 2>&1; then
+          if answer=$(npm view "glasshive@$VERSION" version 2>&1); then
             echo "published=true" >> "$GITHUB_OUTPUT"
             echo "$VERSION は既にレジストリに在る。出さずに終える"
-          else
+          elif printf '%s\n' "$answer" | grep -q 'E404'; then
             echo "published=false" >> "$GITHUB_OUTPUT"
+          else
+            printf '%s\n' "$answer"
+            echo "レジストリに問い合わせられなかった。publish には進まない"
+            exit 1
           fi
 
-      # publish の手前で prepublishOnly がビルド・品質ゲート・パッケージの検証を全部走らせる。
-      # 落ちれば出ない
+      # publish の手前で dist/ を作り、成果物が在ることを自分で確かめる。
+      # npm は package.json の files に並べた名前が 1 つも解決できなくても publish を通すので、
+      # ビルドがどの lifecycle script から起きるかに関わらず、出す直前のファイルを見る。
       - if: steps.registry.outputs.published == 'false'
-        run: npm publish
+        run: npm run build
+      - name: 起動に要るファイルが揃っているか
+        if: steps.registry.outputs.published == 'false'
+        run: |
+          missing=""
+          # bin/glasshive.js が import する入口と、ランチャーが読み込むサーバーバンドル
+          for artifact in dist/launcher/index.js dist/server/server.js; do
+            [ -f "$artifact" ] || missing="$missing $artifact"
+          done
+          # ブラウザーへ返す静的ファイル。1 つも無ければ画面が出ない
+          if [ -z "$(find dist/client -type f -print -quit 2>/dev/null)" ]; then
+            missing="$missing dist/client"
+          fi
+          # ライセンス表示は git に入れず、ビルドが書き出したものを files でパッケージへ入れる。
+          # git に無いので、書き出されなければそのまま欠けたまま出る
+          [ -f THIRD-PARTY-NOTICES.md ] || missing="$missing THIRD-PARTY-NOTICES.md"
+          if [ -n "$missing" ]; then
+            echo "ビルド成果物が足りない:$missing"
+            exit 1
+          fi
+
+      # publish の手前で package.json の lifecycle script が品質ゲートとパッケージの検証を
+      # 走らせる。落ちれば出ない
+      - if: steps.registry.outputs.published == 'false'
+        run: npm publish --tag "$NPM_TAG"

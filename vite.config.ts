@@ -1,6 +1,7 @@
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import viteReact from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { thirdPartyNotices } from './scripts/generate-third-party-notices.ts';
 
 export default defineConfig(({ command }) => ({
   // 開発中もローカルだけで待ち受ける。`Host` が合わない求めは Vite 自身が 403 で断る —
@@ -76,5 +77,9 @@ export default defineConfig(({ command }) => ({
       },
     }),
     viteReact(),
+
+    // 取り込んだパッケージのライセンス表示を書き出す。バンドルし終えた後のモジュールの一覧を
+    // 見るので、他のプラグインより後ろに置く
+    thirdPartyNotices(),
   ],
 }));

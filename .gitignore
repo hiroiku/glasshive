@@ -10,6 +10,10 @@ dist/
 .tanstack/
 *.tsbuildinfo
 
+# 取り込んだパッケージのライセンス表示。ビルドがバンドルの中身から書き出すので、
+# git に入れると依存を足した日に古いままの写しが残る
+THIRD-PARTY-NOTICES.md
+
 # ルーターの生成物(dev / build で作り直される)
 src/frameworks/tanstack/routeTree.gen.ts
 
