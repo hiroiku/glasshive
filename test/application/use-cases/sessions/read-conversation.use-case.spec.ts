@@ -9,10 +9,10 @@ import type { TreeSnapshotService } from '~/application/services/sessions/tree-s
 import type { ProjectTree } from '~/application/use-cases/sessions/observe-tree.use-case.ts';
 import { createReadConversation } from '~/application/use-cases/sessions/read-conversation.use-case.ts';
 
-/* 会話を読む求めを、受けてよいかどうか。
+/* 会話を読む呼び出しを、受けてよいかどうか。
 
-   **ここが緩むと、この道具は手元のファイルを何でも配る窓になる。** 旧実装は
-   任意の絶対パスを受けており、画像を 1 枚読み込ませるだけで正本の全文が外へ流れた。 */
+   **ここが緩むと、glasshive はローカルのファイルを何でも配るサーバーになる。**
+   任意の絶対パスを受けると、画像を 1 枚読み込ませるだけで `transcript` の全文が外へ流れる。 */
 
 const OBSERVED_FILE = '/nest/projects/a/session.jsonl';
 const OBSERVED_SUB = '/nest/projects/a/session/subagents/sub.jsonl';
@@ -61,6 +61,8 @@ function treeWith(files: readonly string[]): ProjectTree {
                     id: `sub-${index}`,
                     label: `sub-${index}`,
                     agentType: null,
+                    name: null,
+                    toolUseId: null,
                     parentId: null,
                     depth: 1,
                     file,
@@ -88,7 +90,7 @@ const snapshotOf = (tree: ProjectTree): TreeSnapshotService => ({
   invalidate: () => undefined,
 });
 
-/** 開かれた在り処を控える偽の口。**開いたかどうかそのものが確かめたいこと** */
+/** 開かれたパスを控える偽のポート。**開いたかどうかそのものが確かめたいこと** */
 function spyEvents(): TranscriptEventsRepository & { readonly opened: string[] } {
   const opened: string[] = [];
   return {
@@ -101,8 +103,8 @@ function spyEvents(): TranscriptEventsRepository & { readonly opened: string[] }
   };
 }
 
-describe('会話を 1 頁ぶん読む', () => {
-  it('観測した正本なら開く', async () => {
+describe('会話を 1 ページぶん読む', () => {
+  it('観測した `transcript` なら開く', async () => {
     const events = spyEvents();
     const useCase = createReadConversation({
       tree: snapshotOf(treeWith([OBSERVED_FILE])),
@@ -115,7 +117,7 @@ describe('会話を 1 頁ぶん読む', () => {
     expect(events.opened).toEqual([OBSERVED_FILE]);
   });
 
-  it('子の正本も開く', async () => {
+  it('サブエージェントの `transcript` も開く', async () => {
     const events = spyEvents();
     const useCase = createReadConversation({
       tree: snapshotOf(treeWith([OBSERVED_FILE, OBSERVED_SUB])),
@@ -128,7 +130,7 @@ describe('会話を 1 頁ぶん読む', () => {
     expect(events.opened).toEqual([OBSERVED_SUB]);
   });
 
-  it('観測していない在り処は断る', async () => {
+  it('観測していないパスは断る', async () => {
     const events = spyEvents();
     const useCase = createReadConversation({
       tree: snapshotOf(treeWith([OBSERVED_FILE])),
@@ -140,12 +142,12 @@ describe('会話を 1 頁ぶん読む', () => {
     expect(page.ok).toBe(false);
     if (page.ok) return;
     expect(page.error.code).toBe('transcript.out_of_scope');
-    expect(events.opened, '断る求めで正本を開いてはいけない').toEqual([]);
+    expect(events.opened, '断る呼び出しで `transcript` を開いてはいけない').toEqual([]);
   });
 
-  /* 前方一致で見ていると、観測した正本の隣に置かれただけの別のファイルが
-     「中にある」ことになる。集合帰属なら、観測できた正本そのものしか通らない。 */
-  it('観測した正本の隣に置いただけのものは通さない', async () => {
+  /* 前方一致で見ていると、観測した `transcript` の隣に置かれただけの別のファイルが
+     「中にある」ことになる。集合帰属なら、観測できた `transcript` そのものしか通らない。 */
+  it('観測した `transcript` の隣に置いただけのものは通さない', async () => {
     const events = spyEvents();
     const useCase = createReadConversation({
       tree: snapshotOf(treeWith([OBSERVED_FILE])),
@@ -162,9 +164,9 @@ describe('会話を 1 頁ぶん読む', () => {
     expect(events.opened).toEqual([]);
   });
 
-  /* 畳めば字が変わるものは、畳まずに断る。畳んで見比べると、観測した正本の字を借りて
-     別の中身を読ませる道ができる(繋ぎを辿る OS が開くのは別の場所である)。 */
-  it('遡る字を含む在り処は、畳まずに断る', async () => {
+  /* 正規化すると表記が変わるものは、正規化せずに断る。正規化して見比べると、観測した `transcript` の
+     表記を借りて別の中身を読ませる経路ができる(シンボリックリンクを辿る OS が開くのは別のパスである)。 */
+  it('`..` を含むパスは、正規化せずに断る', async () => {
     const events = spyEvents();
     const useCase = createReadConversation({
       tree: snapshotOf(treeWith([OBSERVED_FILE])),

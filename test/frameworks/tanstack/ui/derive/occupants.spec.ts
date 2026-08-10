@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { occupantIndex, occupantsOf } from '~/frameworks/tanstack/ui/derive/occupants.ts';
 
-/* 作業場所に居るエージェント。
+/* `worktree` に居るエージェント。
 
-   記録の側は「どの枝がどこに出ているか」しか言わない。誰がそこで働いているかは
-   観測の側にしかない。**終わった手は入れない** — 答えるのは「いま誰か居るか」である。 */
+   `git` の側は「どのブランチがどこに出ているか」しか言わない。誰がそこで働いているかは
+   観測の側にしかない。**終わったエージェントは入れない** — 答えるのは「いま誰か居るか」である。 */
 
-/* 巣の形は、突き合わせる役自身から引く */
+/* プロジェクトの形は、突き合わせる実装そのものから引く */
 type ProjectJson = NonNullable<Parameters<typeof occupantIndex>[0]>;
 type SessionJson = ProjectJson['sessions'][number];
 type SubagentJson = SessionJson['subagents'][number];
@@ -15,6 +15,8 @@ const subagent = (over: Partial<SubagentJson> = {}): SubagentJson => ({
   id: 'sub',
   label: 'sub',
   agent_type: null,
+  name: null,
+  tool_use: null,
   parent: null,
   depth: 1,
   file: '/nest/sub.jsonl',
@@ -72,28 +74,28 @@ const project = (sessions: SessionJson[]): ProjectJson => ({
   sessions,
 });
 
-describe('作業場所に居る手', () => {
-  it('その場所そのものに居る手を引く', () => {
+describe('`worktree` に居るエージェント', () => {
+  it('その `worktree` そのものに居るエージェントを引く', () => {
     const index = occupantIndex(project([session({ cwd: '/repo/.worktrees/x' })]));
 
     expect(occupantsOf(index, '/repo/.worktrees/x')).toHaveLength(1);
   });
 
-  /* エージェントは巣の中の一段深いところで動くことがある。 */
-  it('その下で働いている手も引く', () => {
+  /* エージェントはプロジェクトの中の一段深いところで動くことがある。 */
+  it('その下で働いているエージェントも引く', () => {
     const index = occupantIndex(project([session({ cwd: '/repo/.worktrees/x/src' })]));
 
     expect(occupantsOf(index, '/repo/.worktrees/x')).toHaveLength(1);
   });
 
-  /* 名前の先頭が同じだけの別の場所を拾うと、居ないはずの線に人が立つ。 */
-  it('名前の先頭が同じだけの別の場所は拾わない', () => {
+  /* 名前の先頭が同じだけの別のパスを拾うと、居ないはずの `worktree` にエージェントが立つ。 */
+  it('名前の先頭が同じだけの別のパスは拾わない', () => {
     const index = occupantIndex(project([session({ cwd: '/repo/.worktrees/xyz' })]));
 
     expect(occupantsOf(index, '/repo/.worktrees/x')).toEqual([]);
   });
 
-  it('終わった手は入れない', () => {
+  it('終わったエージェントは入れない', () => {
     const index = occupantIndex(project([session({ state: 'ended', cwd: '/repo/.worktrees/x' })]));
 
     expect(occupantsOf(index, '/repo/.worktrees/x')).toEqual([]);
@@ -107,7 +109,7 @@ describe('作業場所に居る手', () => {
     expect(occupantsOf(index, '/repo/.worktrees/x')).toHaveLength(1);
   });
 
-  it('動いている手を先に出す', () => {
+  it('動いているエージェントを先に出す', () => {
     const index = occupantIndex(
       project([
         session({ file: '/nest/waiting.jsonl', state: 'waiting', cwd: '/repo/.worktrees/x' }),
@@ -121,7 +123,7 @@ describe('作業場所に居る手', () => {
     ]);
   });
 
-  it('場所が無ければ空', () => {
+  it('パスが無ければ空', () => {
     expect(occupantsOf(occupantIndex(undefined), null)).toEqual([]);
   });
 });

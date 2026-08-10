@@ -1,53 +1,62 @@
 import type { Observation } from '~/app-kernel/observation.ts';
 
-/* 正本の置き場を読む口。
+/* `transcript` のルート(`~/.claude/projects`)を読むポート。
 
-   **返すのは素材だけである。** 生の字と、大きさ・時刻・どこまで届いたかの数と、
-   ここで宣言した素の形しか出さない。読み解きも組み立ても application の service がする。
+   **返すのは素材だけである。** 生のテキストと、大きさ・時刻・どこまで届いたかの数と、
+   ここで宣言した素の形しか出さない。パースも組み立ても application の service がする。
 
-   どこまで読むかを決めるのも呼ぶ側で、ここは「この正本のここからここまで」と
+   どこまで読むかを決めるのも呼ぶ側で、ここは「この `transcript` のここからここまで」と
    言われて開くだけである。
 
-   どれも `Observation` を返す。無いことと読めなかったことは別の事実で、
+   どれも `Observation` を返す。無かったことと観測できなかったことは別の事実で、
    errno が見えるのは実装の側だけなので、ここで分けておかないと二度と分けられない。 */
 
-/** 読む相手。在り処と、覚えの鍵になる鮮度を併せ持つ */
+/** 読む相手。パスと、キャッシュのキーになる鮮度を併せ持つ */
 export interface TranscriptLocation {
   readonly file: string;
   readonly mtimeMs: number;
   readonly sizeBytes: number;
 }
 
-/** 歩いて見えた正本 1 つ。中身はまだ読んでいない */
+/** 走査して見えた `transcript` 1 つ。中身はまだ読んでいない */
 export interface TranscriptSource extends TranscriptLocation {
-  /** 正本を指す鍵。置き場での名前から拡張子を落としたもの */
+  /** `transcript` を指すキー。ファイル名から拡張子を落としたもの */
   readonly id: string;
-  /* 置き場に在った名前。拡張子込みのまま渡す。
-     名前から呼び名や種別を引くのは、言葉を持っている側の仕事である。 */
+  /* ディレクトリに在ったファイル名。拡張子込みのまま渡す。
+     名前からラベルや種別を引くのは、言葉を持っている側の仕事である。 */
   readonly fileName: string;
 }
 
-/* 正本の隣に置かれた覚え書き。Claude Code が `<正本名>.meta.json` として書く。
+/* `transcript` の隣に置かれた `*.meta.json`。Claude Code が
+   `<transcript のファイル名>.meta.json` として書く。
 
-   **親子は正本の置き場では分からない。** 子はどれだけ深く産まれても同じ棚に平らに並ぶので、
-   誰が誰を呼んだかはこの覚え書きにしか書かれていない。読まなければ木は 2 段に潰れる。 */
+   **親子はディレクトリの並びからは分からない。** 子はどれだけ深く産まれても同じ
+   ディレクトリに平らに並ぶので、誰が誰を呼んだかはこの `*.meta.json` にしか
+   書かれていない。読まなければ木は 2 階層に潰れる。 */
 export interface AgentMeta {
   /** 呼ばれ方(general-purpose / Explore / workflow-subagent など) */
   readonly agentType: string | null;
+  /* 宛先に使う名前。**同一性ではない。** 子どうしが互いを呼ぶとき、指紋の付いた
+     キーではなくこの文字列を使う。名前を持たない子も居る。 */
+  readonly name: string | null;
+  /** どの `tool_use` から生まれたか。`*.meta.json` の外では、子はこの文字列で指されることがある */
+  readonly toolUseId: string | null;
   /** 呼んだ側が添えた一行。人が読める唯一の手がかりで、無ければ 16 進の id しか残らない */
   readonly description: string | null;
   /** 呼んだ相手。根の子には無い */
   readonly parentAgentId: string | null;
-  /** 根から数えた段。根の子が 1 */
-  readonly spawnDepth: number | null;
 }
 
-/** 子の正本 1 つ。隣の覚え書きを読めていれば併せて持つ */
+/** 子(サブエージェント)の `transcript` 1 つ。隣の `*.meta.json` を読めていれば併せて持つ */
 export interface SubagentSource extends TranscriptSource {
   readonly meta: AgentMeta | null;
+  /* どの実行のディレクトリに置かれていたか。1 回の実行の中で産まれた子は `*.meta.json` に
+     呼んだ相手を持たないので、同じ実行の仲間だと言えるのはディレクトリ名だけである。
+     そのディレクトリの外で産まれた子は持たない。 */
+  readonly runId: string | null;
 }
 
-/** セッションの正本と、その下の棚に置かれた子の正本 */
+/** セッションの `transcript` と、その下のディレクトリに置かれた子の `transcript` */
 export interface SessionSource extends TranscriptSource {
   readonly subagents: readonly SubagentSource[];
 }
@@ -58,17 +67,17 @@ export interface TranscriptGroup {
   readonly sessions: readonly SessionSource[];
 }
 
-/** 正本の大きさと、最後に書かれた時刻 */
+/** `transcript` の大きさと、最後に書かれた時刻 */
 export interface TranscriptStat {
   readonly mtimeMs: number;
   readonly sizeBytes: number;
 }
 
-/** 読み取った窓 */
+/** 読み取った範囲 */
 export interface TranscriptWindow {
   readonly text: string;
-  /* 窓が正本の端まで届いたか。先頭から読んだなら末尾へ、末尾から読んだなら先頭へ。
-     `false` なら、その先にまだ字が在る。 */
+  /* 読み取り範囲が `transcript` の端まで届いたか。先頭から読んだなら末尾へ、
+     末尾から読んだなら先頭へ。`false` なら、その先にまだテキストが在る。 */
   readonly complete: boolean;
 }
 
@@ -77,29 +86,30 @@ export interface WindowRequest {
   readonly maxBytes: number;
   /* 端まで届かなかったときに、そこで切れた行を捨てるか。
 
-     捨てないと、行の途中から始まる(あるいは途中で終わる)字を 1 行として
-     読み解こうとして必ず失敗する。逆に、先頭の数行だけが要るときは捨てなくてよい —
-     切れた行はどのみち読み解けずに落ちるだけである。 */
+     捨てないと、行の途中から始まる(あるいは途中で終わる)テキストを 1 行として
+     パースしようとして必ず失敗する。逆に、先頭の数行だけが要るときは捨てなくてよい —
+     切れた行はどのみちパースできずに落ちるだけである。 */
   readonly trimPartialLine: boolean;
 }
 
 export interface TranscriptRepository {
-  /** 木を歩く。名前と stat だけを集め、中身は読まない */
+  /** ディレクトリツリーを走査する。名前と stat だけを集め、中身は読まない */
   listTranscripts(): Promise<Observation<readonly TranscriptGroup[]>>;
 
-  /** 正本の大きさと時刻。歩いてから読むまでの間にも正本は伸びる */
+  /** `transcript` の大きさと時刻。走査してから読むまでの間にも `transcript` は伸びる */
   statTranscript(file: string): Promise<Observation<TranscriptStat>>;
 
   /** 先頭から読む */
   readHead(at: TranscriptLocation, window: WindowRequest): Promise<Observation<TranscriptWindow>>;
 
-  /** 末尾から読む。窓の始まりを決める大きさは、読む直前に採る */
+  /** 末尾から読む。読み取り範囲の先頭を決める大きさは、読む直前に採る */
   readTail(at: TranscriptLocation, window: WindowRequest): Promise<Observation<TranscriptWindow>>;
 
-  /* 場所の書き表し方の揺れを均す。
+  /* パスの書き表し方の揺れを正規化する。
 
-     **解決できなかったときに渡された字を返すのは、この口の仕事ではない。**
+     **解決できなかったときに、渡された文字列をそのまま返すのはこのポートの仕事ではない。**
      それを `observed` で返すと解決の結果と見分けが付かなくなり、覚える側が
-     「解決済み」として抱え込む。字で代えるのは、代えてよいと判断できる呼ぶ側の仕事。 */
+     「解決済み」として抱え込む。渡された文字列で代えるのは、代えてよいと判断できる
+     呼ぶ側の仕事である。 */
   canonicalize(path: string): Promise<Observation<string>>;
 }

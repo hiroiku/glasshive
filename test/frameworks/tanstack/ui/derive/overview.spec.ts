@@ -15,7 +15,7 @@ import {
 const T = Date.parse('2026-08-04T00:00:00Z');
 const iso = (ms: number): string => new Date(ms).toISOString();
 
-/* 材料の形は、行を起こす役自身から引く。ここは外の道の形を宣言した層を見に行けない。 */
+/* 材料の形は、行を起こす実装そのものから引く。ここは外部 API の形を宣言した層を `import` できない。 */
 type ProjectJson = Parameters<typeof deriveRows>[0][number];
 type SessionJson = ProjectJson['sessions'][number];
 type SubagentJson = SessionJson['subagents'][number];
@@ -25,6 +25,8 @@ function subagent(overrides: Partial<SubagentJson> = {}): SubagentJson {
     id: 'agent-x',
     label: 'x',
     agent_type: null,
+    name: null,
+    tool_use: null,
     parent: null,
     depth: 1,
     file: '/p/agent-x.jsonl',
@@ -106,7 +108,7 @@ function row(overrides: Partial<OverviewRow> = {}): OverviewRow {
 }
 
 describe('一覧の行を起こす', () => {
-  it('様子ごとにセッションを数える', () => {
+  it('状態ごとにセッションを数える', () => {
     const rows = deriveRows([
       project({
         sessions: [
@@ -140,7 +142,7 @@ describe('一覧の行を起こす', () => {
     ).toBe(1);
   });
 
-  it('最終活動は巣の中で最も新しいものを採る', () => {
+  it('最終活動はプロジェクトの中で最も新しいものを採る', () => {
     const rows = deriveRows([
       project({
         sessions: [session({ last_activity: iso(T - 5000) }), session({ last_activity: iso(T) })],
@@ -153,10 +155,10 @@ describe('一覧の行を起こす', () => {
   it('直近の消費は木に入っている値をそのまま持つ', () => {
     const rows = deriveRows([project({ tokens_24h: 4321, tokens_24h_state: 'observed' })]);
 
-    expect(rows[0]?.tokens24h, '巣ごとに問い直さない').toBe(4321);
+    expect(rows[0]?.tokens24h, 'プロジェクトごとに問い直さない').toBe(4321);
   });
 
-  it('読めなかった消費は null のまま運び、様子も添える', () => {
+  it('読めなかった消費は null のまま運び、状態も添える', () => {
     const rows = deriveRows([project({ tokens_24h: null, tokens_24h_state: 'unobservable' })]);
 
     expect(rows[0]?.tokens24h).toBe(null);
@@ -164,7 +166,7 @@ describe('一覧の行を起こす', () => {
   });
 });
 
-describe('同じ呼び名の巣を見分ける', () => {
+describe('同じ名前のプロジェクトを見分ける', () => {
   it('ぶつかったときだけ一つ上の名前を添える', () => {
     const rows = deriveRows([
       project({ id: 'a', name: 'web', path: '/work/alpha/web' }),
@@ -174,34 +176,34 @@ describe('同じ呼び名の巣を見分ける', () => {
 
     expect(rows[0]?.parent).toBe('alpha');
     expect(rows[1]?.parent).toBe('beta');
-    expect(rows[2]?.parent, 'ぶつかっていない巣に添えると画面が字で埋まる').toBe(null);
+    expect(rows[2]?.parent, 'ぶつかっていないプロジェクトに添えると画面が文字で埋まる').toBe(null);
   });
 
-  it('場所が分からない巣には添えるものが無い', () => {
+  it('パスが分からないプロジェクトには添えるものが無い', () => {
     const rows = deriveRows([
       project({ id: 'a', name: 'web', path: null }),
       project({ id: 'b', name: 'web', path: '/web' }),
     ]);
 
     expect(rows[0]?.parent).toBe(null);
-    expect(rows[1]?.parent, '一つ上が無い場所も添えられない').toBe(null);
+    expect(rows[1]?.parent, '一つ上が無いパスも添えられない').toBe(null);
   });
 });
 
 describe('行の頭の点', () => {
   it('人待ちが最優先', () => {
-    expect(dotStateOf(row({ input: 1, active: 3 })), 'この道具のいちばんの用事').toBe('input');
+    expect(dotStateOf(row({ input: 1, active: 3 })), 'glasshive のいちばんの用事').toBe('input');
   });
 
   it('人待ちが無ければ稼働', () => {
     expect(dotStateOf(row({ active: 1 }))).toBe('active');
   });
 
-  it('何も動いていなくても道具が生きていれば待機', () => {
+  it('何も動いていなくてもプロセスが生きていれば待機', () => {
     expect(dotStateOf(row({ liveProcess: true }))).toBe('waiting');
   });
 
-  it('道具も居なければ終了', () => {
+  it('プロセスも居なければ終了', () => {
     expect(dotStateOf(row())).toBe('ended');
   });
 });
@@ -226,7 +228,7 @@ describe('既定の並び', () => {
 
     expect(
       sortRows(rows).map((r) => r.id),
-      '昨日ぶん回した巣が居座ると、今まさに待っている巣が沈む',
+      '昨日ぶん回したプロジェクトが居座ると、今まさに待っているプロジェクトが沈む',
     ).toEqual(['waiting-now', 'busy-yesterday']);
   });
 
@@ -287,7 +289,7 @@ describe('列を選んで並べ替える', () => {
     ).toEqual(['zero', 'unknown']);
   });
 
-  it('呼び名の順にも並べられる', () => {
+  it('名前の順にも並べられる', () => {
     const rows = [row({ id: 'b', name: 'zeta' }), row({ id: 'a', name: 'alpha' })];
 
     expect(sortRows(rows, { key: 'name', direction: 'asc' }).map((r) => r.name)).toEqual([
@@ -302,7 +304,7 @@ describe('列を選んで並べ替える', () => {
 });
 
 describe('絞り込み', () => {
-  it('呼び名でも場所でも当たる', () => {
+  it('名前でもパスでも当たる', () => {
     const rows = [
       row({ id: 'a', name: 'web', path: '/work/alpha/web' }),
       row({ id: 'b', name: 'api', path: '/work/beta/api' }),
@@ -310,7 +312,7 @@ describe('絞り込み', () => {
 
     expect(
       filterRows(rows, 'alpha').map((r) => r.id),
-      '同じ呼び名を選び分けるには場所が要る',
+      '同じ名前を選び分けるにはパスが要る',
     ).toEqual(['a']);
     expect(
       filterRows(rows, 'API').map((r) => r.id),
@@ -350,17 +352,17 @@ describe('期間で絞る', () => {
     expect(withinSpan(rows, 'all', T)).toHaveLength(rows.length);
   });
 
-  /* 読めなかったことを「古い」に言い換えると、見に行けていない巣が期間の外に居るように
-     見え、観る人には最初から無かったのと同じになる。 */
-  it('最終活動の読めない巣は、どの期間でも落とさない', () => {
+  /* 読めなかったことを「古い」に言い換えると、観測できていないプロジェクトが期間の外に
+     居るように見え、ユーザーには最初から無かったのと同じになる。 */
+  it('最終活動の読めないプロジェクトは、どの期間でも落とさない', () => {
     const unknown = [row({ id: '読めない', lastActivityMs: null })];
 
     expect(withinSpan(unknown, '24h', T)).toHaveLength(1);
   });
 });
 
-describe('帯と合計', () => {
-  it('帯の基準は最も大きい消費', () => {
+describe('バーと合計', () => {
+  it('バーの基準は最も大きい消費', () => {
     expect(tokensCeiling([row({ tokens24h: 10 }), row({ tokens24h: 40 })])).toBe(40);
   });
 
@@ -383,7 +385,7 @@ describe('帯と合計', () => {
     });
   });
 
-  it('読めない巣が混ざったら、合計が全部でないことを印にする', () => {
+  it('読めないプロジェクトが混ざったら、合計が全部でないことを示す', () => {
     const totals = totalsOf([
       row({ tokens24h: 100 }),
       row({ tokens24h: null, tokens24hState: 'unobservable' }),
@@ -393,7 +395,7 @@ describe('帯と合計', () => {
     expect(totals.tokensPartial, '足りない合計を「これで全部だ」という顔で出さない').toBe(true);
   });
 
-  it('窓の外だっただけの巣は、合計を欠けさせない', () => {
+  it('対象期間の外だっただけのプロジェクトは、合計を欠けさせない', () => {
     const totals = totalsOf([
       row({ tokens24h: 100 }),
       row({ tokens24h: null, tokens24hState: 'absent' }),

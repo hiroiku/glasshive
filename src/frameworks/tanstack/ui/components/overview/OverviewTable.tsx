@@ -9,9 +9,9 @@ import {
 import { formatSince, formatTokens } from '../../format.ts';
 import { Dot } from '../primitives/Dot.tsx';
 
-/* 巣の一覧。
+/* プロジェクトの一覧。
 
-   subgrid で組む都合上、**行を包む要素を増やさない。** 見出しも行も
+   `subgrid` で組む都合上、**行を包む要素を増やさない。** 見出しも行も
    `.dash-grid` の直接の子で、列は親が 1 か所で決めている。 */
 
 interface HeadProps {
@@ -22,7 +22,7 @@ interface HeadProps {
   readonly right?: boolean;
 }
 
-/* 並べ替えの頭。**3 つの画面で同じ語彙を使う** — `.head .sortable` の決まりが
+/* 並べ替えの見出し。**3 つの画面で同じ class 名を使う** — `.head .sortable` の CSS が
    そのまま効くので、画面ごとに矢印の出し方を書き直さずに済む。 */
 function SortHead({ label, sortKey, order, onSort, right }: HeadProps) {
   const on = order.key === sortKey;
@@ -78,8 +78,8 @@ export function OverviewTable({
         const isPinned = pinned.has(row.id);
         return (
           <div key={row.id} className="dash-row">
-            {/* 行の属性としてのピン。行を開く操作とは別の的にしたいので、
-                リンクの外に出して単独の押しどころにしてある。 */}
+            {/* 行の属性としてのピン留め。行を開く操作とは別のクリック対象にしたいので、
+                リンクの外に出して独立した button にしてある。 */}
             <button
               type="button"
               className={`pin${isPinned ? ' on' : ''}`}
@@ -105,7 +105,7 @@ export function OverviewTable({
             <span className="right mono">{row.waiting || ''}</span>
             <span className={`right mono${row.input > 0 ? ' inputc' : ''}`}>{row.input || ''}</span>
 
-            {/* 読めなかった消費は空にせず、読めなかったと言う。
+            {/* 観測できなかった消費は空にせず、観測できなかったと言う。
                 空にすると「使っていない」と並んで見えてしまう。 */}
             <span
               className="right mono"

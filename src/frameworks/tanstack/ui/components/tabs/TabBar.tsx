@@ -11,39 +11,47 @@ import { MAX_SLOTS } from '../../hooks/useTabShortcuts.ts';
 import { Dot } from '../primitives/Dot.tsx';
 import { Icon } from '../primitives/Icon.tsx';
 
-/* タブ行。留めたものが、留めた順に並ぶ。
+/* タブ行。ピン留めしたものが、留めた順に並ぶ。
 
-   **幅を動かさない。** 件数の札と外す × は同じ場所に置き、載せたときに差し替える。
+   **幅を動かさない。** 件数と閉じる × は同じ場所に置き、ホバーしたときに差し替える。
    × が現れて行が伸びると隣が動き、押すつもりのなかったタブを外してしまう。
    タブは位置で覚えて選ぶものなので、位置が動くこと自体が壊れている。
 
-   鍵盤から選べることは、載せたときの札で言う。**行の見た目は変えない** —
-   番号を字として出すと、幅が席ごとに変わって位置が動く。 */
+   キーボードから選べることは、ホバー時の `title` で言う。行の見た目は変えない —
+   番号を文字として出すと、幅がタブごとに変わって位置が動く。 */
 
 export interface TabBarProps {
-  /** タブに出す id。**留めた印そのものではない** — 観測に在るものだけが渡ってくる */
+  /** タブに出す id。**ピン留めの一覧そのものではない** — 観測に在るものだけが渡ってくる */
   readonly visible: readonly string[];
-  readonly projects: readonly ProjectJson[];
+  /* 観測できたプロジェクト。**まだ木が届いていない間は `undefined` である。**
+     空の配列へ潰すと「1 つも観測できなかった」と見分けが付かなくなり、
+     届くのを待っているだけのタブまで、消えたタブとして落ちる。 */
+  readonly projects: readonly ProjectJson[] | undefined;
   readonly onUnpin: (id: string) => void;
-  /* いま観ているが留めていない巣。末尾に仮の席として出す。
-     出さないと、留めていない巣を観ているあいだ、自分がどこに居るかがタブ行から消える。 */
+  /* いま開いているが、ピン留めしていないプロジェクト。末尾に暫定タブとして出す。
+     出さないと、ピン留めしていないプロジェクトを見ているあいだ、自分がどこに居るかが
+     タブ行から消える。 */
   readonly current: string | null;
-  /** 終わったものも数に入れるか。表に出ている数と札の数を揃える */
+  /** 終わったものも数に入れるか。表に出ている件数とタブの件数を揃える */
   readonly showAll: boolean;
 }
 
 export function TabBar({ visible, projects, onUnpin, current, showAll }: TabBarProps) {
-  const byId = new Map(projects.map((project) => [project.id, project]));
-  /* 器はどの道でも同じものでなければならないので、載るまでは道のことを言わない。
-     仮の席も「いま居る道」から出るものなので、載ってから足す。 */
+  const byId = new Map((projects ?? []).map((project) => [project.id, project]));
+  /* 木が届いているか。**届く前と、届いた上で見つからないのは別である。**
+     前者は待っているだけなのでタブを出す。後者は観測から消えた id なので落とす。 */
+  const observed = projects !== undefined;
+  /* HTML シェル(`_shell.html`)はどのルートでも同じものなので、hydrate するまでは
+     ルートのことを言わない。暫定タブも「いま居るルート」から出るものなので、
+     hydrate してから足す。 */
   const hydrated = useHydrated();
   const here = hydrated ? current : null;
   const provisional = here !== null && !visible.includes(here) ? here : null;
-  /* 数を出すときの今。**行ごとに引かない** — 引き直すと、同じ行の中で
-     見える数と見えない数の境目がずれる。 */
+  /* 件数を数えるときの現在時刻。**タブごとに引き直さない** — 引き直すと、同じタブ行の
+     中で見える数と見えない数の境目がずれる。 */
   const nowMs = Date.now();
   const mark = useCommandMark();
-  // 席の番号は行の並びそのもの。一覧が 1、留めたものが 2 から続く
+  // タブの番号は並び順そのもの。Overview が 1、ピン留めしたものが 2 から続く
   const slotMark = (slot: number) => (slot > MAX_SLOTS ? '' : ` (${mark}${slot})`);
   const home = (
     <>
@@ -54,7 +62,7 @@ export function TabBar({ visible, projects, onUnpin, current, showAll }: TabBarP
 
   return (
     <nav id="tabs" aria-label="Pinned projects">
-      {/* 一覧へ戻る席。**留めた印が空でも消えない** — 消えると帰り道が無くなる */}
+      {/* Overview へ戻るタブ。**ピン留めが空でも消えない** — 消えると戻る手段が無くなる */}
       <span className="tab">
         {hydrated ? (
           <Link
@@ -75,8 +83,13 @@ export function TabBar({ visible, projects, onUnpin, current, showAll }: TabBarP
 
       {visible.map((id, index) => {
         const project = byId.get(id);
-        if (project === undefined) return null;
-        const shown = visibleSessions(project, showAll, nowMs).length;
+        // 観測から消えた id。**待っているのではなく、もう無い**
+        if (project === undefined && observed) return null;
+        /* 木が届くまでは id そのものを名前として出す。**id は観測ではなく URL の値である。**
+           ここでタブごと落とすと、ピン留めしたプロジェクトを直に開いたユーザーには、
+           いまどこに居るかがどこにも出ない画面になる(アドレスバーを読むしか手が無くなる)。 */
+        const name = project?.name ?? id;
+        const shown = project === undefined ? 0 : visibleSessions(project, showAll, nowMs).length;
         return (
           <span key={id} className="tab">
             <Link
@@ -84,18 +97,18 @@ export function TabBar({ visible, projects, onUnpin, current, showAll }: TabBarP
               params={{ slug: id }}
               className="tab-link"
               activeProps={{ className: 'tab-link on' }}
-              title={`${project.path ?? id}${slotMark(index + 2)}`}
+              title={`${project?.path ?? id}${slotMark(index + 2)}`}
             >
-              <Dot state={projectDotState(project)} />
-              <span>{project.name}</span>
+              <Dot state={project === undefined ? 'unknown' : projectDotState(project)} />
+              <span>{name}</span>
             </Link>
-            {/* 札と × を同じ枠に重ねる。載せると入れ替わるだけで、枠の幅は変わらない */}
+            {/* 件数と × を同じ枠に重ねる。ホバーで入れ替わるだけで、枠の幅は変わらない */}
             <span className="tab-slot">
               <span className="n">{shown === 0 ? '' : shown}</span>
               <button
                 type="button"
                 className="tab-close"
-                aria-label={`Unpin ${project.name}`}
+                aria-label={`Unpin ${name}`}
                 onClick={() => onUnpin(id)}
               >
                 ×
@@ -115,7 +128,7 @@ export function TabBar({ visible, projects, onUnpin, current, showAll }: TabBarP
           >
             {(() => {
               const project = byId.get(provisional);
-              return project === undefined ? null : <Dot state={projectDotState(project)} />;
+              return <Dot state={project === undefined ? 'unknown' : projectDotState(project)} />;
             })()}
             <span>{byId.get(provisional)?.name ?? provisional}</span>
           </Link>

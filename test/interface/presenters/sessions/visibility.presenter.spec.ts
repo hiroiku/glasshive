@@ -13,7 +13,7 @@ import {
 
 /* 既定で何を見せるか。**観測ではなく、見せ方の予算である。**
 
-   ここが狂うと、動いているものが画面から消える。消えたことは観る人には
+   ここが狂うと、動いているものが画面から消える。消えたことはユーザーには
    「何も起きていない」としか見えないので、どの層よりも取り違えが痛い。 */
 
 const NOW = Date.parse('2026-08-09T12:00:00.000Z');
@@ -23,6 +23,8 @@ const subagent = (over: Partial<SubagentJson> = {}): SubagentJson => ({
   id: 'sub',
   label: 'sub',
   agent_type: null,
+  name: null,
+  tool_use: null,
   parent: null,
   depth: 1,
   file: '/nest/sub.jsonl',
@@ -174,7 +176,7 @@ describe('見せる子を選ぶ', () => {
   });
 });
 
-describe('巣ひとつを 1 点で言い表す', () => {
+describe('プロジェクト 1 つを 1 点で言い表す', () => {
   it('返事待ちが 1 つでもあれば、それを最優先で見せる', () => {
     const dot = projectDotState(
       project([session({ state: 'active' }), session({ state: 'waiting', awaiting: 'user' })]),
@@ -187,7 +189,7 @@ describe('巣ひとつを 1 点で言い表す', () => {
     expect(projectDotState(project([session({ state: 'active' })]))).toBe('active');
   });
 
-  it('道具が生きていれば、待っていると言う', () => {
+  it('プロセスが生きていれば、待っていると言う', () => {
     expect(projectDotState({ ...project([session()]), live_process: true })).toBe('waiting');
   });
 

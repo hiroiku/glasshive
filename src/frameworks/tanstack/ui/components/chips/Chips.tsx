@@ -1,25 +1,23 @@
-import { mdiHomeOutline, mdiRhombus, mdiSourceBranch } from '@mdi/js';
+import { mdiHomeOutline, mdiRhombus, mdiSourceBranch, mdiSourceCommit } from '@mdi/js';
+import { commitToken } from '../../derive/tokens.ts';
 import { hoverTok } from '../../hoverTok.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import { pressable } from '../../pressable.ts';
 import { Dot } from '../primitives/Dot.tsx';
 import { Icon } from '../primitives/Icon.tsx';
 
-/* どの画面にも出る 3 種の札。
+/* どの画面にも出る 4 種のチップ。
 
-   **道を props で受け取らない。** どこからでも道を呼べるので、受け取る必要が無い。
-   旧実装はこの `nav` を 30 か所以上に通しており、札を 1 つ置くために
-   その場所まで道を運ぶ必要があった。
+   ルーターは props で受け取らない。どこからでも `useNav()` を呼べるので、通す必要が無い。
 
-   どれも載せると本文の側の同じものが光る。押すと、その札が指す先が窓に出る。
+   どれもホバーすると本文側の同じ語がハイライトされ、クリックするとチップが指す先が
+   サイドパネルに開く。**ハイライトはホバーだけでなくフォーカスでも起こす** —
+   キーボードで辿るユーザーにはホバーが無いので、ここを落とすと何も光らない。
 
-   **光らせるのは載せたときだけではない。** 鍵盤で辿っている人には載せる手が無いので、
-   焦点が来たときにも同じものを光らせる。
+   チップ自体は button で置く。中に押しどころを持たない末端なので、要素を変えても
+   何も壊れない。見た目は `base.css` が button の既定を一度落としている。 */
 
-   札そのものは button で置く。中に押しどころを持たない末端なので、要素を変えても
-   何も壊れない — 見た目は base.css で button の既定を一度落としてある。 */
-
-/** 載せたときと焦点が来たときに、本文の側の同じ語を光らせる */
+/** ホバーとフォーカスで、本文側の同じ語をハイライトする */
 const glow = (token: string) => ({
   onMouseEnter: () => hoverTok(token, true),
   onMouseLeave: () => hoverTok(token, false),
@@ -27,7 +25,7 @@ const glow = (token: string) => ({
   onBlur: () => hoverTok(token, false),
 });
 
-/** エージェントの札。点と名前と居場所。押すと会話が出る */
+/** エージェントのチップ。状態の点と名前と worktree。押すと会話パネルが開く */
 export function AgentChip({
   file,
   state,
@@ -46,7 +44,7 @@ export function AgentChip({
       className="wk"
       title={file}
       aria-label={`Open conversation for ${label}`}
-      // 行そのものの押しどころを乗っ取らない。札は札として押される
+      // 行そのもののクリックを乗っ取らない。チップはチップとして押される
       {...pressable(() => nav.openConv(file), { stopPropagation: true })}
       {...glow(file)}
     >
@@ -59,7 +57,7 @@ export function AgentChip({
   );
 }
 
-/** 課題の札。閉じたものは沈めて見せる — 参照の大半は統合済みの課題である */
+/** 課題のチップ。閉じたものは沈めて見せる — 参照の大半は統合済みの課題である */
 export function IssueChip({ id, closed = false }: { id: string; closed?: boolean }) {
   const nav = useNav();
   return (
@@ -77,7 +75,36 @@ export function IssueChip({ id, closed = false }: { id: string; closed?: boolean
   );
 }
 
-/** 枝 / 作業場所の札。押すと記録の画面のその行へ */
+/* コミットのチップ。押すと、その `ref` の詳細がサイドパネルに出る。
+
+   **書かれていた桁数のまま見せる。** 7 桁で書かれたものを 40 桁に伸ばすと、
+   本文とチップで別のものを見ている気になる。リンク先だけを完全な sha で持つ。 */
+export function CommitChip({
+  rev,
+  label,
+  subject,
+}: {
+  rev: string;
+  label: string;
+  subject: string;
+}) {
+  const nav = useNav();
+  return (
+    <button
+      type="button"
+      className="refchip commit"
+      title={subject === '' ? rev : `${rev} — ${subject}`}
+      aria-label={`View commit ${label}`}
+      {...pressable(() => nav.openRef(rev, label), { stopPropagation: true })}
+      {...glow(commitToken(rev))}
+    >
+      <Icon path={mdiSourceCommit} size={10} />
+      {label}
+    </button>
+  );
+}
+
+/** ブランチ / worktree のチップ。押すと Git 画面のその行へ */
 export function RefChip({ name, kind = 'branch' }: { name: string; kind?: 'branch' | 'worktree' }) {
   const nav = useNav();
   return (

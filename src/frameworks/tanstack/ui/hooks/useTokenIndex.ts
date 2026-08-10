@@ -1,33 +1,37 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
+import { gitQuery } from '../../queries/git.query.ts';
 import { issuesQuery } from '../../queries/issues.query.ts';
 import {
-  type AgentRef,
   agentTokens,
+  commitTokens,
   gitTokens,
   type IssueRef,
   issueIndex,
+  type TokenDict,
+  tokenDict,
 } from '../derive/tokens.ts';
 
-/* 文中の語を札にするための索きを、3 つまとめて用意する。
+/* 文中の語をチップにするためのインデックスを、一つの `lookup` にまとめて用意する。
 
-   会話の窓と題名の両方が同じ索きを要るので、ここに寄せてある。台帳は 1 度取れば
-   両方で使い回せる — 問い合わせの鍵が同じなので、二度は取りに行かない。 */
+   会話のパネルも題名も同じインデックスを要るので、ここに寄せてある。台帳と Git は 1 度取れば
+   どちらでも使い回せる — 問い合わせのキーが同じなので、二度は取りに行かない。
 
-export interface TokenIndex {
-  readonly issues: Map<string, IssueRef>;
-  readonly agents: Map<string, AgentRef>;
-  readonly gits: Map<string, 'branch' | 'worktree'>;
-  /** どれも空か。空なら文をそのまま出せばよく、語ごとの突き合わせを丸ごと省ける */
-  readonly empty: boolean;
-}
+   **見ているプロジェクトのことは、見ている間ずっとインデックスに持っている。** 台帳と Git を
+   ここで引くのはそのためで、Git の画面を開いていなくても sha がチップになる。
+   どちらも読めなくてもチップにならないだけで、文はそのまま出る。 */
+
+export type TokenIndex = TokenDict;
 
 export function useTokenIndex(project: ProjectJson | undefined): TokenIndex {
-  /* 閉じたものも索きに入れる。会話が参照するのは大半が統合済みの課題である。
-     台帳が読めなくても札にならないだけで、文はそのまま出る。 */
+  // 閉じたものもインデックスに入れる。会話が参照するのは大半が統合済みの課題である
   const ledger = useQuery({
     ...issuesQuery(project?.id ?? '', true),
+    enabled: project !== undefined,
+  });
+  const repository = useQuery({
+    ...gitQuery(project?.id ?? ''),
     enabled: project !== undefined,
   });
 
@@ -38,13 +42,10 @@ export function useTokenIndex(project: ProjectJson | undefined): TokenIndex {
     return issueIndex(response.body.issues);
   }, [ledger.data]);
 
+  const overview = repository.data?.ok === true ? repository.data.body : undefined;
   const agents = useMemo(() => agentTokens(project), [project]);
-  const gits = useMemo(() => gitTokens(project), [project]);
+  const gits = useMemo(() => gitTokens(project, overview), [project, overview]);
+  const commits = useMemo(() => commitTokens(overview), [overview]);
 
-  return {
-    issues,
-    agents,
-    gits,
-    empty: issues.size === 0 && agents.size === 0 && gits.size === 0,
-  };
+  return useMemo(() => tokenDict(issues, agents, gits, commits), [issues, agents, gits, commits]);
 }

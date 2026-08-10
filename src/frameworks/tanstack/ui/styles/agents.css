@@ -1,9 +1,16 @@
-/* ---------- Agents。木と時間の帯 ---------- */
+/* ---------- Agents。木とタイムラインの稼働区間 ---------- */
 
 /* ---------- ツリー(列ぞろえ + タイムライン) ----------
    全行が #tree-pane のトラックを subgrid で共有する。
    文字列の列は fit-content — 中身が短いときは中身の幅に密着し(上限つき)、
-   余った幅はすべてタイムライン(唯一の fr)へ流れてウォーターフォールが最大化する。 */
+   余った幅はすべてタイムライン(唯一の fr)へ流れてウォーターフォールが最大化する。
+
+   **列の下限は行のセルの min-width が渡す。** 行のセルは `.grid-row > span` の
+   overflow: hidden で自動最小寸法が 0 になるので、min-width を書いた列だけが
+   トラックに下限を持つ。書かない列はヘッダの語の幅まで潰れ、中身は clip に呑まれて
+   黙って消える。下限の合計が入らない幅では列を潰さず、overflow: auto が横へ送る。
+   足りない幅は maximize tracks が全トラックへ等分で配るので、fit-content の
+   上限を上げても飢えた列は救えない — 効くのは上限ではなく下限のほうである。 */
 #tree-pane {
   flex: 1;
   min-width: 0;
@@ -50,6 +57,19 @@
   white-space: nowrap;
 }
 
+/* 並べ替えは続けて押す操作なので、押すたびに列名が選択されないようにする。
+   4 つの表の見出しがどれも `head` を持つので、素のクラスで 1 つにまとめている。
+
+   **見出しでない行には当てない。** id も sha もブランチ名も題も、コピーしたいのはそちらである。
+
+   軸の目盛りの時刻も、これでコピーできなくなる。表示範囲の両端は .rs-time の欄に残るが、
+   その間の刻みはどこにも選べる形で出ていない — 端に貼りつく目盛りは読めないので
+   落としており(AgentsTable の x < 3 || x > 97)、残るのは .rs-time と重ならない時刻になる。
+   目盛りは軸の刻みであって観測した値ではないので、押せることのほうを採る。 */
+.head {
+  user-select: none;
+}
+
 /* 並び替え: 列名クリックで切り替え(▲/▼)。タイムライン列は目盛りの色 + 左端の矢印で示す */
 .head .sortable {
   cursor: pointer;
@@ -89,7 +109,7 @@
   left: 12px;
 }
 
-/* 変わった行だけの一撃ハイライト。
+/* 変わった行だけの一瞬のハイライト。
    transform の拡大はスクロール可能領域に算入されて横スクロールバーが一瞬出るため使わない
    (背景と inset shadow はオーバーフローに影響しない)。 */
 @keyframes rowpop {
@@ -122,12 +142,15 @@
   background: rgba(96, 165, 250, 0.1);
   border-left-color: var(--accent);
 }
+/* 名前の列だけは overflow を上書きしない — visible にすると、潰れたセルから溢れた文字が
+   切られずに Status のチップの上へ流れ出す(11 セルの中でここだけが重なって見える理由)。
+   min-width は名前の列の下限。字下げは padding なので border-box の内寸を食う一方で
+   トラックは広げない。深さが深いほど内寸が減るぶん、下限も同じ 24px 刻みで上げる */
 .row .name {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
-  overflow: visible;
+  min-width: min(300px, calc(150px + var(--depth, 0) * 24px));
 }
 .row .name .t {
   overflow: hidden;
@@ -146,9 +169,16 @@
   color: var(--dim);
   font-size: 10px;
 }
+/* id も名前も単語なので、放っておくと min-content 未満に縮まない。
+   縮まないまま隣に居ると、先に 0 まで潰れるのは題のほうになり、名前の欄から
+   題が消えて id だけが残る。両方を縮めて、長い題から先に省略記号へ落とす */
 .row .sub-id {
   color: var(--dim);
   font-size: 10.5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .row .col-model,
 .row .col-eff {
@@ -186,6 +216,25 @@
 .row .col-now.subwait {
   color: #7dd3fc;
 }
+
+/* 残る fit-content の 4 列にも下限を持たせる。下限が無いとヘッダの語の幅(bd なら 13px)まで
+   潰れ、チップもブランチ名もいま何をしているかも clip に呑まれて跡形も無くなる。
+   チップ 1 つぶんは残して、それでも足りない幅は横送りに回す。
+
+   **中身の在るセルにだけ持たせる。** 下限は「潰れて読めなくなる」ことを防ぐためのもので、
+   描くものが無いセルには守るべき文字が無い。無条件に敷くと、worktree を使っていない
+   プロジェクトや、走っているセッションが無いときにも空の列が幅を握り、その分だけ
+   タイムラインが痩せる — この表で伸び縮みするのはタイムラインの列 1 つだけなので、
+   余った幅の行き先は他に無い。 */
+.row .col-bd:not(:empty),
+.row .col-wt:not(:empty),
+.row .col-br:not(:empty) {
+  min-width: 92px;
+}
+.row .col-now:not(:empty) {
+  min-width: 104px;
+}
+
 .row .col-bd {
   display: flex;
   gap: 6px;
@@ -200,9 +249,9 @@
   text-align: right;
 }
 
-/* 罫線: 呼んだ相手のドット直下から縦線を下ろし、子のドットへ枝を渡す。
-   段は行が --depth で持つ(1 が直に呼ばれた子)。名前の字下げと同じ 24px 刻みで右へずらす —
-   ずらさないと、深い子の枝だけが 1 段目の線から伸びているように見える */
+/* 罫線: 呼んだ相手のドット直下から縦線を下ろし、子のドットへ横線を渡す。
+   深さは行が --depth で持つ(1 が直に呼ばれた子)。名前の字下げと同じ 24px 刻みで右へずらす —
+   ずらさないと、深い子の横線だけが深さ 1 の縦線から伸びているように見える */
 .row.kind-subagent::before {
   content: "";
   position: absolute;
@@ -267,7 +316,7 @@
   overflow: visible;
 }
 /* ウォーターフォール内はドラッグでパンできる(素のクリックは行選択のまま)。
-   帯自体は 14px しかないので、当たり判定は透明な ::before で行のタイムライン領域全体
+   .tl 自体は 14px しかないので、当たり判定は透明な ::before で行のタイムライン領域全体
    (上下の余白 + 右パディング + 列間ギャップ)へ広げる — 隙間が row の pointer に
    落ちるとドラッグのつもりがサイドパネルを開いてしまう */
 .row .tl {
@@ -298,8 +347,9 @@ body.tl-panning .row .tl {
   overflow: visible;
   pointer-events: none;
 }
-/* 往路・復路とも実線 — 向きの区別は矢印が担う(破線は帯や点線グリッドに紛れて読めない)。
-   色は「会話」を表す空色系 — グリッドと終了帯のスレート系(青紫寄りの灰)から色相で分離する
+/* 往路・復路とも実線 — 向きの区別は矢印が担う(破線はバーや点線グリッドに紛れて読めない)。
+   色は「会話」を表す空色系 — グリッドと終了状態のバーのスレート系(青紫寄りの灰)から
+   色相で分離する
    ("waiting on subagents" の表示色と同じ系統)。
    縦線は行ごとの区間を重ねしろ付きで継ぐため、不透明色にして継ぎ目の濃淡を消す */
 .net-line {
@@ -314,6 +364,51 @@ body.tl-panning .row .tl {
 }
 .net-arrow.end {
   fill: #4f92b0;
+}
+
+/* エージェント間メッセージのレイヤー。結線と同じ座標に乗るが、**別の話である。**
+
+   結線は「誰が誰を呼び出したか」、こちらは「誰が誰に話しかけたか」。同じ色にすると
+   木の形と会話の流れが混ざって読めないので、色相を琥珀へ振って分ける。
+   矢そのものは押せるので、当たりだけは受ける。 */
+.tl-msg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.tl-msg .msg {
+  pointer-events: auto;
+  cursor: pointer;
+}
+/* 細い線は掴めない。透明な太い線を重ねて、当たり判定だけを広げる */
+.msg-hit {
+  stroke: transparent;
+  stroke-width: 9;
+}
+/* **薄く引く。** 忙しい組ではメッセージが数百本になり、濃く引くとバーが塗り潰されて
+   誰が誰を呼んだのかが読めなくなる。薄ければ、重なりがそのまま密度に見える */
+.msg-line {
+  stroke: #8a6a3a;
+  stroke-width: 1;
+  opacity: 0.42;
+}
+.msg-arrow {
+  fill: #d9a441;
+  opacity: 0.6;
+}
+.tl-msg .msg:hover .msg-line,
+.tl-msg .msg:focus-visible .msg-line {
+  stroke: #f0c060;
+  stroke-width: 1.5;
+  opacity: 1;
+}
+.tl-msg .msg:hover .msg-arrow,
+.tl-msg .msg:focus-visible .msg-arrow {
+  fill: #f0c060;
+  opacity: 1;
 }
 .tl .bar.unknown {
   top: 6px;
@@ -358,7 +453,7 @@ body.tl-panning .row .tl {
 .tl .bar.ended {
   background: #46566b;
 }
-/* 呼吸はいままさに稼働している帯(最後の生きた区間)だけ。
+/* 明滅はいままさに稼働しているバー(最後の生きた稼働区間)だけ。
    .active より後に置く — 前にあると同詳細度の後勝ちで past にも animation が効いてしまう */
 .tl .bar.past {
   opacity: 0.5;

@@ -38,7 +38,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   component: Root,
 });
 
-/* 器だけ。SPA なので、ここだけが組み立て時に一度描かれ、以降はブラウザーが中身を入れ替える。 */
+/* HTML シェルだけ。SPA なので、ここだけがビルド時に一度描かれ、以降はブラウザーが
+   中身を入れ替える。 */
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -53,8 +54,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* 好みは道より上に置く。道を移っても保つものなので、道の中に持たせると
-   画面を移るたびに読み直され、そのたびに窓の出方が跳ねる。 */
+/* 好みはルートより上に置く。ルートを移っても保つものなので、ルートの中に持たせると
+   画面を移るたびに読み直され、そのたびにパネルの出方が跳ねる。 */
 function Root() {
   return (
     <PrefsProvider>
@@ -75,15 +76,15 @@ function countsOf(tree: TreeJson | undefined) {
   return counts;
 }
 
-/* 上の帯とタブ行。どの画面に居ても同じものが出るので、道の根に置く。
+/* 上部バーとタブ行。どの画面に居ても同じものが出るので、`__root` に置く。
 
    タブ行がここに在るのは、画面を移ってもタブが描き直されないためである。
    画面の側に置くと、移るたびに並びが組み直されて、位置で覚えている手が狂う。
 
-   合図を受けるのもここである。1 本だけ張って、来たものを覚えの側へ配る。 */
+   変更通知を受けるのもここである。SSE は 1 本だけ張って、来たものをキャッシュへ配る。 */
 const brand = (
   <>
-    <Icon path={mdiBeehiveOutline} size={15} /> Glasshive
+    <Icon path={mdiBeehiveOutline} size={15} /> glasshive
   </>
 );
 
@@ -107,7 +108,7 @@ function Chrome() {
   });
 
   const toggleNotify = async () => {
-    // 入れるときだけ尋ねる。切るのに許しは要らない
+    // 入れるときだけ尋ねる。切るのに許可は要らない
     if (!prefs.notify && !(await requestNoticePermission())) return;
     prefs.set({ notify: !prefs.notify });
   };
@@ -115,8 +116,9 @@ function Chrome() {
   return (
     <>
       <header id="topbar">
-        {/* 載る前は素の行き先として出す。Link は「いま居る道か」を印として書き込むので、
-            器に焼くとその印が一覧のものに固まり、別の道を直に開いた人と食い違う */}
+        {/* hydrate 前は素の `<a>` として出す。`Link` は「いま居るルートか」を属性として
+            書き込むので、HTML シェルに焼くとその状態が Overview のものに固まり、
+            別のルートを直に開いたユーザーと食い違う */}
         {hydrated ? (
           <Link to="/" id="brand">
             {brand}
@@ -158,8 +160,8 @@ function Chrome() {
         >
           <Icon path={prefs.notify ? mdiBellOutline : mdiBellOffOutline} size={14} />
         </button>
-        {/* 繋がっていないことは隠さない。合図が来ていないのに静かなだけに見えると、
-            観る人は「何も起きていない」と読む */}
+        {/* 繋がっていないことは隠さない。変更通知が届いていないのに静かなだけに見えると、
+            ユーザーは「何も起きていない」と読む */}
         <span
           id="conn"
           className={connected ? 'on' : ''}
@@ -171,7 +173,7 @@ function Chrome() {
 
       <TabBar
         visible={tabs.visibleTabs}
-        projects={tree.data?.projects ?? []}
+        projects={tree.data?.projects}
         onUnpin={tabs.togglePin}
         current={current}
         showAll={prefs.showAll}

@@ -1,4 +1,4 @@
-/* ---------- ドロワー。指し・課題・会話の窓 ---------- */
+/* ---------- ドロワー。ref・課題・会話のパネル ---------- */
 
 /* ---------- ドロワー(詳細パネル) ----------
    幅の増減ではなく位置のスライドで開閉する — 幅が変わると本文の折り返しと
@@ -35,7 +35,7 @@ body.dragging #drawer {
 }
 
 /* 並置モード(既定): 重ならず、メインエリアを狭めて横に並ぶ。
-   閉じているときはレイアウトから外す(スライドの芝居は重なりモード専用) */
+   閉じているときはレイアウトから外す(スライドのアニメーションは重なりモード専用) */
 body.drawer-dock #drawer {
   position: relative;
   top: auto;
@@ -173,7 +173,7 @@ body.dragging #drawer-grip {
 /* 会話ログも他のビューと同じく列で整列する:
    [時刻] [▸] [種別アイコン] [名前] [プレビュー 1fr]。subgrid で全イベント横断に揃える。
    時刻は最初に目に入るよう左端で、縦長の内容でも sticky で見え続ける */
-/* 畳んだ行は目で走らせるものなので、話した中身より 1 段大きい。
+/* 畳んだ行は目で走らせるものなので、話した中身より 1 段階大きい。
    同じ大きさにすると、どこが手順の切れ目なのかが読み取れなくなる。 */
 #conversation {
   flex: 1;
@@ -399,6 +399,8 @@ body.dragging #drawer-grip {
   padding: 40px;
   text-align: center;
 }
+/* 遡り読みは続けて押す操作。文字は動詞であって会話の中身ではないので、
+   押すたびに反転させない。会話の本文はこの下で選べるまま。 */
 #older {
   display: block;
   margin: 0 auto 14px;
@@ -409,6 +411,7 @@ body.dragging #drawer-grip {
   padding: 4px 14px;
   cursor: pointer;
   font: inherit;
+  user-select: none;
 }
 #older:hover {
   color: var(--fg);
@@ -445,7 +448,7 @@ body.dragging #drawer-grip {
   margin-top: 2px;
 }
 /* 話した中身は、辿るためではなく読むためのものなので、いちばん小さく詰める。
-   ここが窓の中の「本文の大きさ」であり、見出しも引用も表もこの数から決まる。 */
+   ここがパネルの中の「本文の大きさ」であり、見出しも引用も表もこの数から決まる。 */
 .event .bubble {
   grid-column: 2 / -1;
   min-width: 0;
@@ -629,7 +632,7 @@ body.dragging #drawer-grip {
 .md tr:nth-child(even) td {
   background: rgba(42, 52, 65, 0.25);
 }
-/* 強調は「白い太字」ではなく色で読ませる — ラベル行(根拠: 等)が一瞬で拾える */
+/* 強調は白さではなく色で読ませる — ラベル行(根拠: 等)が一瞬で拾える */
 .md strong {
   color: #ecc48d;
 }
@@ -761,10 +764,10 @@ body.dragging #drawer-grip {
   background: rgba(125, 138, 153, 0.2);
 }
 
-/* 札に載せたときに、本文の側の該当行を光らせる。
+/* チップにホバーしたときに、本文の側の該当行を光らせる。
 
    ここだけ !important を使うのは、**光らせる相手が行そのもの**だからである。
-   行は状態(選択中・変化直後・載せている)で背景を持っており、どれに当たっても
+   行は状態(選択中・変化直後・ホバー中)で背景を持っており、どれに当たっても
    同じ強さで光らせないと、状態によって光ったり光らなかったりする。 */
 .tok-hl {
   /* biome-ignore lint/complexity/noImportantStyles: 行の状態ごとの背景すべてに勝つ必要がある */
@@ -826,6 +829,59 @@ body.dragging #drawer-grip {
 }
 .adot.ended {
   background: #64748b;
+}
+
+/* ---------- `code` と `pre` の中のチップ ----------
+
+   `code` と `pre` は書かれたとおりに出す場所である。そこに出てくる id も指す先を
+   持っているのでチップにするが、**見た目は地の文字のままにする。**
+
+   どちらも既に自前の地色と枠を持っている。そこへ余白と背景を持つチップを重ねると枠が
+   二重になり、行の箱を突き破って隣の行に重なる。だからここは箱を持たず、行の高さも
+   動かさない — 押せることは色と点線の下線だけで言う。 */
+.tokref {
+  display: inline;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+.tokref:hover {
+  text-decoration-style: solid;
+}
+/* アイコンも箱を持たない。文字の並びの中に置くので、下線からは外して文字に寄せる */
+.tokref .mdi,
+.tokref .adot {
+  vertical-align: -1px;
+  margin-right: 2px;
+  text-decoration: none;
+  opacity: 0.8;
+}
+.tokref .adot {
+  width: 6px;
+  height: 6px;
+  vertical-align: 0;
+  opacity: 1;
+}
+.tokref.issue {
+  color: #7fb4ea;
+}
+.tokref.issue.closed {
+  color: #8b9aab;
+}
+.tokref.ref,
+.tokref.commit {
+  color: #a9bccf;
+}
+.tokref.agent.active {
+  color: var(--active);
+}
+.tokref.agent.waiting {
+  color: var(--waiting);
+}
+.tokref.agent.ended {
+  color: #94a3b8;
 }
 
 /* ---------- 詳細パネルの活動タイムライン ---------- */

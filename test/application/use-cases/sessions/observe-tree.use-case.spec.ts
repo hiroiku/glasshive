@@ -8,8 +8,8 @@ import type {
 } from '~/application/ports/repositories/sessions/transcript.repository.ts';
 import { createObserveTree } from '~/application/use-cases/sessions/observe-tree.use-case.ts';
 
-/* 木ひと目ぶんの組み立て。読み解きは下書きの側で確かめてあるので、
-   ここで見るのは **歩けたかどうかの持ち回り** と **場所の均し方** である。 */
+/* 木ひと目ぶんの組み立て。パースは下書きの側で確かめてあるので、
+   ここで見るのは、走査できたかどうかの持ち回りと、パスの正規化である。 */
 
 const NOW = Date.parse('2026-08-09T12:00:00.000Z');
 const ACTIVE_THRESHOLD_MS = 60_000;
@@ -79,29 +79,29 @@ const treeOf = async (stub: ReturnType<typeof createStub>) => {
 };
 
 describe('木をひと目ぶん観測する', () => {
-  it('求めは必ず受理される。観測できなかったことは木の中に残る', async () => {
+  it('呼び出しは必ず受理される。観測できなかったことは木の中に残る', async () => {
     const stub = createStub({
-      groups: unobservable(new UnexpectedError('歩けない')),
+      groups: unobservable(new UnexpectedError('走査できない')),
     });
 
     const result = await stub.observe.execute(NOW);
-    expect(result.ok, '見に行けなかったことは断る理由ではない').toBe(true);
+    expect(result.ok, '観測できなかったことは断る理由ではない').toBe(true);
   });
 
-  it('置き場を歩けなかったことは、巣が 1 つも無いことと分けて持つ', async () => {
+  it('`~/.claude/projects` を走査できなかったことは、プロジェクトが無いことと分けて持つ', async () => {
     const walked = await treeOf(createStub({}));
     const blind = await treeOf(
-      createStub({ groups: unobservable(new UnexpectedError('歩けない')) }),
+      createStub({ groups: unobservable(new UnexpectedError('走査できない')) }),
     );
 
     expect(walked.sources).toEqual({ kind: 'observed', value: 1 });
-    expect(blind.projects, '歩けなかった周でも、木の形そのものは返す').toEqual([]);
+    expect(blind.projects, '走査できなかった周でも、木の形そのものは返す').toEqual([]);
     expect(blind.sources.kind, 'どちらも空の一覧になる。この欄でしか見分けられない').toBe(
       'unobservable',
     );
   });
 
-  it('道具を数えられなかったことも、0 件と分けて持つ', async () => {
+  it('プロセスを数えられなかったことも、0 件と分けて持つ', async () => {
     const tree = await treeOf(
       createStub({
         processes: unobservable(new UnexpectedError('数えられない')),
@@ -114,29 +114,32 @@ describe('木をひと目ぶん観測する', () => {
     expect(tree.projects, '数えられなくても木は返る').toHaveLength(1);
   });
 
-  it('巣の場所は、正本に書かれた作業場所を均してから木へ渡す', async () => {
+  it('プロジェクトのパスは、`transcript` に書かれた作業ディレクトリを正規化してから木へ渡す', async () => {
     const stub = createStub({});
 
     const tree = await treeOf(stub);
-    expect(stub.asked, '名前を解いて場所を得ることはしない。正本に書かれた字から引く').toEqual([
-      '/w/proj',
-    ]);
+    expect(
+      stub.asked,
+      '名前を解いてパスを得ることはしない。`transcript` に書かれた文字列から引く',
+    ).toEqual(['/w/proj']);
     expect(tree.projects[0]?.canonicalPath).toBe('/real/w/proj');
-    expect(tree.projects[0]?.path, '正本に書かれていた字も、手を加えずに残す').toBe('/w/proj');
+    expect(tree.projects[0]?.path, '`transcript` に書かれていた表記も、手を加えずに残す').toBe(
+      '/w/proj',
+    );
   });
 
-  it('均せなかった巣も、書かれていた場所で測れる', async () => {
+  it('正規化できなかったプロジェクトも、書かれていたパスで測れる', async () => {
     const stub = createStub({ canonical: absent('no-source') });
 
     const tree = await treeOf(stub);
     expect(
       tree.projects[0]?.canonicalPath,
-      '均せなかったのは「揺れを吸えなかった」だけで、「場所が分からない」ではない',
+      '正規化できなかったのは「表記の揺れを吸えなかった」だけで、「パスが分からない」ではない',
     ).toBe('/w/proj');
-    expect(tree.projects[0]?.name, '名前も場所から引ける。名前で測る側へは落とさない').toBe('proj');
+    expect(tree.projects[0]?.name, '名前もパスから引ける。名前で測る側へは落とさない').toBe('proj');
   });
 
-  it('均せなかった巣どうしは、書かれた場所が違えば併さらない', async () => {
+  it('正規化できなかったプロジェクトどうしは、書かれたパスが違えば併さらない', async () => {
     const other = `${JSON.stringify({
       type: 'user',
       cwd: '/w/other',
@@ -179,28 +182,30 @@ describe('木をひと目ぶん観測する', () => {
 
     expect(
       result.value.projects.map((project) => project.canonicalPath).sort(),
-      '均せなかったことを「場所が無い」に倒すと、名前で測ることになって別の実体が併さる',
+      '正規化できなかったことを「パスが無い」に倒すと、名前で測ることになって別の実体が併さる',
     ).toEqual(['/w/other', '/w/proj']);
   });
 
-  it('場所を 1 つも書いていない巣には、均す相手が無い', async () => {
+  it('パスを 1 つも書いていないプロジェクトには、正規化する相手が無い', async () => {
     const stub = createStub({ groups: observed([{ ...GROUP, sessions: [] }]) });
 
     const tree = await treeOf(stub);
     expect(stub.asked, '尋ねる相手が無いのに問い合わせない').toEqual([]);
-    expect(tree.projects, 'セッションを 1 つも持たない名前は、巣として数えない').toEqual([]);
+    expect(tree.projects, 'セッションを 1 つも持たない名前は、プロジェクトとして数えない').toEqual(
+      [],
+    );
   });
 
-  /* 置き場を読むのに待ち時間は無いので、まとめて開いても速くならない。
-     速くならないかわりに、開いた窓が全部いっぺんに居座る — 正本ひとつで最大 12MiB、
-     数千の正本を抱えた機械では、それだけで観測そのものが落ちる。 */
-  it('窓は 1 つずつ開く', async () => {
+  /* `~/.claude/projects` を読むのに待ち時間は無いので、まとめて開いても速くならない。
+     速くならないかわりに、読み取った範囲が全部いっぺんにメモリへ居座る — `transcript`
+     ひとつで最大 12MiB、数千の `transcript` を抱えた機械では、それだけで観測が落ちる。 */
+  it('読み取りは 1 つずつ行う', async () => {
     let open = 0;
     let peak = 0;
     const hold = async () => {
       open += 1;
       peak = Math.max(peak, open);
-      // 1 順ぶん譲る。まとめて始めていれば、この間に兄弟が全部開く
+      // マイクロタスク 1 つぶん譲る。まとめて始めていれば、この間に兄弟が全部開く
       await Promise.resolve();
       open -= 1;
       return observed({ text: '', complete: true });
@@ -212,6 +217,7 @@ describe('木をひと目ぶん観測する', () => {
       mtimeMs: NOW,
       sizeBytes: 10,
       meta: null,
+      runId: null,
     });
     const session = (id: string) => ({
       id,
@@ -249,6 +255,6 @@ describe('木をひと目ぶん観測する', () => {
 
     const result = await observe.execute(NOW);
     expect(result.ok).toBe(true);
-    expect(peak, '同時に開いた窓が 1 つを超えたら、正本の数だけ字が積み上がる').toBe(1);
+    expect(peak, '同時に開いた読み取りが 1 つを超えたら、`transcript` の数だけ積み上がる').toBe(1);
   });
 });

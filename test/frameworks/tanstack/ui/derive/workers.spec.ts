@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { liveCount, workerIndex } from '~/frameworks/tanstack/ui/derive/workers.ts';
 
-/* 課題の id から「いま誰が触っているか」を引く索き。
+/* 課題の id から「いま誰が触っているか」を引くインデックス。
 
-   **台帳には書かれていない。** 書かれているのは assignee という人の申告だけである。
+   **bd には書かれていない。** 書かれているのは assignee という人の申告だけである。
    ここが繋がって初めて、申告と実態の食い違いが画面に出る。 */
 
-/* 巣の形は、索く役自身から引く。写して持てば、形が変わったときに片方だけ古いまま残る */
+/* プロジェクトの形は、インデックスを組む実装そのものから引く。写して持てば、形が変わったときに片方だけ古いまま残る */
 type ProjectJson = NonNullable<Parameters<typeof workerIndex>[0]>;
 type SessionJson = ProjectJson['sessions'][number];
 type SubagentJson = SessionJson['subagents'][number];
@@ -15,6 +15,8 @@ const subagent = (over: Partial<SubagentJson> = {}): SubagentJson => ({
   id: 'sub',
   label: 'sub',
   agent_type: null,
+  name: null,
+  tool_use: null,
   parent: null,
   depth: 1,
   file: '/nest/sub.jsonl',
@@ -72,7 +74,7 @@ const project = (sessions: SessionJson[]): ProjectJson => ({
   sessions,
 });
 
-describe('課題を触っている手を引く', () => {
+describe('課題を触っているエージェントを引く', () => {
   it('会話の中で触れられた課題から引ける', () => {
     const index = workerIndex(
       project([session({ issues: ['kuden-os-4f2a'], file: '/nest/s.jsonl' })]),
@@ -82,7 +84,7 @@ describe('課題を触っている手を引く', () => {
   });
 
   /* worktree を課題の id で切る使い方が広く行われている。その名前は cwd に出る。 */
-  it('作業場所の名前からも引ける', () => {
+  it('`worktree` の名前からも引ける', () => {
     const index = workerIndex(project([session({ cwd: '/repo/.worktrees/kuden-os-4f2a' })]));
 
     expect(index.get('kuden-os-4f2a')).toHaveLength(1);
@@ -96,14 +98,14 @@ describe('課題を触っている手を引く', () => {
     expect(index.get('x-1')?.[0]).toMatchObject({ kind: 'subagent', file: '/nest/sub.jsonl' });
   });
 
-  /* 触れ方が 2 通りあっても、触っているのは 1 人である。 */
-  it('同じ正本を二度並べない', () => {
+  /* 触れ方が 2 通りあっても、触っているエージェントは 1 つである。 */
+  it('同じ `transcript` を二度並べない', () => {
     const index = workerIndex(project([session({ issues: ['x-1'], cwd: '/repo/.worktrees/x-1' })]));
 
     expect(index.get('x-1')).toHaveLength(1);
   });
 
-  it('別の正本なら、並べる', () => {
+  it('別の `transcript` なら、並べる', () => {
     const index = workerIndex(
       project([
         session({ file: '/nest/one.jsonl', issues: ['x-1'] }),
@@ -119,8 +121,8 @@ describe('課題を触っている手を引く', () => {
   });
 });
 
-describe('生きている手の数', () => {
-  it('終わった手は数えない', () => {
+describe('生きているエージェントの数', () => {
+  it('終わったエージェントは数えない', () => {
     const index = workerIndex(
       project([
         session({ file: '/nest/live.jsonl', state: 'active', issues: ['x-1'] }),

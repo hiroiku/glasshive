@@ -22,19 +22,19 @@ import { EdgeGutter } from './EdgeGutter.tsx';
 
 /* 課題の一覧。依存の弧・親子の階層・着手の順。
 
-   9 列の格子で、行は subgrid で親の列に乗る。**行を包む要素を増やさないこと。**
-   subgrid は直の子にしか効かない。
+   9 列のグリッドで、行は `subgrid` で親の列に乗る。行を包む要素を増やさないこと —
+   `subgrid` は直の子にしか効かない。
 
    台帳が言うことと、観測が言うことを、同じ行に並べてある。台帳の assignee は人の申告で、
-   隣の札はいま実際に動いているエージェントである。**食い違いが見えることに意味がある。** */
+   隣のチップはいま実際に動いているエージェントである。**食い違いが見えることに意味がある。** */
 
-/** 一度に並べる名札の数。溢れたぶんは数だけ添える */
+/** 一度に並べるエージェントのチップの数。溢れたぶんは件数だけ添える */
 const MAX_LISTED_WORKERS = 2;
 
-/** 一度に並べる付箋の数 */
+/** 一度に並べるラベルの数 */
 const MAX_LISTED_LABELS = 2;
 
-/** 弧の余白の下限。頭の「▶ Start」が収まる幅 */
+/** 弧を引く余白の下限。見出しの「▶ Start」が収まる幅 */
 const MIN_GUTTER = 58;
 
 export type IssueSortKey =
@@ -56,8 +56,8 @@ export interface IssueOrder {
 const priorityClass = (priority: number | null): string =>
   priority === null ? 'px' : `p${Math.min(priority, 4)}`;
 
-/* 並べ替えの鍵。**着手順だけは別の物差しである** — 他が課題の欄を読むのに対し、
-   これは「次に取れるか」を読む。だから同じ表に混ぜず、頭の側で入れ替える。 */
+/* 並べ替えのキー。**着手順だけは別の物差しである** — 他が課題の欄を読むのに対し、
+   これは「次に取れるか」を読む。だから同じ列に混ぜず、見出しの側で切り替える。 */
 const keyOf = (issue: IssueSummaryJson, key: IssueSortKey): string => {
   if (key === 'id') return issue.id ?? '';
   if (key === 'title') return issue.title ?? '';
@@ -96,7 +96,7 @@ function SortHead({ label, sortKey, order, onSort, right }: HeadProps) {
 export interface IssuesTableProps {
   /** 一覧に出す課題。閉じたものを含めるかは、取ってくる側が決めている */
   readonly issues: readonly IssueSummaryJson[];
-  /** 閉じたものまで含む全量。束ねた課題の消化はここから数える */
+  /** 閉じたものまで含む全件。親課題の進捗はここから数える */
   readonly all: readonly IssueSummaryJson[];
   readonly project: ProjectJson | undefined;
   readonly workers: WorkerIndex;
@@ -106,7 +106,7 @@ export interface IssuesTableProps {
   readonly order: IssueOrder;
   readonly onSort: (key: IssueSortKey) => void;
   readonly nowMs: number;
-  /** この巣を初めて描くか。初回は変化の光を当てない */
+  /** このプロジェクトを初めて描くか。初回は変化のハイライトを出さない */
   readonly firstPaint: boolean;
 }
 
@@ -127,8 +127,8 @@ export function IssuesTable({
   const progress = useMemo(() => childProgress(all), [all]);
   const rankOf = useMemo(() => startRanker(issues), [issues]);
 
-  /* 変化の光。絞り込む前の全件を見る — 絞りを掛けた結果だけを見ると、
-     絞りから外れた行の変化が黙って落ちる。 */
+  /* 変化のハイライト。絞り込む前の全件を見る — 絞り込んだ結果だけを見ると、
+     絞り込みから外れた行の変化が黙って落ちる。 */
   const seenRef = useRef(false);
   const first = firstPaint || !seenRef.current;
   seenRef.current = true;
@@ -179,7 +179,7 @@ export function IssuesTable({
       return keyOf(a, order.key).localeCompare(keyOf(b, order.key), 'ja') * sign;
     });
 
-  /* 着手順は「次に取る一列の待ち行列」である。階層に畳むと、待ち行列の順番が
+  /* 着手順は「次に取る一列の待ち行列」である。階層にまとめると、待ち行列の順番が
      親の下へ散って読めなくなる。 */
   const rows: HierarchyRow[] =
     order.key === 'start'
@@ -191,7 +191,7 @@ export function IssuesTable({
   return (
     <div id="issues-list">
       <div className="issue-row head">
-        {/* 弧の列の頭は着手順の並べ替えを兼ねる。依存が解けた open を優先度順に上へ */}
+        {/* 弧の列の見出しは着手順の並べ替えを兼ねる。依存が解けた open を優先度順に上へ */}
         <button
           type="button"
           className={`sortable dep-sort${order.key === 'start' ? ' sorted' : ''}`}
@@ -268,9 +268,9 @@ function IssueRow({
   const agg = issue.id === null ? undefined : progress.get(issue.id);
 
   return (
-    /* 行そのものを button にはできない。中に札を持っており、button の中に button は
-       置けない(ブラウザーが入れ子を解いて、格子ごと崩す)。役と焦点の順だけを足す。 */
-    // biome-ignore lint/a11y/useSemanticElements: 中に押しどころを持つ行は button にできない
+    /* 行そのものを button にはできない。中にチップを持っており、button の中に button は
+       置けない(ブラウザーが入れ子を解いて、グリッドごと崩す)。`role` と `tabIndex` だけを足す。 */
+    // biome-ignore lint/a11y/useSemanticElements: 中にチップを持つ行は button にできない
     <div
       className={`issue-row${live >= 2 ? ' conflict' : ''}${pop === null ? '' : ' pop'}`}
       data-tok={[issue.id, ...found.map((worker) => worker.file)].filter(Boolean).join(' ')}
@@ -280,13 +280,13 @@ function IssueRow({
       aria-label={`Open issue ${issue.id ?? ''}`}
       {...pressable(onOpen)}
     >
-      {/* 弧の svg と、その幅を確保する空きで 1 組。svg はレイアウトの外に置いてあるので、
-          列の幅は隣の空きが取る */}
+      {/* 弧の svg と、その幅を確保する空の要素で 1 組。svg はレイアウトの外に置いてあるので、
+          列の幅は隣の空の要素が取る */}
       <EdgeGutter row={index} edges={edges} width={gutter} />
       <span style={{ width: gutter }} />
       <span className="iid" title={issue.id ?? ''}>
         {row.guides.map((carry, level) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: 罫線は段そのもので、位置が identity である
+          // biome-ignore lint/suspicious/noArrayIndexKey: 罫線は深さそのもので、位置が identity である
           <span key={`g${level}`} className={`tg${carry ? ' cont' : ''}`} />
         ))}
         {row.depth > 0 && <span className={`tg ${row.last ? 'end' : 'tee'}`} />}
@@ -325,7 +325,7 @@ function IssueRow({
             type="button"
             key={label}
             className="lbl"
-            // 付箋は行の押しどころを乗っ取らない。押したら、その付箋で絞る
+            // ラベルは行のクリックを乗っ取らない。押したら、そのラベルで絞り込む
             {...pressable(() => onLabel(label), { stopPropagation: true })}
           >
             {cut(label, 20)}

@@ -23,6 +23,8 @@ function subagent(at: number, overrides: Partial<DraftSubagent> = {}): DraftSuba
     id: 'agent-aimpl-foo-abcdef1234567890',
     label: 'aimpl-foo',
     agentType: null,
+    name: null,
+    toolUseId: null,
     parentId: null,
     depth: 1,
     file: '/p/agent-aimpl-foo-abcdef1234567890.jsonl',
@@ -84,25 +86,25 @@ function build(drafts: readonly DraftProject[], nowMs: number, processes: readon
   });
 }
 
-describe('三つの様子を導き出す', () => {
+describe('三つの状態を導き出す', () => {
   it('閾値の内に書き込みがあれば稼働', () => {
     const tree = build([project()], T0 + 10 * SEC);
     expect(tree.projects[0]?.sessions[0]?.state).toBe('active');
   });
 
-  it('閾値を過ぎて道具も生きていなければ終了', () => {
+  it('閾値を過ぎてプロセスも生きていなければ終了', () => {
     const tree = build([project()], T0 + 600 * SEC);
     const first = tree.projects[0]?.sessions[0];
     expect(first?.state).toBe('ended');
     expect(first?.awaiting, '死んだセッションは何も待たない').toBe(null);
   });
 
-  it('閾値を過ぎていても同じ巣に道具が生きていれば待機', () => {
+  it('閾値を過ぎていても同じプロジェクトにプロセスが生きていれば待機', () => {
     const tree = build([project()], T0 + 120 * SEC, ['/work/myproj']);
     expect(tree.projects[0]?.sessions[0]?.state).toBe('waiting');
   });
 
-  it('待機の枠は生きている道具の数だけ、新しい順に配られる', () => {
+  it('待機の枠は生きているプロセスの数だけ、新しい順に配られる', () => {
     const tree = build(
       [
         project({
@@ -114,7 +116,7 @@ describe('三つの様子を導き出す', () => {
     );
     const sessions = tree.projects[0]?.sessions ?? [];
     expect(sessions.map((s) => s.id)).toEqual(['new', 'old']);
-    expect(sessions[0]?.state, '道具 1 つぶんだけ、直近のセッションが待機').toBe('waiting');
+    expect(sessions[0]?.state, 'プロセス 1 つぶんだけ、直近のセッションが待機').toBe('waiting');
     expect(sessions[1]?.state, '残りは終了。全部を待機にしない').toBe('ended');
   });
 });
@@ -164,7 +166,7 @@ describe('何を待っているかを見分ける', () => {
   });
 });
 
-describe('子の様子', () => {
+describe('子の状態', () => {
   it('書き込みの新しさだけで決まる', () => {
     const tree = build(
       [
@@ -206,8 +208,8 @@ describe('子の様子', () => {
   });
 });
 
-describe('巣を併せる', () => {
-  it('同じ場所を指す別名は 1 つになり、道具は二重に数えない', () => {
+describe('プロジェクトを併せる', () => {
+  it('同じパスを指す別名は 1 つになり、プロセスは二重に数えない', () => {
     const tree = build(
       [
         project({ slug: '-work-myproj', sessions: [session(T0, { id: 'a' })] }),
@@ -248,17 +250,17 @@ describe('巣を併せる', () => {
     const sessions = tree.projects[0]?.sessions ?? [];
     expect(
       sessions.map((s) => s.state),
-      '道具 1 つに対して待機も 1 つ',
+      'プロセス 1 つに対して待機も 1 つ',
     ).toEqual(['waiting', 'ended']);
   });
 
-  it('呼び名は代表が書いていた場所の末尾から採る', () => {
+  it('名前は代表が書いていた作業ディレクトリの末尾から採る', () => {
     const only = build([project()], T0).projects[0];
     expect(only?.path).toBe('/work/myproj');
     expect(only?.name).toBe('myproj');
   });
 
-  it('場所が分からない巣は名前をそのまま呼び名にする', () => {
+  it('パスが分からないプロジェクトは、`slug` をそのまま名前にする', () => {
     const tree = build(
       [
         project({
@@ -272,8 +274,8 @@ describe('巣を併せる', () => {
   });
 });
 
-describe('巣の場所を導き出す', () => {
-  it('最も新しいセッションが書いていた場所を採る', () => {
+describe('プロジェクトのパスを導き出す', () => {
+  it('最も新しいセッションが書いていた作業ディレクトリを採る', () => {
     expect(
       deriveProjectPath([
         session(T0 - 100 * SEC, { cwd: '/old/place' }),
@@ -283,20 +285,20 @@ describe('巣の場所を導き出す', () => {
     ).toBe('/new/place');
   });
 
-  it('場所を書いていないセッションは飛ばして、次を見る', () => {
+  it('作業ディレクトリを書いていないセッションは飛ばして、次を見る', () => {
     expect(
       deriveProjectPath([session(T0, { cwd: null }), session(T0 - SEC, { cwd: '/work/myproj' })]),
     ).toBe('/work/myproj');
     expect(deriveProjectPath([session(T0, { cwd: '' })])).toBe(null);
   });
 
-  it('どのセッションも場所を書いていなければ無い', () => {
+  it('どのセッションも作業ディレクトリを書いていなければ無い', () => {
     expect(deriveProjectPath([session(T0, { cwd: null })])).toBe(null);
     expect(deriveProjectPath([])).toBe(null);
   });
 
-  it('新しいセッションが場所を書いていなければ、古い方まで下がる', () => {
-    // 並べてから探すので、渡す順を変えても答えは動かない
+  it('新しいセッションが作業ディレクトリを書いていなければ、古い方まで下がる', () => {
+    // 並べてから探すので、渡す順を変えても結果は動かない
     const older = session(T0 - 100 * SEC, { cwd: '/work/myproj' });
     const newer = session(T0, { cwd: null });
     expect(deriveProjectPath([older, newer])).toBe('/work/myproj');
@@ -304,8 +306,8 @@ describe('巣の場所を導き出す', () => {
   });
 });
 
-describe('道具の帰属', () => {
-  it('最も深い巣ひとつだけに数える', () => {
+describe('プロセスの帰属', () => {
+  it('最も深いプロジェクトひとつだけに数える', () => {
     const tree = build(
       [
         project({
@@ -320,16 +322,16 @@ describe('道具の帰属', () => {
     );
     const byId = new Map(tree.projects.map((p) => [p.id, p.liveProcessCount]));
     expect(byId.get('inner')).toBe(1);
-    expect(byId.get('outer'), '祖先へ波及させると、上位の巣が丸ごと生きて見える').toBe(0);
+    expect(byId.get('outer'), '祖先へ波及させると、上位のプロジェクトが丸ごと生きて見える').toBe(0);
   });
 });
 
 describe('木そのもの', () => {
-  it('セッションを持たない名前は巣として数えない', () => {
+  it('セッションを持たない名前はプロジェクトとして数えない', () => {
     expect(build([project({ sessions: [] })], T0).projects).toEqual([]);
   });
 
-  it('巣は最終活動の新しい順に並ぶ', () => {
+  it('プロジェクトは最終活動の新しい順に並ぶ', () => {
     const tree = build(
       [
         project({
@@ -348,7 +350,7 @@ describe('木そのもの', () => {
     expect(tree.projects.map((p) => p.id)).toEqual(['new', 'old']);
   });
 
-  it('道具を数えられなくても木は組み、数えられなかったことを載せる', () => {
+  it('プロセスを数えられなくても木は組み、数えられなかったことを載せる', () => {
     const tree = buildProjectTree({
       drafts: [project()],
       processes: unobservable(new Denied('ps に断られた')),
@@ -366,11 +368,11 @@ describe('木そのもの', () => {
   it('数えられたときは総数を載せる', () => {
     const tree = build([project()], T0, ['/work/myproj', '/elsewhere']);
     expect(tree.processes).toEqual(observed(2));
-    expect(tree.projects[0]?.liveProcessCount, 'どこにも含まれない道具は数えない').toBe(1);
+    expect(tree.projects[0]?.liveProcessCount, 'どこにも含まれないプロセスは数えない').toBe(1);
   });
 });
 
-describe('直近の消費を巣ごとにまとめる', () => {
+describe('直近の消費をプロジェクトごとにまとめる', () => {
   it('セッションと子の両方を足す', () => {
     const tree = build(
       [
@@ -387,12 +389,13 @@ describe('直近の消費を巣ごとにまとめる', () => {
       T0,
     );
 
-    expect(tree.projects[0]?.recentTokens, '子の正本は別に書かれるので足さないと欠ける').toEqual(
-      observed(115),
-    );
+    expect(
+      tree.projects[0]?.recentTokens,
+      'サブエージェントの `transcript` は別に書かれるので、足さないと欠ける',
+    ).toEqual(observed(115));
   });
 
-  it('併せた巣では、併せた先の全部を足す', () => {
+  it('併せたプロジェクトでは、併せた先の全部を足す', () => {
     const tree = build(
       [
         project({
@@ -411,7 +414,7 @@ describe('直近の消費を巣ごとにまとめる', () => {
     expect(tree.projects[0]?.recentTokens).toEqual(observed(7));
   });
 
-  it('1 つでも読めない正本があれば、巣の数も読めなかったことにする', () => {
+  it('1 つでも読めない `transcript` があれば、プロジェクトの数も観測できなかったことにする', () => {
     const tree = build(
       [
         project({
@@ -438,7 +441,7 @@ describe('直近の消費を巣ごとにまとめる', () => {
 
     expect(
       first && 'recentTokens' in first,
-      '窓の幅は一覧の都合であって、セッションの性質ではない',
+      '集計期間の長さは一覧の都合であって、セッションの性質ではない',
     ).toBe(false);
     expect(first?.subagents[0] && 'recentTokens' in first.subagents[0]).toBe(false);
   });

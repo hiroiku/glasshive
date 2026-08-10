@@ -24,6 +24,10 @@ import {
   createListIssues,
   type ListIssuesUseCase,
 } from '~/application/use-cases/issues/list-issues.use-case.ts';
+import {
+  createObserveMessages,
+  type ObserveMessagesUseCase,
+} from '~/application/use-cases/sessions/observe-messages.use-case.ts';
 import { createObserveTree } from '~/application/use-cases/sessions/observe-tree.use-case.ts';
 import {
   createObserveUsage,
@@ -54,12 +58,12 @@ import { createFsTranscriptRepository } from '~/infrastructure/repositories/sess
 import { createFsTranscriptEventsRepository } from '~/infrastructure/repositories/sessions/fs-transcript-events.repository.ts';
 import { createFsViewerPreferencesRepository } from '~/infrastructure/repositories/workspace/fs-viewer-preferences.repository.ts';
 
-/* 組み立ての場所。口と実装をここでだけ繋ぐ。
+/* 組み立ての場所。ポートと実装をここでだけ繋ぐ。
 
    内側の層はどれも、誰が実装を差し込んだかを知らない。知っているのはここだけである。
 
-   遅延して 1 つだけ作るのは、見張りをこの道具に 1 つに保つため(change-broadcast.service.ts)。
-   窓が開くたびに作ると、OS の見張りが窓の数だけ増える。 */
+   遅延して 1 つだけ作るのは、ウォッチャーを glasshive 全体で 1 つに保つためである
+   (`change-broadcast.service.ts`)。接続のたびに作ると、OS のファイル監視が接続数だけ増える。 */
 
 export interface Kernel {
   settings: Settings;
@@ -67,6 +71,7 @@ export interface Kernel {
   tree: TreeSnapshotService;
   conversation: ReadConversationUseCase;
   usage: ObserveUsageUseCase;
+  messages: ObserveMessagesUseCase;
   search: ObserveSearchUseCase;
   listIssues: ListIssuesUseCase;
   getIssue: GetIssueUseCase;
@@ -80,13 +85,13 @@ let instance: Kernel | undefined;
 
 function assemble(): Kernel {
   const settings = currentSettings();
-  /* 覚えるのは application の側である。置き場の口は素材しか知らないので、
-     ここに覆いを掛けると生の字を抱え込むことになる — 正本 1 つで最大 12MiB、
-     数千本ある置き場では観る前に機械が音を上げる。 */
+  /* キャッシュを持つのは application の側である。リポジトリのポートは素材しか返さないので、
+     ここでキャッシュを被せると生のテキストを抱え込むことになる — `transcript` 1 本で
+     最大 12MiB、数千本ある `~/.claude/projects` では画面を出す前に機械が音を上げる。 */
   const transcripts = createFsTranscriptRepository({
     transcriptsRoot: settings.transcriptsRoot,
   });
-  /* 読み解きの覚えは 1 つだけ持つ。木も統計も同じ素材を見るので、別に持つと
+  /* パース結果のキャッシュは 1 つだけ持つ。木も統計も同じ素材を見るので、別々に持つと
      同じ 8MiB を二度読んで二度抱えることになる。 */
   const drafts = createTranscriptDrafts({
     transcripts,
@@ -102,19 +107,19 @@ function assemble(): Kernel {
     clock: systemClock,
   });
 
-  /* 台帳は巣ごとに在る。口は場所を言われて開くだけなので、置き場を持たない */
+  /* 台帳はプロジェクトごとにある。ポートはパスを言われて開くだけなので、ルートを持たない */
   const ledger = createFsIssueLedgerRepository();
 
-  /* 外の道具は巣ごとに起こす。ぶつかりの見込みだけは、先端の組が同じなら覚えたものを返す —
-     線が 18 本あれば差分だけで 18 回起こすことになり、そこが一番重い。 */
+  /* `git` はプロジェクトごとに起動する。衝突の見込みだけは、先端の組が同じならキャッシュを
+     返す — 先端が 18 本あれば差分を取るだけで 18 回起動することになり、そこが一番重い。 */
   const git = createCliGitCommandIntegration();
 
   const changes = createChangeBroadcast(createFsWatchTranscript(settings.transcriptsRoot));
-  /* 正本が動いたら、覚えている盤面を捨てる。捨てないと、合図で取り直しても
-     短い間だけ古い盤面が返り、変わったはずの画面が変わらない。 */
+  /* `transcript` が動いたら、キャッシュしているスナップショットを捨てる。捨てないと、変更通知を
+     受けて取り直しても短い間だけ古いスナップショットが返り、変わったはずの画面が変わらない。 */
   changes.subscribe(() => tree.invalidate());
 
-  /* この道具で唯一の書き込み。置き場だけを渡し、書いてよいかの見張りは実装が自分で持つ。 */
+  /* glasshive で唯一の書き込み。保存先だけを渡し、書いてよいかのガードは実装が自分で持つ。 */
   const preferences = createFsViewerPreferencesRepository({
     configDir: settings.configDir,
   });
@@ -128,6 +133,7 @@ function assemble(): Kernel {
       events: createFsTranscriptEventsRepository(),
     }),
     usage: createObserveUsage({ tree, drafts }),
+    messages: createObserveMessages({ tree, transcripts }),
     search: createSearchTranscripts({
       tree,
       search: createTranscriptSearch({ transcripts }),
@@ -146,7 +152,7 @@ export function getKernel(): Kernel {
   return instance;
 }
 
-/** 検査のために作り直す。本番の道では呼ばない */
+/** テストのために作り直す。本番のコードからは呼ばない */
 export function resetKernel(): void {
   instance?.changes.close();
   instance = undefined;

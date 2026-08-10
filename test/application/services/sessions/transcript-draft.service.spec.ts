@@ -10,9 +10,10 @@ import type {
 } from '~/application/ports/repositories/sessions/transcript.repository.ts';
 import { createTranscriptDrafts } from '~/application/services/sessions/transcript-draft.service.ts';
 
-/* 素材に読み解きを当てるところ。置き場は開かないので、下地は頼まれた窓を返すだけの偽物でよい。
+/* 素材をパースするところ。`~/.claude/projects` は開かないので、ポートは頼まれた読み取り範囲を
+   返すだけのスタブでよい。
 
-   確かめるのは二つ。**どの窓をどう頼んだか**と、**返ってきた字から何を導いたか**である。 */
+   確かめるのは 2 つ。どの範囲をどう頼んだかと、**返ってきたテキストから何を導いたか**である。 */
 
 const KIB = 1024;
 const MIB = 1024 * KIB;
@@ -20,8 +21,8 @@ const DAY_MS = 86_400_000;
 const NOW = Date.parse('2026-08-09T12:00:00.000Z');
 const ACTIVE_THRESHOLD_MS = 60_000;
 
-/* 窓の幅。**この数は契約である。**
-   ここを緩めると、読める範囲が変わって同じ正本から違う答えが出る。 */
+/* 読み取り範囲の幅。**この数は契約である。**
+   ここを緩めると読める範囲が変わり、同じ `transcript` から違う結果が出る。 */
 const SESSION_HEAD = 256 * KIB;
 const SESSION_TAIL = 128 * KIB;
 const SUB_HEAD = 64 * KIB;
@@ -36,7 +37,7 @@ interface Request {
   readonly trimPartialLine: boolean;
 }
 
-/** 頼み 1 つに対する答え。書いていない頼みには空の窓を返す */
+/** `Request` 1 つに対する結果。書いていない `Request` には空の読み取り範囲を返す */
 type Respond = (request: Request) => Observation<TranscriptWindow>;
 
 const jsonl = (records: readonly unknown[]): string =>
@@ -79,7 +80,7 @@ const drafts = (transcripts: TranscriptRepository) =>
     activeThresholdMs: ACTIVE_THRESHOLD_MS,
   });
 
-/** 頭も尻も同じ字を返す下地。窓の幅だけを見たいときに使う */
+/** 頭も尻も同じテキストを返す `Respond`。読み取り範囲の幅だけを見たいときに使う */
 const answering =
   (byWindow: Partial<Record<string, Observation<TranscriptWindow>>>): Respond =>
   (request) =>
@@ -101,25 +102,31 @@ const subagentSource = (
   fileName: string,
   mtimeMs = NOW,
   meta: AgentMeta | null = null,
+  runId: string | null = null,
 ): SubagentSource => ({
   id: fileName.replace(/\.jsonl$/, ''),
   fileName,
-  file: `/w/-w-proj/sess/subagents/${fileName}`,
+  file:
+    runId === null
+      ? `/w/-w-proj/sess/subagents/${fileName}`
+      : `/w/-w-proj/sess/subagents/workflows/${runId}/${fileName}`,
   mtimeMs,
   sizeBytes: 40,
   meta,
+  runId,
 });
 
-/** 隣に置かれた覚え書き。書かれていなかった欄は null のまま */
+/** 隣に置かれた `*.meta.json`。書かれていなかった欄は null のまま */
 const agentMeta = (overrides: Partial<AgentMeta> = {}): AgentMeta => ({
   agentType: null,
+  name: null,
+  toolUseId: null,
   description: null,
   parentAgentId: null,
-  spawnDepth: null,
   ...overrides,
 });
 
-describe('セッションの見出しを導く', () => {
+describe('セッションのメタ情報を導く', () => {
   const head = jsonl([
     {
       type: 'user',
@@ -151,10 +158,11 @@ describe('セッションの見出しを導く', () => {
     const draft = await drafts(stub.transcripts).readSession(sessionSource(), NOW);
     expect(draft.title, '題は頭からしか出ない').toBe('はじめの一言');
     expect(draft.cwd).toBe('/w/proj');
-    expect(draft.current, '今の様子は尻からしか出ない').toBe('Read: /a/b.ts');
-    expect(draft.gitBranch, '枝は後に見えたものが現在地。尻を読まなければ main のまま').toBe(
-      'topic',
-    );
+    expect(draft.current, '今の状態は末尾からしか出ない').toBe('Read: /a/b.ts');
+    expect(
+      draft.gitBranch,
+      'ブランチは後に見えたものが現在地。末尾を読まなければ main のまま',
+    ).toBe('topic');
     expect(draft.model).toBe('claude-opus-5');
   });
 
@@ -164,7 +172,7 @@ describe('セッションの見出しを導く', () => {
     await drafts(stub.transcripts).readSession(sessionSource(), NOW);
     expect(
       stub.requests.filter((request) => request.file.endsWith('sess.jsonl')),
-      '幅も繕い方も、行として読み解けることを前提にしている',
+      '幅も繕い方も、行としてパースできることを前提にしている',
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -191,16 +199,16 @@ describe('セッションの見出しを導く', () => {
     const draft = await drafts(stub.transcripts).readSession(sessionSource(), NOW);
     expect(
       stub.requests.some((request) => request.from === 'tail' && request.maxBytes === SESSION_TAIL),
-      '頭で諦めた見出しの尻を開いても、答えは変わらない',
+      '先頭が読めずに諦めたのだから、末尾を開いても結果は変わらない',
     ).toBe(false);
     expect(draft.title, '読めなかった欄は空のまま。木そのものは返る').toBe(null);
-    expect(draft.file, '見出しが読めなくても、在り処と大きさは分かっている').toBe(
+    expect(draft.file, 'メタ情報が読めなくても、パスと大きさは分かっている').toBe(
       '/w/-w-proj/sess.jsonl',
     );
   });
 
   it('尻が読めなくても、頭で読めた分は捨てない', async () => {
-    // 頭だけを読むと「本文で終わっている」ように見える正本。尻を見ないと本当の末尾は分からない
+    // 頭だけを読むと「本文で終わっている」ように見える `transcript`。尻を見ないと本当の末尾は分からない
     const headEndingInText = jsonl([
       {
         type: 'user',
@@ -225,7 +233,7 @@ describe('セッションの見出しを導く', () => {
     const draft = await drafts(stub.transcripts).readSession(sessionSource(), NOW);
     expect(
       draft.cwd,
-      '作業場所まで消すと、その巣に道具を配れず、待っているセッションが残らず終了へ倒れる',
+      '作業ディレクトリまで消すと、そのプロジェクトにプロセスを配れず、待っているセッションが終了へ倒れる',
     ).toBe('/w/proj');
     expect(draft.title).toBe('はじめの一言');
     expect(
@@ -257,7 +265,7 @@ describe('セッションの見出しを導く', () => {
   });
 });
 
-describe('子の見出しを導く', () => {
+describe('子のメタ情報を導く', () => {
   const childHead = jsonl([
     {
       type: 'user',
@@ -290,7 +298,7 @@ describe('子の見出しを導く', () => {
 
   it('止まっている子の尻は開かない', async () => {
     const stub = createStub(answering({ [`head:${SUB_HEAD}`]: window(childHead) }));
-    // 稼働の窓より前にしか書かれていない子は、止まっている
+    // 稼働とみなす期間より前にしか書かれていない子は、止まっている
     const source = withChild('agent-x-0123456789abcdef.jsonl', NOW - 10 * 60_000);
 
     const draft = await drafts(stub.transcripts).readSession(source, NOW);
@@ -301,10 +309,10 @@ describe('子の見出しを導く', () => {
       stub.requests.some((request) => request.from === 'tail' && request.maxBytes === SUB_TAIL),
       '止まっている子の値は委譲のときに決まっている。末尾を開く理由が無い',
     ).toBe(false);
-    expect(child?.current, '今の様子は末尾からしか出ないので、無いままになる').toBe(null);
+    expect(child?.current, '今の状態は末尾からしか出ないので、無いままになる').toBe(null);
   });
 
-  it('動いている子は、末尾まで読んで今の様子を採る', async () => {
+  it('動いている子は、末尾まで読んで今の状態を採る', async () => {
     const stub = createStub(
       answering({
         [`head:${SUB_HEAD}`]: window(childHead),
@@ -317,9 +325,10 @@ describe('子の見出しを導く', () => {
       NOW,
     );
     expect(draft.subagents[0]?.current).toBe('Bash: npm test');
-    expect(draft.subagents[0]?.cwd, '作業場所は先頭の一行から。尻を読んでも変わらない').toBe(
-      '/w/proj/.worktrees/gh-12',
-    );
+    expect(
+      draft.subagents[0]?.cwd,
+      '作業ディレクトリは先頭の一行から。末尾を読んでも変わらない',
+    ).toBe('/w/proj/.worktrees/gh-12');
   });
 
   it('子の尻が読めなくても、頭で読めた分は捨てない', async () => {
@@ -337,7 +346,7 @@ describe('子の見出しを導く', () => {
       'claude-haiku-4',
     );
     expect(draft.subagents[0]?.cwd).toBe('/w/proj/.worktrees/gh-12');
-    expect(draft.subagents[0]?.current, '尻を読めていないので、今の様子だけは分からない').toBe(
+    expect(draft.subagents[0]?.current, '末尾を読めていないので、今の状態だけは分からない').toBe(
       null,
     );
   });
@@ -350,11 +359,11 @@ describe('子の見出しを導く', () => {
       stub.requests.find(
         (request) => request.from === 'head' && request.file.includes('subagents'),
       ),
-      '切れた行は読み解けずに落ちるだけで、要るものは先頭に揃う',
+      '切れた行はパースに失敗して落ちるだけで、要るものは先頭に揃う',
     ).toEqual(expect.objectContaining({ maxBytes: SUB_HEAD, trimPartialLine: false }));
   });
 
-  it('取り組んでいる課題は、本文ではなく作業場所の字から引く', async () => {
+  it('取り組んでいる課題は、本文ではなく作業ディレクトリのパスから引く', async () => {
     const stub = createStub(answering({ [`head:${SUB_HEAD}`]: window(childHead) }));
 
     const draft = await drafts(stub.transcripts).readSession(
@@ -364,20 +373,21 @@ describe('子の見出しを導く', () => {
     expect(draft.subagents[0]?.issue).toBe('gh-12');
   });
 
-  it('鍵は名前から拡張子を落としたもの、呼び名は前置きと指紋を剥がしたもの', async () => {
+  it('id はファイル名から拡張子を落としたもの、ラベルは前置きと指紋を剥がしたもの', async () => {
     const stub = createStub(() => EMPTY);
 
     const draft = await drafts(stub.transcripts).readSession(
       withChild('agent-review-0123456789abcdef.jsonl'),
       NOW,
     );
-    expect(draft.subagents[0]?.id, '剥がしたものを鍵に使うと、指紋だけが違う子が同じに見える').toBe(
-      'agent-review-0123456789abcdef',
-    );
+    expect(
+      draft.subagents[0]?.id,
+      '剥がしたものを id に使うと、指紋だけが違う子が同じに見える',
+    ).toBe('agent-review-0123456789abcdef');
     expect(draft.subagents[0]?.label).toBe('review');
   });
 
-  it('子の棚に混じった、子でない正本は数えない', async () => {
+  it('サブエージェントのディレクトリに混じった、子でない `transcript` は数えない', async () => {
     const stub = createStub(() => EMPTY);
     const source = sessionSource({
       subagents: [subagentSource('agent-x-0123456789abcdef.jsonl'), subagentSource('notes.jsonl')],
@@ -386,7 +396,7 @@ describe('子の見出しを導く', () => {
     const draft = await drafts(stub.transcripts).readSession(source, NOW);
     expect(
       draft.subagents.map((child) => child.id),
-      '名前で見分けるのは言葉を持つ側の仕事。口はただ棚に在ったものを並べてくる',
+      '名前の決め事を知っているのはこちら側で、ポートはただディレクトリに在ったものを並べてくる',
     ).toEqual(['agent-x-0123456789abcdef']);
   });
 });
@@ -400,7 +410,7 @@ describe('子を呼んだ相手の下へ入れ直す', () => {
   const child = (label: string, parentAgentId: string) =>
     subagentSource(`agent-${label}-0123456789abcdef.jsonl`, NOW, agentMeta({ parentAgentId }));
 
-  it('親を持つ子は親のすぐ下に来て、段が 2 になる', async () => {
+  it('親を持つ子は親のすぐ下に来て、深さが 2 になる', async () => {
     const stub = createStub(() => EMPTY);
     const source = withChildren(
       parent('lead'),
@@ -411,7 +421,7 @@ describe('子を呼んだ相手の下へ入れ直す', () => {
     const draft = await drafts(stub.transcripts).readSession(source, NOW);
     expect(
       draft.subagents.map((sub) => [sub.id, sub.depth]),
-      '段は子どうしで数える。セッションが直に呼んだ子が 1、その子が 2',
+      '深さは子どうしで数える。セッションが直に呼んだ子が 1、その子が 2',
     ).toEqual([
       ['agent-lead-0123456789abcdef', 1],
       ['agent-helper-0123456789abcdef', 2],
@@ -419,36 +429,36 @@ describe('子を呼んだ相手の下へ入れ直す', () => {
     ]);
   });
 
-  it('覚え書きの指す字に前置きが無くても、棚に在る鍵へ合わせる', async () => {
+  it('`*.meta.json` が指す文字列に前置きが無くても、ディレクトリに在る id へ合わせる', async () => {
     const stub = createStub(() => EMPTY);
-    // 覚え書きは呼んだ相手を `agent-` を落とした字で書く
+    // `*.meta.json` は呼んだ相手を `agent-` を落とした文字列で書く
     const source = withChildren(parent('lead'), child('helper', 'lead-0123456789abcdef'));
 
     const draft = await drafts(stub.transcripts).readSession(source, NOW);
     expect(
       draft.subagents.map((sub) => [sub.id, sub.parentId, sub.depth]),
-      '字のまま突き合わせると親が一人も見つからず、木は 2 段に潰れたままになる',
+      '文字列のまま突き合わせると親が一人も見つからず、木は 2 階層に潰れたままになる',
     ).toEqual([
       ['agent-lead-0123456789abcdef', null, 1],
       ['agent-helper-0123456789abcdef', 'agent-lead-0123456789abcdef', 2],
     ]);
   });
 
-  it('親が棚に居ない子は、段 1 に出て消えない', async () => {
+  it('親がディレクトリに居ない子は、深さ 1 に出て消えない', async () => {
     const stub = createStub(() => EMPTY);
     const source = withChildren(child('orphan', 'agent-gone-0123456789abcdef'));
 
     const draft = await drafts(stub.transcripts).readSession(source, NOW);
     expect(
       draft.subagents.map((sub) => [sub.id, sub.depth]),
-      '木から外すと、観る人には「そんな子は動いていない」としか見えない',
+      '木から外すと、ユーザーには「そんなエージェントは動いていない」としか見えない',
     ).toEqual([['agent-orphan-0123456789abcdef', 1]]);
-    expect(draft.subagents[0]?.parentId, '当てが外れた字は、観測した字のまま残す').toBe(
+    expect(draft.subagents[0]?.parentId, '当てが外れた文字列は、観測したまま残す').toBe(
       'agent-gone-0123456789abcdef',
     );
   });
 
-  it('覚え書きが読めなかった子も、段 1 に並ぶ', async () => {
+  it('`*.meta.json` が読めなかった子も、深さ 1 に並ぶ', async () => {
     const stub = createStub(() => EMPTY);
     const source = withChildren(subagentSource('agent-x-0123456789abcdef.jsonl', NOW, null));
 
@@ -458,7 +468,7 @@ describe('子を呼んだ相手の下へ入れ直す', () => {
     ]);
   });
 
-  it('兄弟どうしの並びは、棚に在った順のまま', async () => {
+  it('兄弟どうしの並びは、ディレクトリに在った順のまま', async () => {
     const stub = createStub(() => EMPTY);
     const source = withChildren(parent('b'), parent('a'), child('c', 'agent-b-0123456789abcdef'));
 
@@ -469,7 +479,7 @@ describe('子を呼んだ相手の下へ入れ直す', () => {
     ).toEqual(['agent-b-0123456789abcdef', 'agent-c-0123456789abcdef', 'agent-a-0123456789abcdef']);
   });
 
-  it('呼ばれ方は覚え書きから採る', async () => {
+  it('`agentType` は `*.meta.json` から採る', async () => {
     const stub = createStub(() => EMPTY);
     const source = withChildren(
       subagentSource(
@@ -485,13 +495,13 @@ describe('子を呼んだ相手の下へ入れ直す', () => {
   });
 });
 
-describe('子の呼び名を決める', () => {
+describe('サブエージェントのラベルを決める', () => {
   const withMeta = (meta: AgentMeta | null) =>
     sessionSource({
       subagents: [subagentSource('agent-review-0123456789abcdef.jsonl', NOW, meta)],
     });
 
-  it('呼んだ側が添えた一行が在れば、それが呼び名になる', async () => {
+  it('呼んだ側が添えた一行が在れば、それがラベルになる', async () => {
     const stub = createStub(() => EMPTY);
 
     const draft = await drafts(stub.transcripts).readSession(
@@ -500,34 +510,70 @@ describe('子の呼び名を決める', () => {
     );
     expect(
       draft.subagents[0]?.label,
-      '名前から起こした呼び名は役どころを語らない。添えられた一行だけが語る',
+      '名前から起こしたラベルは役どころを語らない。添えられた一行だけが語る',
     ).toBe('Audit the transcript reader');
   });
 
-  it('一行が無ければ、名前から起こした呼び名に倒す', async () => {
+  it('一行が無ければ、名前から起こしたラベルに倒す', async () => {
     const stub = createStub(() => EMPTY);
 
     const draft = await drafts(stub.transcripts).readSession(withMeta(agentMeta()), NOW);
     expect(draft.subagents[0]?.label).toBe('review');
   });
 
-  it('名前からも呼び名が起きなければ、鍵をそのまま呼び名にする', async () => {
+  it('名前からもラベルが起きなければ、id をそのままラベルにする', async () => {
     const stub = createStub(() => EMPTY);
     // 前置きしか無い名前。剥がすと何も残らない
     const source = sessionSource({ subagents: [subagentSource('agent-.jsonl')] });
 
     const draft = await drafts(stub.transcripts).readSession(source, NOW);
-    expect(draft.subagents[0]?.label, '名無しで並ぶより、鍵で並ぶほうがまだ手繰れる').toBe(
+    expect(draft.subagents[0]?.label, '名無しで並ぶより、id で並ぶほうがまだ手繰れる').toBe(
       'agent-',
     );
   });
 
-  it('覚え書きそのものが無くても、名前から起こした呼び名は残る', async () => {
+  /* ワークフローの実行から産まれた子には `description` が書かれない。16 進だけで並ぶと、
+     同じ実行の仲間だったことも読めなくなる。 */
+  it('ワークフローの実行の中の子には、ディレクトリ名を頭に付ける', async () => {
+    const stub = createStub(() => EMPTY);
+    const source = sessionSource({
+      subagents: [subagentSource('agent-a0123456789abcdef.jsonl', NOW, agentMeta(), 'wf_x')],
+    });
+
+    const draft = await drafts(stub.transcripts).readSession(source, NOW);
+    expect(draft.subagents[0]?.label, 'ディレクトリ名が揃えば、並べただけで仲間が揃う').toBe(
+      'wf_x/a0123456789abcdef',
+    );
+    expect(draft.subagents[0]?.id, '同一性はディレクトリ名に左右されない').toBe(
+      'agent-a0123456789abcdef',
+    );
+  });
+
+  it('ワークフローの実行の中でも、`description` の一行が在ればそちらを採る', async () => {
+    const stub = createStub(() => EMPTY);
+    const source = sessionSource({
+      subagents: [
+        subagentSource(
+          'agent-a0123456789abcdef.jsonl',
+          NOW,
+          agentMeta({ description: 'Verify the fix' }),
+          'wf_x',
+        ),
+      ],
+    });
+
+    const draft = await drafts(stub.transcripts).readSession(source, NOW);
+    expect(draft.subagents[0]?.label, 'ディレクトリ名より、何をしている子かを先に読みたい').toBe(
+      'Verify the fix',
+    );
+  });
+
+  it('`*.meta.json` そのものが無くても、名前から起こしたラベルは残る', async () => {
     const stub = createStub(() => EMPTY);
 
     const draft = await drafts(stub.transcripts).readSession(withMeta(null), NOW);
     expect(draft.subagents[0]?.label).toBe('review');
-    expect(draft.subagents[0]?.id, '同一性は呼び名に左右されない').toBe(
+    expect(draft.subagents[0]?.id, '同一性はラベルに左右されない').toBe(
       'agent-review-0123456789abcdef',
     );
   });
@@ -555,7 +601,7 @@ describe('子の呼び名を決める', () => {
     ).toBe('Read the shelf then fix the tree');
   });
 
-  it('長い一行は、題と同じ 60 字で丸める', async () => {
+  it('長い一行は、題と同じ 60 文字で丸める', async () => {
     const stub = createStub(() => EMPTY);
     const long = 'a'.repeat(61);
 
@@ -567,18 +613,18 @@ describe('子の呼び名を決める', () => {
   });
 });
 
-describe('動いていた帯を導く', () => {
+describe('動いていた稼働区間を導く', () => {
   const activity = jsonl([
     { type: 'user', timestamp: '2026-08-09T10:00:00.000Z' },
     { type: 'assistant', timestamp: '2026-08-09T10:01:00.000Z' },
     { type: 'user', timestamp: '2026-08-09T11:00:00.000Z' },
   ]);
 
-  it('末尾の時刻を繋いで帯にする', async () => {
+  it('末尾の時刻を繋いで稼働区間にする', async () => {
     const stub = createStub(answering({ [`tail:${INTERVAL_SCAN}`]: window(activity) }));
 
     const draft = await drafts(stub.transcripts).readSession(sessionSource(), NOW);
-    expect(draft.activity, '2 分より長い無音で帯を分ける').toEqual({
+    expect(draft.activity, '2 分より長い無音で区間を分ける').toEqual({
       kind: 'observed',
       value: {
         complete: true,
@@ -596,7 +642,7 @@ describe('動いていた帯を導く', () => {
     });
   });
 
-  it('帯は末尾 4MiB から拾う。時刻は字面で探すので、切れた行は繕わない', async () => {
+  it('稼働区間は末尾 4MiB から拾う。時刻はテキストをそのまま走査するので、切れた行は繕わない', async () => {
     const stub = createStub(() => EMPTY);
 
     await drafts(stub.transcripts).readSession(sessionSource(), NOW);
@@ -613,11 +659,11 @@ describe('動いていた帯を導く', () => {
     const draft = await drafts(stub.transcripts).readSession(sessionSource(), NOW);
     expect(
       draft.activity.kind === 'observed' && draft.activity.value.complete,
-      'これより前にも帯が在り得ることを、値として持ち帰る',
+      'これより前にも区間が在り得ることを、値として持ち帰る',
     ).toBe(false);
   });
 
-  it('読めなかった帯を、空の帯に均さない', async () => {
+  it('観測できなかった稼働区間を、空の区間として扱わない', async () => {
     const stub = createStub((request) =>
       request.maxBytes === INTERVAL_SCAN ? unobservable(new UnexpectedError('読めない')) : EMPTY,
     );
@@ -625,7 +671,7 @@ describe('動いていた帯を導く', () => {
     const draft = await drafts(stub.transcripts).readSession(sessionSource(), NOW);
     expect(
       draft.activity.kind,
-      '空の帯に均すと、開けなかった正本が「ずっと静かだった」ものとして並ぶ',
+      '空の区間として扱うと、開けなかった `transcript` が「ずっと静かだった」ものとして並ぶ',
     ).toBe('unobservable');
   });
 });
@@ -648,7 +694,7 @@ describe('使ったトークンを数える', () => {
     },
   ]);
 
-  it('窓の内なら、末尾 8MiB から拾って総量に畳む', async () => {
+  it('対象期間の内なら、末尾 8MiB から拾って総量に集計する', async () => {
     const stub = createStub(answering({ [`tail:${USAGE_SCAN}`]: window(usage) }));
 
     const draft = await drafts(stub.transcripts).readSession(sessionSource(), NOW);
@@ -661,7 +707,7 @@ describe('使ったトークンを数える', () => {
     );
   });
 
-  it('窓より古い正本には、触りもしない', async () => {
+  it('対象期間より古い `transcript` には、触りもしない', async () => {
     const stub = createStub(answering({ [`tail:${USAGE_SCAN}`]: window(usage) }));
     const stale = sessionSource({ mtimeMs: NOW - 8 * DAY_MS });
 
@@ -672,23 +718,23 @@ describe('使ったトークンを数える', () => {
     });
     expect(
       stub.requests.some((request) => request.maxBytes === USAGE_SCAN),
-      '窓の外と決まったなら、開く理由が無い',
+      '対象期間の外と決まったなら、開く理由が無い',
     ).toBe(false);
   });
 
-  it('窓の幅ちょうどは外側', async () => {
+  it('対象期間の幅ちょうどは外側', async () => {
     const stub = createStub(answering({ [`tail:${USAGE_SCAN}`]: window(usage) }));
     const boundary = sessionSource({ mtimeMs: NOW - 7 * DAY_MS });
     const inside = sessionSource({ mtimeMs: NOW - 7 * DAY_MS + 1 });
 
     expect(
       (await drafts(stub.transcripts).readSession(boundary, NOW)).tokens,
-      '稼働の判定は「以下」で内、数えの窓は「未満」で内。向きが違う',
+      '稼働の判定は「以下」で内、数える期間は「未満」で内。向きが違う',
     ).toEqual({ kind: 'absent', reason: 'out-of-window' });
     expect((await drafts(stub.transcripts).readSession(inside, NOW)).tokens.kind).toBe('observed');
   });
 
-  it('直近 24 時間ぶんも、同じ一度の歩きで数える', async () => {
+  it('直近 24 時間ぶんも、同じ一度の走査で数える', async () => {
     const spread = jsonl([
       {
         type: 'assistant',
@@ -715,15 +761,15 @@ describe('使ったトークンを数える', () => {
     expect(draft.tokens).toEqual({ kind: 'observed', value: 107 });
     expect(
       draft.recentTokens,
-      '一覧の列はこれを見る。巣ごとに問い直すと、一覧が正本の数だけ問い合わせることになる',
+      '一覧の列はこれを見る。プロジェクトごとに問い直すと、`transcript` の数だけ問い合わせになる',
     ).toEqual({ kind: 'observed', value: 7 });
     expect(
       stub.requests.filter((request) => request.maxBytes === USAGE_SCAN),
-      '総量と直近で、同じ正本を二度開かない',
+      '総量と直近で、同じ `transcript` を二度開かない',
     ).toHaveLength(1);
   });
 
-  it('読めなかった数えを、0 に均さない', async () => {
+  it('読めなかったトークン数を、0 として扱わない', async () => {
     const stub = createStub((request) =>
       request.maxBytes === USAGE_SCAN ? unobservable(new UnexpectedError('読めない')) : EMPTY,
     );
@@ -749,7 +795,7 @@ describe('セッションの立ち位置', () => {
     ).toBe(NOW - 10 * 60_000);
   });
 
-  it('無い正本も、在り処と大きさだけの下書きとして並ぶ', async () => {
+  it('無い `transcript` も、パスと大きさだけの下書きとして並ぶ', async () => {
     const stub = createStub(() => absent('no-source'));
 
     const draft = await drafts(stub.transcripts).readSession(sessionSource(), NOW);

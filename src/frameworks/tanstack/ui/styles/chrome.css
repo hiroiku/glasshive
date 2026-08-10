@@ -10,13 +10,15 @@
   border-bottom: 1px solid var(--border);
   flex: none;
 }
-/* 名乗りは一覧へ戻る道でもある。押せるからといって、ブラウザーの既定の
+/* #brand は Overview へ戻るリンクでもある。押せるからといって、ブラウザーの既定の
    リンクの姿(青と下線)をそのまま出さない — 上部バーで唯一その色になり、
-   画面の中で最も目を引くのが名乗りになってしまう。 */
+   画面の中で最も目を引くのが #brand になってしまう。
+   glasshive 自身の名前であって観測ではないので、コピーする用が無い = 選ばせない。 */
 #brand {
   font-weight: 700;
   color: inherit;
   text-decoration: none;
+  user-select: none;
 }
 
 /* ビュー切替(Agents / Beads / Git)— プロジェクトタブの直下、プロジェクト内の概念 */
@@ -29,10 +31,6 @@
   border-bottom: 1px solid var(--border);
   background: var(--bg);
 }
-#subbar-project {
-  color: var(--dim);
-  font-size: 11px;
-}
 #views {
   display: inline-flex;
   gap: 2px;
@@ -41,6 +39,9 @@
   border-radius: 6px;
   padding: 2px;
 }
+/* 中身は <a> なので、放っておくと既定の下線が出る。ここは押しどころの群れであって
+   本文の中のリンクではないので、下線は姿を壊すだけ(#brand と同じ理由)。
+   出ている文字はビューの名前であって観測ではないから、続けて押しても選択されない。 */
 .vbtn {
   background: transparent;
   color: var(--dim);
@@ -50,6 +51,8 @@
   cursor: pointer;
   font: inherit;
   font-size: 12px;
+  text-decoration: none;
+  user-select: none;
 }
 .vbtn:hover {
   color: var(--fg);
@@ -123,6 +126,11 @@
 #tree-pane > .view-toolbar {
   grid-column: 1 / -1;
 }
+/* 絞り込みは続けて押す操作で、押すたびにチップの文字が選択されるのでは使えない。
+
+   **添えられた件数は、これでコピーできなくなる。** 元になった行は 1 行ずつ選べるが、
+   件数そのものは他のどこにも出ていない。数えるためのチップではなく絞り込むための
+   チップなので、押せることのほうを採る。 */
 .fchip {
   background: transparent;
   border: 1px solid var(--border);
@@ -132,6 +140,7 @@
   cursor: pointer;
   font: inherit;
   font-size: 11px;
+  user-select: none;
 }
 .fchip:hover {
   color: var(--fg);
@@ -140,7 +149,7 @@
   color: var(--accent);
   border-color: var(--accent);
 }
-/* 別の群であることを、間だけで言う。仕切りを引くと帯が段に見える */
+/* 別の群であることを、間だけで言う。区切り線を引くとツールバーが 2 行に見える */
 .chip-gap {
   width: 10px;
 }
@@ -205,7 +214,7 @@
 .tab .n.input {
   color: var(--input);
 }
-/* 留めていない巣を観ているあいだの仮の席。留めた席と見分けが付くように傾ける */
+/* ピン留めしていないプロジェクトを見ているあいだの暫定タブ。留めたタブと見分けが付くように傾ける */
 .tab.provisional .tab-link {
   font-style: italic;
 }
@@ -218,14 +227,18 @@
   text-decoration: none;
   min-width: 0;
 }
-/* 件数の札と外す × を同じ枠に重ねる。**載せても枠の幅が変わらない。**
-   × が現れて行が伸びると隣が動き、押すつもりのなかったタブを外してしまう */
+/* 件数の表示と外す × を同じ枠に重ねる。**ホバーしても枠の幅が変わらない。**
+   × が現れて行が伸びると隣が動き、押すつもりのなかったタブを外してしまう。 */
 .tab-slot {
   position: relative;
   width: 12px;
   height: 14px;
   flex: none;
 }
+/* 選ばせないのは × だけにする。**枠ごと止めない。**
+   重なっている件数はプロジェクト 1 つぶんの見えているセッションの数で、上部バーの
+   #counts は全部のプロジェクトを状態別に割った数なので、同じ数はどこにも出ていない。
+   枠ごと止めると、画面のどこからもコピーできない観測の数ができる。 */
 .tab-slot > * {
   position: absolute;
   inset: 0;
@@ -242,6 +255,7 @@
   font-size: 12px;
   padding: 0;
   opacity: 0;
+  user-select: none;
 }
 .tab:hover .tab-slot .n {
   opacity: 0;
@@ -259,6 +273,12 @@
   border-radius: 50%;
   display: inline-block;
   flex: none;
+}
+/* 状態がまだ分からないタブの点。**塗らずに、場所だけ取る。**
+   出さないと、木が届いた瞬間に点のぶん幅が動いて隣のタブの位置がずれる。
+   塗ると、まだ観測していない状態を表示することになる。輪だけで「タブは在るが状態は未だ」を言う。 */
+.dot.unknown {
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 .dot.active {
   background: var(--active);

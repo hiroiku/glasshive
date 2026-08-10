@@ -13,25 +13,26 @@ import { NavProvider, useNav } from '../ui/nav/NavContext.tsx';
 import { openPanelOf, type ProjectSearch, parseProjectSearch } from '../ui/nav/search.ts';
 import { usePrefs } from '../ui/prefs/PrefsContext.tsx';
 
-/* 巣ひとつぶんの画面の枠。下の帯・本文・窓・縁。
+/* プロジェクト 1 つぶんの画面の枠。`#subbar`・本文・パネル・`#rail`。
 
-   **窓をここに置く。** ビューを移っても組み直されないので、会話を開いたまま
+   **パネルをここに置く。** ビューを移っても組み直されないので、会話を開いたまま
    Agents と Git を行き来できる。ビューの側に置くと、移るたびに会話が最初から読み直される。 */
 
 export const Route = createFileRoute('/projects/$slug')({
   validateSearch: parseProjectSearch,
   loader: ({ context }) => {
-    // 先に走らせるだけで、待たない。待つと、それぞれの画面が持つ空の姿が消える
+    // 先に走らせるだけで、待たない。待つと、それぞれの画面が持つ「まだ何も無いときの案内」が消える
     void context.queryClient.ensureQueryData(treeQuery);
   },
   component: ProjectLayout,
 });
 
-/* 窓の中身は、窓を開けたときに取りに行く。
+/* サイドパネルの中身は、パネルを開いたときに読み込む。
 
-   会話と課題の本文は印付けと色付けの道具を連れてくる。**それは窓の中でしか使わない**のに、
-   一緒に束ねると Agents も Git も Beads も、開けもしない窓のぶんを毎回読み込む。
-   分けたぶん、指しの窓を開けても印付けは付いてこない。 */
+   会話と課題の本文は Markdown レンダラーとシンタックスハイライタを連れてくる。これらは
+   パネルの中でしか使わないので、一緒にバンドルすると Agents も Git も Beads も、
+   開きもしないパネルのぶんを毎回読み込むことになる。分けたぶん、`ref` のパネルを
+   開いても Markdown 側は付いてこない。 */
 const ConvPanel = lazy(() =>
   import('../ui/components/conversation/ConvPanel.tsx').then((it) => ({ default: it.ConvPanel })),
 );
@@ -44,8 +45,8 @@ const RefDetailPanel = lazy(() =>
   })),
 );
 
-/* 行き先は字として書く。組み立てると道の名前が型から外れ、
-   道を消したり名前を変えたりしたときに気付けなくなる。 */
+/* 行き先は文字列リテラルで書く。組み立てるとルートのパスが型から外れ、
+   ルートを消したり名前を変えたりしたときに気付けなくなる。 */
 const VIEWS = [
   { to: '/projects/$slug/agents', label: 'Agents' },
   { to: '/projects/$slug/git', label: 'Git' },
@@ -72,13 +73,13 @@ function ProjectChrome({ slug }: { slug: string }) {
   const project = tree.data?.projects.find((candidate) => candidate.id === slug);
   const panel = openPanelOf(search);
 
-  /* 窓が開いているかは印から導く。**開閉の覚えを持たない** —
-     持つと、URL を渡した先で窓が閉じたまま出る。 */
+  /* パネルが開いているかは検索パラメータから導く。**開閉の状態を別に持たない** —
+     持つと、URL を渡した先でパネルが閉じたまま出る。 */
   useEffect(() => {
     document.body.classList.toggle('drawer-open', panel !== null);
   }, [panel]);
 
-  // 逃げ道はいつでも同じ鍵にする
+  // 閉じるキーは、どのパネルでも `Escape` にそろえる
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') nav.closePanel();
@@ -123,7 +124,7 @@ function ProjectChrome({ slug }: { slug: string }) {
               key={view.to}
               to={view.to}
               params={{ slug }}
-              // 画面を移っても、探しの語も絞りも窓も持ち越す
+              // 画面を移っても、検索語も絞り込みもパネルも持ち越す
               search={(prev: ProjectSearch) => prev}
               className="vbtn"
               activeProps={{ className: 'vbtn current' }}
@@ -131,9 +132,6 @@ function ProjectChrome({ slug }: { slug: string }) {
               {view.label}
             </Link>
           ))}
-        </span>
-        <span id="subbar-project" title={project?.path ?? ''}>
-          {project?.name ?? slug}
         </span>
       </div>
 
@@ -152,7 +150,7 @@ function ProjectChrome({ slug }: { slug: string }) {
               : { width: prefs.drawerWidth, minWidth: prefs.drawerWidth }
           }
         >
-          {/* 幅を掴んで変えるためだけの面。窓の開け閉てと出し方は横の押しどころからできる */}
+          {/* 幅を掴んで変えるためだけの面。パネルの開け閉てと出し方は横のボタンからできる */}
           {/* biome-ignore lint/a11y/noStaticElementInteractions: 掴んで動かすためだけの面 */}
           <div id="drawer-grip" title="Drag to resize" onMouseDown={onGripDown} />
           <div id="drawer-controls">
@@ -172,7 +170,7 @@ function ProjectChrome({ slug }: { slug: string }) {
             </button>
           </div>
           <div id="drawer-body">
-            {/* 閉じている間は組み立てない。閉じた窓の中身を持ち続けても誰にも見えない */}
+            {/* 閉じている間は描かない。閉じたパネルの中身を持ち続けても誰にも見えない */}
             <div id="conv-pane">
               {panel !== null && (
                 <Suspense fallback={<div className="empty">Loading…</div>}>
@@ -197,8 +195,8 @@ function ProjectChrome({ slug }: { slug: string }) {
                 nav.closePanel();
                 return;
               }
-              /* 何も選ばれていないなら、窓だけを開ける。**在り処が無いと開いていられない**
-                 ので、印だけ立てて「選んでください」を出す。 */
+              /* 何も選ばれていないなら、パネルだけを開ける。**対象が無いままでは開いて
+                 いられない**ので、`panel` の検索パラメータだけ立てて「選んでください」を出す。 */
               void navigate({
                 to: '.',
                 search: (prev: ProjectSearch): ProjectSearch => ({

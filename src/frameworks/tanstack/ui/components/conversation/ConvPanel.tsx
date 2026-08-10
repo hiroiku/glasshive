@@ -8,15 +8,16 @@ import { useTranscriptWindow } from '../../hooks/useTranscriptWindow.ts';
 import { AgentChip, IssueChip, RefChip } from '../chips/Chips.tsx';
 import { EventView } from './EventView.tsx';
 
-/* 会話の窓。頭に「誰の話か」、下に会話そのもの。
+/* 会話パネル。ヘッダーに「誰の会話か」、下に会話そのもの。
 
-   指すのは正本の在り処だけである。誰の会話かは、そのときの盤面から引き当てる —
-   道の印に持たせると、印を貼った時点の姿が凍って、いま動いているかどうかが読めなくなる。 */
+   URL が指すのは `transcript` のパスだけである。誰の会話かは、そのときのスナップショットから
+   引き当てる — 検索パラメータに持たせると、URL を作った時点の姿が凍って、
+   いま動いているかどうかが読めなくなる。 */
 
-/** 頭に並べる子の数の上限。それ以上は数だけ添える */
+/** ヘッダーに並べるサブエージェントの数の上限。それ以上は件数だけ添える */
 const MAX_LISTED_SUBAGENTS = 6;
 
-/** 頭に並べる課題の数の上限 */
+/** ヘッダーに並べる課題の数の上限 */
 const MAX_LISTED_ISSUES = 3;
 
 export interface Selected {
@@ -24,7 +25,7 @@ export interface Selected {
   readonly node: SessionJson | SubagentJson;
 }
 
-/** 在り処から、いまの盤面の誰かを引き当てる */
+/** `transcript` のパスから、いまのスナップショットのセッションかサブエージェントを引き当てる */
 export function findByFile(project: ProjectJson | undefined, file: string): Selected | null {
   for (const session of project?.sessions ?? []) {
     if (session.file === file) return { kind: 'session', node: session };
@@ -35,7 +36,7 @@ export function findByFile(project: ProjectJson | undefined, file: string): Sele
   return null;
 }
 
-/* エージェント目線の文脈。親・子・課題・記録を頭に束ねる。
+/* エージェントから見た文脈。親・子・課題・`git` をヘッダーに束ねる。
 
    これが在ると、会話だけを見ていても「この子が何のために呼ばれたか」が読める。 */
 function AgentContext({
@@ -171,7 +172,7 @@ function Conversation({
 
   return (
     <div id="conversation" ref={window.boxRef}>
-      {/* 読みに行けなかったことを、空の会話で表さない */}
+      {/* 読み込みに失敗したことを、空の会話で表さない */}
       {window.failed && <div id="placeholder">Failed to load</div>}
       {window.hasOlder && (
         <button type="button" id="older" onClick={window.loadOlder}>

@@ -1,10 +1,10 @@
-import { absTime, mdhm } from '../../format.ts';
+import { mdhm } from '../../format.ts';
 import { useChartHover } from '../../hooks/useChartHover.ts';
 
-/* 同時に動いていた頭数。
+/* 同時に動いていたエージェントの数。
 
-   段状の面で描くのは、**頭数が整数だから**である。滑らかに繋ぐと、
-   3 頭と 4 頭の間に「3.5 頭」の時間が在ったように見える。 */
+   階段状の面で描くのは、**この数が整数だから**である。滑らかに繋ぐと、
+   3 と 4 の間に「3.5 エージェント」の時間が在ったように見える。 */
 
 export interface ConcurrencyPanelProps {
   readonly counts: readonly number[];
@@ -12,7 +12,7 @@ export interface ConcurrencyPanelProps {
   readonly footMs: number;
   readonly bars: number;
   readonly nowMs: number;
-  /** いま動いている頭数。図とは別に、今この瞬間を出す */
+  /** いま動いているエージェントの数。グラフとは別に、今この瞬間を出す */
   readonly liveNow: number;
 }
 
@@ -48,9 +48,9 @@ export function ConcurrencyPanel({
         </span>
       </div>
 
-      {/* 載せると、その柱ひとつぶんの同時の数を読み上げ欄に出す。図そのものの言い分は
-          svg の題が持っているので、載せられない人にも要旨は届く */}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: 載せて読むためだけの面 */}
+      {/* ホバーすると、そのバー 1 本ぶんの同時数をツールチップに出す。グラフ自体の要旨は
+          svg の `title` が持っているので、ホバーできない人にも届く */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: ホバーして読むためだけの面 */}
       <div className="sf-plot" onMouseMove={hover.onMouseMove} onMouseLeave={hover.onMouseLeave}>
         <svg
           className="sf-svg"
@@ -84,10 +84,11 @@ export function ConcurrencyPanel({
         )}
       </div>
 
+      {/* 目盛りは Tokens と同じ表記で揃える。2 枚は同じ `footMs` と同じ期間を見ている */}
       <div className="sf-ticks">
-        <span>{absTime(fromMs)}</span>
-        <span>{absTime(fromMs + (nowMs - fromMs) / 2)}</span>
-        <span>{absTime(nowMs)}</span>
+        <span>{mdhm(fromMs)}</span>
+        <span>{mdhm(fromMs + (nowMs - fromMs) / 2)}</span>
+        <span>{mdhm(nowMs)}</span>
       </div>
     </div>
   );

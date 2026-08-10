@@ -3,8 +3,8 @@ import { AppError } from '~/app-kernel/error.ts';
 import { absent, type Observation, observed, unobservable } from '~/app-kernel/observation.ts';
 import { iso, presentTree } from '~/interface/presenters/sessions/tree.presenter.ts';
 
-/* 写す相手の形は、写す役自身から引く。ここは内側の名前を見に行けないし、
-   写して持てば、出力が変わったときに片方だけ古いまま残る。 */
+/* 変換元の形は、プレゼンター自身から引く。ここは内側の名前を `import` できないし、
+   書き写して持てば、出力が変わったときに片方だけ古いまま残る。 */
 type ProjectTree = Parameters<typeof presentTree>[0];
 type ObservedProject = ProjectTree['projects'][number];
 type TranscriptSession = ObservedProject['sessions'][number];
@@ -15,10 +15,10 @@ class DeniedError extends AppError {
   readonly code = 'test.denied';
 }
 
-/** 何も動いていなかった帯。先頭まで読めたうえで、1 本も無い */
+/** 何も動いていなかった稼働区間。先頭まで読めたうえで、1 本も無い */
 const EMPTY_ACTIVITY: ActivityIntervalSet = { intervals: [], complete: true };
 
-/** 起点。ミリ秒を持たせてあるので、丸めたかどうかが字面で分かる */
+/** 起点。ミリ秒を持たせてあるので、丸めたかどうかが表記で分かる */
 const T = Date.parse('2026-08-04T00:00:00.123Z');
 const MIN = 60_000;
 
@@ -27,6 +27,8 @@ function subagent(overrides: Partial<SubagentSession> = {}): SubagentSession {
     id: 'agent-a1b2',
     label: 'a1b2',
     agentType: null,
+    name: null,
+    toolUseId: null,
     parentId: null,
     depth: 1,
     file: '/root/proj/sess/subagents/agent-a1b2.jsonl',
@@ -96,7 +98,7 @@ function tree(overrides: Partial<ProjectTree> = {}): ProjectTree {
   };
 }
 
-/** 木を組んで、1 つめの巣の 1 つめのセッションだけを取り出す */
+/** 木を組んで、1 つめのプロジェクトの 1 つめのセッションだけを取り出す */
 function firstSession(overrides: Partial<TranscriptSession>) {
   const presented = presentTree(tree({ projects: [project({ sessions: [session(overrides)] })] }))
     .projects[0]?.sessions[0];
@@ -104,18 +106,18 @@ function firstSession(overrides: Partial<TranscriptSession>) {
   return presented;
 }
 
-describe('秒までの字面にする', () => {
+describe('秒までの表記にする', () => {
   it('ミリ秒を落とす', () => {
     expect(
       iso(Date.parse('2026-08-04T00:00:00.123Z')),
-      'ミリ秒まで出しても観る人には意味が無く、桁が揺れると目で比べにくい',
+      'ミリ秒まで出してもユーザーには意味が無く、桁が揺れると目で比べにくい',
     ).toBe('2026-08-04T00:00:00Z');
   });
 
   it('ちょうど 0 ミリ秒でも同じ形にする', () => {
     expect(
       iso(Date.parse('2026-08-04T00:00:00.000Z')),
-      '桁の有る無しで字面が変わると、並べたときに揃わない',
+      '桁の有る無しで表記が変わると、並べたときに揃わない',
     ).toBe('2026-08-04T00:00:00Z');
   });
 
@@ -134,18 +136,18 @@ describe('秒までの字面にする', () => {
   });
 });
 
-describe('起点の字面', () => {
-  it('正本に書かれていた字をそのまま出す', () => {
+describe('起点の表記', () => {
+  it('`transcript` に書かれていた文字列をそのまま出す', () => {
     expect(
       firstSession({}).started,
-      '正本の字面は数から起こしたものではないので、こちらで丸めると事実が変わる',
+      '`transcript` の表記は数から起こしたものではないので、こちらで丸めると事実が変わる',
     ).toBe('2026-08-03T12:00:00.789Z');
   });
 
   it('子の起点も手を加えない', () => {
     expect(
       firstSession({ subagents: [subagent()] }).subagents[0]?.started,
-      '子も同じ理由で、正本の字面をそのまま渡す',
+      '子も同じ理由で、`transcript` の表記をそのまま渡す',
     ).toBe('2026-08-03T23:59:59.456Z');
   });
 
@@ -159,48 +161,50 @@ describe('起点の字面', () => {
 describe('数の見え方', () => {
   const withTokens = (tokens: Observation<number>) => firstSession({ tokens });
 
-  it('見えたときは数と observed', () => {
+  it('観測できたときは数と observed', () => {
     const presented = withTokens(observed(4200));
-    expect(presented.tokens, '見えた数はそのまま渡す').toBe(4200);
-    expect(presented.tokens_state, '見えたことを言えるのはこの欄だけ').toBe('observed');
+    expect(presented.tokens, '観測できた数はそのまま渡す').toBe(4200);
+    expect(presented.tokens_state, '観測できたことを言えるのはこの欄だけ').toBe('observed');
   });
 
-  it('窓の外のときは null と absent', () => {
+  it('読み取り範囲の外のときは null と absent', () => {
     const presented = withTokens(absent('out-of-window'));
     expect(presented.tokens, '読んでいない数を 0 と出すと「使っていない」と読まれる').toBe(null);
-    expect(presented.tokens_state, '数が無い理由を言えないと、0 と読めなかったが同じに見える').toBe(
-      'absent',
-    );
-  });
-
-  it('読めなかったときは null と unobservable', () => {
-    const presented = withTokens(unobservable(new DeniedError('読めない')));
-    expect(presented.tokens, '読めなかったものに数は付けられない').toBe(null);
     expect(
       presented.tokens_state,
-      '無かったのか読めなかったのかは、観る人にとって別の事実である',
+      '数が無い理由を言えないと、0 と観測できなかったが同じに見える',
+    ).toBe('absent');
+  });
+
+  it('観測できなかったときは null と unobservable', () => {
+    const presented = withTokens(unobservable(new DeniedError('読めない')));
+    expect(presented.tokens, '観測できなかったものに数は付けられない').toBe(null);
+    expect(
+      presented.tokens_state,
+      '無かったのか観測できなかったのかは、ユーザーにとって別の事実である',
     ).toBe('unobservable');
   });
 
-  it('子の数も同じ写し方をする', () => {
+  it('子の数も同じように変換する', () => {
     const child = firstSession({
       subagents: [subagent({ tokens: absent('empty') })],
     }).subagents[0];
-    expect(child?.tokens, '子でも見えない数は null').toBe(null);
+    expect(child?.tokens, '子でも数が無ければ null').toBe(null);
     expect(child?.tokens_state, '子でも理由は別の欄で言う').toBe('absent');
   });
 });
 
-describe('動いていた帯', () => {
+describe('稼働区間', () => {
   const withActivity = (activity: Observation<ActivityIntervalSet>) => firstSession({ activity });
 
-  it('帯は字面の組の並びになる', () => {
+  it('稼働区間は時刻の表記の組の並びになる', () => {
     const presented = withActivity(
       observed({ intervals: [{ fromMs: T - MIN, toMs: T }], complete: true }),
     );
-    expect(presented.intervals, '帯の端も数から起こした時刻なので、他と同じ丸め方で出す').toEqual([
-      ['2026-08-03T23:59:00Z', '2026-08-04T00:00:00Z'],
-    ]);
+    expect(
+      presented.intervals,
+      '稼働区間の端も数から起こした時刻なので、他と同じ丸め方で出す',
+    ).toEqual([['2026-08-03T23:59:00Z', '2026-08-04T00:00:00Z']]);
     expect(presented.intervals_state, '読めたのだから observed').toBe('observed');
   });
 
@@ -210,7 +214,7 @@ describe('動いていた帯', () => {
     );
     expect(
       presented.intervals_state,
-      '`complete` は窓がどこまで届いたかの話で、読めたかどうかの話ではない',
+      '`complete` は読み取り範囲がどこまで届いたかの話で、読めたかどうかの話ではない',
     ).toBe('observed');
     expect(presented.intervals_complete, '先頭まで届いていないことは、こちらの欄が言う').toBe(
       false,
@@ -221,52 +225,53 @@ describe('動いていた帯', () => {
     const presented = withActivity(observed({ intervals: [], complete: true }));
     expect(
       presented.intervals_state,
-      '静かだった正本を「読めなかった」と言えば、開けもしなかったことになる',
+      '静かだった `transcript` を「観測できなかった」と言えば、開けもしなかったことになる',
     ).toBe('observed');
-    expect(presented.intervals, '見えた結果が空なのだから、空を出す').toEqual([]);
+    expect(presented.intervals, '観測できた結果が空なのだから、空を出す').toEqual([]);
   });
 
-  it('窓の外で 1 本も無くても、読めたことは変わらない', () => {
+  it('読み取り範囲の外で 1 本も無くても、読めたことは変わらない', () => {
     expect(
       withActivity(observed({ intervals: [], complete: false })).intervals_state,
-      '末尾を読み切って何も無かったのであって、読みに行けなかったのではない',
+      '末尾を読み切って何も無かったのであって、観測できなかったのではない',
     ).toBe('observed');
   });
 
-  it('正本が消えていれば absent', () => {
+  it('`transcript` が消えていれば absent', () => {
     const presented = withActivity(absent('no-source'));
     expect(presented.intervals_state, '開く先が無いのだから、無いという事実である').toBe('absent');
-    expect(presented.intervals, '見えていない帯は出さない').toEqual([]);
-    expect(presented.intervals_complete, '開いてもいない正本に「先頭まで届いた」とは言えない').toBe(
-      false,
-    );
-  });
-
-  it('読みに行けなければ unobservable', () => {
-    const presented = withActivity(unobservable(new DeniedError('開けない')));
-    expect(
-      presented.intervals_state,
-      '開けなかった正本を「ずっと静かだった」と出せば、観る人は動いていないと読む',
-    ).toBe('unobservable');
-    expect(presented.intervals, '読めていないものに帯は付けられない').toEqual([]);
+    expect(presented.intervals, '観測できていない稼働区間は出さない').toEqual([]);
     expect(
       presented.intervals_complete,
-      'true と言えば、開けなかった正本について「これで全部だ」と言うことになる',
+      '開いてもいない `transcript` に「先頭まで届いた」とは言えない',
     ).toBe(false);
   });
 
-  it('子の帯も同じ写し方をする', () => {
+  it('観測しに行けなければ unobservable', () => {
+    const presented = withActivity(unobservable(new DeniedError('開けない')));
+    expect(
+      presented.intervals_state,
+      '開けなかった `transcript` を「ずっと静かだった」と出せば、ユーザーは動いていないと読む',
+    ).toBe('unobservable');
+    expect(presented.intervals, '読めていないものに稼働区間は付けられない').toEqual([]);
+    expect(
+      presented.intervals_complete,
+      'true と言えば、開けなかった `transcript` について「これで全部だ」と言うことになる',
+    ).toBe(false);
+  });
+
+  it('子の稼働区間も同じように変換する', () => {
     const child = firstSession({
       subagents: [subagent({ activity: unobservable(new DeniedError('開けない')) })],
     }).subagents[0];
-    expect(child?.intervals_state, '子でも読めなかったことは読めなかったと言う').toBe(
+    expect(child?.intervals_state, '子でも観測できなかったことは観測できなかったと言う').toBe(
       'unobservable',
     );
     expect(child?.intervals_complete, '子でも先頭まで届いたとは言わない').toBe(false);
   });
 });
 
-describe('生きている道具', () => {
+describe('生きているプロセス', () => {
   it('数えられたときは observed と理由なし', () => {
     expect(
       presentTree(tree({ processes: observed(3) })).processes,
@@ -277,11 +282,11 @@ describe('生きている道具', () => {
   it('数えるもとが無いときは absent と理由', () => {
     expect(
       presentTree(tree({ processes: absent('no-source') })).processes,
-      '何が無かったのかまで言わないと、観る人は次に何をすべきか決められない',
+      '何が無かったのかまで言わないと、ユーザーは次に何をすべきか決められない',
     ).toEqual({ state: 'absent', reason: 'no-source' });
   });
 
-  it('数えに行けなかったときは unobservable と誤りの名札', () => {
+  it('数えに行けなかったときは unobservable とエラーコード', () => {
     expect(
       presentTree(tree({ processes: unobservable(new DeniedError('数えられない')) })).processes,
       '数えられなかったのに 0 と出せば、待っているセッションが全部終わったものに見える',
@@ -291,60 +296,60 @@ describe('生きている道具', () => {
   it('数えられなくても木は出る', () => {
     expect(
       presentTree(tree({ processes: unobservable(new DeniedError('だめ')) })).projects.length,
-      '道具を数え損ねても、セッションそのものは見えている',
+      'プロセスを数え損ねても、セッションそのものは見えている',
     ).toBe(1);
   });
 });
 
-describe('正本の置き場', () => {
-  it('歩けたときは observed', () => {
-    expect(presentTree(tree()).sources, '歩けたのなら、空の一覧は本当に空である').toEqual({
+describe('`~/.claude/projects` を走査できたか', () => {
+  it('走査できたときは observed', () => {
+    expect(presentTree(tree()).sources, '走査できたのなら、空の一覧は本当に空である').toEqual({
       state: 'observed',
       reason: null,
     });
   });
 
-  it('置き場そのものが無いときは absent', () => {
+  it('ディレクトリそのものが無いときは absent', () => {
     expect(
       presentTree(tree({ sources: absent('no-source'), projects: [] })).sources,
-      'まだ 1 つも巣が無いのと、置き場が無いのは別の事実である',
+      'まだ 1 つもプロジェクトが無いのと、`~/.claude/projects` が無いのは別の事実である',
     ).toEqual({ state: 'absent', reason: 'no-source' });
   });
 
-  it('歩けなかったときは unobservable', () => {
+  it('走査できなかったときは unobservable', () => {
     expect(
       presentTree(
         tree({
-          sources: unobservable(new DeniedError('歩けない')),
+          sources: unobservable(new DeniedError('走査できない')),
           projects: [],
         }),
       ).sources,
-      '歩けなかったのに空の一覧だけを返せば、巣が消えたように見える',
+      '走査できなかったのに空の一覧だけを返せば、プロジェクトが消えたように見える',
     ).toEqual({ state: 'unobservable', reason: 'test.denied' });
   });
 });
 
-describe('巣の欄', () => {
+describe('プロジェクトの欄', () => {
   it('代表の名前が id と slug の両方に出る', () => {
     const presented = presentTree(tree()).projects[0];
     expect(presented?.id, '併せた組を指す名は代表のもの 1 つ').toBe('-work-proj');
-    expect(presented?.slug, '道に載せる名前も同じ字を使う').toBe('-work-proj');
+    expect(presented?.slug, 'URL に載せる名前も同じ文字列を使う').toBe('-work-proj');
   });
 
-  it('道具が居なければ live_process は偽', () => {
+  it('プロセスが居なければ live_process は偽', () => {
     const presented = presentTree(tree()).projects[0];
     expect(presented?.live_process, '0 本なら動いていない').toBe(false);
     expect(presented?.live_process_count, '数もそのまま出す').toBe(0);
   });
 
-  it('道具が居れば真と本数', () => {
+  it('プロセスが居れば真と本数', () => {
     const presented = presentTree(tree({ projects: [project({ liveProcessCount: 2 })] }))
       .projects[0];
     expect(presented?.live_process, '1 本でも動いていれば真').toBe(true);
     expect(presented?.live_process_count, '真偽だけでは 1 本と数本が同じに見える').toBe(2);
   });
 
-  it('場所が無いときは null', () => {
+  it('パスが無いときは null', () => {
     expect(
       presentTree(tree({ projects: [project({ path: null })] })).projects[0]?.path,
       '書かれていないことは null で表す',
@@ -352,11 +357,11 @@ describe('巣の欄', () => {
   });
 });
 
-describe('見える窓の広さ', () => {
-  it('ミリ秒を秒に均す', () => {
+describe('「動いている」と見なす期間の長さ', () => {
+  it('ミリ秒を秒に変換する', () => {
     expect(
       presentTree(tree({ activeThresholdMs: 90_000 })).active_threshold_secs,
-      '観る人に見せるのは秒。ミリ秒のままだと桁が読みにくい',
+      'ユーザーに見せるのは秒。ミリ秒のままだと桁が読みにくい',
     ).toBe(90);
   });
 
@@ -378,21 +383,21 @@ describe('内側だけの欄', () => {
   );
 
   it('併せた元の名前は出さない', () => {
-    expect(dumped.includes('slugs'), '併せ方は内側の事情で、観る人には要らない').toBe(false);
+    expect(dumped.includes('slugs'), '併せ方は内側の事情で、ユーザーには要らない').toBe(false);
     expect(
       dumped.includes('-volumes-work-proj'),
-      '欄の名前を消しても、代表でない名前の字が漏れていれば同じことである',
+      '欄の名前を消しても、代表でない名前の文字列が漏れていれば同じことである',
     ).toBe(false);
   });
 
-  it('併せるための鍵に使った場所は出さない', () => {
+  it('併せるためのキーに使ったパスは出さない', () => {
     expect(
       dumped.includes('canonicalPath'),
-      '鍵は突き合わせのための字であって、観る人が見る場所ではない',
+      'キーは突き合わせのための文字列であって、ユーザーが見るパスではない',
     ).toBe(false);
     expect(
       dumped.includes('/Volumes/work/proj'),
-      '解決済みの場所を出すと、正本に書かれていた場所と別の字が観る人に届く',
+      '解決済みのパスを出すと、`transcript` に書かれていたパスと別の文字列がユーザーに届く',
     ).toBe(false);
   });
 
@@ -410,7 +415,7 @@ describe('内側だけの欄', () => {
     ).toBe(false);
   });
 
-  it('木と巣に在る欄はこれで全部', () => {
+  it('木とプロジェクトに在る欄はこれで全部', () => {
     const presented = presentTree(tree());
     expect(Object.keys(presented), '木の直下に在るのはこの 5 つだけ').toEqual([
       'generated_at',
@@ -421,7 +426,7 @@ describe('内側だけの欄', () => {
     ]);
     expect(
       Object.keys(presented.projects[0] ?? {}),
-      '巣に余分な欄を足すと、受け取る側が内側の事情を知ってしまう',
+      'プロジェクトに余分な欄を足すと、受け取る側が内側の事情を知ってしまう',
     ).toEqual([
       'id',
       'slug',
@@ -435,10 +440,13 @@ describe('内側だけの欄', () => {
     ]);
   });
 
-  it('直近の消費は数と様子の二つを添えて出す', () => {
+  it('直近の消費は数と状態の二つを添えて出す', () => {
     const presented = presentTree(tree({ projects: [project({ recentTokens: observed(1234) })] }))
       .projects[0];
-    expect(presented?.tokens_24h, '一覧はこれを見るので、巣ごとに問い直さなくてよい').toBe(1234);
+    expect(
+      presented?.tokens_24h,
+      '一覧はこれを見るので、プロジェクトごとに問い直さなくてよい',
+    ).toBe(1234);
     expect(presented?.tokens_24h_state).toBe('observed');
   });
 
@@ -449,14 +457,16 @@ describe('内側だけの欄', () => {
       }),
     ).projects[0];
     expect(presented?.tokens_24h, '0 を置くと「使っていない」と読まれる').toBe(null);
-    expect(presented?.tokens_24h_state, '読めなかったことは様子の欄が言う').toBe('unobservable');
+    expect(presented?.tokens_24h_state, '観測できなかったことは状態の欄が言う').toBe(
+      'unobservable',
+    );
   });
 
   it('セッションに在る欄はこれで全部', () => {
     const presented = firstSession({ subagents: [subagent()] });
     expect(
       Object.keys(presented),
-      '一番大きい塊をここで押さえないと、欄が黙って消えても検査は通ってしまう',
+      '一番大きい塊をここで押さえないと、欄が黙って消えてもテストは通ってしまう',
     ).toEqual([
       'id',
       'file',
@@ -484,10 +494,12 @@ describe('内側だけの欄', () => {
 
   it('子に在る欄はこれで全部', () => {
     const presented = firstSession({ subagents: [subagent()] }).subagents[0];
-    expect(Object.keys(presented ?? {}), '子も同じく、欄の抜けを字で押さえる').toEqual([
+    expect(Object.keys(presented ?? {}), '子も同じく、欄の抜けを名前の一覧で押さえる').toEqual([
       'id',
       'label',
       'agent_type',
+      'name',
+      'tool_use',
       'parent',
       'depth',
       'file',
@@ -512,7 +524,7 @@ describe('内側だけの欄', () => {
 describe('並びは触らない', () => {
   /* 並べ替えは導出の仕事である。ここでもう一度並べると、同じ判断が二か所に散り、
      片方だけ直したときに木の並びと画面の並びが食い違う。 */
-  it('巣は渡された順のまま', () => {
+  it('プロジェクトは渡された順のまま', () => {
     const presented = presentTree(
       tree({
         projects: [

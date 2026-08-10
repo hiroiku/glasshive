@@ -11,21 +11,22 @@ import type { TipSortKey } from '../ui/derive/gitGraph.ts';
 import { useNowMs } from '../ui/hooks/useNowMs.ts';
 import type { ProjectSearch } from '../ui/nav/search.ts';
 
-/* 記録の画面。
+/* Git の画面。
 
-   **リポジトリでないことと、記録を読む道具が無いことを分けて見せる。** 旧実装はどちらも
-   同じ答えにしていたので、道具の入っていない機械では、すべての巣が「リポジトリでない」と出た。 */
+   **リポジトリでないことと、`git` がインストールされていないことを分けて見せる。**
+   同じ結果に潰すと、`git` の入っていない機械では、すべてのプロジェクトが
+   「リポジトリでない」と出る。 */
 
 export const Route = createFileRoute('/projects/$slug/git')({
   component: GitView,
 });
 
-/** 印が何も言っていないときの並び。新しい順 */
+/** 検索パラメータが何も言っていないときの並び。新しい順 */
 const DEFAULT_ORDER: GitOrder = { key: 'date', direction: 'desc' };
 
 const SORT_KEYS: readonly TipSortKey[] = ['name', 'ahead', 'date'];
 
-/** 相対の時刻の表示と、点の息づかいを進めるための時計 */
+/** 相対時刻の表示と、点の明滅を進めるための時計 */
 const TICK_MS = 5000;
 
 function GitView() {
@@ -36,7 +37,7 @@ function GitView() {
 
   const tree = useQuery(treeQuery);
   const git = useQuery(gitQuery(slug));
-  /* 統合待ちの札は台帳から来る。台帳が無い巣では札が出ないだけで、線は出る */
+  /* 統合待ちのチップは台帳から来る。台帳が無いプロジェクトではチップが出ないだけで、線は出る */
   const ledger = useQuery(issuesQuery(slug, false));
 
   const project = tree.data?.projects.find((candidate) => candidate.id === slug);
@@ -82,7 +83,7 @@ function GitView() {
       </div>
     );
   }
-  /* 見に行けなかったのは記録の話ではない。道具が無い・権利が無いはここへ来る */
+  /* 観測できなかったのはリポジトリの話ではない。`git` が無い・権限が無いはここへ来る */
   if (!answer.ok) {
     return (
       <div id="git-view">
@@ -115,7 +116,7 @@ function GitView() {
   );
 }
 
-/* リポジトリでない巣。**無いことは失敗ではない。** */
+/* リポジトリでないプロジェクト。**無いことは失敗ではない。** */
 function GitPromo() {
   return (
     <div className="bd-promo git">

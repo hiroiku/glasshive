@@ -2,18 +2,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { routeTree } from './routeTree.gen';
 
-/* 道案内の組み立て。
+/* ルーターの組み立て。
 
-   問い合わせの器を道の context に載せておくと、道の loader からも画面からも同じ器を使える。
-   観測は時とともに変わり続けるので、遷移のときだけ取り直す loader だけでは足りない —
-   合図が来たら捨てて取り直す、という流れの中心がこの器である。 */
+   `QueryClient` をルーターの context に載せておくと、ルートの loader からも画面からも
+   同じインスタンスを使える。観測は時とともに変わり続けるので、遷移のときだけ取り直す
+   loader だけでは足りない — 変更通知が来たら捨てて取り直す、という流れの中心が
+   この `QueryClient` である。 */
 
 export function getRouter() {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        /* 取り直しの引き金は合図だけにする。窓を離れて戻るたびに全部を読み直すと、
-           観ているだけで機械が忙しくなる。 */
+        /* 取り直しの引き金は変更通知だけにする。ウィンドウを離れて戻るたびに全部を
+           読み直すと、観ているだけで機械が忙しくなる。 */
         refetchOnWindowFocus: false,
         staleTime: 30_000,
         retry: false,
@@ -26,14 +27,14 @@ export function getRouter() {
     scrollRestoration: true,
     defaultPreload: 'intent',
 
-    /* 器を焼くときに描かれるのは、道の中身ではなくこれである。
+    /* HTML シェルをビルドするときに描かれるのは、ルートの中身ではなくこれである。
 
-       **これを置かないと、器は空のまま焼かれる。** ブラウザーは器を引き継ぐときに
-       道の中身を描くので、空の器と食い違い、React が木を丸ごと作り直す。
-       同じものを両側で描かせておけば、引き継ぎは静かに済む。 */
+       **これを置かないと、シェルは空のままビルドされる。** ブラウザーは hydrate のときに
+       ルートの中身を描くので、空のシェルと食い違い、React が DOM を丸ごと作り直す。
+       同じものを両側で描かせておけば、hydrate は静かに済む。 */
     defaultPendingComponent: () => <p className="empty">Loading…</p>,
-    /* 待ちの姿を、待たせてから出すのではなく最初から出す。器には既に描かれているので、
-       ここで間を置くと、その間だけブラウザー側が空になって食い違う。 */
+    /* 待ちの表示を、間を置いてからではなく最初から出す。HTML シェルには既に描かれて
+       いるので、ここで間を置くと、その間だけブラウザー側が空になって食い違う。 */
     defaultPendingMs: 0,
 
     context: { queryClient },

@@ -1,6 +1,6 @@
-/* 印は絵文字ではなく形で描く。
+/* アイコンは絵文字ではなく SVG のパスで描く。
 
-   絵文字は環境ごとに姿も幅も違うので、列の幅が機械によって動く。形なら
+   絵文字は環境ごとに見た目も幅も違うので、列の幅が機械によって動く。SVG なら
    どこでも同じに出て、`currentColor` でその場の色に馴染む。 */
 
 export function Icon({
@@ -14,8 +14,8 @@ export function Icon({
   className?: string;
   title?: string;
 }) {
-  /* 名前の有無で分けて書く。1 つにまとめて印を出し入れすると、
-     読む側にも検める側にも「名前のある絵」なのか「飾り」なのかが見えない。 */
+  /* `title` の有無で 2 通りを書き分ける。1 つの svg で属性を出し入れすると、
+     読む側にも検証する側にも「名前のある画像」なのか「装飾」なのかが見えない。 */
   if (title === undefined) {
     return (
       <svg
@@ -38,6 +38,6 @@ export function Icon({
   );
 }
 
-/** 字として組み立てた印の中へ埋め込む用。React を置けない場所でだけ使う */
+/** 文字列として組み立てた HTML の中へ埋め込む用。React を置けない場所でだけ使う */
 export const iconHtml = (path: string, size = 11): string =>
   `<svg viewBox="0 0 24 24" width="${size}" height="${size}" class="mdi" aria-hidden="true"><path d="${path}" fill="currentColor"/></svg>`;

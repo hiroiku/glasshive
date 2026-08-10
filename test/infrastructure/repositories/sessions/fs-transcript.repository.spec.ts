@@ -4,17 +4,17 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createFsTranscriptRepository } from '~/infrastructure/repositories/sessions/fs-transcript.repository.ts';
 
-/* 本物のファイルで確かめる。ここは置き場そのものを読む場所なので、
+/* 本物のファイルで確かめる。ここは `~/.claude/projects` そのものを読む場所なので、
    偽の fs に当てても「読めた・読めなかった」の分かれ目は確かめられない。
 
-   確かめるのは素材の採り方だけである。読み解きはここに無いので、
-   採れた字が何を意味するかは application の側で確かめる。 */
+   確かめるのは素材の採り方だけである。パースはここに無いので、
+   採れたテキストが何を意味するかは application の側で確かめる。 */
 
 const NOW = Date.parse('2026-08-09T12:00:00.000Z');
 
 let root: string;
 
-/** 権利を落とした検査の後片付け。落としたままだと消せない */
+/** 権限を落としたテストの後片付け。落としたままだと消せない */
 function restorePermissions(target: string): void {
   try {
     fs.chmodSync(target, 0o700);
@@ -30,8 +30,8 @@ function restorePermissions(target: string): void {
   for (const entry of entries) restorePermissions(path.join(target, entry.name));
 }
 
-/* root で走る機械では権利を落としても読めてしまう。
-   そこでは「読めない」を作れないので、その検査は飛ばす。 */
+/* root で走る機械では権限を落としても読めてしまう。
+   そこでは「読めない」を作れないので、そのテストは飛ばす。 */
 function probeDenyRead(): boolean {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'glasshive-probe-'));
   const file = path.join(dir, 'probe');
@@ -62,7 +62,7 @@ function writeText(file: string, text: string): string {
   return file;
 }
 
-/** 読む相手。大きさと時刻は覚えの鍵なので、実物から採る */
+/** 読む相手。大きさと時刻はキャッシュのキーなので、実物から採る */
 function at(file: string) {
   const stat = fs.statSync(file);
   return { file, mtimeMs: stat.mtimeMs, sizeBytes: stat.size };
@@ -79,8 +79,8 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-describe('木を歩く', () => {
-  it('名前ひとつぶんの棚から、セッションとその子を並べる', async () => {
+describe('ディレクトリツリーを走査する', () => {
+  it('名前ひとつぶんのディレクトリから、セッションとその子を並べる', async () => {
     writeLines(path.join(root, '-w-proj', 'sess-a.jsonl'), [{ type: 'user' }]);
     writeLines(path.join(root, '-w-proj', 'sess-b.jsonl'), [{ type: 'user' }]);
     writeLines(
@@ -89,7 +89,7 @@ describe('木を歩く', () => {
     );
 
     const listed = await repo().listTranscripts();
-    if (listed.kind !== 'observed') throw new Error(`歩けなかった: ${listed.kind}`);
+    if (listed.kind !== 'observed') throw new Error(`走査できなかった: ${listed.kind}`);
 
     expect(listed.value).toHaveLength(1);
     const group = listed.value[0];
@@ -98,13 +98,13 @@ describe('木を歩く', () => {
     const sessions = [...(group?.sessions ?? [])].sort((a, b) => a.id.localeCompare(b.id));
     expect(
       sessions.map((session) => session.id),
-      '正本の名前から拡張子を落としたものが、そのセッションを指す鍵',
+      '`transcript` のファイル名から拡張子を落としたものが、そのセッションを指すキー',
     ).toEqual(['sess-a', 'sess-b']);
     expect(
       sessions[0]?.subagents.map((subagent) => subagent.fileName),
-      '置き場に在った名前をそのまま渡す。呼び名を引くのは言葉を持つ側の仕事',
+      '`~/.claude/projects` に在った名前をそのまま渡す。ラベルを決めるのは言葉を持つ側の仕事',
     ).toEqual(['agent-review-0123456789abcdef.jsonl']);
-    expect(sessions[1]?.subagents, '子の棚が無いセッションは子を持たない').toEqual([]);
+    expect(sessions[1]?.subagents, '子のディレクトリが無いセッションは子を持たない').toEqual([]);
   });
 
   it('大きさと書かれた時刻を集めるだけで、中身は読まない', async () => {
@@ -112,34 +112,34 @@ describe('木を歩く', () => {
     const stat = fs.statSync(file);
 
     const listed = await repo().listTranscripts();
-    if (listed.kind !== 'observed') throw new Error('歩けなかった');
+    if (listed.kind !== 'observed') throw new Error('走査できなかった');
     const session = listed.value[0]?.sessions[0];
     expect(session?.sizeBytes).toBe(stat.size);
     expect(session?.mtimeMs).toBe(stat.mtimeMs);
     expect(session?.file).toBe(file);
   });
 
-  it('正本でないものと、棚でないものは数えない', async () => {
+  it('`transcript` でないものと、ディレクトリでないものは数えない', async () => {
     writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
-    fs.writeFileSync(path.join(root, '-w-proj', 'notes.txt'), 'ただの覚え書き');
-    fs.writeFileSync(path.join(root, 'loose.txt'), '棚ではない');
+    fs.writeFileSync(path.join(root, '-w-proj', 'notes.txt'), 'ただのメモ');
+    fs.writeFileSync(path.join(root, 'loose.txt'), 'ディレクトリではない');
 
     const listed = await repo().listTranscripts();
-    if (listed.kind !== 'observed') throw new Error('歩けなかった');
+    if (listed.kind !== 'observed') throw new Error('走査できなかった');
     expect(listed.value.map((group) => group.slug)).toEqual(['-w-proj']);
     expect(listed.value[0]?.sessions.map((session) => session.id)).toEqual(['sess']);
   });
 
-  it('置き場そのものが無ければ、無いこととして返す', async () => {
+  it('`~/.claude/projects` そのものが無ければ、無いこととして返す', async () => {
     const listed = await repo(path.join(root, 'まだ無い')).listTranscripts();
     expect(
       listed,
-      '置き場が無いのは観測の失敗ではない。まだ一度も動かしていない機械はこうなる',
+      '`~/.claude/projects` が無いのは観測の失敗ではない。まだ一度も動かしていない機械はこうなる',
     ).toEqual({ kind: 'absent', reason: 'no-source' });
   });
 
   it.skipIf(!DENIES_READ)(
-    '置き場を読む権利が無ければ、見に行けなかったこととして返す',
+    '`~/.claude/projects` を読む権限が無ければ、観測できなかったこととして返す',
     async () => {
       writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
       fs.chmodSync(root, 0o000);
@@ -152,32 +152,35 @@ describe('木を歩く', () => {
     },
   );
 
-  it.skipIf(!DENIES_READ)('内側の棚が読めなくても、他の名前は見えたまま', async () => {
+  it.skipIf(!DENIES_READ)('内側のディレクトリが読めなくても、他の名前は見えたまま', async () => {
     writeLines(path.join(root, '-w-open', 'sess.jsonl'), [{ type: 'user' }]);
     const closed = path.join(root, '-w-closed');
     writeLines(path.join(closed, 'sess.jsonl'), [{ type: 'user' }]);
     fs.chmodSync(closed, 0o000);
 
     const listed = await repo().listTranscripts();
-    if (listed.kind !== 'observed') throw new Error('歩けなかった');
+    if (listed.kind !== 'observed') throw new Error('走査できなかった');
     const slugs = listed.value.map((group) => group.slug).sort();
-    expect(slugs, '読めない棚 1 つで、置き場全体を隠さない').toEqual(['-w-closed', '-w-open']);
+    expect(slugs, '読めないディレクトリ 1 つで、`~/.claude/projects` 全体を隠さない').toEqual([
+      '-w-closed',
+      '-w-open',
+    ]);
     const closedGroup = listed.value.find((group) => group.slug === '-w-closed');
     expect(closedGroup?.sessions).toEqual([]);
   });
 });
 
 describe('子を集める', () => {
-  /** 名前ひとつぶんの棚を歩いて、そのセッションの子だけを取り出す */
+  /** 名前ひとつぶんのディレクトリを走査して、そのセッションの子だけを取り出す */
   async function subagentsOf(sessionId: string) {
     const listed = await repo().listTranscripts();
-    if (listed.kind !== 'observed') throw new Error(`歩けなかった: ${listed.kind}`);
+    if (listed.kind !== 'observed') throw new Error(`走査できなかった: ${listed.kind}`);
     const session = listed.value[0]?.sessions.find((candidate) => candidate.id === sessionId);
     if (session === undefined) throw new Error(`セッションが見えない: ${sessionId}`);
     return [...session.subagents].sort((a, b) => a.id.localeCompare(b.id));
   }
 
-  it('走りごとに切られた内側の棚に居る子も集める', async () => {
+  it('走りごとに切られた内側のディレクトリに居る子も集める', async () => {
     const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
     writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
     writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
@@ -189,29 +192,47 @@ describe('子を集める', () => {
     const collected = await subagentsOf('sess');
     expect(
       collected.map((subagent) => subagent.id),
-      '直下しか歩かないと、走りの棚に入った子が丸ごと落ちる',
+      '直下しか走査しないと、走りのディレクトリに入った子が丸ごと落ちる',
     ).toEqual(['agent-a1', 'agent-a2', 'agent-a3']);
     expect(
       collected[1]?.file,
-      '在り処は歩いた場所そのまま。棚の名前を畳んで直下の振りをしない',
+      '`file` は走査したパスそのまま。途中のディレクトリをまとめて直下の振りをしない',
     ).toBe(path.join(subagents, 'workflows', 'wf_x', 'agent-a2.jsonl'));
   });
 
-  it('セッションの正本は棚の直下だけで、内側の棚には降りない', async () => {
+  /* 走りの名前はディレクトリの構造にしか無い。子の `transcript` にも `*.meta.json` にも
+     書かれていないので、走査するときに拾わなければ、同じ走りの仲間だったことは二度と言えない。 */
+  it('走りのディレクトリの名前を、その中の子に持たせる', async () => {
+    const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'workflows', 'wf_x', 'agent-a2.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'workflows', 'wf_y', 'nested', 'agent-a3.jsonl'), [
+      { type: 'user' },
+    ]);
+
+    const collected = await subagentsOf('sess');
+    expect(
+      collected.map((subagent) => subagent.runId),
+      '走りの外の子は持たない。走りのディレクトリの直下の名前だけが走りを指し、その先はどれだけ深くても同じ走りの中',
+    ).toEqual([null, 'wf_x', 'wf_y']);
+  });
+
+  it('セッションの `transcript` はディレクトリの直下だけで、内側のディレクトリには降りない', async () => {
     writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
     writeLines(path.join(root, '-w-proj', 'sess', 'subagents', 'agent-a1.jsonl'), [
       { type: 'user' },
     ]);
 
     const listed = await repo().listTranscripts();
-    if (listed.kind !== 'observed') throw new Error('歩けなかった');
+    if (listed.kind !== 'observed') throw new Error('走査できなかった');
     expect(
       listed.value[0]?.sessions.map((session) => session.id),
-      'セッションは入れ子にならない。子をセッションとして並べると、同じ正本が二度出る',
+      'セッションは入れ子にならない。子をセッションとして並べると、同じ `transcript` が二度出る',
     ).toEqual(['sess']);
   });
 
-  it('隣の覚え書きから、呼ばれ方と呼んだ相手と段を読む', async () => {
+  it('隣の `*.meta.json` から、`agentType` と親と深さを読む', async () => {
     const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
     writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
     writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
@@ -221,21 +242,21 @@ describe('子を集める', () => {
         agentType: 'workflow-subagent',
         description: 'かぞえなおす',
         parentAgentId: 'agent-a0',
-        spawnDepth: 2,
         model: 'claude-opus-5',
       }),
     );
 
     const collected = await subagentsOf('sess');
-    expect(collected[0]?.meta, '親子は覚え書きにしか書かれていない').toEqual({
+    expect(collected[0]?.meta, '親子は `*.meta.json` にしか書かれていない').toEqual({
       agentType: 'workflow-subagent',
+      name: null,
+      toolUseId: null,
       description: 'かぞえなおす',
       parentAgentId: 'agent-a0',
-      spawnDepth: 2,
     });
   });
 
-  it('走りの棚に居る子の覚え書きも、その隣から読む', async () => {
+  it('走りのディレクトリに居る子の `*.meta.json` も、その隣から読む', async () => {
     const run = path.join(root, '-w-proj', 'sess', 'subagents', 'workflows', 'wf_x');
     writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
     writeLines(path.join(run, 'agent-a2.jsonl'), [{ type: 'user' }]);
@@ -244,25 +265,26 @@ describe('子を集める', () => {
     const collected = await subagentsOf('sess');
     expect(collected[0]?.meta).toEqual({
       agentType: null,
+      name: null,
+      toolUseId: null,
       description: null,
       parentAgentId: null,
-      spawnDepth: 1,
     });
   });
 
-  it('覚え書きが無くても、壊れていても、子は残る', async () => {
+  it('`*.meta.json` が無くても、壊れていても、子は残る', async () => {
     const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
     writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
     writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
     writeLines(path.join(subagents, 'agent-a2.jsonl'), [{ type: 'user' }]);
     writeText(path.join(subagents, 'agent-a2.meta.json'), '{ここで切れて');
     writeLines(path.join(subagents, 'agent-a3.jsonl'), [{ type: 'user' }]);
-    writeText(path.join(subagents, 'agent-a3.meta.json'), '"覚え書きの形をしていない"');
+    writeText(path.join(subagents, 'agent-a3.meta.json'), '"`*.meta.json` の形をしていない"');
 
     const collected = await subagentsOf('sess');
     expect(
       collected.map((subagent) => subagent.id),
-      '覚え書きを読めないことで子が消えると、動いている子が居ないように見える',
+      '`*.meta.json` を読めないことで子が消えると、動いている子が居ないように見える',
     ).toEqual(['agent-a1', 'agent-a2', 'agent-a3']);
     expect(collected.map((subagent) => subagent.meta)).toEqual([null, null, null]);
   });
@@ -275,25 +297,27 @@ describe('子を集める', () => {
       path.join(subagents, 'agent-a1.meta.json'),
       JSON.stringify({
         agentType: 7,
+        name: 42,
+        toolUseId: false,
         description: { text: 'かぞえなおす' },
         parentAgentId: ['agent-a0'],
-        spawnDepth: 'ふかい',
       }),
     );
 
     const collected = await subagentsOf('sess');
     expect(
       collected[0]?.meta,
-      '観測した字をそのまま上へ流すと、読み解く側が数でないものを数える',
+      '観測した値をそのまま上へ流すと、パースする側が数でないものを数える',
     ).toEqual({
       agentType: null,
+      name: null,
+      toolUseId: null,
       description: null,
       parentAgentId: null,
-      spawnDepth: null,
     });
   });
 
-  it('覚え書きそのものは子として数えない', async () => {
+  it('`*.meta.json` そのものは子として数えない', async () => {
     const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
     writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
     writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
@@ -303,11 +327,11 @@ describe('子を集める', () => {
     const collected = await subagentsOf('sess');
     expect(
       collected.map((subagent) => subagent.fileName),
-      '正本の隣に置かれた覚え書きは、正本ではない',
+      '`transcript` の隣に置かれた `*.meta.json` は、`transcript` ではない',
     ).toEqual(['agent-a1.jsonl']);
   });
 
-  it('走りそのものの控えは子として数えない', async () => {
+  it('走りそのもののログは子として数えない', async () => {
     const run = path.join(root, '-w-proj', 'sess', 'subagents', 'workflows', 'wf_x');
     writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
     writeLines(path.join(run, 'agent-a2.jsonl'), [{ type: 'user' }]);
@@ -316,11 +340,11 @@ describe('子を集める', () => {
     const collected = await subagentsOf('sess');
     expect(
       collected.map((subagent) => subagent.id),
-      '走りの控えを子として並べると、誰も動かしていない仕事が木に出る',
+      '走りのログを子として並べると、誰も動かしていない仕事が木に出る',
     ).toEqual(['agent-a2']);
   });
 
-  it.skipIf(!DENIES_READ)('内側の棚が読めなくても、他の子は見えたまま', async () => {
+  it.skipIf(!DENIES_READ)('内側のディレクトリが読めなくても、他の子は見えたまま', async () => {
     const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
     writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
     writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
@@ -331,11 +355,11 @@ describe('子を集める', () => {
     const collected = await subagentsOf('sess');
     expect(
       collected.map((subagent) => subagent.id),
-      '読めない棚 1 つで、他の子まで隠さない',
+      '読めないディレクトリ 1 つで、他の子まで隠さない',
     ).toEqual(['agent-a1']);
   });
 
-  it.skipIf(!DENIES_READ)('覚え書きを読む権利が無くても、子は残る', async () => {
+  it.skipIf(!DENIES_READ)('`*.meta.json` を読む権限が無くても、子は残る', async () => {
     const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
     writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
     writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
@@ -347,12 +371,15 @@ describe('子を集める', () => {
 
     const collected = await subagentsOf('sess');
     expect(collected.map((subagent) => subagent.id)).toEqual(['agent-a1']);
-    expect(collected[0]?.meta, '読めなかった覚え書きは、無かったのと同じ扱いにする').toBeNull();
+    expect(
+      collected[0]?.meta,
+      '読めなかった `*.meta.json` は、無かったのと同じ扱いにする',
+    ).toBeNull();
   });
 });
 
 describe('大きさと時刻を採る', () => {
-  it('歩いてから読むまでの間に伸びた分も、採り直せば見える', async () => {
+  it('走査してから読むまでの間に伸びた分も、採り直せば見える', async () => {
     const file = writeText(path.join(root, '-w-proj', 'sess.jsonl'), 'abc\n');
     const before = await repo().statTranscript(file);
     fs.appendFileSync(file, 'defg\n');
@@ -362,29 +389,32 @@ describe('大きさと時刻を採る', () => {
       kind: 'observed',
       value: expect.objectContaining({ sizeBytes: 4 }),
     });
-    expect(after, '大きさは読む直前に採る。歩いたときの数を信じない').toEqual({
+    expect(after, '大きさは読む直前に採る。走査したときの数を信じない').toEqual({
       kind: 'observed',
       value: expect.objectContaining({ sizeBytes: 9 }),
     });
   });
 
-  it('無い正本は、無いこととして返す', async () => {
+  it('無い `transcript` は、無いこととして返す', async () => {
     expect(await repo().statTranscript(path.join(root, 'いない.jsonl'))).toEqual({
       kind: 'absent',
       reason: 'no-source',
     });
   });
 
-  it.skipIf(!DENIES_READ)('棚に入れなければ、見に行けなかったこととして返す', async () => {
-    const closed = path.join(root, '-w-closed');
-    const buried = writeLines(path.join(closed, 'sess.jsonl'), [{ type: 'user' }]);
-    fs.chmodSync(closed, 0o000);
+  it.skipIf(!DENIES_READ)(
+    'ディレクトリに入れなければ、観測できなかったこととして返す',
+    async () => {
+      const closed = path.join(root, '-w-closed');
+      const buried = writeLines(path.join(closed, 'sess.jsonl'), [{ type: 'user' }]);
+      fs.chmodSync(closed, 0o000);
 
-    expect(
-      (await repo().statTranscript(buried)).kind,
-      '大きさを見に行けないことを「無い」に潰さない',
-    ).toBe('unobservable');
-  });
+      expect(
+        (await repo().statTranscript(buried)).kind,
+        '大きさを観測できなかったことを「無かった」に潰さない',
+      ).toBe('unobservable');
+    },
+  );
 });
 
 describe('先頭から読む', () => {
@@ -408,7 +438,7 @@ describe('先頭から読む', () => {
       maxBytes: 7,
       trimPartialLine: true,
     });
-    expect(head, '切れた行を残すと、1 行として読み解こうとして必ず失敗する').toEqual({
+    expect(head, '切れた行を残すと、1 行としてパースしようとして必ず失敗する').toEqual({
       kind: 'observed',
       value: { text: 'aaa', complete: false },
     });
@@ -427,7 +457,7 @@ describe('先頭から読む', () => {
     });
   });
 
-  it('改行が 1 つも無い正本は、繕えないのでそのまま返す', async () => {
+  it('改行が 1 つも無い `transcript` は、繕えないのでそのまま返す', async () => {
     const file = writeText(path.join(root, '-w-proj', 'sess.jsonl'), 'aaaaaaaaaa');
 
     const head = await repo().readHead(at(file), {
@@ -440,7 +470,7 @@ describe('先頭から読む', () => {
     });
   });
 
-  it('無い正本は、無いこととして返す', async () => {
+  it('無い `transcript` は、無いこととして返す', async () => {
     const head = await repo().readHead(
       { file: path.join(root, 'いない.jsonl'), mtimeMs: NOW, sizeBytes: 10 },
       { maxBytes: 1024, trimPartialLine: true },
@@ -448,19 +478,23 @@ describe('先頭から読む', () => {
     expect(head).toEqual({ kind: 'absent', reason: 'no-source' });
   });
 
-  it.skipIf(!DENIES_READ)('読む権利の無い正本は、見に行けなかったこととして返す', async () => {
-    const file = writeText(path.join(root, '-w-proj', 'sess.jsonl'), 'aaa\n');
-    const location = at(file);
-    fs.chmodSync(file, 0o000);
+  it.skipIf(!DENIES_READ)(
+    '読む権限の無い `transcript` は、観測できなかったこととして返す',
+    async () => {
+      const file = writeText(path.join(root, '-w-proj', 'sess.jsonl'), 'aaa\n');
+      const location = at(file);
+      fs.chmodSync(file, 0o000);
 
-    const head = await repo().readHead(location, {
-      maxBytes: 1024,
-      trimPartialLine: true,
-    });
-    expect(head.kind, '読めないのを空の字と答えると、何も書かれていない正本に見える').toBe(
-      'unobservable',
-    );
-  });
+      const head = await repo().readHead(location, {
+        maxBytes: 1024,
+        trimPartialLine: true,
+      });
+      expect(
+        head.kind,
+        '読めないのを空のテキストと答えると、何も書かれていない `transcript` に見える',
+      ).toBe('unobservable');
+    },
+  );
 });
 
 describe('末尾から読む', () => {
@@ -484,7 +518,7 @@ describe('末尾から読む', () => {
       maxBytes: 7,
       trimPartialLine: true,
     });
-    expect(tail, 'これより前にも字が在り得ることを、値として持ち帰る').toEqual({
+    expect(tail, 'これより前にもテキストが在り得ることを、値として持ち帰る').toEqual({
       kind: 'observed',
       value: { text: 'bbb\n', complete: false },
     });
@@ -497,13 +531,13 @@ describe('末尾から読む', () => {
       maxBytes: 7,
       trimPartialLine: false,
     });
-    expect(tail, '字面から拾う使い方では、切れた行が混じっても困らない').toEqual({
+    expect(tail, '生のテキストから拾う使い方では、切れた行が混じっても困らない').toEqual({
       kind: 'observed',
       value: { text: 'aa\nbbb\n', complete: false },
     });
   });
 
-  it('改行が 1 つも無い正本は、繕うと何も残らない', async () => {
+  it('改行が 1 つも無い `transcript` は、繕うと何も残らない', async () => {
     const file = writeText(path.join(root, '-w-proj', 'sess.jsonl'), 'aaaaaaaaaa');
 
     const tail = await repo().readTail(at(file), {
@@ -516,7 +550,7 @@ describe('末尾から読む', () => {
     });
   });
 
-  it('歩いた後に伸びた正本でも、いまの末尾を読む', async () => {
+  it('走査した後に伸びた `transcript` でも、いまの末尾を読む', async () => {
     const file = writeText(path.join(root, '-w-proj', 'sess.jsonl'), 'aaa\n');
     const stale = at(file);
     fs.appendFileSync(file, 'bbb\n');
@@ -525,13 +559,13 @@ describe('末尾から読む', () => {
       maxBytes: 4,
       trimPartialLine: false,
     });
-    expect(tail, '窓の始まりは、渡された大きさではなく読む直前の大きさで決まる').toEqual({
+    expect(tail, '読み取り範囲の先頭は、渡された大きさではなく読む直前の大きさで決まる').toEqual({
       kind: 'observed',
       value: { text: 'bbb\n', complete: false },
     });
   });
 
-  it('無い正本は、無いこととして返す', async () => {
+  it('無い `transcript` は、無いこととして返す', async () => {
     const tail = await repo().readTail(
       { file: path.join(root, 'いない.jsonl'), mtimeMs: NOW, sizeBytes: 10 },
       { maxBytes: 1024, trimPartialLine: false },
@@ -539,21 +573,24 @@ describe('末尾から読む', () => {
     expect(tail).toEqual({ kind: 'absent', reason: 'no-source' });
   });
 
-  it.skipIf(!DENIES_READ)('読む権利の無い正本は、見に行けなかったこととして返す', async () => {
-    const file = writeText(path.join(root, '-w-proj', 'sess.jsonl'), 'aaa\n');
-    const location = at(file);
-    fs.chmodSync(file, 0o000);
+  it.skipIf(!DENIES_READ)(
+    '読む権限の無い `transcript` は、観測できなかったこととして返す',
+    async () => {
+      const file = writeText(path.join(root, '-w-proj', 'sess.jsonl'), 'aaa\n');
+      const location = at(file);
+      fs.chmodSync(file, 0o000);
 
-    const tail = await repo().readTail(location, {
-      maxBytes: 1024,
-      trimPartialLine: false,
-    });
-    expect(tail.kind).toBe('unobservable');
-  });
+      const tail = await repo().readTail(location, {
+        maxBytes: 1024,
+        trimPartialLine: false,
+      });
+      expect(tail.kind).toBe('unobservable');
+    },
+  );
 });
 
-describe('場所の字を均す', () => {
-  it('別名を辿って、実体の場所を返す', async () => {
+describe('パスを正規化する', () => {
+  it('別名を辿って、実体のパスを返す', async () => {
     const real = path.join(root, 'ほんもの');
     fs.mkdirSync(real);
     const link = path.join(root, 'べつめい');
@@ -566,20 +603,20 @@ describe('場所の字を均す', () => {
     });
   });
 
-  it('無い場所は、無いこととして返す', async () => {
+  it('無いパスは、無いこととして返す', async () => {
     const missing = path.join(root, 'どこにも無い');
     expect(
       await repo().canonicalize(missing),
-      '渡された字を答えとして返すと、解決できた結果と見分けが付かず、覚える側が抱え込む',
+      '渡されたパスをそのまま返すと、解決できた結果と見分けが付かず、覚える側が抱え込む',
     ).toEqual({ kind: 'absent', reason: 'no-source' });
   });
 
-  it.skipIf(!DENIES_READ)('辿る権利が無ければ、見に行けなかったこととして返す', async () => {
+  it.skipIf(!DENIES_READ)('辿る権限が無ければ、観測できなかったこととして返す', async () => {
     const closed = path.join(root, 'とじた');
     fs.mkdirSync(path.join(closed, 'なか'), { recursive: true });
     fs.chmodSync(closed, 0o000);
 
     const resolved = await repo().canonicalize(path.join(closed, 'なか'));
-    expect(resolved.kind, '辿れなかったのを「そういう場所だ」と答えない').toBe('unobservable');
+    expect(resolved.kind, '辿れなかったのを「そういうパスだ」と答えない').toBe('unobservable');
   });
 });

@@ -3,34 +3,39 @@ import viteReact from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig(({ command }) => ({
-  // 開発中も手元だけで待ち受ける。Host が合わない求めは Vite 自身が 403 で断る —
-  // 127.0.0.1 に縛るだけでは、名前を差し替えて手元に化けた求めを止められない。
+  // 開発中もローカルだけで待ち受ける。`Host` が合わない求めは Vite 自身が 403 で断る —
+  // 127.0.0.1 に縛るだけでは、`Host` を差し替えてローカルに化けた求めを止められない。
   server: {
     host: '127.0.0.1',
-    // 配りものの隣。組んだものと開発中のものを、番号で見分けられる
-    port: 4484,
-    strictPort: true,
+    /* パッケージ版と同じポート番号から試す。開発サーバーもパッケージ版も同じ glasshive なので、
+       ユーザーが覚えるポート番号は 1 つでよい。
+
+       **空いていなければ次のポートへ譲る。** パッケージ版が既に 4483 を握っているときに
+       起動そのものを断ると、動かしたまま手を入れられなくなる。
+       譲った先のポート番号は Vite が起動時に出力する。 */
+    port: 4483,
+    strictPort: false,
     allowedHosts: ['127.0.0.1', 'localhost'],
   },
 
-  // tsconfig の paths(~/*)をそのまま効かせる
+  // `tsconfig` の `paths`(`~/*`)をそのまま効かせる
   resolve: { tsconfigPaths: true },
 
-  /* 配りものを 1 つで完結させる。外に置いたままにすると、npx で入った先に
-     その名前が無い日が来る — 観る人には「起動しない」としか見えない。
+  /* パッケージを 1 つで完結させる。外部依存のままにすると、`npx` で入れた先に
+     その名前が無い日が来る — ユーザーには「起動しない」としか見えない。
 
-     **組み立てのときだけ束ねる。** 開発中に束ねると、react のような古い形の名前を
-     Vite の走らせ役がそのまま評価できず、`module is not defined` で画面が出なくなる。
-     開発中は素のまま読み込ませればよく、配りものの中身には関わらない。 */
+     **バンドルするのはビルドのときだけ。** 開発中にバンドルすると、react のような CommonJS の
+     パッケージを Vite の開発時のランタイムがそのまま評価できず、`module is not defined` で
+     画面が出なくなる。開発中は素のまま読み込ませればよく、パッケージの中身には関わらない。 */
   ...(command === 'build' ? { environments: { ssr: { resolve: { noExternal: true } } } } : {}),
 
   plugins: [
     tanstackStart({
       srcDirectory: 'src',
 
-      // 入口は 4 つとも srcDirectory からの相対で解かれる。
-      // server の入口を自分で置くのは必須で、置かないと出る名前が仮の入口名になり、
-      // 起動口から参照する道が版ごとに動く。
+      // エントリーは 4 つとも `srcDirectory` からの相対で解決される。
+      // `server` のエントリーを自分で置くのは必須で、置かないと出力されるファイル名が
+      // 仮のエントリー名になり、ランチャーから参照するパスが版ごとに動く。
       start: { entry: './frameworks/tanstack/start.ts' },
       router: {
         entry: './frameworks/tanstack/router.tsx',
@@ -40,15 +45,16 @@ export default defineConfig(({ command }) => ({
       client: { entry: './frameworks/tanstack/client.tsx' },
       server: { entry: './frameworks/tanstack/server.ts' },
 
-      // 画面はブラウザーだけが描く。サーバーが描くと、観測の求めと描画が同じ処理に混ざる。
+      // 画面はブラウザーだけが描く。サーバー側でレンダリングすると、観測の求めと描画が
+      // 同じ処理に混ざる。
       spa: { enabled: true },
 
-      // 層の境目を束ね役に守らせる。外の世界に触る層がブラウザー側の束に紛れ込んだら
-      // 組み立てが落ちる — 人の目で見張る代わりに、機械が毎回見る。
+      // 層の境界をバンドラーに守らせる。外の世界に触る層がブラウザー側のバンドルに紛れ込んだら
+      // ビルドが落ちる — レビューで見つける前提にせず、バンドラーが毎回検証する。
       //
-      // files は既定を「足す」のではなく「置き換える」ので、既定の **/*.server.* を
-      // 自分で並べ直している。これを落とすと、名前で示したサーバー専用の見張りが黙って消える。
-      // (specifiers の方は既定と混ぜられるため、こちらは足すだけでよい)
+      // `files` は既定を「足す」のではなく「置き換える」ので、既定の `**/*.server.*` を
+      // 自分で並べ直している。これを落とすと、ファイル名でサーバー専用と示したもののガードが
+      // 黙って消える。(`specifiers` の方は既定と混ぜられるため、こちらは足すだけでよい)
       importProtection: {
         behavior: { dev: 'error', build: 'error' },
         client: {

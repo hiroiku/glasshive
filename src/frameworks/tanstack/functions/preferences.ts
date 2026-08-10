@@ -6,10 +6,10 @@ import {
   writePreferences,
 } from '~/interface/controllers/workspace/preferences.controller.ts';
 
-/* 選びをブラウザーと遣り取りする口。
+/* `preferences.json` をブラウザーとやり取りする server function。
 
    **この名前を `.server.ts` にしてはいけない。** 呼ぶのはブラウザー側なので、
-   境目の見張りが `*.server.*` を断ってしまう。 */
+   層の境界のガードが `*.server.*` を断ってしまう。 */
 
 const deps = (): PreferencesDeps => {
   const kernel = getKernel();
@@ -24,11 +24,11 @@ export const getPreferences = createServerFn({ method: 'GET' }).handler(() =>
   readPreferences(deps()),
 );
 
-/* 届いたものはそのまま窓へ渡す。
+/* 届いたものはそのまま `interface` 層へ渡す。
 
-   **ここで字に落とし直さない。** 輪になった値や BigInt を渡されただけで投げることになり、
-   届いた形が悪いだけで道具が壊れる。**投げるのはプログラムの誤りだけ**である。
-   何が読める申し出なのかを決めるのは窓(interface)の仕事で、枠組みは運ぶだけ。 */
+   **ここで文字列へ変換し直さない。** 循環参照や BigInt を渡されただけで投げることになり、
+   届いた形が悪いだけで glasshive が壊れる。投げてよいのはプログラムの誤りだけである。
+   何が読める入力なのかを決めるのは `interface` 層の仕事で、フレームワークは運ぶだけ。 */
 export const setPreferences = createServerFn({ method: 'POST' })
-  .inputValidator((value: unknown) => value)
+  .validator((value: unknown) => value)
   .handler(({ data }) => writePreferences(deps(), data));

@@ -6,10 +6,10 @@ import {
   resolveProject,
 } from '~/application/services/workspace/readable-scope.service.ts';
 
-/* ここは抜け穴の検めそのものである。通ってはいけないものが通らないことを、
+/* ここは抜け穴の検証そのものである。通ってはいけないものが通らないことを、
    1 つずつ名指しで固定する。
 
-   偽物の形は、導出が受け取る形から取る。**字を書き写すと、受け取る形が変わっても
+   偽物の形は、導出が受け取る型から取る。**型を手で書き写すと、受け取る形が変わっても
    ここは通ったままになる。** */
 
 type ProjectTree = Parameters<typeof fromTree>[0];
@@ -17,7 +17,7 @@ type ObservedProject = ProjectTree['projects'][number];
 type TranscriptSession = ObservedProject['sessions'][number];
 type SubagentSession = TranscriptSession['subagents'][number];
 
-/** まだ何も動いていない帯。空であることと、見に行けなかったことは別である */
+/** まだ何も動いていない稼働区間。空であることと、観測できなかったことは別である */
 const NO_ACTIVITY: TranscriptSession['activity'] = observed({
   intervals: [],
   complete: true,
@@ -39,6 +39,8 @@ function subagent(id: string, file: string): SubagentSession {
     id,
     label: id,
     agentType: null,
+    name: null,
+    toolUseId: null,
     parentId: null,
     depth: 1,
     file,
@@ -119,59 +121,61 @@ const beta = project(BETA_SLUG, BETA_PATH, [session('s2', BETA_MAIN)]);
 
 const scope = fromTree(tree([alpha, beta]));
 
-/** 断られたときだけ名札を返す。断りの理由を型を崩さずに見るため */
+/** 断られたときだけエラーコードを返す。断りの理由を型を崩さずに見るため */
 const codeOf = (r: ReturnType<typeof resolveProject>): string | null =>
   r.ok ? null : r.error.code;
 
-describe('観測した巣を id で引く', () => {
+describe('観測したプロジェクトを id で引く', () => {
   it('観測した id は引ける', () => {
     const r = resolveProject(scope, ALPHA_SLUG);
-    expect(r.ok ? r.value : null, '窓は自分の一覧に在る id しか渡さない').toBe(ALPHA_PATH);
+    expect(r.ok ? r.value : null, 'コントローラーは自分の一覧に在る id しか渡さない').toBe(
+      ALPHA_PATH,
+    );
   });
 
   it('知らない id は断る', () => {
     const r = resolveProject(scope, '-Users-me-work-gamma');
     expect(r.ok).toBe(false);
-    expect(codeOf(r), '観ていないものは、そんな巣は知らないと答えるほかない').toBe(
+    expect(codeOf(r), '観測していないものは、そんなプロジェクトは知らないと答えるほかない').toBe(
       'project.not_observed',
     );
   });
 
   it('絶対パスを id として渡しても引けない', () => {
-    // ここが緩むと、場所を渡り歩くという攻め口がそのまま戻ってくる
+    // ここが緩むと、パスを渡り歩くという攻撃面がそのまま戻ってくる
     expect(codeOf(resolveProject(scope, '/etc'))).toBe('project.not_observed');
     expect(codeOf(resolveProject(scope, '/etc/passwd'))).toBe('project.not_observed');
   });
 
-  it('一覧にその字が在っても、絶対パスは id として通さない', () => {
-    /* 一覧に無いから断れているだけでは、形の門が効いていることにならない。
-     **鍵として実在させたうえで**断らせて、門が一覧より先に立っていることを固定する。 */
+  it('一覧にその文字列が在っても、絶対パスは id として通さない', () => {
+    /* 一覧に無いから断れているだけでは、形式のガードが効いていることにならない。
+     **キーとして実在させたうえで**断らせて、形式のガードが一覧の照合より先に立つことを固定する。 */
     const poisoned = fromTree(
       tree([project('/etc', '/etc', [session('p1', `${ROOT}/-p/p1.jsonl`)])]),
     );
-    expect(poisoned.projectsById.has('/etc'), '鍵は実在している').toBe(true);
+    expect(poisoned.projectsById.has('/etc'), 'キーは実在している').toBe(true);
     expect(codeOf(resolveProject(poisoned, '/etc'))).toBe('project.not_observed');
   });
 
-  it('観測した巣の実パスそのものを渡しても引けない', () => {
-    // 実際に観測できている場所であっても、id ではないものは id として通さない
+  it('観測したプロジェクトの実パスそのものを渡しても引けない', () => {
+    // 実際に観測できているパスであっても、id ではないものは id として通さない
     expect(codeOf(resolveProject(scope, ALPHA_PATH))).toBe('project.not_observed');
   });
 
-  it('遡る字を含む id は引けない', () => {
+  it('`..` を含む id は引けない', () => {
     expect(codeOf(resolveProject(scope, `../${ALPHA_SLUG}`))).toBe('project.not_observed');
     expect(codeOf(resolveProject(scope, '..'))).toBe('project.not_observed');
     expect(codeOf(resolveProject(scope, '.'))).toBe('project.not_observed');
     expect(codeOf(resolveProject(scope, `${ALPHA_SLUG}/../../etc`))).toBe('project.not_observed');
   });
 
-  it('空の id と、区切りに使えない字を含む id は引けない', () => {
+  it('空の id と、区切りに使えない文字を含む id は引けない', () => {
     expect(codeOf(resolveProject(scope, ''))).toBe('project.not_observed');
     expect(codeOf(resolveProject(scope, `${ALPHA_SLUG}\0`))).toBe('project.not_observed');
   });
 
   it('断り方は、形が違うときも一覧に無いときも同じ', () => {
-    /* 断り方が分かれると、尋ねて回るだけで置き場に何が在るかが分かってしまう。
+    /* 断り方が分かれると、尋ねて回るだけで `~/.claude/projects` に何が在るかが分かってしまう。
      **同じであることだけを見てはいけない。** どちらも通ってしまったときも「同じ」になる。 */
     const shaped = codeOf(resolveProject(scope, '/etc'));
     const missing = codeOf(resolveProject(scope, '-unknown'));
@@ -179,32 +183,32 @@ describe('観測した巣を id で引く', () => {
     expect(missing).toBe(shaped);
   });
 
-  it('土台から生えてくる名前も引けない', () => {
-    /* 一覧を素の物入れで持つと、載せた覚えの無い名前が値を持って返る。
-       Map で持つのは、鍵にできる字を一覧に載せたものだけに閉じるためである。 */
+  it('プロトタイプから生えてくる名前も引けない', () => {
+    /* 一覧を素のオブジェクトで持つと、載せた覚えの無い名前が値を持って返る。
+       `Map` で持つのは、キーにできる文字列を一覧に載せたものだけに閉じるためである。 */
     expect(codeOf(resolveProject(scope, '__proto__'))).toBe('project.not_observed');
     expect(codeOf(resolveProject(scope, 'constructor'))).toBe('project.not_observed');
     expect(codeOf(resolveProject(scope, 'toString'))).toBe('project.not_observed');
   });
 
   it('名前の頭が同じだけの隣は引けない', () => {
-    // 前方一致で引けると、名前を伸ばしただけで別の巣の場所が取れる
+    // 前方一致で引けると、名前を伸ばしただけで別のプロジェクトのパスが取れる
     expect(codeOf(resolveProject(scope, ALPHA_SLUG.slice(0, -1)))).toBe('project.not_observed');
     expect(codeOf(resolveProject(scope, `${ALPHA_SLUG}x`))).toBe('project.not_observed');
   });
 
-  it('場所の分からない巣は引けない', () => {
-    // 名前でしか組めなかった巣に、当てずっぽうの場所を与えない
+  it('パスの分からないプロジェクトは引けない', () => {
+    // 名前でしか組めなかったプロジェクトに、当てずっぽうのパスを与えない
     const nameless = fromTree(
       tree([project('-broken', null, [session('n1', `${ROOT}/-broken/n1.jsonl`)])]),
     );
     expect(codeOf(resolveProject(nameless, '-broken'))).toBe('project.not_observed');
   });
 
-  it('遡る字を含む場所の巣は引けない', () => {
-    /* 解決できなかった巣には、正本に**書かれた**作業場所がそのまま入る。畳んで覚えると、
-       書いた側が選んだ場所が「観測できた巣の場所」になり、繋ぎ越しなら OS が開くのは
-       畳んだ先とも別の場所になる。 */
+  it('`..` を含むパスのプロジェクトは引けない', () => {
+    /* 解決できなかったプロジェクトには、`transcript` に**書かれた**作業ディレクトリがそのまま入る。
+       正規化して覚えると、書いた側が選んだパスが「観測できたプロジェクトのパス」になり、
+       シンボリックリンク越しなら OS が開くのは正規化した先とも別のパスになる。 */
     const forged = fromTree(
       tree([
         project('-forged', `${ALPHA_PATH}/../../../../etc`, [
@@ -219,59 +223,59 @@ describe('観測した巣を id で引く', () => {
     expect(codeOf(resolveProject(forged, '-forged'))).toBe('project.not_observed');
     expect(codeOf(resolveProject(forged, '-linked'))).toBe('project.not_observed');
     expect(codeOf(resolveProject(forged, '-sloppy'))).toBe('project.not_observed');
-    expect(forged.projectsById.size, '畳めば字が変わる場所は 1 つも覚えない').toBe(0);
+    expect(forged.projectsById.size, '正規化すると表記が変わるパスは 1 つも覚えない').toBe(0);
   });
 });
 
-describe('観測した正本だけを開かせる', () => {
-  it('観測した正本は通る', () => {
+describe('観測した `transcript` だけを開かせる', () => {
+  it('観測した `transcript` は通る', () => {
     expect(allowsTranscript(scope, ALPHA_MAIN)).toBe(true);
     expect(allowsTranscript(scope, BETA_MAIN)).toBe(true);
   });
 
-  it('子の正本も通る', () => {
+  it('サブエージェントの `transcript` も通る', () => {
     expect(
       allowsTranscript(scope, ALPHA_CHILD),
       '含め忘れると、委譲された仕事の行から会話が開けなくなる',
     ).toBe(true);
   });
 
-  it('観測していない場所は通らない', () => {
+  it('観測していないパスは通らない', () => {
     expect(allowsTranscript(scope, '/etc/passwd')).toBe(false);
     expect(allowsTranscript(scope, `${ROOT}/-Users-me-work-gamma/s9.jsonl`)).toBe(false);
   });
 
   it('前方一致では通らない', () => {
-    // 観測した正本の隣に置いただけのファイルが、名前の頭が同じというだけで開けてはならない
+    // 観測した `transcript` の隣に置いただけのファイルが、名前の頭が同じというだけで開けてはならない
     expect(allowsTranscript(scope, `${ALPHA_MAIN}.bak`)).toBe(false);
     expect(allowsTranscript(scope, `${ROOT}/${ALPHA_SLUG}/secret.jsonl`)).toBe(false);
     expect(allowsTranscript(scope, `${ROOT}/${ALPHA_SLUG}`)).toBe(false);
     expect(allowsTranscript(scope, ROOT)).toBe(false);
   });
 
-  it('巣の場所は正本ではない', () => {
-    // 引ける場所と開ける正本は別の集合である
+  it('プロジェクトのパスは `transcript` ではない', () => {
+    // 引けるパスと開ける `transcript` は別の集合である
     expect(allowsTranscript(scope, ALPHA_PATH)).toBe(false);
   });
 
-  it('相対名と、区切りに使えない字を含む名は通らない', () => {
+  it('相対名と、区切りに使えない文字を含む名は通らない', () => {
     expect(allowsTranscript(scope, `${ALPHA_SLUG}/s1.jsonl`)).toBe(false);
     expect(allowsTranscript(scope, `${ALPHA_MAIN}\0.png`)).toBe(false);
     expect(allowsTranscript(scope, '')).toBe(false);
   });
 
-  it('畳めば同じ字になるだけのものは通さない', () => {
-    /* 畳んでから見比べると、途中の繋ぎを辿った先の別の中身が、
-       観測した正本の字を借りて読めてしまう。渡すのは解決済みの場所だけである。 */
+  it('正規化すれば同じ表記になるだけのものは通さない', () => {
+    /* 正規化してから見比べると、途中のシンボリックリンクを辿った先の別の中身が、
+       観測した `transcript` の表記を借りて読めてしまう。渡すのは解決済みのパスだけである。 */
     expect(allowsTranscript(scope, `${ROOT}/${ALPHA_SLUG}/../${ALPHA_SLUG}/s1.jsonl`)).toBe(false);
     expect(allowsTranscript(scope, `${ROOT}/${ALPHA_SLUG}/./s1.jsonl`)).toBe(false);
     expect(allowsTranscript(scope, `${ROOT}//${ALPHA_SLUG}/s1.jsonl`)).toBe(false);
   });
 
-  it('畳めば字が変わる正本は、覚える側でも入れない', () => {
-    /* 覚えるときに畳むのも、照らすときに畳むのと同じ穴である。
-       `<繋ぎ>/../alpha/s1.jsonl` を畳んで覚えると、観測していない中身が
-       観測した正本の字で範囲に入る。 */
+  it('正規化すると表記が変わる `transcript` は、覚える側でも入れない', () => {
+    /* 覚えるときに正規化するのも、照合するときに正規化するのと同じ穴である。
+       `<シンボリックリンク>/../alpha/s1.jsonl` を正規化して覚えると、観測していない中身が
+       観測した `transcript` の表記で範囲に入る。 */
     const folded = fromTree(
       tree([
         project(ALPHA_SLUG, ALPHA_PATH, [
@@ -280,7 +284,7 @@ describe('観測した正本だけを開かせる', () => {
         ]),
       ]),
     );
-    expect(folded.transcriptFiles.size, '畳めば字が変わる正本は 1 つも覚えない').toBe(0);
+    expect(folded.transcriptFiles.size, '正規化すると表記が変わる `transcript` は覚えない').toBe(0);
     expect(allowsTranscript(folded, ALPHA_MAIN)).toBe(false);
     expect(allowsTranscript(folded, `${ROOT}/${ALPHA_SLUG}/s2.jsonl`)).toBe(false);
   });
@@ -288,15 +292,15 @@ describe('観測した正本だけを開かせる', () => {
 
 describe('範囲の出所は観測した木だけ', () => {
   it('観測したものしか入らない', () => {
-    expect(scope.projectsById.size, '場所が引けるのは観測できた巣の数だけ').toBe(2);
-    expect(scope.transcriptFiles.size, '正本は親 2 つと子 1 つ').toBe(3);
+    expect(scope.projectsById.size, 'パスが引けるのは観測できたプロジェクトの数だけ').toBe(2);
+    expect(scope.transcriptFiles.size, '`transcript` は親 2 つと子 1 つ').toBe(3);
   });
 
   it('木が入れ替わると範囲も入れ替わる', () => {
     const next = fromTree(tree([beta]));
     expect(codeOf(resolveProject(next, ALPHA_SLUG))).toBe('project.not_observed');
     expect(allowsTranscript(next, ALPHA_MAIN)).toBe(false);
-    expect(resolveProject(next, BETA_SLUG).ok, '残っている巣はそのまま引ける').toBe(true);
+    expect(resolveProject(next, BETA_SLUG).ok, '残っているプロジェクトはそのまま引ける').toBe(true);
     expect(allowsTranscript(next, BETA_MAIN)).toBe(true);
   });
 

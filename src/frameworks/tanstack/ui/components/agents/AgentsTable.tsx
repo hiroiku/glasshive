@@ -20,6 +20,7 @@ import {
   visibleSessions,
   visibleSubagents,
 } from '~/interface/presenters/sessions/visibility.presenter.ts';
+import { messagesQuery } from '../../../queries/messages.query.ts';
 import { searchQuery } from '../../../queries/sessions.query.ts';
 import {
   agentTypeShort,
@@ -46,14 +47,14 @@ import { Dot } from '../primitives/Dot.tsx';
 import { TlBar } from '../timeline/TlBar.tsx';
 import { AgentsToolbar } from './AgentsToolbar.tsx';
 
-/* エージェントの表。11 本の列と、親子を結ぶ線と、時間帯の引き寄せ。
+/* エージェントの表。11 本の列と、親子を結ぶ線と、掴んで時間帯を動かす操作。
 
-   **これを分けない。** 列の定義・入れ子の格子・結ぶ線・引き寄せは、行の高さ(`rowPitch`)と
-   時間の列の位置(`tlGeom`)と軸(`axis`)で強く結び合っている。切り分けると、
-   その 3 つを部品の間で行き来させることになり、どこで測ってどこで使うのかが読めなくなる。
+   列の定義・入れ子のグリッド・結ぶ線・掴んで動かす操作は、行の高さ(`rowPitch`)と
+   時間の列の位置(`tlGeom`)と軸(`axis`)で強く結び合っている。**このファイルを分割しない**
+   — その 3 つをコンポーネントの間で受け渡すことになり、どこで測ってどこで使うのかが読めなくなる。
 
-   **`#tree-pane` の直の子に包みを挟まない。** 列を決めているのは `#tree-pane` で、
-   帯も行も入れ子の格子として親の列を borrow している。1 枚挟むと列が揃わなくなる。 */
+   `#tree-pane` の直の子にラッパー要素を挟まない。列を決めているのは `#tree-pane` で、
+   ツールバーも行も `subgrid` で親の列に乗っている。1 枚挟むと列が揃わなくなる。 */
 
 type AgentNode = SessionJson | SubagentJson;
 
@@ -71,17 +72,17 @@ type AgentRow =
       readonly subs: AgentRow[];
     };
 
-/* 平らに届いた子を、呼んだ相手の下へ入れ子にする。
+/* 平らに届いたサブエージェントを、親の下へ入れ子にする。
 
    **字下げだけを深くしても木にはならない。** 親を畳んだのに孫が残っていれば、
-   観る人には親の居ない行が並んでいるようにしか見えない。畳みが孫まで届くのは、
-   表そのものが入れ子を持っているときだけである。
+   ユーザーには親の居ない行が並んでいるようにしか見えない。畳んだときに孫まで届くのは、
+   表そのものが入れ子構造を持っているときだけである。
 
-   置くのは既に置いた相手の下だけにする。呼んだ相手がまだ現れていない子は根へ倒れるので、
-   覚え書きが輪を作っていても入れ子が輪にならない。
+   置くのは既に置いた親の下だけにする。親がまだ現れていない子は根へ倒れるので、
+   `*.meta.json` の親子関係が循環していても、入れ子は循環しない。
 
-   呼んだ相手が絞りで消えた子も根へ出す。木から外すと、
-   観る人には「そんな子は動いていない」としか見えない。 */
+   親が絞り込みで消えた子も根へ出す。木から外すと、ユーザーには
+   「そんな子は動いていない」としか見えない。 */
 function nestSubagents(subagents: readonly SubagentJson[]): AgentRow[] {
   const placed = new Map<string, AgentRow>();
   const roots: AgentRow[] = [];
@@ -102,7 +103,7 @@ function nestSubagents(subagents: readonly SubagentJson[]): AgentRow[] {
   return roots;
 }
 
-/** 並べ替えたときの様子の順。動いているものが先 */
+/** 並べ替えに使う状態の順。動いているものが先 */
 const STATE_ORDER: Record<string, number> = { active: 0, waiting: 1, ended: 2 };
 
 const EFFORT_ORDER: Record<string, number> = {
@@ -113,7 +114,7 @@ const EFFORT_ORDER: Record<string, number> = {
   max: 4,
 };
 
-/** 表の題として出す名前の上限 */
+/** 表に出す名前(ラベル)の最大長 */
 const MAX_LABEL_CHARS = 60;
 
 /** これだけ動きが無い待機は「要注意」として拾う */
@@ -122,10 +123,17 @@ const STALE_WAIT_MS = 30 * 60_000;
 /** 1 つの親から引く線の上限。これを超えると線が束になって読めない */
 const MAX_CONNECTIONS_PER_PARENT = 12;
 
+/* 1 枚に引ける矢印の上限。**これを超えたら本数だけを出して、描くのをやめる。**
+   重なりすぎた矢印は誰が誰へ送ったのかを語らない — ただの網目になる。 */
+const MAX_MESSAGE_ARROWS = 300;
+
+/** 同じ相手どうしのメッセージを 1 本にまとめる横幅。これより近ければ目には重なって見える */
+const MARK_MERGE_PX = 4;
+
 const labelOf = (row: AgentRow): string =>
   row.kind === 'session' ? (row.node.title ?? row.node.id.slice(0, 8)) : row.node.label;
 
-/* 課題まわりの一言。押せる札にする前の、並べ替えのための素の字 */
+/* 課題まわりの短い表示。チップにする前の、並べ替えのための素の文字列 */
 function bdOf(row: AgentRow): string {
   if (row.kind === 'subagent') return row.node.issue ?? '';
   const parts: string[] = [];
@@ -134,7 +142,7 @@ function bdOf(row: AgentRow): string {
   return parts.join(' · ');
 }
 
-/** 見えている欄への部分一致(大小を問わない) */
+/** 見えている欄への部分一致(大文字小文字を問わない) */
 const hits = (query: string, haystack: readonly (string | null | undefined)[]): boolean =>
   haystack.some((value) => value?.toLowerCase().includes(query) === true);
 
@@ -142,9 +150,9 @@ export interface AgentsTableProps {
   readonly project: ProjectJson;
   readonly showAll: boolean;
   readonly nowMs: number;
-  /** いま会話の窓に出ている正本。行を光らせるためだけに使う */
+  /** いま会話パネルに出ている `transcript`。行をハイライトするためだけに使う */
   readonly selectedFile: string | null;
-  /** この巣を初めて描くか。初回は変化の光を当てない */
+  /** このプロジェクトを初めて描くか。初回は変化のハイライトを出さない */
   readonly firstPaint: boolean;
   readonly query: string;
   readonly onQuery: (query: string) => void;
@@ -169,9 +177,14 @@ export function AgentsTable({
 }: AgentsTableProps) {
   const nav = useNav();
   const [expanded, setExpanded] = useState<ExpandedState>(true);
-  /* 深い探しは道の印に載せない。**開いた途端に数百の正本を末尾まで開くことになる。**
-     しおりを踏んだだけでそれが走るのは、観るだけの道具の振る舞いではない。 */
+  /* deep 検索は URL の検索パラメータに載せない。**載せると、開いた途端に数百の
+     `transcript` を末尾まで読むことになる。** ブックマークを開いただけでそれが走るのは、
+     読むだけのツールの振る舞いではない。 */
   const [deep, setDeep] = useState(false);
+  /* エージェント間メッセージも URL の検索パラメータに載せない。**メッセージは
+     `transcript` のどこにでも現れる**ので、拾うにはセッションの `transcript` を
+     サブエージェントごと丸ごと読むしかない。ブックマークを開いただけでは走らせない。 */
+  const [talk, setTalk] = useState(false);
   const [scale, setScale] = useState<Scale>('auto');
   // 手で選んだ絶対の時間帯。null なら Auto か決め打ちの幅(右端 = 最新)に従う
   const [picked, setPicked] = useState<Axis | null>(null);
@@ -184,13 +197,13 @@ export function AgentsTable({
   const deepFiles = useMemo(() => {
     if (!deep) return null;
     const found = deepSearch.data;
-    // 探しに行けなかったときは絞らない。空の結果として扱うと、全部が消えて「無い」に見える
+    // 検索できなかったときは絞らない。空の結果として扱うと、全部が消えて「無い」に見える
     if (found === undefined || found === null || !found.ok) return null;
     return new Set(found.body.files);
   }, [deep, deepSearch.data]);
 
-  /* 結ぶ線を行の境目まで正しく届かせるための行の実の高さと、
-     全行を貫く時間の格子を敷くための時間の列の位置と幅を測る。 */
+  /* 結ぶ線を行の境目まで正しく届かせるための行の実際の高さと、
+     全行を貫く時間のグリッドを敷くための、時間列の位置と幅を測る。 */
   const rowsRef = useRef<HTMLDivElement>(null);
   const [rowPitch, setRowPitch] = useState(26);
   const [tlGeom, setTlGeom] = useState({ left: 0, width: 0 });
@@ -221,7 +234,7 @@ export function AgentsTable({
       let subs = visibleSubagents(session, showAll, nowMs);
 
       if (deepFiles !== null) {
-        // 深い探し: 中身が当たった正本だけを残す
+        // deep 検索: 中身が一致した `transcript` だけを残す
         if (!deepFiles.has(session.file)) {
           subs = subs.filter((subagent) => deepFiles.has(subagent.file));
           if (subs.length === 0) continue;
@@ -262,7 +275,7 @@ export function AgentsTable({
   }, [project, showAll, nowMs, attention, trimmed, deepFiles]);
 
   /* 変わった行を拾うのは、**絞り込みで見えていない行も含めて**である。
-     見えている行だけを見比べると、絞りを切り替えただけで全部が「変わった」ことになる。 */
+     見えている行だけを見比べると、絞り込みを切り替えただけで全部が「変わった」ことになる。 */
   useMemo(() => {
     prunePops(nowMs);
     for (const session of project.sessions) {
@@ -403,8 +416,8 @@ export function AgentsTable({
     setPicked({ t0, t1 });
   };
 
-  /* 帯の上をなぞって時間帯を動かす。動かすのは選んだ窓だけで、
-     スライダーも目盛りも札も同じ軸を読んでいるので、勝手に揃う。 */
+  /* 稼働区間のバーの上を掴んで時間帯を動かす。動かすのは表示範囲だけで、
+     スライダーも目盛りも時刻のラベルも同じ軸を読んでいるので、勝手に揃う。 */
   const didPanRef = useRef(false);
   const onPanStart = (event: React.MouseEvent) => {
     if (event.button !== 0) return;
@@ -417,7 +430,7 @@ export function AgentsTable({
 
     const move = (moved: MouseEvent) => {
       const dx = moved.clientX - x0;
-      // 素の押しは行を開く操作のまま。動かす気があったときだけ引き寄せに変える
+      // 単なるクリックは行を開く操作のまま。動かす意図があったときだけ、掴んで動かす操作に変える
       if (!didPanRef.current && Math.abs(dx) < 3) return;
       didPanRef.current = true;
       document.body.classList.add('tl-panning');
@@ -443,8 +456,8 @@ export function AgentsTable({
     document.addEventListener('mouseup', up);
   };
 
-  /* 親から子への結び。行きは親の帯から子の帯の始まりへ、帰りは子の終わりから親へ。
-     向きは矢印が担う。**窓の外の柱は端へ吸着させず、そのまま描かない。** */
+  /* 親から子へ結ぶ線。行きは親の稼働区間から子の稼働区間の始まりへ、帰りは子の終わりから親へ。
+     向きは矢印が担う。**表示範囲の外へ出た縦線は端へ吸着させず、そのまま描かない。** */
   const connections = useMemo(() => {
     const inWindow = (x: number) => (x >= 0 && x <= 99.8 ? x : null);
     const list: {
@@ -457,13 +470,13 @@ export function AgentsTable({
 
     rows.forEach((row: Row<AgentRow>, index: number) => {
       if (row.depth === 0) return;
-      // 呼んだ相手は、自分より浅い段で最も近い上の行である
+      // 親は、自分より浅い深さで最も近い上の行である
       let parent = index - 1;
       while (parent >= 0 && (rows[parent]?.depth ?? 0) >= row.depth) parent -= 1;
       if (parent < 0) return;
       const drawn = (perParent.get(parent) ?? 0) + 1;
       perParent.set(parent, drawn);
-      // 開きすぎた木では結びを諦める。読めない線は情報ではない
+      // 広がりすぎた木では線を引くのを諦める。読めない線は情報ではない
       if (drawn > MAX_CONNECTIONS_PER_PARENT) return;
 
       const node = row.original.node;
@@ -483,6 +496,126 @@ export function AgentsTable({
   const headers = table.getHeaderGroups()[0]?.headers ?? [];
   const midOf = (row: number) => row * rowPitch + rowPitch / 2;
 
+  /* エージェント間メッセージは 1 つのセッションぶんだけ引く。**読むのは `transcript` の
+     丸ごとである。** いま選んでいる行のセッションに絞り、選んでいなければ一番上に
+     出ているものにする。 */
+  const focusSessionId = useMemo(() => {
+    if (!talk) return '';
+    const owns = (session: SessionJson) =>
+      session.file === selectedFile ||
+      session.subagents.some((subagent) => subagent.file === selectedFile);
+    const chosen = project.sessions.find(owns);
+    if (chosen !== undefined) return chosen.id;
+    return rows.find((row: Row<AgentRow>) => row.depth === 0)?.original.node.id ?? '';
+  }, [talk, selectedFile, project.sessions, rows]);
+
+  const talkQuery = useQuery({
+    ...messagesQuery(project.id, focusSessionId),
+    enabled: talk && focusSessionId !== '',
+  });
+
+  /* 誰が誰へメッセージを送ったかを、行と時間の座標に落とす。
+
+     **畳まれた相手へのメッセージは、見えている親へ束ねる。** 描かないと、木を畳んだ
+     途端にやりとりが無かったことになる。表示範囲の外へ出たメッセージは稼働区間と同じく
+     描かない — 端へ吸着させると、そこで起きたことのように見える。 */
+  const talkHops = useMemo(() => {
+    const answer = talkQuery.data;
+    if (!talk || answer === undefined || answer === null || !answer.ok) return null;
+
+    const visible = new Map<string, number>();
+    const named = new Map<string, { readonly label: string; readonly file: string }>();
+    rows.forEach((row: Row<AgentRow>, index: number) => {
+      const node = row.original.node;
+      visible.set(node.id, index);
+      named.set(node.id, { label: labelOf(row.original), file: node.file });
+    });
+    const parents = new Map<string, string>();
+    const walk = (branch: readonly AgentRow[], parent: string | null) => {
+      for (const entry of branch) {
+        if (parent !== null) parents.set(entry.node.id, parent);
+        walk(entry.subs, entry.node.id);
+      }
+    };
+    walk(data, null);
+
+    const seat = (id: string): number | null => {
+      let at: string | undefined = id;
+      while (at !== undefined) {
+        const found = visible.get(at);
+        if (found !== undefined) return found;
+        at = parents.get(at);
+      }
+      return null;
+    };
+
+    /* 同じ相手どうしが、目に見えない近さで交わしたメッセージは 1 本にまとめる。
+
+       **重ねても濃くなるだけで、本数は読めない。** やりとりの多い組み合わせでは 5 時間に
+       数百通が集まり、7 日の幅で見ればそれが数十 px に潰れる。1 本にまとめて件数を
+       添えれば、同じ場所が「何度も話した」と読める。 */
+    const pitch = Math.max(tlGeom.width, 1) / MARK_MERGE_PX;
+    const marks = new Map<
+      string,
+      {
+        readonly key: string;
+        readonly from: number;
+        readonly to: number;
+        readonly x: number;
+        readonly who: string;
+        readonly summary: string;
+        /** 送信側の `transcript`。押すと、そのメッセージが在る会話へ */
+        readonly file: string | null;
+        count: number;
+      }
+    >();
+    let dropped = 0;
+    for (const hop of answer.body.hops) {
+      const atMs = Date.parse(hop.at);
+      const x = ((atMs - axis.t0) / span) * 100;
+      const from = seat(hop.from);
+      const to = seat(hop.to);
+      if (!Number.isFinite(x) || x < 0 || x > 99.8 || from === null || to === null || from === to) {
+        dropped += 1;
+        continue;
+      }
+      const at = `${from}:${to}:${Math.round((x / 100) * pitch)}`;
+      const found = marks.get(at);
+      if (found !== undefined) {
+        found.count += 1;
+        continue;
+      }
+      if (marks.size >= MAX_MESSAGE_ARROWS) {
+        dropped += 1;
+        continue;
+      }
+      marks.set(at, {
+        key: hop.tool_use,
+        from,
+        to,
+        x,
+        who: `${named.get(hop.from)?.label ?? hop.from} → ${named.get(hop.to)?.label ?? hop.to}`,
+        summary: hop.summary,
+        file: named.get(hop.from)?.file ?? null,
+        count: 1,
+      });
+    }
+
+    const drawn = [...marks.values()].map((mark) => ({
+      ...mark,
+      label: [mark.who, mark.count > 1 ? `${mark.count} messages` : '', mark.summary]
+        .filter((part) => part !== '')
+        .join(' · '),
+    }));
+    return {
+      drawn,
+      // 矢印が語っているメッセージの数。まとめた本数ではなく、まとめられた中身の数で言う
+      shown: drawn.reduce((count, mark) => count + mark.count, 0),
+      dropped: dropped + answer.body.unplaced,
+      complete: answer.body.complete,
+    };
+  }, [talk, talkQuery.data, rows, data, axis, span, tlGeom.width]);
+
   return (
     <div id="tree-pane">
       <AgentsToolbar
@@ -490,6 +623,17 @@ export function AgentsTable({
         onQuery={onQuery}
         deep={deep}
         onDeep={setDeep}
+        talk={talk}
+        onTalk={setTalk}
+        talkNote={
+          talkHops === null
+            ? null
+            : {
+                messages: talkHops.shown,
+                marks: talkHops.drawn.length,
+                dropped: talkHops.dropped,
+              }
+        }
         attention={attention}
         onAttention={onAttention}
         scale={scale}
@@ -525,7 +669,7 @@ export function AgentsTable({
               {header.column.id === 'timeline'
                 ? ticks.map((tick) => {
                     const x = ((tick - axis.t0) / span) * 100;
-                    // 端に貼りつく目盛りは読めないので落とす
+                    // 端に貼りつく目盛りは読めないので出さない
                     if (x < 3 || x > 97) return null;
                     return (
                       <span key={tick} className="tick" style={{ left: `${x}%` }}>
@@ -540,7 +684,7 @@ export function AgentsTable({
       </div>
 
       <div id="rows" ref={rowsRef}>
-        {/* 時間の格子は全行を貫く 1 枚で敷く。行ごとに描くと行間で点線が途切れる */}
+        {/* 時間のグリッドは全行を貫く 1 枚で敷く。行ごとに描くと行間で点線が途切れる */}
         {rows.length > 0 && tlGeom.width > 0 && (
           <div className="tl-grid" style={{ left: tlGeom.left, width: tlGeom.width }}>
             {ticks.map((tick) => (
@@ -549,10 +693,10 @@ export function AgentsTable({
           </div>
         )}
 
-        {/* 結ぶ線も同じ流儀の 1 枚で、親の帯から子の帯まで 1 本の連続した線として描く
-            (行ごとの継ぎだと、継ぎ目の滑らかさが節のような点に見える)。
-            帯は行の中心の上下 ±4px を占め、矢印の先はその縁にちょうど触れる。
-            線は木の入れ子をなぞるだけの飾りなので、読み上げからは外す */}
+        {/* 結ぶ線も同じく全行を貫く 1 枚で、親のバーから子のバーまで 1 本の連続した線として
+            描く(行ごとに継ぐと、継ぎ目が節のような点に見える)。
+            バーは行の中心の上下 ±4px を占め、矢印の先はその縁にちょうど触れる。
+            この線は木の入れ子をなぞるだけの飾りなので、読み上げからは外す */}
         {rows.length > 0 && tlGeom.width > 0 && connections.length > 0 && (
           <svg
             className="tl-conn"
@@ -600,6 +744,47 @@ export function AgentsTable({
           </svg>
         )}
 
+        {/* エージェント間メッセージの矢印。**親子ではなく、実際にやりとりした相手どうしを結ぶ。**
+            親子の線と同じ座標に乗るので描き方も揃えるが、色を分けて別の意味だと分かるようにする。
+            細い線はクリックしにくいので、透明な太い線を重ねて当たり判定を広げる */}
+        {rows.length > 0 && tlGeom.width > 0 && talkHops !== null && talkHops.drawn.length > 0 && (
+          <svg className="tl-msg" style={{ left: tlGeom.left, width: tlGeom.width }}>
+            <title>Messages between agents</title>
+            {talkHops.drawn.map((arrow) => {
+              const down = arrow.to > arrow.from;
+              const y1 = midOf(arrow.from) + (down ? 4 : -4);
+              const y2 = midOf(arrow.to) + (down ? -5 : 5);
+              const tip = midOf(arrow.to) + (down ? -9 : 9);
+              return (
+                // biome-ignore lint/a11y/useSemanticElements: svg の中に button は置けない
+                <g
+                  key={arrow.key}
+                  className="msg"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={arrow.label}
+                  {...pressable(() => {
+                    if (arrow.file !== null) nav.openConv(arrow.file);
+                  })}
+                >
+                  <title>{arrow.label}</title>
+                  <line x1={`${arrow.x}%`} x2={`${arrow.x}%`} y1={y1} y2={y2} className="msg-hit" />
+                  <line
+                    x1={`${arrow.x}%`}
+                    x2={`${arrow.x}%`}
+                    y1={y1}
+                    y2={y2}
+                    className="msg-line"
+                  />
+                  <svg x={`${arrow.x}%`} overflow="visible" aria-hidden="true">
+                    <polygon points={`-2.8,${tip} 2.8,${tip} 0,${y2}`} className="msg-arrow" />
+                  </svg>
+                </g>
+              );
+            })}
+          </svg>
+        )}
+
         {rows.length === 0 ? (
           <div className="empty">No sessions to show</div>
         ) : (
@@ -618,7 +803,7 @@ export function AgentsTable({
               nowMs={nowMs}
               onPanStart={onPanStart}
               onOpen={() => {
-                // 引き寄せ直後の手離しで会話が開かないようにする
+                // 掴んで動かした直後のマウスアップで会話が開かないようにする
                 if (didPanRef.current) {
                   didPanRef.current = false;
                   return;
@@ -628,8 +813,8 @@ export function AgentsTable({
               onToggle={() => row.toggleExpanded()}
               canExpand={row.getCanExpand()}
               isExpanded={row.getIsExpanded()}
-              /* 字下げは血筋が言う段で取る。表の入れ子の段だと、呼んだ相手が絞りで
-                 消えた孫が、直に呼ばれた子と同じ深さに見えてしまう */
+              /* 字下げはサブエージェント自身が持つ `depth` で取る。表の入れ子の深さだと、
+                 親が絞り込みで消えた孫が、直に呼ばれた子と同じ深さに見えてしまう */
               depth={row.original.kind === 'session' ? 0 : row.original.node.depth}
             />
           ))
@@ -639,7 +824,8 @@ export function AgentsTable({
   );
 }
 
-/* 行 1 本。**包みを増やさない** — この `div` が `#rows` の直の子で、親の列を借りている。 */
+/* 行 1 本。**ラッパー要素を増やさない** — この `div` が `#rows` の直の子で、`subgrid` で
+   親の列に乗っている。 */
 function AgentRowView({
   row,
   last,
@@ -672,11 +858,11 @@ function AgentRowView({
   const worktree = worktreeName(node.cwd);
   const branch = node.git_branch ?? '';
   const awaiting = entry.kind === 'session' ? entry.node.awaiting : null;
-  /** 呼ばれ方。畳んだ字を出し、元の字は載せたときに見せる */
+  /** `agent_type`。短縮した表記を出し、元の値はホバーしたときに `title` で見せる */
   const calledAs = entry.kind === 'subagent' ? entry.node.agent_type : null;
 
   /* いま何をしているか。**待っていることを最優先で見せる。**
-     稼働は勝手に進むが、応答待ちはあなたを待っている。 */
+     稼働中の作業は勝手に進むが、入力待ちはユーザーが動くまで進まない。 */
   const now =
     awaiting === 'user'
       ? 'awaiting user input'
@@ -694,11 +880,11 @@ function AgentRowView({
         : [];
 
   return (
-    // biome-ignore lint/a11y/useSemanticElements: 中に札を持つ行は button にできない
+    // biome-ignore lint/a11y/useSemanticElements: 中にチップを持つ行は button にできない
     <div
       className={`grid-row row kind-${entry.kind} state-${node.state}${last ? ' last' : ''}${selected ? ' selected' : ''}${pop === null ? '' : ' pop'}`}
       data-tok={[node.file, ...issueTokens, worktree, branch].filter(Boolean).join(' ')}
-      /* 段は罫線を引く側にも渡す。字下げだけを動かすと、線だけが 1 段目に取り残される */
+      /* 深さは罫線を引く CSS にも渡す。字下げだけを動かすと、線だけが深さ 0 の位置に残る */
       style={{ ...pop, '--depth': String(depth) } as React.CSSProperties}
       role="button"
       tabIndex={0}
@@ -713,8 +899,8 @@ function AgentRowView({
         <Dot state={awaiting === 'user' ? 'input' : node.state} />
         <span className="t">{cut(labelOf(entry), MAX_LABEL_CHARS)}</span>
         {entry.kind === 'session' && <span className="sub-id">{node.id.slice(0, 8)}</span>}
-        {/* 呼び名が 16 進の id しか無い子では、何をしている子かはこれでしか読めない。
-            列は増やさない — 11 本の subgrid を崩すと表全体の列が揃わなくなる */}
+        {/* ラベルが 16 進の id しか無い子では、何をしている子かはこれでしか読めない。
+            列は増やさない — 11 本の `subgrid` を崩すと表全体の列が揃わなくなる */}
         {agentTypeShort(calledAs) !== '' && (
           <span className="sub-id" title={calledAs ?? ''}>
             {agentTypeShort(calledAs)}

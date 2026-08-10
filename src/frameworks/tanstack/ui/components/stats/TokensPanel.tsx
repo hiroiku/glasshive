@@ -1,11 +1,11 @@
 import { type Bin, FEET, MAX_BARS, rangeLabel, WINDOW_MS } from '../../derive/usage.ts';
-import { absTime, formatTokens, mdhm } from '../../format.ts';
+import { formatTokens, mdhm } from '../../format.ts';
 import { useChartHover } from '../../hooks/useChartHover.ts';
 
-/* 消費の山と、その積み上がり。
+/* 消費の推移と、その積み上がり。
 
-   足の長さを選ばせるのはローソク足と同じ語彙である。範囲ではなく 1 本の長さを選ぶと、
-   「いま何を見ているか」が本数 × 長さで読める。 */
+   バー 1 本の長さを選ばせるのはローソク足チャートと同じ考え方である。範囲ではなく
+   1 本の長さを選ぶと、「いま何を見ているか」が本数 × 長さで読める。 */
 
 export interface TokensPanelProps {
   readonly bins: readonly Bin[];
@@ -24,8 +24,8 @@ export function TokensPanel({ bins, fromMs, footMs, bars, nowMs, onFoot }: Token
 
   let running = 0;
   const cumulative = heights.map((value) => (running += value));
-  /* 足ごとの位置と高さを先に組む。**鍵に添字を使わない** —
-     足の並びは窓を動かすたびに丸ごと入れ替わるので、添字では別の足と取り違える。 */
+  /* バーごとの位置と高さを先に組む。**React のキーに添字を使わない** —
+     バーの並びは期間を動かすたびに丸ごと入れ替わるので、添字では別のバーと取り違える。 */
   const columns = bins.map((bin, index) => ({
     at: fromMs + index * footMs,
     x: index * 10,
@@ -58,9 +58,9 @@ export function TokensPanel({ bins, fromMs, footMs, bars, nowMs, onFoot }: Token
         </span>
       </div>
 
-      {/* 載せると、その柱ひとつぶんの消費を読み上げ欄に出す。図そのものの言い分は
-          svg の題が持っているので、載せられない人にも要旨は届く */}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: 載せて読むためだけの面 */}
+      {/* ホバーすると、そのバー 1 本ぶんの消費をツールチップに出す。グラフ自体の要旨は
+          svg の `title` が持っているので、ホバーできない人にも届く */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: ホバーして読むためだけの面 */}
       <div className="sf-plot" onMouseMove={hover.onMouseMove} onMouseLeave={hover.onMouseLeave}>
         <svg
           className="sf-svg"
@@ -117,10 +117,12 @@ export function TokensPanel({ bins, fromMs, footMs, bars, nowMs, onFoot }: Token
         )}
       </div>
 
+      {/* 年は要らない。期間はいちばん長くても 18h で、年をまたぐ読み方をしない。
+          「YYYY-MM-DD HH:MM」を 3 つ並べると、それだけでパネル 1 枚の幅を超える */}
       <div className="sf-ticks">
-        <span>{absTime(fromMs)}</span>
-        <span>{absTime(fromMs + rangeMs / 2)}</span>
-        <span>{absTime(nowMs)}</span>
+        <span>{mdhm(fromMs)}</span>
+        <span>{mdhm(fromMs + rangeMs / 2)}</span>
+        <span>{mdhm(nowMs)}</span>
       </div>
     </div>
   );

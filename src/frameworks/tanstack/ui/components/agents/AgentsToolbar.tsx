@@ -2,22 +2,34 @@ import type { Axis, Scale } from '../../timeline/axis.ts';
 import { SCALES } from '../../timeline/axis.ts';
 import { RangeSlider, TimeInput } from '../timeline/RangeSlider.tsx';
 
-/* 表の帯。探しと絞りと、いま見ている時間帯。
+/* 表のツールバー。検索と絞り込みと、いま見ている時間帯。
 
    **`#tree-pane` の直の子であり続けること。** 列の定義は `#tree-pane` が持っており、
-   帯は `grid-column: 1 / -1` で全列を跨いでいる。包みを 1 枚挟むと跨げなくなる。 */
+   ツールバーは `grid-column: 1 / -1` で全列を跨いでいる。ラッパーを 1 枚挟むと跨げなくなる。 */
 
 export interface AgentsToolbarProps {
   readonly query: string;
   readonly onQuery: (query: string) => void;
-  /** 見えている欄ではなく、正本の中身を探すか */
+  /** 見えている欄ではなく、`transcript` の中身を検索するか */
   readonly deep: boolean;
   readonly onDeep: (deep: boolean) => void;
+  /** エージェント間メッセージの矢印を、稼働区間のバーの上に重ねるか */
+  readonly talk: boolean;
+  readonly onTalk: (talk: boolean) => void;
+  /* 見えているメッセージの数と、描いた矢印の本数と、描けなかった数。
+     **描かなかったものを黙って落とさない。** 表示範囲の外へ出たメッセージも、上限で
+     諦めたメッセージも、件数だけはここに出す。矢印は近いものをまとめるので、
+     本数はメッセージの数より少ない。 */
+  readonly talkNote: {
+    readonly messages: number;
+    readonly marks: number;
+    readonly dropped: number;
+  } | null;
   readonly attention: boolean;
   readonly onAttention: (attention: boolean) => void;
   readonly scale: Scale;
   readonly onScale: (scale: Scale) => void;
-  /** 時間帯を手で選んでいるか。選んでいる間は目盛りの札を光らせない */
+  /** 時間帯を手で選んでいるか。選んでいる間はプリセットのチップを光らせない */
   readonly picked: boolean;
   readonly axis: Axis;
   readonly domain: Axis;
@@ -30,6 +42,9 @@ export function AgentsToolbar({
   onQuery,
   deep,
   onDeep,
+  talk,
+  onTalk,
+  talkNote,
   attention,
   onAttention,
   scale,
@@ -56,6 +71,21 @@ export function AgentsToolbar({
         onClick={() => onDeep(!deep)}
       >
         deep
+      </button>
+      <button
+        type="button"
+        className={`fchip ${talk ? 'on' : ''}`}
+        title={
+          talkNote === null
+            ? "Draw arrows for messages agents sent each other (reads the open session's transcripts)"
+            : `${talkNote.messages} messages in ${talkNote.marks} arrows${talkNote.dropped > 0 ? `, ${talkNote.dropped} outside the window or over the limit` : ''}`
+        }
+        onClick={() => onTalk(!talk)}
+      >
+        {talkNote === null ? '⇄ messages' : `⇄ ${talkNote.messages}`}
+        {talkNote !== null && talkNote.dropped > 0 && (
+          <span className="n">+{talkNote.dropped}</span>
+        )}
       </button>
       <button
         type="button"

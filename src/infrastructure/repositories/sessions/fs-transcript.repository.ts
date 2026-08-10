@@ -16,34 +16,43 @@ import {
   statFile,
 } from '~/infrastructure/io/bounded-read.ts';
 
-/* 正本の置き場を、ファイルの読み取りだけで観る。何にも書き込まない。
+/* `~/.claude/projects` を、ファイルの読み取りだけで観る。何にも書き込まない。
 
-   ここは「どこを、どれだけ読むか」を言われたとおりに開く場所である。読めた字を
-   どう読み解くかは知らないし、何バイトまで読むかも自分では決めない。
+   ここは「どこを、どれだけ読むか」を言われたとおりに開く場所である。読めたテキストを
+   どうパースするかは知らないし、何バイトまで読むかも自分では決めない。
 
-   歩きと読みが分かれているのは、木の形が stat だけで決まるからである。中身を開くのは
-   見出し・区間・数えを要るときだけで、窓の外の正本は開きもしない。 */
+   走査と読み取りが分かれているのは、木の形が stat だけで決まるからである。中身を開くのは
+   メタ情報・稼働区間・集計が要るときだけで、対象期間の外の `transcript` は開きもしない。 */
 
-/* 正本の拡張子。**置き場の形はここが知っている。**
-   セッションの正本の名前から拡張子を落としたものが、その子の棚の在り処になる。 */
+/* `transcript` の拡張子。**`~/.claude/projects` の形を知っているのは、この一群の定数である。**
+   セッションの `transcript` のファイル名から拡張子を落としたものが、そのサブエージェントの
+   ディレクトリ名になる。 */
 const TRANSCRIPT_SUFFIX = '.jsonl';
 
-/* 子の正本が置かれる、セッションと同じ名の下の棚。
-   **この下は平らではない。** 走りごとに `workflows/<runId>/` のような棚が切られ、
-   そこに入った子は直下には出てこないので、降りずに数えると丸ごと落ちる。 */
+/* サブエージェントの `transcript` が置かれる、セッションと同じ名前のディレクトリの下。
+   **この下は平らではない。** 実行ごとに `workflows/<runId>/` のようなディレクトリが切られ、
+   そこに入ったサブエージェントは直下には出てこないので、降りずに数えると丸ごと落ちる。 */
 const SUBAGENT_DIR = 'subagents';
 
-/* 子の正本の名前の頭。**降りる以上、これが要る。**
-   走りの棚には走りそのものの控え(`journal.jsonl`)も置かれていて、拡張子だけで拾うと
-   それが子として並んでしまう。頭で選ぶのは、控えの名前を数え上げるより取りこぼしが無い。 */
+/* 実行ごとのディレクトリを束ねている名前。**この直下の名前が、その実行の `runId` になる。**
+   実行の中で産まれたサブエージェントの `*.meta.json` には親が書かれないので、同じ実行のもの
+   だと言えるのはディレクトリ名だけになる。 */
+const RUN_DIR = 'workflows';
+
+/* サブエージェントの `transcript` のファイル名の接頭辞。**降りる以上、これが要る。**
+   実行のディレクトリには実行そのもののログ(`journal.jsonl`)も置かれていて、拡張子だけで
+   拾うとそれがサブエージェントとして並んでしまう。接頭辞で選ぶのは、除外したいファイル名を
+   数え上げるより取りこぼしが無い。 */
 const SUBAGENT_PREFIX = 'agent-';
 
-/* 子の正本の隣に置かれた覚え書き。正本の名前の拡張子だけを差し替えたものになる。
-   親子はここにしか書かれていないので、読まなければ木は 2 段に潰れる。 */
+/* サブエージェントの `transcript` の隣に置かれた `*.meta.json`。`transcript` のファイル名の
+   拡張子だけを差し替えたものになる。親子関係はここにしか書かれていないので、読まなければ
+   木は 2 階層に潰れる。 */
 const META_SUFFIX = '.meta.json';
 
-/* 覚え書きに許す大きさ。数えるだけの短い JSON なので、これを超えるものは覚え書きではない。
-   上限に当たれば字が切れて読み解けず、覚え書きが無いのと同じ扱いに落ちる。 */
+/* `*.meta.json` に許す大きさ。フィールドが数えるほどしかない短い JSON なので、これを超える
+   ものは `*.meta.json` ではない。上限に当たればテキストが切れてパースできず、
+   `*.meta.json` が無いのと同じ扱いに落ちる。 */
 const META_MAX_BYTES = 64 * 1024;
 
 function listDirEntries(dir: string): Observation<fs.Dirent[]> {
@@ -54,28 +63,29 @@ function listDirEntries(dir: string): Observation<fs.Dirent[]> {
   }
 }
 
-/* 木の内側の棚は、読めなくても空として先へ進む。
+/* 木の内側のディレクトリは、読めなくても空として先へ進む。
 
-   置き場そのものが読めないなら観測は成り立たないが、内側の 1 つが読めないだけなら
-   他の名前は見えている。そこで止めると、見えているものまで隠れる。
+   `~/.claude/projects` そのものが読めないなら観測は成り立たないが、内側の 1 つが読めない
+   だけなら他のディレクトリは見えている。そこで止めると、見えているものまで隠れる。
 
-   **ここは「無い」と「見に行けなかった」をわざと潰している、この道具で唯一の場所である。**
-   潰してよいと言えるのは、棚の形が `Observation` を持てないからではなく、内側 1 つの
-   読めなさが木の形を変えないからである(セッションを持たない名前は巣として数えない)。
-   歩けた名前の数は `listTranscripts` の `Observation` に残るので、置き場ごと読めなかった
-   のか、内側が 1 つ読めなかったのかは、上の層で区別が付く。 */
+   **ここは「無かった」と「観測できなかった」をわざと潰している、glasshive で唯一の場所
+   である。** 潰してよいと言えるのは、戻り値が `Observation` を持てないからではなく、
+   内側 1 つの読めなさが木の形を変えないからである(セッションを持たないディレクトリは
+   プロジェクトとして数えない)。走査できたディレクトリの数は `listTranscripts` の
+   `Observation` に残るので、`~/.claude/projects` ごと読めなかったのか、内側が 1 つ
+   読めなかったのかは、上の層で区別が付く。 */
 function entriesOrEmpty(dir: string): fs.Dirent[] {
   const listed = listDirEntries(dir);
   return listed.kind === 'observed' ? listed.value : [];
 }
 
-/** 正本 1 つを、名前と stat だけで写す */
+/** `transcript` 1 つを、ファイル名と stat だけで写す */
 function describeSource(dir: string, name: string): TranscriptSource | null {
   const file = path.join(dir, name);
   const stat = statFile(file);
-  /* 歩いている間に消えた正本は、この周では無かったものとして扱う。
-     大きさを見に行けなかったものも同じ扱いになる — 木の形は stat だけで決まるので、
-     大きさの無い正本は載せようがない。次の周で読めれば、そのまま戻ってくる。 */
+  /* 走査している間に消えた `transcript` は、この回では無かったものとして扱う。
+     サイズを観測できなかったものも同じ扱いになる — 木の形は stat だけで決まるので、
+     サイズの無い `transcript` は載せようがない。次の回で読めれば、そのまま戻ってくる。 */
   if (stat.kind !== 'observed') return null;
   return {
     id: name.slice(0, -TRANSCRIPT_SUFFIX.length),
@@ -86,19 +96,16 @@ function describeSource(dir: string, name: string): TranscriptSource | null {
   };
 }
 
-/** 観測した字を信じ切らない。書かれ方が違う値は、書かれていなかったものに倒す */
+/** 観測した値を信じ切らない。型が違うものは、書かれていなかったものに倒す */
 function textOrNull(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-function countOrNull(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
+/* サブエージェントの隣の `*.meta.json` を読む。読めない・壊れている・そもそも無いは、
+   すべて「無い」に落とす。
 
-/* 子の隣の覚え書きを読む。読めない・壊れている・そもそも無いは、すべて「無い」に落とす。
-
-   **覚え書きが無いことで子が消えてはならない。** ここが返す null は「呼んだ相手が分からない」
-   という事実であって、その子が居ないという意味ではない。 */
+   **`*.meta.json` が無いことでサブエージェントが消えてはならない。** ここが返す null は
+   「親が分からない」という事実であって、そのサブエージェントが居ないという意味ではない。 */
 function readAgentMeta(file: string): AgentMeta | null {
   const window = readHeadWindow(file, META_MAX_BYTES, false);
   if (window.kind !== 'observed') return null;
@@ -112,13 +119,14 @@ function readAgentMeta(file: string): AgentMeta | null {
   const fields = parsed as Record<string, unknown>;
   return {
     agentType: textOrNull(fields.agentType),
+    name: textOrNull(fields.name),
+    toolUseId: textOrNull(fields.toolUseId),
     description: textOrNull(fields.description),
     parentAgentId: textOrNull(fields.parentAgentId),
-    spawnDepth: countOrNull(fields.spawnDepth),
   };
 }
 
-/** 棚に在る正本を集める。名前と stat だけで、中身は開かない */
+/** ディレクトリに在る `transcript` を集める。ファイル名と stat だけで、中身は開かない */
 function collectSources(dir: string): TranscriptSource[] {
   const sources: TranscriptSource[] = [];
   for (const entry of entriesOrEmpty(dir)) {
@@ -129,13 +137,21 @@ function collectSources(dir: string): TranscriptSource[] {
   return sources;
 }
 
-/* 子の棚を、内側の棚まで降りて集める。走りごとに切られた棚の中にも子が居るからである。
-   別名は棚として数えないので、別名が親を指していても回り続けることはない。 */
-function collectSubagents(dir: string): SubagentSource[] {
+/* サブエージェントを、内側のディレクトリまで降りて集める。実行ごとに切られたディレクトリの
+   中にもサブエージェントが居るからである。symlink はディレクトリとして数えないので、
+   symlink が親を指していても回り続けることはない。
+
+   降りながら、いまどの実行の中に居るかを持ち回る。`runId` はディレクトリの形にしか無いので、
+   ここで拾わなければ二度と拾えない — サブエージェントの `transcript` にも `*.meta.json` にも
+   書かれていない。 */
+function collectSubagents(dir: string, runId: string | null): SubagentSource[] {
   const sources: SubagentSource[] = [];
+  const holdsRuns = path.basename(dir) === RUN_DIR;
   for (const entry of entriesOrEmpty(dir)) {
     if (entry.isDirectory()) {
-      sources.push(...collectSubagents(path.join(dir, entry.name)));
+      // `workflows` の直下だけが `runId` を決める。その先はどれだけ深くても同じ実行の中である
+      const inner = holdsRuns ? entry.name : runId;
+      sources.push(...collectSubagents(path.join(dir, entry.name), inner));
       continue;
     }
     const isSubagent =
@@ -145,17 +161,21 @@ function collectSubagents(dir: string): SubagentSource[] {
     if (!isSubagent) continue;
     const source = describeSource(dir, entry.name);
     if (source === null) continue;
-    sources.push({ ...source, meta: readAgentMeta(path.join(dir, `${source.id}${META_SUFFIX}`)) });
+    sources.push({
+      ...source,
+      runId,
+      meta: readAgentMeta(path.join(dir, `${source.id}${META_SUFFIX}`)),
+    });
   }
   return sources;
 }
 
-/* 名前ひとつぶんの棚から、セッションの正本とその子を集める。
-   セッションは棚の直下だけを見る — セッションは入れ子にならない。 */
+/* プロジェクト 1 つぶんのディレクトリから、セッションの `transcript` とそのサブエージェントを
+   集める。セッションはディレクトリの直下だけを見る — セッションは入れ子にならない。 */
 function collectSessions(groupDir: string): SessionSource[] {
   return collectSources(groupDir).map((source) => ({
     ...source,
-    subagents: collectSubagents(path.join(groupDir, source.id, SUBAGENT_DIR)),
+    subagents: collectSubagents(path.join(groupDir, source.id, SUBAGENT_DIR), null),
   }));
 }
 
@@ -170,7 +190,7 @@ export function createFsTranscriptRepository(options: {
       if (listed.kind !== 'observed') return listed;
       const groups: TranscriptGroup[] = [];
       for (const entry of listed.value) {
-        // 置き場には正本でないものも混ざる。名前ひとつぶんは、必ず棚の形をしている
+        // `~/.claude/projects` には `transcript` でないものも混ざる。プロジェクト 1 つぶんは、必ずディレクトリである
         if (!entry.isDirectory()) continue;
         groups.push({
           slug: entry.name,
@@ -192,7 +212,7 @@ export function createFsTranscriptRepository(options: {
     },
 
     async readTail(at, window) {
-      // 大きさは読む直前に採る。歩いてから読むまでの間にも正本は伸びる
+      // サイズは読む直前に採る。走査してから読むまでの間にも `transcript` は伸びる
       const stat = statFile(at.file);
       if (stat.kind !== 'observed') return stat;
       return readTailWindow(at.file, window.maxBytes, stat.value.size, window.trimPartialLine);
@@ -204,9 +224,10 @@ export function createFsTranscriptRepository(options: {
       } catch (error) {
         /* 解決できなかったことを、解決できた振りで返さない。
 
-           渡された字をここで `observed` として返すと、それが「解決の結果」として
-           上の層に覚えられる。外した器が繋ぎ直された後も古い字が居座り、同じ実体の巣が
-           別名のまま二つに並ぶ。字で代えてよいかは、代えてよい場所で決める。 */
+           渡されたパスをここで `observed` として返すと、それが「解決の結果」として
+           上の層に覚えられる。外していたボリュームが繋ぎ直された後も古いパスが居座り、
+           同じ実体のプロジェクトが別のパスのまま二つに並ぶ。渡されたパスで代用してよいかは、
+           代用してよい場所で決める。 */
         return classifyReadFailure(error, target);
       }
     },

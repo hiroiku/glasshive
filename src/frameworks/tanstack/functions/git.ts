@@ -6,10 +6,10 @@ import {
   readGitRef,
 } from '~/interface/controllers/git/git.controller.ts';
 
-/* 記録をブラウザーへ渡す口。
+/* `git` の観測をブラウザーへ渡す server function。
 
    **この名前を `.server.ts` にしてはいけない。** 呼ぶのはブラウザー側なので、
-   境目の見張りが `*.server.*` を断ってしまう。 */
+   層の境界のガードが `*.server.*` を断ってしまう。 */
 
 const deps = (): GitDeps => {
   const kernel = getKernel();
@@ -17,9 +17,9 @@ const deps = (): GitDeps => {
 };
 
 export const getGit = createServerFn({ method: 'GET' })
-  .inputValidator((value: unknown) => value)
+  .validator((value: unknown) => value)
   .handler(({ data }) => readGitOverview(deps(), data));
 
 export const getGitRef = createServerFn({ method: 'GET' })
-  .inputValidator((value: unknown) => value)
+  .validator((value: unknown) => value)
   .handler(({ data }) => readGitRef(deps(), data));

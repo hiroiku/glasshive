@@ -14,17 +14,18 @@ import type { ProjectSearch } from '../ui/nav/search.ts';
 
 /* 課題の画面。
 
-   台帳は人の手で動くので、正本ほど速くは変わらない。合図では配られないため、
+   台帳は人の手で動くので、`transcript` ほど速くは変わらない。変更通知では配られないため、
    ここだけは時計で取り直す。
 
-   **台帳が無いことと、読めなかったことを分けて見せる。** 無いなら bd を勧める案内を出す。
-   読めなかったなら、読めなかったと言う — 空の一覧にすると、課題が 1 件も無い巣に見える。 */
+   **台帳が無いことと、観測できなかったことを分けて見せる。** 無いなら bd を勧める案内を
+   出す。観測できなかったならそう言う — 空の一覧にすると、課題が 1 件も無いプロジェクトに
+   見える。 */
 
 export const Route = createFileRoute('/projects/$slug/beads')({
   component: BeadsView,
 });
 
-/** 印が何も言っていないときの並び。最後に触られた順 */
+/** 検索パラメータが何も言っていないときの並び。最後に更新された順 */
 const DEFAULT_ORDER = { key: 'updated', direction: 'desc' } as const;
 
 const SORT_KEYS: readonly IssueSortKey[] = [
@@ -52,7 +53,7 @@ function BeadsView() {
   const tree = useQuery(treeQuery);
   const includeClosed = search.closed === true;
   const ledger = useQuery(issuesQuery(slug, includeClosed));
-  /* 束ねた課題の消化と、札の索きは閉じたものまで要る。一覧とは別の鍵で持つ */
+  /* 束ねた課題の消化と、チップのインデックスは閉じたものまで要る。一覧とは別の `queryKey` で持つ */
   const whole = useQuery(issuesQuery(slug, true));
 
   const project = tree.data?.projects.find((candidate) => candidate.id === slug);
@@ -85,8 +86,8 @@ function BeadsView() {
   if (answer === undefined) {
     return <p className="empty">Loading…</p>;
   }
-  /* 断られたのと、見に行けたが無かったのは別の事実である。
-     断りはこちらの求めの誤り(知らない巣の id など)で、台帳の話ではない。 */
+  /* 断られたのと、観測できたが無かったのは別の事実である。
+     断りはこちらの呼び出しの誤り(観測していないプロジェクトの id など)で、台帳の話ではない。 */
   if (!answer.ok) {
     return <p className="empty">Could not load issues ({answer.body.code})</p>;
   }
@@ -132,9 +133,9 @@ function BeadsView() {
   );
 }
 
-/* 台帳が無い巣。**無いことは失敗ではない。**
+/* 台帳が無いプロジェクト。**無いことは失敗ではない。**
 
-   多くの巣には bd が入っていない。何が見えるようになるのかを書いておくと、
+   多くのプロジェクトには bd が入っていない。何が見えるようになるのかを書いておくと、
    この画面が空である理由と、埋める手立てが同時に読める。 */
 function BdPromo() {
   return (

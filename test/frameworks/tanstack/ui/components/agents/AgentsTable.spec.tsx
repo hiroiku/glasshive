@@ -6,13 +6,13 @@ import {
   type AgentsTableProps,
 } from '~/frameworks/tanstack/ui/components/agents/AgentsTable.tsx';
 
-/* 委譲は 1 段では終わらない。子がまた子を呼び、実際に 3 段目まで在る。
+/* 委譲は深さ 1 では終わらない。子がまた子を呼び、実際に深さ 3 まで在る。
 
-   **段を潰すと、木は木でなくなる。** 孫が子と同じ深さに並べば、誰が誰に投げたのかは
-   読めなくなり、親を畳んでも孫だけが親無しの行として残る。ここで見るのは、
-   段が字下げにも罫線にも届いていることと、畳みが下の代まで届くことである。 */
+   **深さを潰すと、木は木でなくなる。** 孫が子と同じ深さに並べば、誰が誰に投げたのかは
+   読めなくなり、親を折り畳んでも孫だけが親無しの行として残る。ここで見るのは、
+   `depth` が字下げにも罫線にも届いていることと、折り畳みが下の代まで届くことである。 */
 
-/* 巣の形は、受け取る表そのものから引く。写し取ると、形が変わっても検めが気づけない */
+/* プロジェクトの形は、受け取る表そのものから引く。写し取ると、形が変わってもテストが気づけない */
 type ProjectJson = AgentsTableProps['project'];
 type SessionJson = ProjectJson['sessions'][number];
 type SubagentJson = SessionJson['subagents'][number];
@@ -23,7 +23,7 @@ vi.mock('~/frameworks/tanstack/ui/nav/NavContext.tsx', () => ({
   useNav: () => nav,
 }));
 
-/* 探しの問い合わせは向こう側の口を連れてくる。deep を押していない限り呼ばれないので、
+/* 検索の問い合わせはサーバー側のコードを連れてくる。deep を押していない限り呼ばれないので、
    形だけを置いて、画面の側だけを見る */
 vi.mock('~/frameworks/tanstack/queries/sessions.query.ts', () => ({
   searchQuery: (projectId: string, query: string) => ({
@@ -45,6 +45,8 @@ function subagent(
     id,
     label: id,
     agent_type: null,
+    name: null,
+    tool_use: null,
     parent,
     depth,
     file: `/x/${id}.jsonl`,
@@ -146,7 +148,7 @@ const indentOf = (label: string): string => {
 const labels = (): string[] =>
   [...document.querySelectorAll('.row .name .t')].map((el) => el.textContent ?? '');
 
-/** 親 → 子 → 孫。実データに在る 3 段をそのまま置く */
+/** 親 → 子 → 孫。実データに在る深さ 3 をそのまま置く */
 const three = project([
   session('sess', [
     subagent('child', 1, null, { agent_type: 'workflow-subagent' }),
@@ -154,8 +156,8 @@ const three = project([
   ]),
 ]);
 
-describe('段の深さを、字下げと罫線の両方へ届ける', () => {
-  it('孫は子より 1 段ぶん深く字下げされる', () => {
+describe('`depth` を、字下げと罫線の両方へ届ける', () => {
+  it('孫は子より 1 階層ぶん深く字下げされる', () => {
     mount({ project: three });
 
     expect(indentOf('sess')).toBe('0px');
@@ -163,18 +165,18 @@ describe('段の深さを、字下げと罫線の両方へ届ける', () => {
     expect(indentOf('grandchild'), '子と同じ字下げでは、誰に呼ばれた子か読めない').toBe('48px');
   });
 
-  it('罫線を引く側にも同じ段が渡る', () => {
+  it('罫線を引く側にも同じ深さが渡る', () => {
     mount({ project: three });
 
-    // 罫線の位置は CSS が --depth から計算する。行が段を持たなければ 1 段目に取り残される
+    // 罫線の位置は CSS が --depth から計算する。行が `depth` を持たなければ深さ 1 に取り残される
     expect(rowOf('child').getAttribute('style')).toContain('--depth: 1');
     expect(rowOf('grandchild').getAttribute('style')).toContain('--depth: 2');
   });
 
-  it('呼んだ相手が絞りで消えても、孫は消えず段の深さを保つ', () => {
+  it('呼んだ相手が絞り込みで消えても、孫は消えず深さを保つ', () => {
     mount({ project: three, query: 'grandchild' });
 
-    expect(labels(), '木から外すと、観る人には動いていない子にしか見えない').toEqual([
+    expect(labels(), '木から外すと、ユーザーには動いていない子にしか見えない').toEqual([
       'sess',
       'grandchild',
     ]);
@@ -182,9 +184,9 @@ describe('段の深さを、字下げと罫線の両方へ届ける', () => {
   });
 });
 
-describe('畳んだ親と一緒に、下の代まで隠れる', () => {
-  it('子を畳むと孫も消える', () => {
-    // 畳めるのは選んでいる行だけ。選んでいない行を押すと会話が開く
+describe('折り畳んだ親と一緒に、下の代まで隠れる', () => {
+  it('子を折り畳むと孫も消える', () => {
+    // 折り畳めるのは選んでいる行だけ。選んでいない行を押すと会話が開く
     mount({ project: three, selectedFile: '/x/child.jsonl' });
     expect(labels()).toEqual(['sess', 'child', 'grandchild']);
 
@@ -196,7 +198,7 @@ describe('畳んだ親と一緒に、下の代まで隠れる', () => {
     ]);
   });
 
-  it('セッションを畳むと、代を問わず子が全部消える', () => {
+  it('セッションを折り畳むと、代を問わず子が全部消える', () => {
     mount({ project: three, selectedFile: '/x/sess.jsonl' });
 
     fireEvent.click(rowOf('sess'));
@@ -204,7 +206,7 @@ describe('畳んだ親と一緒に、下の代まで隠れる', () => {
     expect(labels()).toEqual(['sess']);
   });
 
-  it('子を畳んでも、その子の兄弟は残る', () => {
+  it('子を折り畳んでも、その子の兄弟は残る', () => {
     const tree = project([
       session('sess', [
         subagent('child', 1, null),
@@ -220,8 +222,8 @@ describe('畳んだ親と一緒に、下の代まで隠れる', () => {
   });
 });
 
-describe('呼ばれ方を名前の脇へ添える', () => {
-  it('列を増やさずに、呼ばれ方を薄く添える', () => {
+describe('`agent_type` を名前の脇へ添える', () => {
+  it('列を増やさずに、`agent_type` を薄く添える', () => {
     mount({ project: three });
 
     const child = rowOf('child');
@@ -230,7 +232,7 @@ describe('呼ばれ方を名前の脇へ添える', () => {
     expect(child.children.length).toBe(11);
   });
 
-  it('畳んだ字の元は載せたときに見せる', () => {
+  it('切り詰めた表記の元は、ホバーしたときに見せる', () => {
     mount({ project: three });
 
     const chip = [...rowOf('child').querySelectorAll('.sub-id')].at(-1);

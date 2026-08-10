@@ -16,24 +16,24 @@ import { SubjectText } from '../text/SubjectText.tsx';
 import { GitGutter } from './GitGutter.tsx';
 import { GitToolbar } from './GitToolbar.tsx';
 
-/* 生きている線を、本流の上に重ねて描く。
+/* 生きているブランチの線を、本流の上に重ねて描く。
 
-   1 行が 1 つの指しか記録で、左の余白がその行を通る線を描く。**行を包む要素を増やさない** —
-   線は行の高さを前提に座標を決めているので、間に何か挟むと線が行からずれる。
+   1 行が 1 つの `ref` かコミットで、左の余白がその行を通る線を描く。行を包む要素を
+   増やさない — 線は行の高さを前提に座標を決めているので、間に何か挟むと線が行からずれる。
 
-   ぶつかりの見込みは表の上に出す。同じファイルを 2 本の線が触っているという事実は、
+   コンフリクトの見込みは表の上に出す。同じファイルを 2 本の線が触っているという事実は、
    どちらの行にも属さない。
 
-   帯もここが出す。**当たりの数え方を帯と表で分けない** — 分けると、沈んだ行の数と
-   帯に出た数が食い違い、どちらが本当か分からなくなる。 */
+   ツールバーもここが出す。**一致件数の数え方をツールバーと表で分けない** — 分けると、
+   沈んだ行の数とツールバーに出た数が食い違い、どちらが本当か分からなくなる。 */
 
-/** 並べる名札の数 */
+/** 並べるエージェントのチップの数 */
 const MAX_LISTED_OCCUPANTS = 4;
 
 /** これだけ遅れていたら、目を引く色にする */
 const BEHIND_WARN = 50;
 
-/** 上に出すぶつかりの数 */
+/** 表の上に出すコンフリクトの数 */
 const MAX_LISTED_CONFLICTS = 4;
 
 export interface GitOrder {
@@ -78,7 +78,8 @@ export function GitGraph({
     tipStates.set(index, occupantsOf(occupants, row.tip.worktree)[0]?.state ?? '');
   });
 
-  /* 巣そのものに居る手。下の作業場所に居る手まで拾うと、本流の行に全員が並ぶ。 */
+  /* プロジェクトの直下に居るエージェント。配下の作業ディレクトリに居るぶんまで拾うと、
+     本流の行に全員が並ぶ。 */
   const root = project?.path ?? null;
   const rootOccupants = occupantsOf(occupants, root).filter((occupant) =>
     (project?.sessions ?? []).some(
@@ -172,12 +173,12 @@ export function GitGraph({
             const rev = tip.kind === 'branch' ? tip.name : tip.sha;
             const worktreeLeaf = tip.worktree?.split('/').pop() ?? '';
             return (
-              // biome-ignore lint/a11y/useSemanticElements: 中に札を持つ行は button にできない
+              // biome-ignore lint/a11y/useSemanticElements: 中にチップを持つ行は button にできない
               <div
                 key={`t:${tip.name}:${tip.sha}`}
                 className={`git-row${dim}`}
                 title={tip.worktree ?? tip.name}
-                data-name={`${tip.name} ${worktreeLeaf}`}
+                data-name={`${tip.name} ${worktreeLeaf} ${tip.sha}`}
                 role="button"
                 tabIndex={0}
                 aria-label={`Open ref ${tip.name}`}
@@ -243,10 +244,13 @@ export function GitGraph({
           const node = row.node;
           const isHead = index === firstMain;
           return (
-            // biome-ignore lint/a11y/useSemanticElements: 中に札を持つ行は button にできない
+            // biome-ignore lint/a11y/useSemanticElements: 中にチップを持つ行は button にできない
             <div
               key={`n:${node.sha}`}
               className={`git-row${node.merge ? ' merge' : ''}${dim}`}
+              /* 本文中の sha にホバーしたら、この行がハイライトされる。**完全な sha を
+                 持たせる** — 突き合わせは部分一致なので、本文の桁数が短くても当たる。 */
+              data-name={node.sha}
               role="button"
               tabIndex={0}
               aria-label={`Open commit ${node.sha.slice(0, 9)}`}
