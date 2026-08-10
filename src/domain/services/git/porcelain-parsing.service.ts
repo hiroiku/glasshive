@@ -7,26 +7,26 @@ import {
 import type { DiffFileStat } from '~/domain/value-objects/git/diff-stat.value-object.ts';
 import type { Worktree } from '~/domain/value-objects/git/worktree.value-object.ts';
 
-/* git の答えの字面を、値に読み替える。ここは git を起こさないし、ファイルにも触らない。
+/* `git` の出力を、値に読み替える。ここは `git` を起動しないし、ファイルにも触らない。
 
-   欄の区切りに `\0` を使うのは、記録の題に空白も改行も入るからである。空白で切ると、
-   題の 1 語目までしか読めない。**求める欄をこちらで指定しているので、読み解きと書式は
-   必ず対で直す。** そのために書式の字もここに置いてある。
+   欄の区切りに `\0` を使うのは、コミットの題に空白も改行も入るからである。空白で切ると、
+   題の 1 語目までしか読めない。**求める欄をこちらで指定しているので、パースとフォーマットは
+   必ず対で直す。** そのためにフォーマット文字列もここに置いてある。
 
-   欄が足りない行は、git が答えを途中で切ったか、書式を直し忘れたときにだけ起こる。
-   その 1 行を投げて観測ごと落とすより、空の字として通すほうが害が小さい。 */
+   欄が足りない行は、`git` が出力を途中で切ったか、フォーマットを直し忘れたときにだけ起こる。
+   その 1 行を投げて観測ごと落とすより、空文字列として通すほうが害が小さい。 */
 
-/** 枝の見出し。名 / 短い sha / 最後の記録の時刻 / 題 / いま出ているか */
+/** ブランチのメタ情報。名 / 短い sha / 最後のコミットの時刻 / 題 / いま出ているか */
 export const BRANCH_REF_FORMAT =
   '%(refname:short)%00%(objectname:short)%00%(committerdate:iso-strict)%00%(subject)%00%(HEAD)';
 
-/** 枝の名だけ */
+/** ブランチの名だけ */
 export const BRANCH_NAME_FORMAT = '%(refname:short)';
 
-/** 本流の 1 節。sha / 親ぜんぶ / 時刻 / 題 */
+/** 本流の 1 コミット。sha / 親ぜんぶ / 時刻 / 題 */
 export const MAINLINE_FORMAT = '%H%x00%P%x00%cI%x00%s';
 
-/** 記録の見出し。短い sha / 時刻 / 書いた人 / 題 */
+/** コミットのメタ情報。短い sha / 時刻 / 書いた人 / 題 */
 export const COMMIT_LOG_FORMAT = '%h%x00%cI%x00%an%x00%s';
 
 const WORKTREE_PREFIX = 'worktree ';
@@ -45,8 +45,8 @@ function* fields(text: string): Generator<readonly (string | undefined)[]> {
 
 /* `worktree list --porcelain` を読む。
 
-   1 つの作業場所が複数行で書かれ、`worktree` の行が次の場所の始まりになる。
-   だから場所の行が来るまでの行は、直前の場所のものとして読む。 */
+   1 つの `worktree` が複数行で書かれ、`worktree` の行が次の 1 つの始まりになる。
+   だからその行が来るまでは、直前の `worktree` のものとして読む。 */
 export function parseWorktreeList(text: string): Worktree[] {
   const worktrees: Worktree[] = [];
   let current: {
@@ -75,7 +75,7 @@ export function parseWorktreeList(text: string): Worktree[] {
   return worktrees;
 }
 
-/** `for-each-ref` の答えを枝の見出しに読み替える */
+/** `for-each-ref` の出力をブランチのメタ情報に読み替える */
 export function parseBranchRefs(text: string): BranchRef[] {
   const branches: BranchRef[] = [];
   for (const [name, sha, date, subject, head] of fields(text)) {
@@ -84,14 +84,14 @@ export function parseBranchRefs(text: string): BranchRef[] {
       sha: sha ?? '',
       date: date ?? '',
       subject: subject ?? '',
-      // git は出ている枝にだけ `*` を置く
+      // git は出ているブランチにだけ `*` を置く
       head: head === '*',
     });
   }
   return branches;
 }
 
-/** 枝の名だけを並べた答えを読む。`--no-merged` の答えがこれ */
+/** ブランチの名だけを並べた出力を読む。`--no-merged` の出力がこれ */
 export function parseBranchNames(text: string): Set<string> {
   const names = new Set<string>();
   for (const line of text.split('\n')) {
@@ -101,7 +101,7 @@ export function parseBranchNames(text: string): Set<string> {
   return names;
 }
 
-/** 本流の記録を読む。親が 2 つ以上あれば合流の節である */
+/** 本流のコミットを読む。親が 2 つ以上あれば合流のコミットである */
 export function parseMainline(text: string): MainlineCommit[] {
   const mainline: MainlineCommit[] = [];
   for (const [sha, parents, date, subject] of fields(text)) {
@@ -115,7 +115,7 @@ export function parseMainline(text: string): MainlineCommit[] {
   return mainline;
 }
 
-/** 記録の見出しを読む */
+/** コミットのメタ情報を読む */
 export function parseCommitLog(text: string): CommitSummary[] {
   const commits: CommitSummary[] = [];
   for (const [sha, date, author, subject] of fields(text)) {
@@ -129,15 +129,15 @@ export function parseCommitLog(text: string): CommitSummary[] {
   return commits;
 }
 
-/** `diff --name-only` の答え。触ったファイルの道が 1 行ずつ並ぶ */
+/** `diff --name-only` の出力。変更したファイルのパスが 1 行ずつ並ぶ */
 export function parseChangedPaths(text: string): string[] {
   return text.split('\n').filter((line) => line !== '');
 }
 
-/* `diff --numstat` の答えを読む。増 / 減 / 道 がタブ区切りで並ぶ。
+/* `diff --numstat` の出力を読む。増 / 減 / パス がタブ区切りで並ぶ。
 
-   増減が `-` の行は中身が字ではないもの(画像など)で、git は数を出さない。
-   数として読めない欄は 0 として数え、行そのものは残す — 触った事実は消さない。 */
+   増減が `-` の行は中身がテキストではないもの(画像など)で、`git` は数を出さない。
+   数値として読めない欄は 0 として数え、行そのものは残す — 触った事実は消さない。 */
 export function parseNumstat(text: string): DiffFileStat[] {
   const rows: DiffFileStat[] = [];
   for (const line of text.split('\n')) {

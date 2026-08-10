@@ -11,7 +11,7 @@ const file = (path: string, add: number, del: number): DiffFileStat => ({
   del,
 });
 
-describe('差分の姿', () => {
+describe('差分のまとめ', () => {
   it('触ったファイルが 1 本も無ければ数え上げも無い', () => {
     expect(
       summarizeDiff([]),
@@ -26,8 +26,8 @@ describe('差分の姿', () => {
     ).toEqual({ files: 2, add: 13, del: 7 });
   });
 
-  /* 上限は**数そのものを書く。** 定数と突き合わせると、上限が動いても常に釣り合うので、
-     見せる窓が変わったことを誰も言えない。 */
+  /* 上限は**リテラルの数値で書く。** 定数と突き合わせると上限が動いても常に釣り合ってしまい、
+     見せる件数が変わったことを誰も言えない。 */
 
   it('動きの大きい順に 6 本だけを見せる', () => {
     const rows = Array.from({ length: 9 }, (_, index) => file(`f${index}.ts`, index, 0));
@@ -49,7 +49,7 @@ describe('差分の姿', () => {
     ).toBe(rows.length);
   });
 
-  it('渡された並びを書き換えない', () => {
+  it('渡された配列を書き換えない', () => {
     const rows = [file('a.ts', 1, 0), file('b.ts', 9, 0)];
     summarizeDiff(rows);
     expect(

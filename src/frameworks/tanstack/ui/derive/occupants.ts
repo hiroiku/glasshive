@@ -1,18 +1,18 @@
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { cut } from '../format.ts';
 
-/* 作業場所に居るエージェント。
+/* 作業ディレクトリに居るエージェント。
 
-   記録の側は「どの枝がどこに出ているか」しか言わない。誰がそこで働いているかは
+   Git の側は「どのブランチがどこに出ているか」しか言わない。誰がそこで働いているかは
    観測の側にしかないので、cwd で突き合わせる。
 
-   **終わった手は入れない。** 記録の画面が答えるのは「いまそこに誰か居るか」で、
+   **終わったエージェントは入れない。** Git の画面が答えるのは「いまそこに誰か居るか」で、
    居たことがあるかではない。 */
 
-/** 名札の長さ。線の行は狭いので、木の一覧より短く切る */
+/** ラベルの最大長。線の行は狭いので、木の一覧より短く切る */
 const MAX_LABEL = 20;
 
-/** 並べる順。動いている手を先に出す */
+/** 並べる順。動いているエージェントを先に出す */
 const STATE_ORDER: Readonly<Record<string, number>> = { active: 0, waiting: 1 };
 
 export interface Occupant {
@@ -51,10 +51,10 @@ export function occupantIndex(project: ProjectJson | undefined): OccupantIndex {
   return index;
 }
 
-/* その作業場所と、その下で働いている手。
+/* その作業ディレクトリと、その下で働いているエージェント。
 
-   下まで見るのは、エージェントが巣の中の一段深いところで動くことがあるからである。
-   区切りを足して比べるのは、名前の先頭が同じだけの別の場所を拾わないため。 */
+   下まで見るのは、エージェントがプロジェクトの中の一段深いところで動くことがあるからである。
+   区切りを足して比べるのは、名前の先頭が同じだけの別のパスを拾わないため。 */
 export function occupantsOf(index: OccupantIndex, root: string | null): Occupant[] {
   if (root === null || root === '') return [];
   const found: Occupant[] = [];

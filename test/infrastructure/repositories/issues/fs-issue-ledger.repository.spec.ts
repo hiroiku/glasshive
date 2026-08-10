@@ -11,7 +11,7 @@ import { createFsIssueLedgerRepository } from '~/infrastructure/repositories/iss
 
 let root: string;
 
-/** 権利を落とした検査の後片付け。落としたままだと消せない */
+/** 権限を落としたテストの後片付け。落としたままだと消せない */
 function restorePermissions(target: string): void {
   try {
     fs.chmodSync(target, 0o700);
@@ -27,8 +27,8 @@ function restorePermissions(target: string): void {
   for (const entry of entries) restorePermissions(path.join(target, entry.name));
 }
 
-/* root で走る機械では権利を落としても読めてしまう。
-   そこでは「読めない」を作れないので、その検査は飛ばす。 */
+/* root で走る機械では権限を落としても読めてしまう。
+   そこでは「読めない」を作れないので、そのテストは飛ばす。 */
 function probeDenyRead(): boolean {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'glasshive-probe-'));
   const file = path.join(dir, 'probe');
@@ -47,7 +47,7 @@ function probeDenyRead(): boolean {
 
 const DENIES_READ = probeDenyRead();
 
-/** 巣ひとつを組む。台帳は巣の直下の決まった場所にしか無い */
+/** プロジェクト 1 つを組む。台帳はプロジェクトの直下の決まったパスにしか無い */
 function writeLedger(projectPath: string, text: string): string {
   const file = path.join(projectPath, '.beads', 'issues.jsonl');
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -70,8 +70,9 @@ const LEDGER = `${[
   .map((record) => JSON.stringify(record))
   .join('\n')}\n`;
 
-/* 幅を持つ読み取りに替わっても、小さな台帳では気付けない。この道具が正本に掛けている
-   いちばん広い窓(8MiB)より大きな台帳を組んで、幅そのものが無いことを確かめる。 */
+/* 幅を持つ読み取りに替わっても、小さな台帳では気付けない。glasshive が `transcript` に
+   掛けているいちばん広い読み取り範囲(8MiB)より大きな台帳を組んで、幅そのものが
+   無いことを確かめる。 */
 const WIDEST_WINDOW_BYTES = 8 * 1024 * 1024;
 
 function hugeLedger(): {
@@ -80,9 +81,9 @@ function hugeLedger(): {
   readonly last: string;
 } {
   const lines: string[] = [];
-  /* 数えるのは字の数である。byte の数は字の数より少なくならないので、字で超えていれば
-     byte でも超えている。**多バイトの字で嵩を稼いではいけない** — 窓は byte で切るとは
-     限らず、字の数で切る実装は、byte だけ大きい台帳をすり抜ける。 */
+  /* 数えるのは文字数である。byte 数は文字数より少なくならないので、文字数で超えていれば
+     byte でも超えている。**多バイト文字で嵩を稼いではいけない** — 読み取り範囲は byte で
+     切るとは限らず、文字数で切る実装は、byte だけ大きい台帳をすり抜ける。 */
   let length = 0;
   for (let index = 0; length <= WIDEST_WINDOW_BYTES; index += 1) {
     const line = JSON.stringify({
@@ -110,18 +111,18 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-describe('台帳の字を持ち帰る', () => {
-  it('巣の直下の台帳を、書かれていた字のまま返す', async () => {
+describe('台帳のテキストを持ち帰る', () => {
+  it('プロジェクトの直下の台帳を、書かれていたテキストのまま返す', async () => {
     writeLedger(root, LEDGER);
 
     const text = await repo().readLedgerText(root);
-    expect(text, '読み解きは内側の仕事。ここで課題に組み替えると、意味が二か所に散る').toEqual({
+    expect(text, 'パースは内側の仕事。ここで課題に組み替えると、意味が二か所に散る').toEqual({
       kind: 'observed',
       value: LEDGER,
     });
   });
 
-  it('大きな台帳でも、窓を掛けずに全部を持ち帰る', async () => {
+  it('大きな台帳でも、読み取り範囲を掛けずに全部を持ち帰る', async () => {
     const huge = hugeLedger();
     const file = writeLedger(root, huge.text);
 
@@ -129,14 +130,14 @@ describe('台帳の字を持ち帰る', () => {
     if (text.kind !== 'observed') throw new Error(`読めなかった: ${text.kind}`);
     expect(
       Buffer.byteLength(text.value, 'utf8'),
-      '窓で切ると、切られた課題が「無い」ものとして消える。件数の札まで狂う',
+      '読み取り範囲で切ると、切られた課題が「無い」ものとして消える。件数まで狂う',
     ).toBe(fs.statSync(file).size);
     const lines = text.value.split('\n');
     expect(lines[0], '先頭を切ると、古い課題が消える').toBe(huge.first);
     expect(lines.at(-2), '末尾を切ると、いま書かれた課題が消える').toBe(huge.last);
   });
 
-  it('台帳が空でも、空の字として読めたことにする', async () => {
+  it('台帳が空でも、空のテキストとして読めたことにする', async () => {
     writeLedger(root, '');
 
     const text = await repo().readLedgerText(root);
@@ -150,42 +151,43 @@ describe('台帳の字を持ち帰る', () => {
     const text = await repo().readLedgerText(root);
     expect(
       text,
-      'bd を使っていない巣はこうなる。観測としては成り立っているので、誤りではない',
+      'bd を使っていないプロジェクトはこうなる。観測としては成り立っているので、エラーではない',
     ).toEqual({ kind: 'absent', reason: 'no-source' });
   });
 
-  it('巣そのものが無ければ、無いこととして返す', async () => {
+  it('プロジェクトそのものが無ければ、無いこととして返す', async () => {
     const text = await repo().readLedgerText(path.join(root, 'どこにも無い'));
     expect(text).toEqual({ kind: 'absent', reason: 'no-source' });
   });
 
-  it('巣の場所として使えない字は、台帳を開く前に断る', async () => {
+  it('プロジェクトのパスとして使えない文字列は、台帳を開く前に断る', async () => {
     for (const bad of ['', '.', 'relative/nest', '\0']) {
       const text = await repo().readLedgerText(bad);
       expect(
         text.kind,
-        `${JSON.stringify(bad)}: 相対の名前で開くと、走らせた場所の台帳を別の巣のものとして返す`,
+        `${JSON.stringify(bad)}: 相対パスで開くと、走らせた作業ディレクトリの台帳を別のプロジェクトのものとして返す`,
       ).toBe('unobservable');
       if (text.kind !== 'unobservable') return;
       expect(
         text.error.code,
-        '台帳が在るかは確かめていない(無いとは言えない)。塞ぎ忘れた穴なので、もう一度求めれば通るかもしれない側(503)ではなく、こちらの穴(500)として言う',
+        '台帳が在るかは確かめていない(無いとは言えない)。塞ぎ忘れた不具合なので、もう一度求めれば通るかもしれない側(503)ではなく、こちらの不具合(500)として言う',
       ).toBe('unexpected');
     }
   });
 
-  it.skipIf(!DENIES_READ)('読む権利が無ければ、見に行けなかったこととして返す', async () => {
+  it.skipIf(!DENIES_READ)('読む権限が無ければ、観測できなかったこととして返す', async () => {
     const file = writeLedger(root, LEDGER);
     fs.chmodSync(file, 0o000);
 
     const text = await repo().readLedgerText(root);
-    expect(text.kind, '読めないのを空と答えると、課題を 1 件も持たない巣として並んでしまう').toBe(
-      'unobservable',
-    );
+    expect(
+      text.kind,
+      '読めないのを空と答えると、課題を 1 件も持たないプロジェクトとして並んでしまう',
+    ).toBe('unobservable');
     if (text.kind !== 'unobservable') return;
     expect(
       text.error.code,
-      '名札で外の番号が決まる。台帳の読めなさは正本の読めなさと別に言えるようにする',
+      'エラーコードで外の HTTP ステータスが決まる。台帳の読めなさは `transcript` の読めなさと別に言えるようにする',
     ).toBe('ledger.unreadable');
   });
 });

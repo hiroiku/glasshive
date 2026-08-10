@@ -4,7 +4,7 @@ import {
   scanWorktreeMentions,
 } from '~/domain/value-objects/sessions/issue-mention.value-object.ts';
 
-describe('作業場所の名前から課題を拾う', () => {
+describe('worktree の名前から課題を拾う', () => {
   it('出てきた順に拾う', () => {
     expect(scanWorktreeMentions('cd .worktrees/foo-123 && ls .worktrees/bar-9')).toEqual([
       'foo-123',
@@ -17,14 +17,14 @@ describe('作業場所の名前から課題を拾う', () => {
   });
 
   it('末尾の点は区切りとして落とす', () => {
-    expect(scanWorktreeMentions('置き場は .worktrees/foo-123. である')).toEqual(['foo-123']);
+    expect(scanWorktreeMentions('パスは .worktrees/foo-123. である')).toEqual(['foo-123']);
   });
 
   it('点だけの名前は課題にならない', () => {
     expect(scanWorktreeMentions('.worktrees/...')).toEqual([]);
   });
 
-  it('名前に使えない字で切れる', () => {
+  it('名前に使えない文字で切れる', () => {
     expect(scanWorktreeMentions('.worktrees/foo-123/src/main.ts')).toEqual(['foo-123']);
   });
 

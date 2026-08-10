@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { findIssueRecord, parseLedger } from '~/domain/services/issues/issue-ledger.service.ts';
 
-/** 台帳の字面を組み立てる。行そのものを渡したいときは字のまま混ぜる */
+/** 台帳のテキストを組み立てる。行そのものを渡したいときは文字列のまま混ぜる */
 const ledgerOf = (...lines: readonly unknown[]): string =>
   `${lines.map((line) => (typeof line === 'string' ? line : JSON.stringify(line))).join('\n')}\n`;
 
-/* 旧の契約検査 4(`old/test/server.test.mjs:131-151`)に当たるもの。
-   閉じた課題は一覧から落とすが件数には出す、本文は載せない、という 3 つを固定する。 */
+/* 閉じた課題は一覧から落とすが件数には出す、一覧に本文は載せない。
+   台帳の読み取りで動かしてはいけない 3 点を、この 1 つの入力で固定する。 */
 const CONTRACT = ledgerOf(
   {
     _type: 'issue',
@@ -42,7 +42,7 @@ describe('台帳を一覧にする', () => {
     ).toEqual(['x-1', 'x-2']);
     expect(
       ledger.counts.closed,
-      '隠しても「いくつ閉じたか」は見せる。数えるより先に落とすと、この札が消える',
+      '隠しても「いくつ閉じたか」は見せる。数えるより先に落とすと、この件数が消える',
     ).toBe(1);
     expect(ledger.counts.open).toBe(1);
     expect(ledger.counts.in_progress).toBe(1);
@@ -52,7 +52,7 @@ describe('台帳を一覧にする', () => {
     const ledger = parseLedger(CONTRACT, { includeClosed: true });
     expect(
       ledger.issues.map((issue) => issue.id),
-      '件数の側は求めで変わらない',
+      '件数の側は `includeClosed` で変わらない',
     ).toEqual(['x-1', 'x-2', 'x-3']);
     expect(ledger.counts).toEqual({ open: 1, in_progress: 1, closed: 1 });
   });
@@ -60,7 +60,7 @@ describe('台帳を一覧にする', () => {
   it('一覧に本文を載せない', () => {
     const ledger = parseLedger(CONTRACT, { includeClosed: true });
     const closed = ledger.issues.find((issue) => issue.id === 'x-3');
-    /* 見付からないまま先へ進むと、`Object.hasOwn({}, ...)` が偽になるだけで検査が通る。
+    /* 見付からないまま先へ進むと、`Object.hasOwn({}, ...)` が偽になるだけでテストが通る。
        本文を落としたのか、課題ごと落としたのかが見分けられなくなるので、ここで止める。 */
     if (closed === undefined) throw new Error('本文を持つ課題が一覧に居ない');
     expect(
@@ -70,7 +70,7 @@ describe('台帳を一覧にする', () => {
     expect(ledger.issues[1]?.assignee, '一覧に要る欄は落とさない').toBe('mgr-deadbeef');
   });
 
-  it('欄の名は内側の書き方に均す', () => {
+  it('欄の名は内側の書き方に正規化する', () => {
     const ledger = parseLedger(
       ledgerOf({
         _type: 'issue',
@@ -106,7 +106,7 @@ describe('台帳を一覧にする', () => {
       ledger.issues.map((issue) => issue.id),
       '台帳には課題以外の記録も混ざる',
     ).toEqual(['x-1']);
-    expect(ledger.counts, '課題でない記録は札にも出さない').toEqual({
+    expect(ledger.counts, '課題でない記録は件数にも出さない').toEqual({
       open: 1,
     });
   });
@@ -147,9 +147,9 @@ describe('台帳を一覧にする', () => {
     );
     expect(
       ledger.issues.map((issue) => issue.id),
-      '欄が全部空の課題として並べると、観る人には読めなかった行と見分けが付かない',
+      '欄が全部空の課題として並べると、ユーザーには読めなかった行と見分けが付かない',
     ).toEqual(['x-1']);
-    expect(ledger.counts, '記録でない行を数えると、札の合計が課題の数と合わなくなる').toEqual({
+    expect(ledger.counts, '記録でない行を数えると、件数の合計が課題の数と合わなくなる').toEqual({
       open: 1,
     });
   });
@@ -163,12 +163,12 @@ describe('台帳を一覧にする', () => {
     );
     expect(
       ledger.issues.map((issue) => issue.status),
-      '状態は必ず字。数えの鍵を二種類にしない',
+      '状態は必ず文字列。集計のキーを 2 種類にしない',
     ).toEqual(['', '']);
     expect(ledger.counts).toEqual({ '': 2 });
   });
 
-  it('繋がりを、掛かっている先と種類に写す', () => {
+  it('依存を、掛かっている先と種類に写す', () => {
     const ledger = parseLedger(
       ledgerOf({
         _type: 'issue',
@@ -192,7 +192,7 @@ describe('台帳を一覧にする', () => {
     ]);
   });
 
-  it('繋がりが並びでなければ、繋がりは無い', () => {
+  it('依存が配列でなければ、依存は無い', () => {
     const ledger = parseLedger(
       ledgerOf(
         { _type: 'issue', id: 'x-1', status: 'open' },
@@ -202,7 +202,7 @@ describe('台帳を一覧にする', () => {
     );
     expect(
       ledger.issues.map((issue) => issue.deps),
-      '繋がりの無い課題と、繋がりの書き方が違う課題は、どちらも辿れない',
+      '依存の無い課題と、依存の書き方が違う課題は、どちらも辿れない',
     ).toEqual([[], []]);
   });
 
@@ -219,8 +219,8 @@ describe('台帳を一覧にする', () => {
       { includeClosed: false },
     );
     const issue = ledger.issues[0];
-    expect(issue?.priority, '字を数として並べ替えると、順序が黙って崩れる').toBe(null);
-    expect(issue?.labels, '札は並びでしか描けない').toBe(null);
+    expect(issue?.priority, '文字列を数として並べ替えると、順序が黙って崩れる').toBe(null);
+    expect(issue?.labels, 'ラベルのチップは配列でしか描けない').toBe(null);
     expect(issue?.title).toBe(null);
   });
 
@@ -249,7 +249,7 @@ describe('台帳を一覧にする', () => {
        化けて欄が消え、実物が正しくても落ちる。だから欄の並びで待つ。 */
     expect(
       Object.entries(ledger.counts).sort(),
-      '状態の字を決めるのは台帳であって、こちらではない',
+      '状態の文字列を決めるのは台帳であって、こちらではない',
     ).toEqual([
       ['__proto__', 1],
       ['constructor', 2],
@@ -260,7 +260,7 @@ describe('台帳を一覧にする', () => {
     }
     expect(
       Object.values(ledger.counts).reduce((sum, count) => sum + count, 0),
-      '一覧に並んでいる課題が札から消えると、いくつ在るのかを誰も言えなくなる',
+      '一覧に並んでいる課題が件数から消えると、いくつ在るのかを誰も言えなくなる',
     ).toBe(ledger.issues.length);
   });
 
@@ -317,7 +317,7 @@ describe('台帳から 1 件を引く', () => {
     );
     expect(
       findIssueRecord(ledger, 'x-1')?.title,
-      '字を含む行だけを読み解くのは速さのため。当たりの判定は id の欄で決める',
+      'id の文字列を含む行だけをパースするのは速さのため。当たりの判定は `id` の欄で決める',
     ).toBe('こちらが本人');
   });
 

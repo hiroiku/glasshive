@@ -7,8 +7,8 @@ class StoreError extends AppError {
   readonly code = 'preferences.unreadable';
 }
 
-/* 写す元の形は、写す役が受け取る形から取る。**字を書き写すと、検査が形を写しただけになる。**
-   出力の形が変わった瞬間にここが落ちて、写し忘れに気づける。 */
+/* 変換元の形は、プレゼンターが受け取る形から取る。**型を書き写すと、テストが形のコピーになるだけである。**
+   出力の形が変わった瞬間にここが落ちて、変換し忘れに気づける。 */
 type View = Parameters<typeof presentPreferences>[0];
 
 const DEFAULT: View['selection'] = {
@@ -25,8 +25,8 @@ const view = (parts: Partial<View>): View => ({
   ...parts,
 });
 
-describe('選びを外の道の形へ写す', () => {
-  it('覚えている選びと、出す対象を別々に出す', () => {
+describe('タブの選択を外部 API の形へ変換する', () => {
+  it('覚えているタブの選択と、出す対象を別々に出す', () => {
     const presented = presentPreferences(
       view({
         selection: {
@@ -47,22 +47,22 @@ describe('選びを外の道の形へ写す', () => {
     });
     expect(
       presented.visible_tabs,
-      '出す対象は留めたものの写しではない。両方出さないと、留めてあるのにタブが無い理由が見えない',
+      '出す対象はピン留めしたもののコピーではない。両方出さないと、留めてあるのにタブが無い理由が見えない',
     ).toEqual(['-w-a']);
   });
 
-  it('覚え書きをどう読めたかを添える', () => {
+  it('`preferences.json` をどう読めたかを添える', () => {
     expect(presentPreferences(view({})).stored).toEqual({
       state: 'observed',
       reason: null,
     });
     expect(
       presentPreferences(view({ stored: absent('no-source') })).stored,
-      'まだ選んでいないのと、読めなかったのは別の事実である',
+      'まだ選んでいないのと、観測できなかったのは別の事実である',
     ).toEqual({ state: 'absent', reason: 'no-source' });
     expect(
       presentPreferences(view({ stored: unobservable(new StoreError('読めない')) })).stored,
-      '読めなかったときは、どの誤りかを名札で言う',
+      '観測できなかったときは、どのエラーかをエラーコードで言う',
     ).toEqual({ state: 'unobservable', reason: 'preferences.unreadable' });
   });
 

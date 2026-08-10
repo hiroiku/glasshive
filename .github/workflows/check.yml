@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
 
-# 観るだけの道具なので、CI にも読む以上の権利を渡さない
+# 読み取り専用のツールなので、CI にも読む以上の権限を渡さない
 permissions:
   contents: read
 
@@ -19,10 +19,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      # **組み立てが先。** 道の一覧(routeTree.gen.ts)は組み立てが作るもので、
+      # **ビルドが先。** ルートの一覧(routeTree.gen.ts)はビルドが生成するもので、
       # git には入れていない。順を入れ替えると、まっさらな checkout でだけ型が落ちる
       - run: npm run build
-      # 書式・層の向き・8 構成の型・検め
+      # 書式・層の依存の向き・8 構成の型・テスト
       - run: npm run check
-      # 組み上がった配りものを外から叩く。ここだけが本当に配るものを見る
+      # ビルドしたパッケージを外から叩く。ここだけが実際に配布するものを検証する
       - run: npm run test:smoke

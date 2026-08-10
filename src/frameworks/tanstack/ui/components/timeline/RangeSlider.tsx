@@ -2,12 +2,13 @@ import { useRef, useState } from 'react';
 import { absTime } from '../../format.ts';
 import { parseTimeInput } from '../../timeline/axis.ts';
 
-/* 時間帯を選ぶ。両端の摘みで端を、帯そのものを掴んで窓ごと動かす。
+/* 時間帯を選ぶ。両端のハンドルで端を動かし、選択範囲のバーそのものを掴めば
+   表示範囲ごと動かせる。
 
-   汎用の時間の範囲なので、表とは分けてある。表の側は「いまどの窓を見ているか」を
-   持っているだけで、その窓をどう動かすかはここが全部持つ。 */
+   汎用の時間範囲なので、表とは分けてある。表の側は「いまどの範囲を見ているか」を
+   持っているだけで、その範囲をどう動かすかはここが全部持つ。 */
 
-/** これより狭い窓は作らない。1 分未満の軸には目盛りが置けない */
+/** これより狭い表示範囲は作らない。1 分未満の軸には目盛りが置けない */
 const MIN_SPAN_MS = 60_000;
 
 export function RangeSlider({
@@ -34,7 +35,7 @@ export function RangeSlider({
 
   const start = (mode: 'a' | 'b' | 'pan') => (event: React.MouseEvent) => {
     event.preventDefault();
-    // 掴んだのは摘みであって、下にある帯ではない
+    // 掴んだのはハンドルであって、その下にある選択範囲のバーではない
     event.stopPropagation();
     const x0 = event.clientX;
     const a0 = a;
@@ -46,7 +47,7 @@ export function RangeSlider({
         const width = b0 - a0;
         let na = a0 + delta;
         let nb = b0 + delta;
-        // 端に当たったら幅を保ったまま止める。潰すと窓の広さが勝手に変わる
+        // 端に当たったら幅を保ったまま止める。潰すと表示範囲の広さが勝手に変わる
         if (na < min) {
           na = min;
           nb = min + width;
@@ -70,8 +71,8 @@ export function RangeSlider({
     document.addEventListener('mouseup', up);
   };
 
-  /* 鍵盤では 1 押しずつ動かす。刻みは窓の広さに合わせる —
-     絶対の秒で刻むと、広い窓では何度押しても動いたように見えない。 */
+  /* キーボードでは 1 押しずつ動かす。刻み幅は表示範囲の広さに合わせる —
+     固定の秒数で刻むと、広い範囲では何度押しても動いたように見えない。 */
   const step = Math.max(MIN_SPAN_MS, (b - a) / 20);
   const nudge = (edge: 'a' | 'b') => (event: React.KeyboardEvent) => {
     const way = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : 0;
@@ -88,7 +89,7 @@ export function RangeSlider({
   return (
     <div className="rslider" ref={trackRef} title={`${absTime(a)} – ${absTime(b)}`}>
       <div className="rs-track" />
-      {/* 帯そのものを掴むのは窓ごと動かすためだけの近道で、同じことは両端の摘みでできる */}
+      {/* バーを掴むのは表示範囲ごと動かすためのショートカットで、同じことは両端のハンドルでもできる */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: 掴んで動かすためだけの面 */}
       <div
         className="rs-fill"
@@ -128,10 +129,10 @@ export function RangeSlider({
   );
 }
 
-/* 素の表示に見えて、触ると書き換えられる日付。
+/* ただの表示に見えて、触ると書き換えられる日時。
 
-   下書きを別に持つのは、打っている途中の字を軸に反映させないためである。
-   1 字打つたびに軸が動くと、打ち終わる前に窓が飛んでいく。 */
+   下書きを別に持つのは、入力途中の文字列を軸に反映させないためである。
+   1 文字打つたびに軸が動くと、打ち終わる前に表示範囲が飛んでいく。 */
 export function TimeInput({
   value,
   onCommit,
@@ -169,7 +170,7 @@ export function TimeInput({
         if (draft === null) return;
         const at = parseTimeInput(draft, value);
         setDraft(null);
-        // 読めない字は捨てて今の値へ戻す。当てずっぽうの時刻へ飛ばさない
+        // パースできない文字列は捨てて今の値へ戻す。当てずっぽうの時刻へ飛ばさない
         if (at !== null) onCommit(at);
       }}
     />

@@ -1,13 +1,13 @@
-/* 作業場所 1 つ。`git worktree list --porcelain` が答える単位である。
+/* `worktree` 1 つ。`git worktree list --porcelain` が答える単位である。
 
-   枝を出しているものと、記録を直に指しているもの(detached)がある。
-   後者は枝の名を持たないので、木の上では作業場所の名前で呼ぶほかない。 */
+   ブランチを出しているものと、コミットを直に指しているもの(detached)がある。
+   後者はブランチの名を持たないので、木の上では `worktree` の名前で呼ぶほかない。 */
 
 export interface Worktree {
   readonly path: string;
-  /** 出している枝。detached なら無い */
+  /** 出しているブランチ。detached なら無い */
   readonly branch: string | null;
-  /** 短くした HEAD の sha。読めなかった作業場所では無い */
+  /** 短くした HEAD の sha。読めなかった `worktree` では無い */
   readonly sha: string | null;
   readonly detached: boolean;
 }

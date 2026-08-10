@@ -4,13 +4,13 @@ import { TranscriptReadError } from '~/infrastructure/errors/sessions/transcript
 
 /* 大きなファイルを、決めた量だけ読む。
 
-   正本は追記され続けるので、全部を読む作りにすると大きなセッション 1 つで観測が止まる。
-   だから読む量に上限を置き、**上限に当たったことを値として持ち帰る**。
+   `transcript` は追記され続けるので、全部を読む作りにすると大きなセッション 1 つで観測が
+   止まる。だから読む量に上限を置き、上限に当たったことを値として持ち帰る。
 
-   ここは errno が見える唯一の場所である。**無いことと読めなかったことを、ここで分ける。**
-   一度潰すと、上の層では二度と分けられない。 */
+   ここは errno が見える唯一の場所である。**「無かった」ことと「観測できなかった」ことを、
+   ここで分ける。** 一度潰すと、上の層では二度と分けられない。 */
 
-/** 見に行けなかったのか、無いだけなのかを errno から見分ける */
+/** 観測できなかったのか、無いだけなのかを errno から見分ける */
 export function classifyReadFailure(error: unknown, what: string): Observation<never> {
   const code = (error as NodeJS.ErrnoException | undefined)?.code;
   if (code === 'ENOENT' || code === 'ENOTDIR') return absent('no-source');
@@ -36,7 +36,7 @@ export function statFile(file: string): Observation<FileStat> {
   }
 }
 
-/** 読み取った窓。`complete` は、その向きでファイルの端まで届いたか */
+/** 読み取った範囲。`complete` は、その向きでファイルの端まで届いたか */
 export interface BoundedWindow {
   readonly text: string;
   readonly complete: boolean;
@@ -85,8 +85,8 @@ export function readHeadWindow(
 
 /* 末尾から読む。**途中から読み始めたときだけ、最初の欠けた行を捨てる。**
 
-   捨てないと、行の途中から始まる字を 1 行として読み解こうとして、必ず失敗する。
-   帯を拾うような、行として読まない使い方では捨てなくてよい。 */
+   捨てないと、行の途中から始まる文字列を 1 行としてパースしようとして、必ず失敗する。
+   稼働区間を拾うような、行として読まない使い方では捨てなくてよい。 */
 export function readTailWindow(
   file: string,
   max: number,

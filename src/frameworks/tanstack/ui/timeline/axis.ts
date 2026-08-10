@@ -1,12 +1,12 @@
 /* 時間の軸。**純関数だけ。**
 
-   軸の取り方は「どの帯が読めるか」を決めてしまうので、ここが狂うと画面全体が嘘になる。
+   軸の取り方は「どの稼働区間が読めるか」を決めてしまうので、ここが狂うと画面全体が嘘になる。
    だから描画から切り離し、値だけで確かめられるようにしてある。 */
 
 /** 軸を引くのに要る、エージェント 1 つぶんの姿 */
 export interface TimelineNode {
   readonly state: string;
-  /** 正本に書かれていた起点の字面 */
+  /** `transcript` に書かれていた開始時刻の表記 */
   readonly started: string | null;
   readonly last_activity: string;
   readonly intervals: readonly (readonly [string, string])[];
@@ -26,10 +26,10 @@ export const SCALES: readonly {
   { key: 7 * 86_400_000, label: '7d' },
 ];
 
-/** Auto が遡る上限。これより古い帯に軸を引き伸ばされると、いま動いている帯が潰れる */
+/** Auto が遡る上限。これより古い稼働区間に軸を引き伸ばされると、いま動いている区間が潰れる */
 const AUTO_SPAN_MS = 24 * 3_600_000;
 
-/** これより狭い窓は作らない。1 分未満の軸には目盛りが置けない */
+/** これより狭い表示範囲は作らない。1 分未満の軸には目盛りが置けない */
 const MIN_SPAN_MS = 60_000;
 
 export interface Axis {
@@ -42,10 +42,10 @@ const parse = (iso: string | null): number => {
   return Number.isFinite(atMs) ? atMs : Number.NaN;
 };
 
-/* 帯を数の組にする。稼働中の最後の帯は現在まで伸ばす。
+/* 稼働区間を数値の組にする。稼働中の最後の区間は現在まで伸ばす。
 
-   帯が 1 つも読めなかったときは、起点と最後の動きで 1 本引く。**空にはしない** —
-   空にすると、帯を拾えなかったエージェントが画面から消える。 */
+   区間が 1 つも読めなかったときは、開始時刻と最後の動きで 1 本引く。**空にはしない** —
+   空にすると、区間を拾えなかったエージェントが画面から消える。 */
 export function intervalsOf(node: TimelineNode, nowMs: number): [number, number][] {
   const parsed: [number, number][] = [];
   for (const [from, to] of node.intervals) {
@@ -68,8 +68,8 @@ export function intervalsOf(node: TimelineNode, nowMs: number): [number, number]
 
 /* 軸の両端を決める。
 
-   Auto は**動いているエージェントの実際の帯だけ**で決める。終わったものまで含めると、
-   1 週間前に終わったセッションが軸を引き伸ばし、いま動いている帯が 1 本の線に潰れる。
+   Auto は**動いているエージェントの実際の稼働区間だけ**で決める。終わったものまで含めると、
+   1 週間前に終わったセッションが軸を引き伸ばし、いま動いている区間が 1 本の線に潰れる。
 
    全員終わっているときだけ全行に広げる。そうしないと軸そのものが空になる。 */
 export function axisOf(nodes: readonly TimelineNode[], scale: Scale, nowMs: number): Axis {
@@ -121,7 +121,8 @@ export function domainOf(nodes: readonly TimelineNode[], axis: Axis, nowMs: numb
 /* 目盛りはキリの良い絶対時刻に置く。
 
    相対に 25% 刻みで置くと、目盛りが時刻として読めない(「11:37」のような端数が並ぶ)。
-   梯子から「本数が 8 本以下になる最小の刻み」を選び、日以上の刻みは手元の深夜に揃える。 */
+   `TICK_STEPS` から「本数が 8 本以下になる最小の刻み」を選び、日以上の刻みはローカルタイムの
+   深夜に揃える。 */
 const TICK_STEPS: readonly number[] = [
   60_000,
   5 * 60_000,
@@ -151,7 +152,7 @@ export function niceTicks(t0: number, t1: number): number[] {
   return ticks;
 }
 
-/** 目盛りの札。窓が 1 日を跨ぐときだけ日付を添える */
+/** 目盛りのラベル。表示範囲が 1 日を跨ぐときだけ日付を添える */
 export function formatTick(atMs: number, spanMs: number): string {
   const date = new Date(atMs);
   const pad = (n: number) => String(n).padStart(2, '0');

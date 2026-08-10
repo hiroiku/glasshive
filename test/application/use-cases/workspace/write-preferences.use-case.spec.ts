@@ -9,7 +9,7 @@ import {
   type TabAction,
 } from '~/application/use-cases/workspace/write-preferences.use-case.ts';
 
-/** 断りの偽物。名札だけが同じであればよく、実装の側の型は要らない */
+/** 断りの偽物。エラーコードだけが同じであればよく、実装の側の型は要らない */
 class RefusedError extends AppError {
   readonly code = 'preferences.refused';
 }
@@ -18,7 +18,7 @@ class StoreError extends AppError {
   readonly code = 'preferences.unreadable';
 }
 
-/** 覚え書きの偽物。置いてある字を持ち、置かれた字と渡された巣の場所を覚えておく */
+/** `preferences.json` の偽物。置かれたテキストと、渡されたプロジェクトのパスを覚えておく */
 function fakeStore(options: { stored?: Observation<string>; refuse?: boolean } = {}) {
   const written: string[] = [];
   const seenRoots: (readonly string[])[] = [];
@@ -38,7 +38,7 @@ function fakeStore(options: { stored?: Observation<string>; refuse?: boolean } =
   return { repository, written, seenRoots };
 }
 
-/** 置かれた字を、選びとして見る。字のままでは何が置かれたか読めない */
+/** 置かれたテキストを、タブの選択として見る。テキストのままでは何が置かれたか読めない */
 const selectionIn = (document: string | undefined) => JSON.parse(document ?? 'null');
 
 const execute = (
@@ -52,8 +52,8 @@ const execute = (
     observedRoots: scope.roots ?? [],
   });
 
-describe('留める・外す・並べ替えを、向こう側の 1 つの行いにする', () => {
-  it('留めると、覚え書きに足されて返る', async () => {
+describe('留める・外す・並べ替えを、向こう側の 1 つの操作にする', () => {
+  it('留めると、`preferences.json` に足されて返る', async () => {
     const store = fakeStore();
 
     const saved = await execute(store, { action: 'pin', id: '-w-a' }, { ids: ['-w-a'] });
@@ -68,13 +68,13 @@ describe('留める・外す・並べ替えを、向こう側の 1 つの行い�
     expect(saved.value.visibleTabs).toEqual(['-w-a']);
     expect(
       saved.value.stored,
-      'いま置いたものが覚え書きの中身である。ここを倒すと、置けた直後に「まだ選んでいない」と見える',
+      'いま置いたものが `preferences.json` の中身である。ここを倒すと、置けた直後に「まだ選んでいない」と見える',
     ).toEqual({ kind: 'observed', value: saved.value.selection });
   });
 
-  /* 丸ごとの選びを受けていたころは、求める側が読んでから置くまでの間に別の窓が留めたぶんが、
-     置き換えで黙って消えていた。読み直してから当てることでしか塞げない。 */
-  it('当てる相手は、いま置いてある覚え書きである', async () => {
+  /* 丸ごとの選択を受け取ると、求める側が読んでから置くまでの間に別のクライアントが留めたぶんが、
+     置き換えで黙って消える。読み直してから当てることでしか塞げない。 */
+  it('当てる相手は、いま置いてある `preferences.json` である', async () => {
     const store = fakeStore({
       stored: observed(documentOf({ version: 1, mode: 'all', pinned: ['-w-他'], hidden: [] })),
     });
@@ -83,13 +83,13 @@ describe('留める・外す・並べ替えを、向こう側の 1 つの行い�
 
     expect(
       selectionIn(store.written[0]).pinned,
-      '手元の写しに当てて丸ごと置くと、別の窓が留めたぶんが消える',
+      'クライアント側のコピーに当てて丸ごと置くと、別のクライアントが留めたぶんが消える',
     ).toEqual(['-w-他', '-w-a']);
     if (!saved.ok) throw new Error('置けなかった');
     expect(saved.value.selection.pinned).toEqual(['-w-他', '-w-a']);
   });
 
-  it('外すと、覚え書きから消えて返る', async () => {
+  it('外すと、`preferences.json` から消えて返る', async () => {
     const store = fakeStore({
       stored: observed(
         documentOf({
@@ -107,7 +107,7 @@ describe('留める・外す・並べ替えを、向こう側の 1 つの行い�
       version: 1,
       mode: 'all',
       pinned: ['-w-b'],
-      // 外すのは机の上から下ろすことで、一覧から消すことではない
+      // 外すのはタブの並びから下ろすことで、一覧から消すことではない
       hidden: [],
     });
   });
@@ -177,31 +177,31 @@ describe('留める・外す・並べ替えを、向こう側の 1 つの行い�
     expect(saved.value.visibleTabs, '残すことと出すことは別である').toEqual(['-w-a']);
   });
 
-  /* 読む側は既定へ倒してよい。倒しても印が「留めていない」に見えるだけで、
-     次に読めた日には戻る。置く側で同じことをすると、推し量りがそのまま正本になる。 */
-  it('覚え書きを読めなかった日は、置きに行かない', async () => {
+  /* 読む側は既定へ倒してよい。倒してもピン留めが「留めていない」に見えるだけで、
+     次に読めたときには戻る。置く側で同じことをすると、推測がそのまま書き込まれる。 */
+  it('`preferences.json` を読めなかったときは、置きに行かない', async () => {
     const store = fakeStore({
       stored: unobservable(new StoreError('読めない')),
     });
 
     const saved = await execute(store, { action: 'pin', id: '-w-a' });
 
-    expect(saved.ok, 'ひととき読めなかっただけの日に、机を丸ごと捨てることになる').toBe(false);
+    expect(saved.ok, 'ひととき読めなかっただけで、タブの並びを丸ごと捨てることになる').toBe(false);
     if (saved.ok) throw new Error('既定で上書きしてしまった');
     expect(saved.error.code, '次に求めれば通るかもしれない側に倒す').toBe('preferences.unreadable');
     expect(store.written, '読めていないものへは、何も置かない').toEqual([]);
   });
 
-  it('読める形になっていない覚え書きの上には、置いてよい', async () => {
+  it('読める形になっていない `preferences.json` の上には、置いてよい', async () => {
     const store = fakeStore({ stored: observed('{"version": 1,') });
 
     const saved = await execute(store, { action: 'pin', id: '-w-a' });
 
-    expect(saved.ok, '読めない字は捨てると決めてある。倒しても失うものが無い').toBe(true);
+    expect(saved.ok, '読めないテキストは捨てると決めてある。倒しても失うものが無い').toBe(true);
     expect(selectionIn(store.written[0]).pinned).toEqual(['-w-a']);
   });
 
-  it('まだ覚え書きが無ければ、既定の上に置く', async () => {
+  it('まだ `preferences.json` が無ければ、既定の上に置く', async () => {
     const store = fakeStore({ stored: absent('no-source') });
 
     const saved = await execute(store, { action: 'pin', id: '-w-a' });
@@ -210,7 +210,7 @@ describe('留める・外す・並べ替えを、向こう側の 1 つの行い�
     expect(selectionIn(store.written[0]).pinned).toEqual(['-w-a']);
   });
 
-  it('観測した巣の場所を、そのまま口へ渡す', async () => {
+  it('観測したプロジェクトのパスを、そのままポートへ渡す', async () => {
     const store = fakeStore();
 
     await execute(store, { action: 'pin', id: '-w-a' }, { roots: ['/w/proj'] });
@@ -225,7 +225,9 @@ describe('留める・外す・並べ替えを、向こう側の 1 つの行い�
 
     expect(saved.ok).toBe(false);
     if (saved.ok) throw new Error('置けてしまった');
-    expect(saved.error.code, '断りは投げない。求めへの答えとして返す').toBe('preferences.refused');
+    expect(saved.error.code, '断りは投げない。呼び出しの結果として返す').toBe(
+      'preferences.refused',
+    );
     expect(store.written, '断ったのだから、何も置かれていない').toEqual([]);
   });
 });

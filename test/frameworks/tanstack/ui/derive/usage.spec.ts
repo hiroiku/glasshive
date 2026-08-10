@@ -9,12 +9,12 @@ import {
   totalsOf,
 } from '~/frameworks/tanstack/ui/derive/usage.ts';
 
-/* 消費の桶から画面に出す形を導く。
+/* 消費のバケットから画面に出す形を導く。
 
    **cache 読みを消費に足さない。** 足すと、同じ会話を続けるほど数が膨らんで、
    どこで本当に使ったのかが読めなくなる。 */
 
-/* 桶の形は、畳む役自身から引く。写して持てば、形が変わったときに片方だけ古いまま残る */
+/* バケットの形は、集計する実装そのものから引く。写して持てば、形が変わったときに片方だけ古いまま残る */
 type UsageBucketJson = Parameters<typeof spendOf>[0];
 
 const bucket = (over: Partial<UsageBucketJson> = {}): UsageBucketJson => ({
@@ -28,7 +28,7 @@ const bucket = (over: Partial<UsageBucketJson> = {}): UsageBucketJson => ({
   ...over,
 });
 
-describe('1 つの桶の消費', () => {
+describe('1 つのバケットの消費', () => {
   it('input と output と cache 書きを足す', () => {
     expect(spendOf(bucket({ i: 10, o: 20, cw: 30 }))).toBe(60);
   });
@@ -38,7 +38,7 @@ describe('1 つの桶の消費', () => {
   });
 });
 
-describe('足の格子を組む', () => {
+describe('足のグリッドを組む', () => {
   const NOW = Date.parse('2026-08-09T12:34:56.000Z');
 
   /* 現在からの相対に置くと、描き直すたびに全部の足が少しずつ横へ流れる。 */
@@ -48,7 +48,7 @@ describe('足の格子を組む', () => {
     const midnight = new Date(NOW);
     midnight.setHours(0, 0, 0, 0);
     /* 真夜中から足の長さの倍数だけ離れていること。**符号は問わない** —
-       窓は真夜中より前から始まることがあり、負の余りの 0 は -0 になる。
+       対象期間は真夜中より前から始まることがあり、負の余りの 0 は -0 になる。
        時間帯によって符号が変わるので、そのまま 0 と見比べると走らせる場所で結果が変わる。 */
     expect(Math.abs((fromMs - midnight.getTime()) % (15 * 60_000))).toBe(0);
   });
@@ -57,7 +57,7 @@ describe('足の格子を組む', () => {
     expect(gridOf(NOW, 5 * 60_000).bars).toBe(MAX_BARS);
   });
 
-  it('足が長ければ、窓は 7 日で頭打ちになる', () => {
+  it('足が長ければ、対象期間は 7 日で頭打ちになる', () => {
     const { fromMs, bars } = gridOf(NOW, 2 * 3_600_000);
 
     expect(bars).toBeLessThanOrEqual(MAX_BARS);
@@ -65,8 +65,8 @@ describe('足の格子を組む', () => {
   });
 });
 
-describe('足ごとに畳む', () => {
-  it('同じ足に入る桶を足し合わせる', () => {
+describe('足ごとに集計する', () => {
+  it('同じ足に入るバケットを足し合わせる', () => {
     const bins = binUsage(
       [bucket({ t: 0, i: 1 }), bucket({ t: 60_000, o: 2 }), bucket({ t: 900_000, cw: 4 })],
       0,
@@ -78,13 +78,13 @@ describe('足ごとに畳む', () => {
     expect(bins[1]?.total).toBe(4);
   });
 
-  it('窓より前の桶は入れない', () => {
+  it('対象期間より前のバケットは入れない', () => {
     const bins = binUsage([bucket({ t: -1, i: 100 })], 0, 60_000, 1);
 
     expect(bins[0]?.total).toBe(0);
   });
 
-  it('窓の右端より後ろの桶は、最後の足へ寄せる', () => {
+  it('対象期間の右端より後ろのバケットは、最後の足へ寄せる', () => {
     const bins = binUsage([bucket({ t: 10_000_000, i: 5 })], 0, 60_000, 2);
 
     expect(bins[1]?.total).toBe(5);
@@ -106,10 +106,10 @@ describe('モデルごとに分ける', () => {
   });
 });
 
-describe('定額の窓を当てる', () => {
+describe('定額の期間を当てる', () => {
   const NOW = 10 * 3_600_000;
 
-  it('最初の活動が窓を開く', () => {
+  it('最初の活動が期間を開く', () => {
     const window = quotaWindow([bucket({ t: NOW - 3_600_000, i: 100 })], NOW);
 
     expect(window.active).toBe(true);
@@ -117,17 +117,17 @@ describe('定額の窓を当てる', () => {
     expect(window.endsAtMs).toBe(NOW - 3_600_000 + 5 * 3_600_000);
   });
 
-  it('窓が明けた後の活動は、次の窓を開く', () => {
+  it('期間が明けた後の活動は、次の期間を開く', () => {
     const opened = NOW - 20 * 3_600_000;
     const window = quotaWindow(
       [bucket({ t: opened, i: 100 }), bucket({ t: NOW - 60_000, i: 7 })],
       NOW,
     );
 
-    expect(window.tokens, '前の窓のぶんを持ち越してはいけない').toBe(7);
+    expect(window.tokens, '前の期間のぶんを持ち越してはいけない').toBe(7);
   });
 
-  it('窓が明けていれば、開いていないと言う', () => {
+  it('期間が明けていれば、開いていないと言う', () => {
     const window = quotaWindow([bucket({ t: NOW - 10 * 3_600_000, i: 100 })], NOW);
 
     expect(window.active).toBe(false);

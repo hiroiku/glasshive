@@ -52,7 +52,7 @@ describe('閾値の内か', () => {
   });
 });
 
-describe('三つの様子', () => {
+describe('三つの状態', () => {
   it('閾値の内なら稼働', () => {
     expect(derive([session()], 0, T + 10 * SEC)[0]?.state).toBe('active');
   });
@@ -221,7 +221,7 @@ describe('待っている相手', () => {
   it('末尾が自分の番の途中なら、待ってはいない', () => {
     const assigned = derive([session({ awaitingCandidate: false })], 1, T + 65 * SEC);
     expect(assigned[0]?.state).toBe('waiting');
-    expect(assigned[0]?.awaiting, '末尾が道具の呼び出しなら応答待ちではない').toBe(null);
+    expect(assigned[0]?.awaiting, '末尾が `tool_use` なら応答待ちではない').toBe(null);
   });
 
   it('子が動いているうちは、末尾が完結していても人の入力待ちにしない', () => {
@@ -238,9 +238,9 @@ describe('待っている相手', () => {
     );
     expect(
       assigned[0]?.awaiting,
-      // 効いているのは判定の順ではなく `user` 側の「子も止まっている」の見張りである。
-      // 二つの枝は subsActive の真偽で排他なので、入れ替えても答えは変わらない。
-      '子が動いている間は人を呼ばない。人待ちは子が止まっていることを要る',
+      // 効いているのは判定の順ではなく、`user` 側の「子も止まっている」というガードである。
+      // 二つの分岐は subsActive の真偽で排他なので、入れ替えても結果は変わらない。
+      '子が動いている間は人を呼ばない。人待ちには、子が止まっていることが要る',
     ).toBe('agents');
   });
 
@@ -262,14 +262,14 @@ describe('渡すものが無いとき', () => {
   });
 });
 
-describe('トークンを数えに行く窓', () => {
+describe('トークンを数えに行く期間', () => {
   it('境界の向きが稼働の判定と裏返っている', () => {
     const week = 7 * 86_400_000;
-    expect(isWithinTokenWindow(week, 0, week), '窓の幅ちょうどは外').toBe(false);
+    expect(isWithinTokenWindow(week, 0, week), '期間の幅ちょうどは外').toBe(false);
     expect(isWithinThreshold(week, 0, week), '稼働の判定では、閾値ちょうどは内').toBe(true);
   });
 
-  it('窓の内なら数えに行く', () => {
+  it('期間の内なら数えに行く', () => {
     const week = 7 * 86_400_000;
     expect(isWithinTokenWindow(week - 1, 0, week)).toBe(true);
     expect(isWithinTokenWindow(week + 1, 0, week)).toBe(false);

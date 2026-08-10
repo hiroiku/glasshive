@@ -2,25 +2,26 @@ import path from 'node:path';
 import type { BranchRef } from '~/domain/value-objects/git/branch-ref.value-object.ts';
 import type { Worktree } from '~/domain/value-objects/git/worktree.value-object.ts';
 
-/* 「生きている線」を選ぶ。
+/* 「生きている先端」を選ぶ。
 
-   生きているとは、本流にまだ入っていないということである。入ってしまった枝は本流の一部
-   なので、横に並べても同じ記録を二度見せるだけになる。
+   生きているとは、本流にまだ入っていないということである。入ってしまったブランチは本流の一部
+   なので、横に並べても同じコミットを二度見せるだけになる。
 
-   数を切るのは画面の都合ではない。**古い線まで並べると、見る人はどれが今の仕事か分から
-   なくなる。** 最後に記録した時刻の新しい順に頭だけを取り、記録を直に指している作業場所は
-   別枠で足す — 枝を持たない線は名前で探せないので、埋もれると二度と見つからない。
+   数を切るのは画面の都合ではない。**古い先端まで並べると、ユーザーはどれが今の仕事か分から
+   なくなる。** 最後にコミットした時刻の新しい順に頭だけを取り、コミットを直に指している
+   `worktree` は別枠で足す — ブランチを持たない先端は名前で探せないので、埋もれると二度と
+   見つからない。
 
-   node:path を使っているのは、区切りの決まりを写し取らないためである。ここは道の字を
-   読むだけで、ファイルには触らない。 */
+   `node:path` を使っているのは、区切り文字の決まりを写し取らないためである。ここはパスの
+   文字列を読むだけで、ファイルには触らない。 */
 
-/** 枝の線を何本まで並べるか */
+/** ブランチの先端をいくつまで並べるか */
 export const TIP_LIMIT = 14;
 
-/** 記録を直に指している作業場所のために空けておく枠 */
+/** コミットを直に指している `worktree` のために空けておく枠 */
 export const DETACHED_TIP_EXTRA = 4;
 
-/** まだ隔たりを数えていない線 */
+/** まだ隔たりを数えていない先端 */
 export interface TipCandidate {
   readonly kind: 'branch' | 'worktree';
   readonly name: string;
@@ -28,9 +29,9 @@ export interface TipCandidate {
   readonly date: string | null;
   readonly subject: string;
   readonly worktree: string | null;
-  /* 分かれ目と隔たりを尋ねるときに git へ渡す字。
+  /* 分かれ目と隔たりを尋ねるときに `git` へ渡すリビジョン。
 
-     枝は名で尋ねる。作業場所は枝を持たないので sha で尋ねるほかない。 */
+     ブランチは名で尋ねる。`worktree` はブランチを持たないので sha で尋ねるほかない。 */
   readonly rev: string;
 }
 
@@ -38,11 +39,11 @@ export interface TipSelectionInput {
   readonly base: string;
   readonly branches: readonly BranchRef[];
   readonly worktrees: readonly Worktree[];
-  /** 本流に入っていない枝の名 */
+  /** 本流に入っていないブランチの名 */
   readonly unmerged: ReadonlySet<string>;
 }
 
-/** 枝の名から、その枝を出している作業場所を引く。同じ枝が二か所に出ていれば後のものを採る */
+/** ブランチの名から、そのブランチを出している `worktree` を引く。同じブランチが二か所に出ていれば後のものを採る */
 function worktreesByBranch(worktrees: readonly Worktree[]): Map<string, Worktree> {
   const byBranch = new Map<string, Worktree>();
   for (const worktree of worktrees) {
@@ -58,7 +59,7 @@ export function selectTips(input: TipSelectionInput): TipCandidate[] {
 
   for (const branch of branches) {
     if (tips.length >= TIP_LIMIT) break;
-    // 本流そのものは線ではない。本流に入った枝も、もう本流の一部である
+    // 本流そのものは先端ではない。本流に入ったブランチも、もう本流の一部である
     if (!unmerged.has(branch.name) || branch.name === base) continue;
     tips.push({
       kind: 'branch',
@@ -78,7 +79,7 @@ export function selectTips(input: TipSelectionInput): TipCandidate[] {
       kind: 'worktree',
       name: path.basename(worktree.path),
       sha: worktree.sha,
-      // 枝を持たないので、最後の記録の時刻も題も見出しからは引けない
+      // ブランチを持たないので、最後のコミットの時刻も題もメタ情報からは引けない
       date: null,
       subject: '',
       worktree: worktree.path,

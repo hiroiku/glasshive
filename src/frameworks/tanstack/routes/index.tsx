@@ -32,9 +32,9 @@ export const Route = createFileRoute('/')({
   component: Overview,
 });
 
-/* 巣の一覧。**どこから起動しても同じものが並ぶ。**
+/* プロジェクトの一覧。**どこから起動しても同じものが並ぶ。**
 
-   タブに出すものは観る人が選ぶ。選びは見せ方の話で、何を観測するかには一切効かない。 */
+   タブに出すものはユーザーが選ぶ。タブの選択は見せ方の話で、何を観測するかには一切効かない。 */
 function Overview() {
   const tree = useQuery(treeQuery);
   const tabs = useTabSelection();
@@ -63,7 +63,7 @@ function Overview() {
 
   const onSort = (key: SortKey) => {
     /* 同じ列をもう一度押したら向きが返る。別の列なら、その列で自然な向きから始める。
-       呼び名だけは昇り順が自然で、数と時刻は多い順・新しい順が自然である。 */
+       名前だけは昇順が自然で、数と時刻は多い順・新しい順が自然である。 */
     setOrder((current) =>
       current.key === key
         ? { key, direction: current.direction === 'desc' ? 'asc' : 'desc' }
@@ -78,7 +78,7 @@ function Overview() {
 
   return (
     <>
-      {/* 帯は本文の外に置く。中に入れると巻きと一緒に流れて、探し口が見えなくなる */}
+      {/* ツールバーは本文の外に置く。中に入れるとスクロールと一緒に流れて、検索欄が見えなくなる */}
       <OverviewToolbar
         query={query}
         onQuery={setQuery}
@@ -92,7 +92,7 @@ function Overview() {
       />
 
       <div id="dash">
-        {/* 見えなかったことは、見えた振りをせずにそのまま言う */}
+        {/* 観測できなかったことは、見えた振りをせずにそのまま言う */}
         {sources.state === 'unobservable' && (
           <p className="warn">
             Could not read the transcript roots — projects are not missing, we could not look
@@ -117,7 +117,7 @@ function Overview() {
               : 'Could not count projects'}
           </p>
         ) : shown.length === 0 ? (
-          // 絞って何も残らなかったことを、巣が無いことと同じ顔で出さない
+          // 絞って何も残らなかったことを、プロジェクトが 1 つも無いことと同じ表示にしない
           <p className="empty">No matching projects (0 of {rows.length})</p>
         ) : (
           <OverviewTable

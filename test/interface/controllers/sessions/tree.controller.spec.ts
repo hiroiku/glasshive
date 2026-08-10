@@ -4,8 +4,8 @@ import { observed } from '~/app-kernel/observation.ts';
 import { err, ok } from '~/app-kernel/result.ts';
 import { readTree } from '~/interface/controllers/sessions/tree.controller.ts';
 
-/* 窓が持つのは、受理と不受理の分かれ目だけである。
-   分け合う 1 枚の形は、窓自身から引く。 */
+/* コントローラーが持つのは、受理と不受理の分かれ目だけである。
+   テストで共有する形は、コントローラー自身から引く。 */
 
 type Snapshot = Parameters<typeof readTree>[0];
 type Answer = Awaited<ReturnType<Snapshot['get']>>;
@@ -28,8 +28,8 @@ const snapshotOf = (answer: Answer): Snapshot => ({
   invalidate: () => {},
 });
 
-describe('木を返す窓', () => {
-  it('受理された求めは、外の道の形に写して返す', async () => {
+describe('木を返すコントローラー', () => {
+  it('受理されたリクエストは、外部 API の形に写して返す', async () => {
     expect(await readTree(snapshotOf(ok(TREE)))).toEqual(
       expect.objectContaining({
         generated_at: '2026-08-04T00:00:00Z',
@@ -39,11 +39,11 @@ describe('木を返す窓', () => {
   });
 
   it('断りは、値のまま外へ流さない', async () => {
-    const refused = new RefusedError('受けられない求めだった');
+    const refused = new RefusedError('受けられないリクエストだった');
 
     await expect(
       readTree(snapshotOf(err(refused))),
-      '値のまま流すと、番号に写す役を通らずに 200 で出てしまう',
+      '値のまま流すと、HTTP ステータスに写すプレゼンターを通らずに 200 で出てしまう',
     ).rejects.toBe(refused);
   });
 });

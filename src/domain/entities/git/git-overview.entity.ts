@@ -2,32 +2,32 @@ import type { BranchRef } from '~/domain/value-objects/git/branch-ref.value-obje
 import type { MainlineCommit } from '~/domain/value-objects/git/commit-summary.value-object.ts';
 import type { Worktree } from '~/domain/value-objects/git/worktree.value-object.ts';
 
-/* リポジトリをひと目ぶん観たもの。
+/* リポジトリを一望したもの。
 
-   縦軸は統合の枝(本流)、横に「生きている線」— まだ本流に入っていない枝の先端と、
-   記録を直に指している作業場所 — が並ぶ。線どうしが同じファイルを触っていれば、
+   縦軸は統合のブランチ(本流)、横に「生きている先端」— まだ本流に入っていないブランチの先端と、
+   コミットを直に指している `worktree` — が並ぶ。先端どうしが同じファイルを触っていれば、
    統合するときにぶつかる見込みとして添える。 */
 
-/** 生きている線 1 本 */
+/** 生きている先端 1 つ */
 export interface Tip {
   readonly kind: 'branch' | 'worktree';
-  /** 枝なら枝の名、作業場所なら場所の末尾の名 */
+  /** ブランチならブランチの名、`worktree` ならパスの末尾の名 */
   readonly name: string;
   readonly sha: string;
-  /** 作業場所の線は最後の記録の時刻を持たない */
+  /** `worktree` の先端は最後のコミットの時刻を持たない */
   readonly date: string | null;
   readonly subject: string;
-  /** この線が出ている作業場所。無ければ null */
+  /** この先端が出ている `worktree`。無ければ null */
   readonly worktree: string | null;
   /** 本流と分かれた位置 */
   readonly mergeBase: string;
-  /** 本流より先へ進んでいる節の数 */
+  /** 本流より先へ進んでいるコミットの数 */
   readonly ahead: number;
-  /** 本流に取り残されている節の数 */
+  /** 本流に取り残されているコミットの数 */
   readonly behind: number;
 }
 
-/** 同じファイルを触っている線の組。統合の順を決めるための見込みであって、実際に試してはいない */
+/** 同じファイルを触っている先端の組。統合の順を決めるための見込みであって、実際に試してはいない */
 export interface ConflictForecast {
   readonly a: string;
   readonly b: string;
@@ -38,7 +38,7 @@ export interface ConflictForecast {
 }
 
 export interface GitOverview {
-  /** 統合の枝。主たる作業場所が出している枝で、決められなければ `HEAD` */
+  /** 統合のブランチ。主たる `worktree` が出しているブランチで、決められなければ `HEAD` */
   readonly base: string;
   readonly worktrees: readonly Worktree[];
   readonly branches: readonly BranchRef[];

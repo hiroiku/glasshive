@@ -1,10 +1,10 @@
 import { queryOptions } from '@tanstack/react-query';
 import { getGit, getGitRef } from '../functions/git.ts';
 
-/* 記録の問い合わせ。
+/* Git の問い合わせ。
 
-   外の道具を線の数だけ起こすので、正本ほど気安くは取り直せない。合図では配らず、
-   少し置いてから取り直す。 */
+   外部コマンドの `git` を線の数だけ起こすので、`transcript` ほど気安くは取り直せない。
+   変更通知では配らず、少し置いてから取り直す。 */
 
 export const gitQueryKey = (projectId: string) => ['git', projectId] as const;
 

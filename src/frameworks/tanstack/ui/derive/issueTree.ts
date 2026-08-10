@@ -22,13 +22,13 @@ export const edgeColorOf = (type: string): string =>
 export interface HierarchyRow {
   readonly issue: IssueSummaryJson;
   readonly depth: number;
-  /** 祖先の段ごとに、まだ弟が居るか。居るなら縦線を通す */
+  /** 祖先の深さごとに、まだ弟が居るか。居るなら縦線を通す */
   readonly guides: readonly boolean[];
   /** 兄弟の最後か。罫線の形が変わる */
   readonly last: boolean;
 }
 
-/* 親が一覧に出ているものだけを子として畳む。
+/* 親が一覧に出ているものだけを子としてまとめる。
 
    出ていない親の下へ入れると、画面に無い行にぶら下がった行が生まれて、
    どこから来た行なのかが読めなくなる。 */

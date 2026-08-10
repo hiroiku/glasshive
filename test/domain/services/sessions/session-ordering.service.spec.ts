@@ -13,11 +13,11 @@ describe('セッションと子を新しい順に並べる', () => {
     ]);
     expect(
       sorted.map((s) => s.id),
-      '観る人が最初に見たいのは、いま動いているもの',
+      'ユーザーが最初に見たいのは、いま動いているもの',
     ).toEqual(['b', 'c', 'a']);
   });
 
-  it('受け取った並びを壊さない', () => {
+  it('受け取った配列を壊さない', () => {
     const items = [
       { id: 'a', lastActivityMs: 10 },
       { id: 'b', lastActivityMs: 30 },
@@ -41,13 +41,13 @@ describe('セッションと子を新しい順に並べる', () => {
     ).toEqual(['a', 'b', 'c']);
   });
 
-  it('何も無ければ空の並びを返す', () => {
+  it('何も無ければ空の配列を返す', () => {
     expect(sortByLastActivityDesc([])).toEqual([]);
   });
 });
 
-describe('巣を新しい順に並べる', () => {
-  it('最も新しく動いた巣が先に来る', () => {
+describe('プロジェクトを新しい順に並べる', () => {
+  it('最も新しく動いたプロジェクトが先に来る', () => {
     const sorted = sortByLatestActivityDesc([
       { id: 'a', latestActivityMs: 10 },
       { id: 'b', latestActivityMs: 30 },
@@ -56,7 +56,7 @@ describe('巣を新しい順に並べる', () => {
     expect(sorted.map((p) => p.id)).toEqual(['b', 'c', 'a']);
   });
 
-  it('受け取った並びを壊さない', () => {
+  it('受け取った配列を壊さない', () => {
     const items = [
       { id: 'a', latestActivityMs: 10 },
       { id: 'b', latestActivityMs: 30 },
@@ -79,7 +79,7 @@ describe('巣を新しい順に並べる', () => {
     ).toEqual(['a', 'b']);
   });
 
-  it('何も無ければ空の並びを返す', () => {
+  it('何も無ければ空の配列を返す', () => {
     expect(sortByLatestActivityDesc([])).toEqual([]);
   });
 });

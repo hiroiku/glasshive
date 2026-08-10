@@ -1,17 +1,17 @@
 import { mdiSourceBranch } from '@mdi/js';
 import { Icon } from '../primitives/Icon.tsx';
 
-/* 記録の帯。探しと、何を相手にしているかと、いま見えている数。
+/* Git 画面のツールバー。検索と、比較の相手と、いま見えている数。
 
-   **探しても行は消えない。** 当たらない行を沈めるだけにしてある — 消すと線が途中で
+   **検索しても行は消えない。** 一致しない行を沈めるだけにしてある — 消すと線が途中で
    切れて、残った行がどこから来たのか読めなくなる。 */
 
 export interface GitToolbarProps {
   readonly query: string;
   readonly onQuery: (query: string) => void;
-  /** 比べる相手。ふつうは本流の枝 */
+  /** 比べる相手。ふつうは本流のブランチ */
   readonly base: string;
-  /** 探しているときの当たり数。探していなければ `null` */
+  /** 検索しているときの一致件数。検索していなければ `null` */
   readonly matches: number | null;
   readonly tips: number;
   readonly worktrees: number;

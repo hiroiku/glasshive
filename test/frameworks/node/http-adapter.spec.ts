@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { toRequest, writeResponse } from '~/frameworks/node/http-adapter.ts';
 
-/* 起動口と束ね役の繋ぎ目。
+/* ランチャーとサーバーバンドルの繋ぎ目。
 
    ここが歪むと、内側がどれだけ正しくても外から使えない。しかも歪みは
    組み上げてからでないと出ないので、画面を触るまで誰も気付けない。 */
@@ -16,7 +16,7 @@ afterEach(async () => {
   server = undefined;
 });
 
-/** 求めを渡された処理へ繋ぐだけの、最小の待ち受け */
+/** リクエストを渡された処理へ繋ぐだけの、最小のサーバー */
 async function serve(handle: (request: Request) => Promise<Response>): Promise<string> {
   server = http.createServer((req, res) => {
     void (async () => {
@@ -28,9 +28,9 @@ async function serve(handle: (request: Request) => Promise<Response>): Promise<s
   return `http://127.0.0.1:${port}`;
 }
 
-describe('求めを Request に写す', () => {
-  /* 本文を読み終えた合図を「観る人が去った」と読むと、本文付きの求めが
-     自分自身を途中で断ち切る。留めた印がどう頑張っても置けなくなる。 */
+describe('リクエストを Request に写す', () => {
+  /* 本文を読み終えたことを「クライアントが切断した」と読むと、本文付きのリクエストが
+     自分自身を途中で断ち切る。ピン留めがどう頑張っても置けなくなる。 */
   it('本文を読み終えても、途中で断ち切らない', async () => {
     const origin = await serve(async (request) => {
       const text = await request.text();
@@ -46,13 +46,13 @@ describe('求めを Request に写す', () => {
       body: JSON.stringify({ action: 'pin', id: '-w-a' }),
     });
 
-    expect(response.status, '求めの側の閉じは、去った合図ではない').toBe(200);
+    expect(response.status, 'リクエスト側の閉じは、切断ではない').toBe(200);
     expect(await response.text(), '本文は最後まで届いていること').toBe(
       '{"action":"pin","id":"-w-a"}',
     );
   });
 
-  it('本文の無い求めも、そのまま通す', async () => {
+  it('本文の無いリクエストも、そのまま通す', async () => {
     const origin = await serve(async (request) => {
       await new Promise((resolve) => setTimeout(resolve, 30));
       return new Response(request.signal.aborted ? '断ち切られた' : 'ok', {
@@ -63,15 +63,15 @@ describe('求めを Request に写す', () => {
     expect(await (await fetch(origin)).text()).toBe('ok');
   });
 
-  /* 届き続ける答えは、相手が去ったことを知らなければ止まらない。
-     知らせる道が無いと、見張りを掴んだまま残り、窓を開け閉てするたびに増えていく。 */
-  it('観る人が去ったら、答えを作っている側へ知らせる', async () => {
+  /* SSE のレスポンスは、クライアントが切断したことを知らなければ止まらない。知らせる手段が
+     無いと、リスナーを掴んだまま残り、接続を開け閉てするたびに増えていく。 */
+  it('クライアントが切断したら、レスポンスを作っている側へ知らせる', async () => {
     let aborted: Promise<void> | undefined;
     const origin = await serve(async (request) => {
       aborted = new Promise<void>((resolve) => {
         request.signal.addEventListener('abort', () => resolve());
       });
-      // 終わらない答え。相手が去るまで閉じない
+      // 終わらないレスポンス。相手が去るまで閉じない
       return new Response(new ReadableStream({ start: (c) => c.enqueue(new Uint8Array([58])) }), {
         headers: { 'content-type': 'text/event-stream' },
       });
@@ -87,11 +87,11 @@ describe('求めを Request に写す', () => {
         aborted,
         new Promise((_, reject) => setTimeout(() => reject(new Error('知らせが来ない')), 3000)),
       ]),
-      '知らせが来ないと、去った相手のぶんの見張りが残り続ける',
+      '知らせが来ないと、切断した相手のぶんのリスナーが残り続ける',
     ).resolves.toBeUndefined();
   });
 
-  it('頭の名前をそのまま渡す', async () => {
+  it('`Host` ヘッダーをそのまま渡す', async () => {
     const origin = await serve(async (request) =>
       Response.json({ host: request.headers.get('host') }),
     );
@@ -116,6 +116,8 @@ describe('求めを Request に写す', () => {
       request.end();
     });
 
-    expect(seen, '名前を見張る側は、届いた字そのものを見られなければならない').toBe('evil.example');
+    expect(seen, 'Host を検証する側は、届いた文字列そのものを見られなければならない').toBe(
+      'evil.example',
+    );
   });
 });

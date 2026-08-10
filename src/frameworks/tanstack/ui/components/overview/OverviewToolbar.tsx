@@ -1,7 +1,7 @@
 import type { OverviewSpan, OverviewTotals } from '../../derive/overview.ts';
 import { formatTokens } from '../../format.ts';
 
-/* 一覧の帯。探しと、いま全体がどうなっているかの一行。 */
+/* Overview のツールバー。検索と、いま全体がどうなっているかの 1 行。 */
 
 export type OverviewFilter = 'all' | 'input' | 'active' | 'pinned';
 
@@ -13,7 +13,7 @@ export interface OverviewToolbarProps {
   readonly span: OverviewSpan;
   readonly onSpan: (span: OverviewSpan) => void;
   readonly totals: OverviewTotals;
-  /** 絞った後に何も残らなかったときのために、絞る前の数も見せる */
+  /** 絞り込んだ後に何も残らなかったときのために、絞り込む前の数も見せる */
   readonly shown: number;
   readonly total: number;
 }
@@ -28,13 +28,13 @@ const CHIPS: readonly {
   { key: 'pinned', label: 'pinned' },
 ];
 
-/* 期間の札は状態の札と別の群にする。**同じ列に混ぜない** —
-   混ぜると、片方を押したときにもう片方が解けたように見える。 */
+/* 期間のチップは状態のチップと別のグループにする。**同じ並びに混ぜない** —
+   混ぜると、片方を押したときにもう片方が解除されたように見える。 */
 const SPANS: readonly { readonly key: OverviewSpan; readonly label: string }[] = [
   { key: '24h', label: '24h' },
   { key: '7d', label: '7d' },
   { key: '30d', label: '30d' },
-  // 状態の札にも「すべて」が在る。同じ字を並べると、どちらが解けたのか読めない
+  // 状態のチップにも all が在る。同じ文字列を並べると、どちらが解除されたのか読めない
   { key: 'all', label: 'any time' },
 ];
 
@@ -106,7 +106,7 @@ export function OverviewToolbar({
           </>
         )}{' '}
         · tokens 24h <b>{formatTokens(totals.tokens)}</b>
-        {/* 足りない合計に「これで全部だ」という顔をさせない */}
+        {/* 欠けのある合計に「これで全部だ」という顔をさせない */}
         {totals.tokensPartial && (
           <span className="dimtxt" title="Some transcripts could not be read">
             {' '}

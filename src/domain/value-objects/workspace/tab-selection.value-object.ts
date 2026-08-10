@@ -1,12 +1,12 @@
-/* 観る人がタブに並べるものの選び。
+/* ユーザーがタブに並べるものの選択。
 
-   これは観測ではなく、人の申し出である。**選びは観測を作り出さない** — ここに id が
-   在ることは、その巣が在ることの証しにはならない。読んでよい場所の集合もここから
-   一切影響を受けない。設定ファイルが権利を与える道を作らないためである。
+   これは観測ではなく、人が決めたものである。**選択は観測を作り出さない** — ここに id が
+   在ることは、そのプロジェクトが在ることの証しにはならない。読んでよいパスの集合も
+   ここから一切影響を受けない。設定ファイルが権限を与える経路を作らないためである。
 
-   版も移行も復旧も持たない。持った瞬間に「失ってはいけないもの」に変わり、
+   バージョンも移行も復旧も持たない。持った瞬間に「失ってはいけないもの」に変わり、
    壊れても観測は止まらないという前提が崩れる。壊れたときに起きるのは選び直しだけで、
-   一覧も窓もそのまま動く。 */
+   一覧もパネルもそのまま動く。 */
 
 export interface TabSelection {
   readonly version: 1;
@@ -30,24 +30,25 @@ export const DEFAULT_TAB_SELECTION: TabSelection = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/* 記録が自分で持っている欄だけを読む。
+/* オブジェクトが自分で持っている欄だけを読む。
 
-   **素の索きは土台から拾う。** `__proto__` や `constructor` を通して土台に欄が生えていると、
-   欄の無い覚え書きが「欄の揃った覚え書き」に見え、書いた覚えのない選びが読めてしまう。 */
+   **素のプロパティ参照はプロトタイプまで拾う。** `__proto__` や `constructor` を通して
+   プロトタイプに欄が生えていると、欄の無い `preferences.json` が「欄の揃った設定」に見え、
+   書いた覚えのない選択が読めてしまう。 */
 const own = (record: Record<string, unknown>, key: string): unknown =>
   Object.hasOwn(record, key) ? record[key] : undefined;
 
-/** 字だけの並びならそれ、そうでなければ無い。1 つでも字でなければ並びごと捨てる */
+/** 文字列だけの並びならそれ、そうでなければ無い。1 つでも文字列でなければ並びごと捨てる */
 const asIds = (value: unknown): readonly string[] | undefined => {
   if (!Array.isArray(value)) return undefined;
   return value.every((entry) => typeof entry === 'string') ? (value as string[]) : undefined;
 };
 
-/* 覚え書きの字を、選びとして読めるときだけ選びにする。
+/* `preferences.json` のテキストを、選択として読めるときだけ選択にする。
 
-   **形を確かめてから使う。** 版が違う・欄の型が違う・字が壊れている、はどれも
-   「読めるものが無い」ことであり、読めなかったことではない。移行も復旧も持たないので、
-   ここで捨てて既定へ倒す。倒れても観測は 1 つも欠けない — 留めた印が
+   **形を検証してから使う。** バージョンが違う・欄の型が違う・文字列が壊れている、はどれも
+   「読めるものが無い」ことであり、観測できなかったことではない。移行も復旧も持たないので、
+   ここで捨てて既定へ倒す。倒れても観測は 1 つも欠けない — ピン留めが
    「留めていない」に見えるだけである。 */
 export function parseTabSelection(text: string): TabSelection | undefined {
   let parsed: unknown;
@@ -66,7 +67,7 @@ export function parseTabSelection(text: string): TabSelection | undefined {
   return { version: TAB_SELECTION_VERSION, mode, pinned, hidden };
 }
 
-/* 選びを、覚え書きの字にする。読み解きと同じ場所に置いてあるのは、
+/* 選択を `preferences.json` のテキストにする。パースと同じ場所に置いてあるのは、
    置いた形と読める形が離れないようにするためである。 */
 export function serializeTabSelection(selection: TabSelection): string {
   return `${JSON.stringify(

@@ -5,20 +5,20 @@ import { type Observation, observed, unobservable } from '~/app-kernel/observati
 import type { TranscriptWatchIntegration } from '~/application/ports/integrations/sessions/transcript-watch.integration.ts';
 import { TranscriptWatchError } from '~/infrastructure/errors/sessions/transcript-watch.error.ts';
 
-/* OS の見張りで正本の木を見る。
+/* `fs.watch` のウォッチャーで `transcript` の木を見る。
 
    張れない機械がある(recursive を持たない実装、上限に当たった、根がまだ無い)。
-   旧実装はそのとき黙って「更新なしで続行」と出すだけだったが、観る人には何も伝わらない。
-   ここでは張れなかったことを値で返し、画面がそう言えるようにする。 */
+   黙って監視なしで続けると、更新が止まっていることがユーザーには何も伝わらない。
+   だから張れなかったことを値で返し、画面がそう言えるようにする。 */
 
 export function createFsWatchTranscript(root: string): TranscriptWatchIntegration {
   return {
     watch(onChange): Observation<() => void> {
       try {
         const watcher = fs.watch(root, { recursive: true }, (_event, filename) => {
-          // 名前の分からない物音がある。どれが動いたか言えないので配らない
+          // ファイル名の分からないイベントが来ることがある。どれが動いたか言えないので配らない
           if (filename === null) return;
-          // 正本以外の物音も配らない。木の中には正本でないものも置かれる
+          // `.jsonl` 以外のイベントも配らない。木の中には `transcript` でないものも置かれる
           if (!filename.endsWith('.jsonl')) return;
           onChange(path.join(root, filename));
         });

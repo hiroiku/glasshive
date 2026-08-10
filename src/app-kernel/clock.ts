@@ -1,8 +1,8 @@
-/* いまを訊く口。
+/* いまを訊くインターフェース。
 
-   旧実装が `scan(source, scope, procs, nowMs)` と、いまを引数で受けていたのは良い性質だった —
-   稼働かどうかの判定は「いま」に懸かっているので、これを内側で読むと、検査は待たされるか
-   ファイルの時刻を細工することになる。その性質を口として引き継ぐ。 */
+   稼働かどうかの判定は「いま」に懸かっている。導出の内側で `Date.now()` を直に読むと、
+   テストは待たされるかファイルの時刻を細工することになるので、「いま」は必ず
+   ここから受け取る。 */
 
 export interface Clock {
   /** epoch ミリ秒 */
@@ -11,5 +11,5 @@ export interface Clock {
 
 export const systemClock: Clock = { now: () => Date.now() };
 
-/** 検査用。時を止める */
+/** テスト用。時刻を固定する */
 export const fixedClock = (ms: number): Clock => ({ now: () => ms });

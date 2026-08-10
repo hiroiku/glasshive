@@ -1,65 +1,69 @@
 import { describe, expect, it } from 'vitest';
 import { Revision, RevisionRange } from '~/domain/value-objects/git/revision.value-object.ts';
 
-/* ここが通ると、外から来た字が git の指定に化ける道が閉じる。
- **形の確かめを緩めると、外の道具の差し替えまで通る。** */
+/* ここが通ると、外から来た文字列が `git` のオプションに化ける経路が閉じる。
+ **形式の検証を緩めると、`--upload-pack` の差し替えまで通ってしまう。** */
 
 const REFUSED = [
-  ['外の道具の指定', '--upload-pack=/tmp/evil'],
-  ['短い指定', '-x'],
-  ['続けて起こす区切り', 'main;rm -rf /'],
+  ['`git` のオプション', '--upload-pack=/tmp/evil'],
+  ['短いオプション', '-x'],
+  ['シェルのコマンド区切り', 'main;rm -rf /'],
   ['空', ''],
   ['空白だけ', ' '],
   ['前に空白が付いた名', ' main'],
   ['記号で始まる名', '.hidden'],
-  ['道の区切りで始まる名', '/etc/passwd'],
+  ['パス区切りで始まる名', '/etc/passwd'],
   ['改行を挟んだ名', 'main\n--upload-pack=x'],
   ['波括弧を含む名', 'main@{upstream}'],
 ] as const;
 
 const ACCEPTED = ['main', 'HEAD', 'feature/add-git-2', 'v1.0.0', '9f8e7d6c5b', 'a.b_c'] as const;
 
-describe('求めと共に来た指し', () => {
+describe('リクエストと共に来た revision', () => {
   for (const [what, raw] of REFUSED) {
     it(`${what}は断る`, () => {
       const created = Revision.create(raw);
-      expect(created.ok, '確かめを抜けた字は、そのまま外の道具の指定として読まれる').toBe(false);
+      expect(created.ok, '検証を抜けた文字列は、そのまま `git` のオプションとして読まれる').toBe(
+        false,
+      );
     });
   }
 
   for (const raw of ACCEPTED) {
     it(`${raw} は通す`, () => {
       const created = Revision.create(raw);
-      expect(created.ok, '普通の枝の名まで断ると、観られるはずのものが観られなくなる').toBe(true);
-      if (created.ok) expect(created.value.value, '通した字はそのまま渡る').toBe(raw);
+      expect(created.ok, '普通のブランチ名まで断ると、観られるはずのものが観られなくなる').toBe(
+        true,
+      );
+      if (created.ok) expect(created.value.value, '通した文字列はそのまま渡る').toBe(raw);
     });
   }
 
-  it('断ったときの名札は git.invalid_revision', () => {
+  it('断ったときのエラーコードは git.invalid_revision', () => {
     const created = Revision.create('--upload-pack=x');
     expect(created.ok).toBe(false);
     if (created.ok) return;
     expect(
       created.error.code,
-      '名札で 400 と決まる。ここが変わると求めの側の誤りが見に行けなかった扱いになる',
+      'エラーコードで 400 と決まる。ここが変わると、リクエストの側の誤りが観測できなかった扱いになる',
     ).toBe('git.invalid_revision');
   });
 
-  it('断った字は外へ出す言い分に載せない', () => {
+  it('断った文字列は外へ返すエラーメッセージに載せない', () => {
     const created = Revision.create('--upload-pack=x');
     expect(created.ok).toBe(false);
     if (created.ok) return;
     expect(
       created.error.message.includes('--upload-pack'),
-      '求めの字をそのまま言い分に載せると、外へ返す包みに外から来た字が混ざる',
+      'リクエストの文字列をそのままメッセージに載せると、レスポンスに外から来た文字列が混ざる',
     ).toBe(false);
-    expect(created.error.details, '後から追えるように、字そのものは内側に残す').toEqual({
+    expect(created.error.details, '後から追えるように、文字列そのものは内側に残す').toEqual({
       raw: '--upload-pack=x',
     });
   });
 });
 
-describe('git 自身が答えた指し', () => {
+describe('git 自身が答えた revision', () => {
   it('形を問わずに通す', () => {
     expect(
       Revision.fromGitOutput('feature/+odd').value,
@@ -68,8 +72,8 @@ describe('git 自身が答えた指し', () => {
   });
 });
 
-describe('隔たりの指し', () => {
-  it('..(片側の記録)', () => {
+describe('revision の範囲', () => {
+  it('..(片側のコミット)', () => {
     const range = RevisionRange.between(
       Revision.fromGitOutput('main'),
       Revision.fromGitOutput('topic'),

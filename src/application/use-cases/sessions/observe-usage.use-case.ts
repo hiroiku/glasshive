@@ -7,18 +7,20 @@ import type { UsageBucket } from '~/domain/entities/sessions/token-usage.entity.
 import { mergeBuckets } from '~/domain/services/sessions/token-usage.service.ts';
 import { STATS_WINDOW_MS } from '~/domain/value-objects/sessions/observation-window.value-object.ts';
 
-/* 巣ひとつぶんの消費を、桶のまま返す。
+/* プロジェクト 1 つぶんの消費を、バケットのまま返す。
 
-   **畳んだものだけを渡し、山の形にするのは観る側の仕事である。** 足の幅も窓も観る人が
-   その場で変えるものなので、こちらで束ねると、幅を変えるたびに正本を読み直すことになる。
+   **集計したものだけを渡し、バーにするのは観る側の仕事である。** 足の幅も対象期間も
+   ユーザーがその場で変えるものなので、こちらで束ねると、幅を変えるたびに `transcript` を
+   読み直すことになる。
 
-   窓は 7 日。それより古い正本は開かない — 開くには全体を読む必要があり、割に合わない。 */
+   対象期間は 7 日。それより古い `transcript` は開かない — 開くには全体を読む必要があり、
+   割に合わない。 */
 
 export type { UsageBucket } from '~/domain/entities/sessions/token-usage.entity.ts';
 
 export interface ProjectUsage {
-  /* 桶が遡る先。**読めたかどうかに関わらず言える。**
-     窓の広さは時刻だけで決まるので、正本が開けなくても変わらない。 */
+  /* バケットが遡る先。**読めたかどうかに関わらず言える。**
+     対象期間の広さは時刻だけで決まるので、`transcript` が開けなくても変わらない。 */
   readonly sinceMs: number;
   readonly buckets: Observation<readonly UsageBucket[]>;
 }
@@ -38,7 +40,7 @@ export function createObserveUsage(deps: {
       const snapshot = await tree.get();
       if (!snapshot.ok) return snapshot;
 
-      /* 引くのは自分の一覧からだけである。**場所は受け取らない。**
+      /* 引くのは自分の一覧からだけである。**パスは受け取らない。**
          引けない id は、形が違うのも一覧に無いのも同じ断り方をする。 */
       const project = snapshot.value.projects.find((candidate) => candidate.id === projectId);
       if (project === undefined) {
@@ -55,8 +57,8 @@ export function createObserveUsage(deps: {
       const sets: (readonly UsageBucket[])[] = [];
       for (const file of files) {
         const buckets = await drafts.readBuckets(file, nowMs);
-        /* 1 つでも読めなければ、統計そのものを見に行けなかったことにする。
-           読めた分だけを足して出すと、実際より低い山が「これが全部だ」という顔で並ぶ。 */
+        /* 1 つでも読めなければ、統計そのものを観測できなかったことにする。
+           読めた分だけを足して出すと、実際より低いバーが「これが全部だ」という顔で並ぶ。 */
         if (buckets.kind === 'unobservable') return ok({ sinceMs, buckets });
         if (buckets.kind === 'observed') sets.push(buckets.value);
       }

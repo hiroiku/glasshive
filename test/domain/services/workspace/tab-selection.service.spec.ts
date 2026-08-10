@@ -16,7 +16,7 @@ const selectionOf = (parts: Partial<TabSelection>): TabSelection => ({
   ...parts,
 });
 
-describe('覚え書きの形を整える', () => {
+describe('`preferences.json` の形を整える', () => {
   it('一覧から消えた id も、留めたまま残す', () => {
     const selection = selectionOf({
       pinned: ['-w-alpha', '-w-gone', '-w-beta'],
@@ -24,11 +24,11 @@ describe('覚え書きの形を整える', () => {
 
     expect(
       reconcile(selection).pinned,
-      '作業領域は外して後で繋ぎ直される。そのたびに留め直させると、机の並びが毎回崩れる',
+      '`worktree` は外して後で繋ぎ直される。そのたびに留め直させると、タブの並びが毎回崩れる',
     ).toEqual(['-w-alpha', '-w-gone', '-w-beta']);
   });
 
-  it('整えても、選びは減らない', () => {
+  it('整えても、タブの選択は減らない', () => {
     const selection = selectionOf({
       pinned: ['-w-alpha'],
       hidden: ['-w-noise'],
@@ -36,14 +36,14 @@ describe('覚え書きの形を整える', () => {
 
     expect(
       reconcile(selection),
-      '観測で削る道をここに作らない。作ると、置き場を一度読めなかった日に選びが丸ごと消える',
+      '観測で削る経路をここに作らない。`~/.claude/projects` を一度読めなかっただけで選択が消える',
     ).toEqual(selectionOf({ pinned: ['-w-alpha'], hidden: ['-w-noise'] }));
   });
 
-  it('整えても、選びは増えない', () => {
+  it('整えても、タブの選択は増えない', () => {
     expect(
       reconcile(DEFAULT_TAB_SELECTION).pinned,
-      '選びは観測を作り出さない。覚え書きには人が選んだものしか入らない',
+      'タブの選択は観測を作り出さない。`preferences.json` には人が選んだものしか入らない',
     ).toEqual([]);
   });
 
@@ -57,14 +57,14 @@ describe('覚え書きの形を整える', () => {
   it('留めたものと伏せたものが食い違えば、留めたほうが勝つ', () => {
     expect(
       reconcile(selectionOf({ pinned: ['-w-a'], hidden: ['-w-a', '-w-b'] })).hidden,
-      '同じ id が両方に居ると、出すのか伏せるのかを読む側が推し量ることになる',
+      '同じ id が両方に居ると、出すのか伏せるのかを読む側が推測することになる',
     ).toEqual(['-w-b']);
   });
 
-  it('空の字は id ではないので、覚えない', () => {
+  it('空文字列は id ではないので、覚えない', () => {
     expect(
       reconcile(selectionOf({ pinned: ['', '-w-a'], hidden: [''] })),
-      '名前の無いタブは押しても開けない。残すと、消し方の分からない行が机に居座る',
+      '名前の無いタブは押しても開けない。残すと、消し方の分からない行がタブの並びに居座る',
     ).toEqual(selectionOf({ pinned: ['-w-a'], hidden: [] }));
   });
 
@@ -82,25 +82,25 @@ describe('タブに出す対象', () => {
 
     expect(
       reconcile(selection).pinned,
-      '「残す」ことと「出す」ことは別である。留めた印は覚え書きに残る',
+      '「残す」ことと「出す」ことは別である。ピン留めは `preferences.json` に残る',
     ).toContain('-w-gone');
     expect(
       visibleTabs(selection, observed),
-      '出すと、消えた作業領域を指すタブが残り、押しても何も無い窓が開く',
+      '出すと、消えた `worktree` を指すタブが残り、押しても何も無い画面が開く',
     ).toEqual(['-w-alpha', '-w-beta']);
   });
 
   it('並びは留めた順のまま。観測の順には従わない', () => {
     expect(
       visibleTabs(selectionOf({ pinned: ['-w-b', '-w-a'] }), ['-w-a', '-w-b']),
-      '留めたものは自分の机の並び。名前順や観測順を強いると、関わりのある巣を隣に置けない',
+      'タブの並びは留めた順で決まる。名前順や観測順を強いると、関わりのあるプロジェクトを隣に置けない',
     ).toEqual(['-w-b', '-w-a']);
   });
 
   it('観測に在っても、留めていなければ出さない', () => {
     expect(
       visibleTabs(DEFAULT_TAB_SELECTION, ['-w-alpha']),
-      '留めたものが無いときは Overview だけを出す。道具が推し量って足さない',
+      '留めたものが無いときは Overview だけを出す。glasshive が推測して足さない',
     ).toEqual([]);
   });
 });
@@ -113,7 +113,7 @@ describe('留める', () => {
   it('既に留めてあれば、順を変えない', () => {
     expect(
       pin(selectionOf({ pinned: ['-w-a', '-w-b'] }), '-w-a').pinned,
-      '同じものを二度押しただけで机の並びが変わると、位置の記憶が壊れる',
+      '同じものを二度押しただけでタブの並びが変わると、位置の記憶が壊れる',
     ).toEqual(['-w-a', '-w-b']);
   });
 
@@ -123,7 +123,7 @@ describe('留める', () => {
     expect(next.hidden, '留めたのに一覧から伏せたままでは、言うことが食い違う').toEqual([]);
   });
 
-  it('場所として使えない名前は覚えない', () => {
+  it('id として使えない名前は覚えない', () => {
     expect(pin(DEFAULT_TAB_SELECTION, '').pinned).toEqual([]);
   });
 });
@@ -136,7 +136,7 @@ describe('外す', () => {
   it('伏せるほうへは移さない', () => {
     expect(
       unpin(selectionOf({ pinned: ['-w-a'] }), '-w-a').hidden,
-      '外すのは机から下ろすことで、一覧から消すことではない。消すと戻し方が分からなくなる',
+      '外すのはタブの並びから下ろすことで、一覧から消すことではない。消すと戻し方が分からなくなる',
     ).toEqual([]);
   });
 
@@ -182,13 +182,13 @@ describe('並べ替える', () => {
     const selection = selectionOf({ pinned: ['-w-a'] });
     expect(
       move(selection, '-w-x', 0).pinned,
-      '並べ替えが選びを増やすと、机に置いた覚えの無いタブが現れる',
+      '並べ替えがタブの選択を増やすと、留めた覚えの無いタブがタブの並びに現れる',
     ).toEqual(['-w-a']);
   });
 
   it('数でない落とし先は、何もしない', () => {
     /* **動かせば並びが変わる id で見る。** 落とし先が今いる場所と重なる組で見ると、
-       門が無くても同じ並びになり、門が在ることを何も確かめないことになる。 */
+       ガードが無くても同じ並びになり、ガードが在ることを何も確かめないことになる。 */
     expect(
       move(selectionOf({ pinned: ['-w-a', '-w-b'] }), '-w-b', Number.NaN).pinned,
       '数として読めない落とし先を丸める役へ渡すと、先頭へ落ちる',

@@ -13,8 +13,8 @@ import {
   type RefDetail,
 } from '~/application/use-cases/git/observe-ref.use-case.ts';
 
-/* 尋ねるときに渡す書式と上限。**答えの字を引く鍵になるので、内側の宣言と対で直すこと。**
-   食い違うと、この確かめは何も引けないまま「そんな指しは無い」とだけ言う。 */
+/* 尋ねるときに渡す書式と上限。**出力を引くキーになるので、内側の宣言と対で直すこと。**
+   食い違うと、この検証は何も引けないまま「そんな `ref` は無い」とだけ言う。 */
 const COMMIT_LOG_FORMAT = '%h%x00%cI%x00%an%x00%s';
 const UNIQUE_LOG_LIMIT = 40;
 const RECENT_LOG_LIMIT = 15;
@@ -23,7 +23,7 @@ class GitFailure extends AppError {
   readonly code: string;
 
   constructor(code: string) {
-    super('検査で起こした失敗');
+    super('テストで起こした失敗');
     this.code = code;
   }
 }
@@ -48,11 +48,11 @@ const ANSWERS: Record<string, string> = {
 const keyOf = (request: GitCommandRequest): string =>
   [...request.args, ...request.revisions.map((revision) => revision.value)].join(' ');
 
-/* **見えたことを先に言う。** 尋ね方が変わって答えの字が引けなくなると、この道具は
-   「そんな指しは無い」に倒れる。そこで早々に切り上げる書き方をすると、確かめは
+/* **見えたことを先に言う。** 尋ね方が変わって出力を引けなくなると、glasshive は
+   「そんな `ref` は無い」に倒れる。そこで早々に切り上げる書き方をすると、検証は
    何も見ないまま通ってしまう。 */
 function observedDetail(result: Awaited<ReturnType<ObserveRefUseCase['execute']>>): RefDetail {
-  expect(result.ok, '断る求めではない').toBe(true);
+  expect(result.ok, '断る呼び出しではない').toBe(true);
   if (!result.ok) throw new Error('断られた');
   expect(result.value.kind, '見えるはずのものが見えないなら、その先の確かめに意味は無い').toBe(
     'observed',
@@ -94,7 +94,7 @@ const shapeOf = (request: GitCommandRequest): string =>
 
 describe('尋ね方', () => {
   it('起こすのは読む命令だけである', async () => {
-    // 相手を自分で決め、入っていない記録が無い道まで通す。起こす命令はこれで出そろう
+    // 相手を自分で決め、入っていない記録が無い経路まで通す。起こす命令はこれで出そろう
     const { git, requests } = fakeGit({ [UNIQUE_LOG]: observed('') });
     await createObserveRef({ git }).execute({
       projectPath: CWD,
@@ -106,7 +106,7 @@ describe('尋ね方', () => {
     );
     expect(
       [...new Set(requests.map(shapeOf))].sort(),
-      'ここに載っていない命令を足すときは、それが巣を書き換えないことを先に確かめること',
+      'ここに載っていない命令を足すときは、それがプロジェクトを書き換えないことを先に確かめること',
     ).toEqual([
       'diff --numstat',
       `log -n ${RECENT_LOG_LIMIT} --format=`,
@@ -117,18 +117,20 @@ describe('尋ね方', () => {
   });
 });
 
-describe('求めを断る', () => {
-  it('形の違う指しは git まで届けない', async () => {
+describe('呼び出しを断る', () => {
+  it('形の違う revision は git まで届けない', async () => {
     const { git, requests } = fakeGit();
     const result = await createObserveRef({ git }).execute({
       projectPath: CWD,
       rev: '--upload-pack=/tmp/evil',
       base: null,
     });
-    expect(result.ok, '確かめを抜けた字は、外の道具の差し替えとして読まれる').toBe(false);
+    expect(result.ok, '検証を抜けた文字列は、`git` のオプションの差し替えとして読まれる').toBe(
+      false,
+    );
     if (result.ok) return;
-    expect(result.error.code, '名札で 400 と決まる').toBe('git.invalid_revision');
-    expect(requests.length, '断る求めで外の道具を起こしてはならない').toBe(0);
+    expect(result.error.code, 'エラーコードで 400 と決まる').toBe('git.invalid_revision');
+    expect(requests.length, '断る呼び出しで `git` を起こしてはならない').toBe(0);
   });
 
   it('比べる相手の形も確かめる', async () => {
@@ -138,7 +140,7 @@ describe('求めを断る', () => {
 });
 
 describe('比べる相手を決める', () => {
-  it('言われなければ、いま出ている枝を相手にする', async () => {
+  it('言われなければ、いま出ているブランチを相手にする', async () => {
     const detail = observedDetail(await observeRef({ rev: 'topic', base: null }));
     expect(detail.base, '相手が無いと、何と比べた一覧なのか言えない').toBe('main');
   });
@@ -149,15 +151,15 @@ describe('比べる相手を決める', () => {
     expect(detail.unique, '比べる相手が無いのだから、直近の記録である').toBe(false);
   });
 
-  it('空の字で言われたのは、言われなかったのと同じ', async () => {
+  it('空文字列で言われたのは、言われなかったのと同じ', async () => {
     const detail = observedDetail(await observeRef({ rev: 'topic', base: '' }));
     expect(
       detail.base,
-      '空の字を「言われた相手」として形を確かめると、普通の求めが断りに化ける',
+      '空文字列を「言われた相手」として形を確かめると、普通の呼び出しが断りに化ける',
     ).toBe('main');
   });
 
-  it('いま出ている枝が引けなければ、相手を決めない', async () => {
+  it('いま出ているブランチが引けなければ、相手を決めない', async () => {
     const detail = observedDetail(
       await observeRef(
         { rev: 'topic', base: null },
@@ -194,7 +196,7 @@ describe('並べる記録', () => {
     if (!result.ok) return;
     expect(
       result.value,
-      'そんな指しは無い、は見に行けたうえでの答えである。404 にすると求めた側の落ち度になる',
+      'そんな `ref` は無い、は観測できたうえでの結果である。404 にすると求めた側の落ち度になる',
     ).toEqual({ kind: 'absent', reason: 'no-source' });
   });
 });
@@ -222,30 +224,30 @@ describe('差分の姿', () => {
 });
 
 describe('起こせなかったとき', () => {
-  it('道具が手元に無ければ、観られなかったと言う', async () => {
+  it('`git` がインストールされていなければ、観測できなかったと言う', async () => {
     const result = await observeRef(
       { rev: 'topic', base: 'main' },
       { [UNIQUE_LOG]: unobservable(new GitFailure(GIT_NOT_INSTALLED)) },
     );
-    expect(result.ok, '断る求めではない。求めの形は正しかった').toBe(true);
+    expect(result.ok, '断る呼び出しではない。呼び出しの形は正しかった').toBe(true);
     if (!result.ok) return;
-    expect(result.value.kind, '道具が無いことを「記録が無い」と言うと、観る人は嘘を読む').toBe(
+    expect(result.value.kind, '`git` が無いことを「記録が無い」と言うと、ユーザーは嘘を読む').toBe(
       'unobservable',
     );
   });
 
-  it('相手を尋ねる途中で道具が居なくなっても、観られなかったと言う', async () => {
+  it('相手を尋ねる途中で `git` が居なくなっても、観測できなかったと言う', async () => {
     const result = await observeRef(
       { rev: 'topic', base: null },
       {
         'rev-parse --abbrev-ref HEAD': unobservable(new GitFailure(GIT_NOT_INSTALLED)),
       },
     );
-    expect(result.ok, '断る求めではない。求めの形は正しかった').toBe(true);
+    expect(result.ok, '断る呼び出しではない。呼び出しの形は正しかった').toBe(true);
     if (!result.ok) throw new Error('断られた');
     expect(
       result.value.kind,
-      '相手が決まらなかったのと、相手を尋ねられなかったのは別である。後者を前者に潰すと、道具の無い機械でどの指しも「比べる相手が無い」と出る',
+      '相手が決まらなかったのと、相手を尋ねられなかったのは別である。後者を前者に潰すと、`git` の無い機械でどの `ref` も「比べる相手が無い」と出る',
     ).toBe('unobservable');
   });
 });

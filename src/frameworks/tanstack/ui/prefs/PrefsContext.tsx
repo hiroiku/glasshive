@@ -1,18 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-/* 見た目の好み。**道の印には載せない。**
+/* 見た目の好み。**URL の検索パラメータには載せない。**
 
-   窓の出方も幅も、その人の机の話であって「この条件で観て」と人に渡すものではない。
-   URL に載せると、渡した先の画面がこちらの机の都合で組み替わる。
+   パネルの出方も幅も、その人の画面の都合であって「この条件で見て」と人に渡すものではない。
+   URL に載せると、渡した先の画面がこちらの都合で組み替わる。
 
-   道を跨いで読むのでここに集める。旧実装は画面の最上位が全部を抱えて props で配っており、
-   窓ひとつの幅を変えるために 9 つのファイルを通っていた。 */
+   複数のルートを跨いで読むので、props で配らずにここへ集める。 */
 
 const STORAGE_KEY = 'glasshive-prefs';
 
 export interface Prefs {
-  /* 窓の出方。並置(本文を狭める)か、重なり(本文の上に滑り出す)か。
-     既定を並置にしてあるのは、会話と表を見比べるのがこの道具の主な使い方だからである。 */
+  /* パネルの出方。並置(本文を狭める)か、重なり(本文の上に滑り出す)か。
+     既定を並置にしてあるのは、会話と表を見比べるのが glasshive の主な使い方だからである。 */
   readonly dock: boolean;
   readonly drawerWidth: number | null;
   /** 終わったものも全部出すか */
@@ -34,7 +33,7 @@ export interface PrefsStore extends Prefs {
 
 const PrefsContext = createContext<PrefsStore | null>(null);
 
-/** 覚えている字を読む。読めなければ既定に戻す — **好みが壊れても観測は止まらない** */
+/** `localStorage` に覚えている文字列を読む。読めなければ既定に戻す — **好みが壊れても観測は止まらない** */
 function loadPrefs(): Prefs {
   if (typeof localStorage === 'undefined') return DEFAULT_PREFS;
   let stored: unknown;
@@ -61,8 +60,9 @@ function loadPrefs(): Prefs {
 }
 
 export function PrefsProvider({ children }: { children: React.ReactNode }) {
-  /* 読むのは載ってから一度だけ。**最初の描画では読まない** — 器は組み立てのときに
-     誰の好みも知らないまま焼かれるので、最初の描画で読むとその人の好みのぶんだけ食い違う。 */
+  /* 読むのはマウントしてから一度だけ。**最初の描画では読まない** — HTML シェル
+     (`_shell.html`)はビルド時に誰の好みも知らないまま描かれるので、最初の描画で読むと
+     その人の好みのぶんだけ食い違う。 */
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [loaded, setLoaded] = useState(false);
 
@@ -72,7 +72,7 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // 読む前に書くと、覚えていた字を既定で塗り潰す
+    // 読む前に書くと、覚えていた文字列を既定で塗り潰す
     if (!loaded) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
@@ -81,8 +81,8 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
     }
   }, [prefs, loaded]);
 
-  /* 窓の出方は body に付ける。滑り出しと並置は入れ物の外側の話なので、
-     部品の中では表せない(旧実装も同じ場所に同じ名前で付けている)。 */
+  /* パネルの出方は body に付ける。滑り出しと並置は入れ物の外側の話なので、
+     コンポーネントの中では表せない。 */
   useEffect(() => {
     document.body.classList.toggle('drawer-dock', prefs.dock);
   }, [prefs.dock]);

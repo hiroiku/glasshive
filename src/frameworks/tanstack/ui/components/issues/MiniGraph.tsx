@@ -4,15 +4,16 @@ import { cut } from '../../format.ts';
 import { hoverTok } from '../../hoverTok.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 
-/* 1 件の課題と、その 1 歩ぶんの繋がり。
+/* 1 件の課題と、そこから直接つながっている課題。
 
-   左は「先に済むべきもの」、右は「これが済むのを待っているもの」。**1 歩で切る** —
-   2 歩まで辿ると、台帳全体を小さく描いただけの絵になって、どれが自分か読めなくなる。
+   左は「先に済むべきもの」、右は「これが済むのを待っているもの」。**辿るのは 1 つ先まで
+   にする** — 2 つ先まで辿ると、台帳全体を小さく描いただけの図になって、どれが自分か
+   読めなくなる。
 
    線は要素の実際の位置から引く。折り返しや幅の変化に付いていくので、
-   窓の幅を変えても線が外れない。 */
+   パネルの幅を変えても線が外れない。 */
 
-/** 依存の型の言い換え。台帳の語のままだと向きが読めない */
+/** 依存の種類の表示名。台帳の語のままだと向きが読めない */
 const DEP_LABEL: Readonly<Record<string, string>> = {
   'parent-child': 'parent',
   blocks: 'blocked by',
@@ -58,9 +59,9 @@ export function MiniGraph({
   const rootRef = useRef<HTMLDivElement>(null);
   const [curves, setCurves] = useState<readonly Curve[]>([]);
 
-  /* 引き金は中身の入れ替わりである。読むのは DOM の位置なので、React から見ると
+  /* 引き直すきっかけは中身の入れ替わりである。読むのは DOM の位置なので、React から見ると
      余計な依存に見えるが、繋がりの数が変わったときに引き直せるのはこれだけである。 */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 位置は DOM から読む。数の変化だけが引き直しの合図
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 位置は DOM から読む。数の変化だけが引き直しのきっかけ
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (root === null) return;
@@ -91,7 +92,7 @@ export function MiniGraph({
     };
 
     draw();
-    // 窓の幅は掴んで変えられる。変わるたびに引き直さないと線が要素から外れる
+    // パネルの幅は掴んで変えられる。変わるたびに引き直さないと線が要素から外れる
     const observer = new ResizeObserver(draw);
     observer.observe(root);
     return () => observer.disconnect();

@@ -16,11 +16,11 @@ import {
   presentIssues,
 } from '~/interface/presenters/issues/issues.presenter.ts';
 
-/* 課題の台帳を読む窓。
+/* 課題の台帳を読むコントローラー。
 
-   **場所は受け取らない。** 巣を名指せるのは自分の一覧に出た id だけで、
-   場所はこちらが自分の観測から引く。旧実装はここで任意の絶対パスを受けており、
-   画像を 1 枚読み込ませるだけで手元の課題が外へ流れた。 */
+   **パスは受け取らない。** プロジェクトを名指せるのは自分の一覧に出た id だけで、
+   パスはこちらが自分の観測から引く。ここで任意の絶対パスを受けると、画像を 1 枚
+   読み込ませるだけで、ローカルの課題が外へ流れることになる。 */
 
 export type IssuesResponse = ApiResponse<IssuesJson>;
 export type IssueResponse = ApiResponse<IssueJson>;
@@ -31,7 +31,7 @@ export interface IssuesDeps {
   readonly tree: TreeSnapshotService;
 }
 
-/** 名指された巣の、解決済みの場所。引けない id は、形が違うのも一覧に無いのも同じ断り方 */
+/** 名指されたプロジェクトの、解決済みのパス。引けない id は、形が違うのも一覧に無いのも同じ断り方 */
 async function locate(tree: TreeSnapshotService, input: unknown): Promise<Result<string>> {
   const projectId = projectIdOf(input);
   if (!projectId.ok) return err(projectId.error);
@@ -44,7 +44,7 @@ export async function listIssues(deps: IssuesDeps, input: unknown): Promise<Issu
   const path = await locate(deps.tree, input);
   if (!path.ok) return { ok: false, ...presentError(path.error) };
 
-  // 載せるかどうかだけの申し出なので、読めない値は「載せない」に倒してよい
+  // 載せるかどうかだけの指定なので、読めない値は「載せない」に倒してよい
   const includeClosed = own(input, 'includeClosed') === true;
   const ledger = await deps.list.execute({
     projectPath: path.value,

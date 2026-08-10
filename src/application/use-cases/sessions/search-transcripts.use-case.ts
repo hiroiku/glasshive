@@ -9,13 +9,13 @@ import {
   STATS_WINDOW_MS,
 } from '~/domain/value-objects/sessions/observation-window.value-object.ts';
 
-/* 巣ひとつの正本を横断して語を探す。
+/* プロジェクト 1 つの `transcript` を横断して語を探す。
 
-   返すのは当たった正本の在り処だけである。どこに当たったかまでは返さない —
-   この探しの用事は「どのエージェントの話か」を絞ることで、抜き書きを読むことではない。
+   返すのは当たった `transcript` のパスだけである。どこに当たったかまでは返さない —
+   この検索の目的は「どのエージェントの話か」を絞ることで、抜き書きを読むことではない。
 
    短すぎる語では探さない。全部に当たって絞り込みにならないうえ、
-   何百の正本を末尾まで開くことになる。 */
+   何百の `transcript` を末尾まで開くことになる。 */
 
 export interface SearchRequest {
   readonly projectId: string;
@@ -52,7 +52,7 @@ export function createSearchTranscripts(deps: {
         for (const subagent of session.subagents) files.push(subagent.file);
       }
 
-      // 均すのはここで一度だけ。正本ごとに均し直す理由が無い
+      // 正規化するのはここで一度だけ。`transcript` ごとに正規化し直す理由が無い
       return ok(
         await search.findTails(files, trimmed.toLowerCase(), {
           sinceMs: nowMs - STATS_WINDOW_MS,

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildRows, layoutOf, sortTips } from '~/frameworks/tanstack/ui/derive/gitGraph.ts';
 
-/* 記録の枝を、縦に並ぶ行へ組み直す。
+/* `git` のブランチと本流を、縦に並ぶ行へ組み直す。
 
-   **畳むのは本流だけ。** 生きている線はどれも「いま誰かが立っている場所」なので、
-   畳むと画面から人が消える。 */
+   **折り畳むのは本流だけ。** 生きている線はどれも「いま誰かが立っている場所」なので、
+   折り畳むと画面から人が消える。 */
 
-/* 形は、組み直す役自身から引く。写して持てば、形が変わったときに片方だけ古いまま残る */
+/* 形は、組み直す実装そのものから引く。写して持てば、形が変わったときに片方だけ古いまま残る */
 type MainNode = Parameters<typeof buildRows>[0][number];
 type Tip = Parameters<typeof buildRows>[1][number];
 
@@ -31,7 +31,7 @@ const tip = (name: string, over: Partial<Tip> = {}): Tip => ({
   ...over,
 });
 
-describe('本流を畳む', () => {
+describe('本流を折り畳む', () => {
   it('生きている線を先に並べ、その下に本流を置く', () => {
     const rows = buildRows([node('a')], [tip('x', { merge_base: 'a' })]);
 
@@ -39,7 +39,7 @@ describe('本流を畳む', () => {
   });
 
   /* 分かれ目が消えると、線が宙で終わる。 */
-  it('合流・分かれ目・先頭は畳まない', () => {
+  it('マージ・分かれ目・先頭は折り畳まない', () => {
     const rows = buildRows(
       [node('head'), node('plain'), node('fork'), node('merged', { merge: true })],
       [tip('x', { merge_base: 'fork' })],
@@ -49,7 +49,7 @@ describe('本流を畳む', () => {
     expect(kept).toEqual(['head', 'fork', 'merged']);
   });
 
-  it('畳んだぶんは 1 行にまとめ、本数を持つ', () => {
+  it('折り畳んだぶんは 1 行にまとめ、本数を持つ', () => {
     const rows = buildRows(
       [node('head'), node('p1'), node('p2'), node('merged', { merge: true })],
       [],
@@ -61,7 +61,7 @@ describe('本流を畳む', () => {
   });
 
   /* 位置で名指すと、上の行が 1 つ増減しただけで別の塊として組み直される。 */
-  it('畳んだ塊は、その中の最初の記録で名指せる', () => {
+  it('折り畳んだ塊は、その中の最初のコミットで名指せる', () => {
     const rows = buildRows([node('head'), node('p1'), node('p2')], []);
 
     expect(rows.find((row) => row.type === 'fold')?.from).toBe('p1');
@@ -83,7 +83,7 @@ describe('線の合流先を決める', () => {
     expect(layout.baseIndex.get(0)).toBe(layout.rows.length - 1);
   });
 
-  it('筋の数だけ幅を取る', () => {
+  it('トラックの数だけ幅を取る', () => {
     const narrow = layoutOf([node('head')], [tip('x')]);
     const wide = layoutOf([node('head')], [tip('x'), tip('y')]);
 

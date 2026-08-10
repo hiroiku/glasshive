@@ -5,8 +5,8 @@ export interface Args {
   configDir: string | undefined;
 }
 
-/* 待ち受ける番号は盤で `HIVE` を打った数字。番号そのものではなく名前で思い出せる。
-   一時ポート(49152 以上)より下なので、外向きの繋ぎに先に取られることがない。 */
+/* 待ち受けるポートは、電話のキーパッドで `HIVE` を打った数字。数字そのものではなく
+   名前で思い出せる。一時ポート(49152 以上)より下なので、外向きの接続に先に取られない。 */
 export const DEFAULTS = { port: 4483, activeThresholdSecs: 60 } as const;
 
 export const HELP = `glasshive — watch your AI agents work, through glass
@@ -28,7 +28,7 @@ export type ParseResult =
   | { ok: true; args: Args }
   | { ok: false; message: string; exitCode: number };
 
-/* 引数を読む。読めない求めは黙って既定に倒さず、断る —
+/* 引数を読む。読めない引数は黙って既定値に倒さず、断る —
    渡した指定が効いていないことに気づけないまま観るのが、いちばん困る。 */
 export function parseArgs(argv: readonly string[]): ParseResult {
   const args: Args = {
@@ -85,8 +85,8 @@ export function parseArgs(argv: readonly string[]): ParseResult {
         args.configDir = raw;
         break;
       }
-      /* 観る範囲を起動で決める指定は無くなった。黙って無視すると、
-         渡した人は「絞ったつもり」で全部を見ることになる。 */
+      /* 観測する範囲は起動時には決められない。黙って無視すると、渡したユーザーは
+         指定が効いたものと思い込むので、受け取った時点で断る。 */
       case '--global':
         return {
           ok: false,

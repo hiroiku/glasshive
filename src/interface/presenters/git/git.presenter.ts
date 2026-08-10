@@ -8,23 +8,24 @@ import {
   presentError,
 } from '~/interface/presenters/api-error.presenter.ts';
 
-/* git の観測を、外の道が読む形へ写す。
+/* `git` の観測を、外部 API が読む形へ写す。
 
-   線の引き方は 1 つだけである。**見に行けたが無かったものは誤りではない。**
-   そこがリポジトリでない・そんな指しは無い、はどちらも 200 と「無い」で返す。
-   404 にすると、記録を読む道具が手元に無いだけの機械で、すべての巣が消えたように見える。
+   線の引き方は 1 つだけである。**観測はできたが対象が無かったものは誤りではない。**
+   そこがリポジトリでない・その `ref` が無い、はどちらも 200 と「無い」で返す。
+   404 にすると、`git` がインストールされていないだけの機械で、すべてのプロジェクトが
+   消えたように見える。
 
-   見に行けなかったとき(道具が無い・権利が無い)だけが誤りで、その写し方は
+   観測できなかったとき(`git` が無い・権限が無い)だけが誤りで、その変換の仕方は
    `api-error.presenter.ts` の表が決める。 */
 
-/** 見えたか、見に行けたが無かったか。見に行けなかったときはこの形では返らない */
+/** 観測できたか、観測はできたが対象が無かったか。観測できなかったときはこの形では返らない */
 export type GitObservationState = 'observed' | 'absent';
 
-/* 番号と、見分けるための札を両方持つ。
+/* HTTP ステータスと、見分けるためのフラグを両方持つ。
 
-   **見分けるのは `ok` である。** 番号だけで見分けさせると、受け取る側が「200 だが誤り」を
-   扱う羽目になる。番号を落とさないのは、記録の窓だけが「無かった」を 200 で返すからで、
-   その取り決めをここで言い切っておく必要がある。 */
+   **見分けるのは `ok` である。** ステータスだけで見分けさせると、受け取る側が
+   「200 だが誤り」を扱う羽目になる。ステータスを落とさないのは、`git` のコントローラーだけが
+   「無かった」を 200 で返すからで、その取り決めをここで言い切っておく必要がある。 */
 export type PresentedGit<T> =
   | { ok: true; status: 200; body: T }
   | { ok: false; status: ApiStatus; body: ApiErrorBody };
@@ -73,7 +74,7 @@ export interface GitConflictJson {
 
 export interface GitOverviewJson {
   state: GitObservationState;
-  /** 無かったときの言い分。見えたときは無い */
+  /** 対象が無かったときの理由。観測できたときは `null` */
   reason: string | null;
   base: string;
   worktrees: GitWorktreeJson[];
@@ -108,7 +109,7 @@ export interface GitRefLogJson {
   files: GitDiffFileJson[];
 }
 
-/** 何も見えなかったときの形。欄はすべて在るまま空にする */
+/** 対象が無かったときの形。欄はすべて在るまま空にする */
 const emptyOverview = (reason: string): GitOverviewJson => ({
   state: 'absent',
   reason,
@@ -135,7 +136,7 @@ const emptyRefLog = (reason: string): GitRefLogJson => ({
 export function presentGitOverview(
   result: Result<Observation<GitOverview>>,
 ): PresentedGit<GitOverviewJson> {
-  // 形の違う求めは断る。見に行けなかったのではなく、行かないと決めたのである
+  // 形の違うリクエストは断る。観測できなかったのではなく、観測しに行かないと決めたのである
   if (!result.ok) return { ok: false, ...presentError(result.error) };
 
   const observation = result.value;
@@ -197,7 +198,7 @@ export function presentGitOverview(
 export function presentRefDetail(
   result: Result<Observation<RefDetail>>,
 ): PresentedGit<GitRefLogJson> {
-  // 形の違う求めは断る。見に行けなかったのではなく、行かないと決めたのである
+  // 形の違うリクエストは断る。観測できなかったのではなく、観測しに行かないと決めたのである
   if (!result.ok) return { ok: false, ...presentError(result.error) };
 
   const observation = result.value;

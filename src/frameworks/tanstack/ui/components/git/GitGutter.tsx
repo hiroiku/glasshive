@@ -4,17 +4,17 @@ import { laneColor } from '../../palette.ts';
 /* 行 1 つを通る線と点。
 
    行ごとに小さな svg を縦に連ねる。1 枚の大きな svg に描かないのは、行の高さが
-   中身で変わることと、行を絞ったときに線だけが取り残されるのを避けるためである。
+   中身で変わることと、行を絞り込んだときに線だけが取り残されるのを避けるためである。
 
-   線は縦に伸び、合流する行で丸角の肘を曲がって柱へ入る。**曲がる向きは 1 つだけ** —
+   線は縦に伸び、合流する行で角を丸めて曲がり、本流の線へ入る。**曲がる向きは 1 つだけ** —
    線が左右に振れると、どの線がどこへ行くのか目で追えなくなる。 */
 
 export interface GitGutterProps {
   readonly row: number;
   readonly layout: GitLayout;
-  /** 生きている線の行 → そこに立っている手の様子。空なら誰も居ない */
+  /** 生きている線の行 → そこに居るエージェントの状態。空なら誰も居ない */
   readonly tipStates: ReadonlyMap<number, string>;
-  /** 明滅の位相。全部の点を同じ息づかいに揃える */
+  /** 明滅の位相。全部の点のアニメーションを揃える */
   readonly delay: string;
 }
 
@@ -26,7 +26,7 @@ export function GitGutter({ row, layout, tipStates, delay }: GitGutterProps) {
   const here = rows[row];
   if (here === undefined) return null;
 
-  // 本流の柱
+  // 本流の線
   if (row >= firstMain) {
     if (here.type === 'fold') {
       shapes.push(
@@ -102,8 +102,8 @@ export function GitGutter({ row, layout, tipStates, delay }: GitGutterProps) {
         />,
       );
       const state = tipStates.get(at);
-      /* 誰か居るなら、その様子で息づく点にする。居ないなら、ただの静かな点。
-       **輪だけにしない** — 輪だけだと「線が在る」としか読めず、人が居るかが消える。 */
+      /* 誰か居るなら、その状態で明滅する点にする。居ないなら、ただの静かな点。
+       **輪郭だけの円にしない** — それだと「線が在る」としか読めず、誰か居るかが消える。 */
       shapes.push(
         state === undefined || state === '' ? (
           <circle key={`s${lane}`} cx={lineX} cy={mid} r={2} fill={color} opacity={0.7} />
@@ -149,7 +149,7 @@ export function GitGutter({ row, layout, tipStates, delay }: GitGutterProps) {
     }
   });
 
-  // 筋は行に書いてあることをなぞるだけの飾り。読み上げからは外す
+  // 線は行に書いてあることをなぞるだけの飾り。読み上げからは外す
   return (
     <svg className="g-gutter" width={width} height={ROW_HEIGHT} aria-hidden="true">
       {shapes}

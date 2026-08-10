@@ -6,13 +6,13 @@ import type {
 
 /* 既定で何を見せるか。
 
-   **これは観測ではなく、見せ方の予算である。** 観測はすべてを持っているが、
+   **これは観測ではなく、見せ方の方針である。** 観測はすべてを持っているが、
    数百の終わったセッションを一度に並べても読めない。だから既定では
    「動いているもの」と「ついさっきまで動いていたもの」だけを出し、
    全部見たい人には見せる。
 
    ここに在るのは、木を組む側でも画面の側でもなく、写した後の形に掛ける決まりだからである。
-   画面ごとに書くと、一覧と表とタブの札で「見えている数」が食い違う。 */
+   画面ごとに書くと、一覧と表とタブのラベルで「見えている数」が食い違う。 */
 
 /** ここまでの間に動いていれば、終わっていても出す */
 export const RECENT_MS = 86_400_000;
@@ -25,7 +25,7 @@ export const MAX_VISIBLE_SUBAGENTS = 8;
 
 const isRecent = (iso: string, nowMs: number): boolean => {
   const atMs = Date.parse(iso);
-  // 読めない字は「最近ではない」に倒す。出鱈目な時刻で並びを乱すよりよい
+  // 時刻として読めない文字列は「最近ではない」に倒す。出鱈目な時刻で並びを乱すよりよい
   return Number.isFinite(atMs) && nowMs - atMs < RECENT_MS;
 };
 
@@ -58,7 +58,7 @@ export function visibleSubagents(
   return session.subagents.filter((subagent) => keep.has(subagent));
 }
 
-/** 巣ひとつを 1 点で言い表す。**応答待ちを最優先に見せる** — 稼働は勝手に進む */
+/** プロジェクト 1 つをドット 1 つで言い表す。**応答待ちを最優先に見せる** — 稼働は勝手に進む */
 export function projectDotState(project: ProjectJson): string {
   if (project.sessions.some((session) => session.awaiting === 'user')) return 'input';
   if (project.sessions.some((session) => session.state === 'active')) return 'active';

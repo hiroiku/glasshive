@@ -4,8 +4,8 @@ import {
   type TabSelectionJson,
 } from '~/frameworks/tanstack/ui/derive/tab-selection.ts';
 
-/* 手元だけの組み替え。**覚え書きの中身を決めるのはこちらではない** —
-   ここで確かめるのは、答えが返るまでの見た目が押した通りに動くことだけである。 */
+/* クライアント側だけの組み替え。**`preferences.json` の中身を決めるのはこちらではない** —
+   ここで確かめるのは、レスポンスが返るまでの見た目が押した通りに動くことだけである。 */
 
 const selection = (parts: Partial<TabSelectionJson> = {}): TabSelectionJson => ({
   version: 1,
@@ -15,7 +15,7 @@ const selection = (parts: Partial<TabSelectionJson> = {}): TabSelectionJson => (
   ...parts,
 });
 
-describe('押した手応えを、答えを待たずに見せる', () => {
+describe('押した手応えを、レスポンスを待たずに見せる', () => {
   it('留めると、並びの末尾に足される', () => {
     expect(
       applyTabAction(selection({ pinned: ['-w-a'] }), {
@@ -25,13 +25,13 @@ describe('押した手応えを、答えを待たずに見せる', () => {
     ).toEqual(selection({ pinned: ['-w-a', '-w-b'] }));
   });
 
-  it('留めると、伏せは解ける', () => {
+  it('留めると、非表示は解ける', () => {
     expect(
       applyTabAction(selection({ hidden: ['-w-a'] }), {
         action: 'pin',
         id: '-w-a',
       }),
-      '留めたほうが後の、強い申し出である',
+      '留めたほうが後の、強い操作である',
     ).toEqual(selection({ pinned: ['-w-a'] }));
   });
 
@@ -41,7 +41,7 @@ describe('押した手応えを、答えを待たずに見せる', () => {
         action: 'pin',
         id: '-w-a',
       }).pinned,
-      '留め直しで机の並びが動くと、押した意味が変わる',
+      '留め直しでタブの並びが動くと、押した意味が変わる',
     ).toEqual(['-w-a', '-w-b']);
   });
 
@@ -51,7 +51,7 @@ describe('押した手応えを、答えを待たずに見せる', () => {
         action: 'unpin',
         id: '-w-a',
       }),
-      '外すのは机の上から下ろすことで、一覧から消すことではない',
+      '外すのはタブの並びから下ろすことで、一覧から消すことではない',
     ).toEqual(selection({ pinned: ['-w-b'] }));
   });
 
@@ -82,9 +82,9 @@ describe('押した手応えを、答えを待たずに見せる', () => {
       }).pinned,
     ).toEqual(['-w-b', '-w-a']);
 
-    /* **負の落とし先は 0 で丸める。** そのまま差し込む役へ渡すと、負の数は末尾から数えた
-       場所と読まれる。留めたものが 2 つまでの組では丸めても丸めなくても同じ並びになるので、
-       3 つで見る — ここが緩むと、手元の見た目だけが向こう側と違う場所へ動く。 */
+    /* **負の落とし先は 0 で丸める。** そのまま `splice` へ渡すと、負の数は末尾から数えた
+       位置と読まれる。留めたものが 2 つまでの組では丸めても丸めなくても同じ並びになるので、
+       3 つで見る — ここが緩むと、クライアント側の見た目だけがサーバーと違う位置へ動く。 */
     expect(
       applyTabAction(selection({ pinned: ['-w-a', '-w-b', '-w-c'] }), {
         action: 'move',
@@ -101,21 +101,21 @@ describe('押した手応えを、答えを待たずに見せる', () => {
         id: '-w-x',
         toIndex: 0,
       }).pinned,
-      '並べ替えという操作が選びを増やすと、押していないものが机に載る',
+      '並べ替えという操作がタブの選択を増やすと、押していないものがタブの並びに載る',
     ).toEqual(['-w-a']);
   });
 
-  it('前の写しを書き換えない', () => {
+  it('前のコピーを書き換えない', () => {
     /* **動かせば並びが変わる組で見る。** 動かしても同じ並びに戻る組(留めたものが 1 つだけ、
-       落とし先が今いる場所)で見ると、その場で書き換えていても写しは元のままに見え、
-       この検査は何も確かめないことになる。 */
+       落とし先が今いる場所)で見ると、その場で書き換えていてもコピーは元のままに見え、
+       このテストは何も確かめないことになる。 */
     const previous = selection({ pinned: ['-w-a', '-w-b'], hidden: ['-w-c'] });
 
     applyTabAction(previous, { action: 'pin', id: '-w-c' });
     applyTabAction(previous, { action: 'unpin', id: '-w-a' });
     applyTabAction(previous, { action: 'move', id: '-w-a', toIndex: 1 });
 
-    expect(previous, '前の写しを書き換えると、置けなかったときに戻す先が無くなる').toEqual(
+    expect(previous, '前のコピーを書き換えると、置けなかったときに戻す先が無くなる').toEqual(
       selection({ pinned: ['-w-a', '-w-b'], hidden: ['-w-c'] }),
     );
   });

@@ -8,9 +8,9 @@ import { serveShell, serveStatic } from './static.js';
 
 const LISTEN_ADDRESS = '127.0.0.1';
 
-/* 束ね役が答える道。ここに来た求めだけを渡し、それ以外は資産か画面の器で返す。
-   配りものの側の振る舞いに任せず、こちらで決める — 任せると、版が変わった日に
-   どの道が誰の担当かが黙って入れ替わる。 */
+/* サーバーバンドルが答えるパスの接頭辞。ここに来たリクエストだけを渡し、それ以外は静的ファイルか
+   HTML シェルで返す。フレームワーク側の既定の振る舞いに任せず、こちらで決める —
+   任せると、バージョンが変わった日にどのパスが誰の担当かが黙って入れ替わる。 */
 const HANDLED_PREFIXES = ['/api/', '/_serverFn'] as const;
 
 interface ServerEntry {
@@ -23,7 +23,7 @@ function openBrowser(url: string): void {
   try {
     spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
   } catch {
-    /* 開けなくても致命ではない。番地は下に出してある */
+    /* ブラウザーを開けなくても致命ではない。URL は下に出してある */
   }
 }
 
@@ -31,8 +31,8 @@ export async function launch(args: Args): Promise<http.Server> {
   const clientDir = fileURLToPath(new URL('../client', import.meta.url));
   const entryUrl = new URL('../server/server.js', import.meta.url).href;
 
-  /* 設定は環境変数で渡す。起動口は tsc で別に組むので、束ね役とは別の実体になり、
-     変数を直接渡す道が無い。 */
+  /* 設定は環境変数で渡す。ランチャーは `tsc` で別にビルドされてサーバーバンドルとは
+     別の実体になるので、変数を直接渡す手段が無い。 */
   process.env.GLASSHIVE_ACTIVE_THRESHOLD_MS = String(Math.round(args.activeThresholdSecs * 1000));
   if (args.configDir !== undefined) process.env.GLASSHIVE_CONFIG_DIR = args.configDir;
 

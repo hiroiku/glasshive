@@ -1,11 +1,12 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-/* 会話の窓の遡り。**「もっと前」は必ず前へ進まなければならない。**
+/* 会話の読み取り範囲の遡り。**「もっと前」は必ず前へ進まなければならない。**
 
-   正本の 1 行は長い。道具に渡した入力や道具が返した中身がそのまま 1 行に入るので、
-   一歩ぶん(256KiB)より長い行が実際に在る。その一歩に行の頭が 1 つも無いと頁は空で返り、
-   読み始めた位置を窓の始まりとして覚えると、以後そのボタンは同じ範囲を永久に読み直す。 */
+   `transcript` の 1 行は長い。ツールに渡した入力やツールが返した中身がそのまま 1 行に
+   入るので、一歩ぶん(256KiB)より長い行が実際に在る。その一歩に行の頭が 1 つも無いと
+   ページは空で返り、読み始めた位置を読み取り範囲の先頭として覚えると、以後そのボタンは
+   同じ範囲を永久に読み直す。 */
 
 const { fetchConversation } = vi.hoisted(() => ({ fetchConversation: vi.fn() }));
 
@@ -36,7 +37,7 @@ beforeEach(() => {
 describe('もっと前を読む', () => {
   it('一歩で何も読めなくても、次の一歩へ進む', async () => {
     fetchConversation
-      // 末尾の窓
+      // 末尾の読み取り範囲
       .mockResolvedValueOnce(page(1_000_000, 1_000_100, [event]))
       // 一歩目。範囲がまるごと 1 行の中に入り、行の頭が 1 つも無い
       .mockResolvedValueOnce(page(1_000_000, 1_000_000, []))
@@ -88,8 +89,8 @@ describe('もっと前を読む', () => {
     expect(asked().slice(1)).toEqual([[0, 200_000]]);
   });
 
-  /* 読みに行けなかったことを、空の会話で表さない。 */
-  it('読めなかったら、読めなかったと言う', async () => {
+  /* 観測できなかったことを、空の会話で表さない。 */
+  it('観測できなかったら、観測できなかったと言う', async () => {
     fetchConversation.mockResolvedValueOnce({
       ok: true,
       body: {

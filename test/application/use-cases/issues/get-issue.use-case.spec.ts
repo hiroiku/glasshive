@@ -7,9 +7,9 @@ import {
   type IssueRecord,
 } from '~/application/use-cases/issues/get-issue.use-case.ts';
 
-/* 台帳の字から 1 件を引き当てるのはここである、ということを固定する。
-   当たりの見付け方そのものは domain の検査が持つ。ここで見るのは、無かったことを
-   どう言うかである — 台帳ごと無いのと、その課題だけが無いのは別の答えになる。 */
+/* 台帳のテキストから 1 件を引き当てるのはここである、ということを固定する。
+   当たりの見付け方そのものは domain のテストが持つ。ここで見るのは、無かったことを
+   どう言うかである — 台帳ごと無いのと、その課題だけが無いのは別の結果になる。 */
 
 const RECORD = {
   _type: 'issue',
@@ -32,7 +32,7 @@ function ledgerOf(text: Observation<string>): IssueLedgerRepository & { asked: s
   };
 }
 
-/** 断りようのない求めなので、受理されたことを確かめてから中身を見る */
+/** 断りようのない呼び出しなので、受理されたことを確かめてから中身を見る */
 async function observe(
   ledger: IssueLedgerRepository,
   id = 'x-1',
@@ -41,7 +41,7 @@ async function observe(
     projectPath: '/nest',
     id,
   });
-  if (!result.ok) throw new Error('1 件の求めは断られない');
+  if (!result.ok) throw new Error('1 件の呼び出しは断られない');
   return result.value;
 }
 
@@ -54,12 +54,12 @@ describe('課題 1 件を引く', () => {
     });
   });
 
-  it('尋ねられた巣の場所を、そのまま口へ渡す', async () => {
+  it('尋ねられたプロジェクトのパスを、そのままポートへ渡す', async () => {
     const ledger = ledgerOf(observed(LEDGER));
     await observe(ledger);
     expect(
       ledger.asked,
-      '別の場所の台帳から引いた課題を、尋ねられた巣の課題として返さない',
+      '別のパスの台帳から引いた課題を、尋ねられたプロジェクトの課題として返さない',
     ).toEqual(['/nest']);
   });
 
@@ -67,23 +67,23 @@ describe('課題 1 件を引く', () => {
     const observation = await observe(ledgerOf(observed(LEDGER)), 'x-9');
     expect(
       observation,
-      '台帳ごと無いのと同じ答えにすると、bd を使っていない巣と課題を消した巣が見分けられない',
+      '台帳ごと無いのと同じ結果にすると、bd を使っていないプロジェクトと課題を消したプロジェクトが見分けられない',
     ).toEqual({ kind: 'absent', reason: 'empty' });
   });
 
   it('台帳が無ければ、元が無いこととして返す', async () => {
     const observation = await observe(ledgerOf(absent('no-source')));
-    expect(observation, '見に行けたうえで無かったのとは、別の事実である').toEqual({
+    expect(observation, '観測できたうえで無かったのとは、別の事実である').toEqual({
       kind: 'absent',
       reason: 'no-source',
     });
   });
 
-  it('見に行けなかったことを、「そんな課題は無い」に潰さない', async () => {
+  it('観測できなかったことを、「そんな課題は無い」に潰さない', async () => {
     const error = new UnexpectedError('台帳を読めなかった');
     const observation = await observe(ledgerOf(unobservable(error)));
 
-    if (observation.kind !== 'unobservable') throw new Error('読めなさが消えている');
-    expect(observation.error, '言い分をそのまま外まで運ぶ').toBe(error);
+    if (observation.kind !== 'unobservable') throw new Error('観測できなかったことが消えている');
+    expect(observation.error, 'エラーをそのまま外まで運ぶ').toBe(error);
   });
 });

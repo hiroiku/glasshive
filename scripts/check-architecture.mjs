@@ -1,20 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/* 道の形では防げない決まりを見る。
+/* `tsconfig` の `paths` では防げない決まりを検証する。
 
-   層をまたぐ import は、層ごとの tsconfig が道を引いていないので組み立てが落ちる。
-   ここで見るのはそれ以外 — 同じ層の中で守るべきこと、置き場と名前の噛み合い、
-   検査が鏡像から外れていないか。
+   層をまたぐ `import` は、層ごとの `tsconfig` が `paths` を通していないのでビルドが落ちる。
+   ここで検証するのはそれ以外 — 同じ層の中で守るべきこと、ディレクトリ名とファイル名の
+   噛み合い、テストが `src` を写した構造から外れていないか。
 
-   どれも「気付かないまま崩れていく」たぐいの決まりである。人の目で見張る代わりに、
-   機械が毎回見る。 */
+   どれも気付かないまま崩れていくたぐいの決まりなので、レビューで見つける前提にせず、
+   CI が毎回検証する。 */
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const SRC = path.join(ROOT, 'src');
 const TEST = path.join(ROOT, 'test');
 
-/** 層と、その層が直接見てよい層。tsconfig の paths と同じ表を、こちらでも持つ */
+/** 層と、その層が直接 `import` してよい層。層ごとの `tsconfig` の `paths` と同じ表を、こちらでも持つ */
 const LAYERS = {
   'app-kernel': [],
   domain: ['app-kernel'],
@@ -22,11 +22,11 @@ const LAYERS = {
   interface: ['app-kernel', 'application'],
   infrastructure: ['app-kernel', 'application'],
   frameworks: ['app-kernel', 'interface', 'composition'],
-  // 枠組みは見ない — 枠組みがこちらを使う側なので、見ると輪になる
+  // `frameworks` は `import` しない — `frameworks` が `composition` を使う側なので、循環する
   composition: ['app-kernel', 'domain', 'application', 'interface', 'infrastructure'],
 };
 
-/** 種類のディレクトリ名と、そこに置くファイルの接尾辞 */
+/** 種類ごとのディレクトリ名と、そこに置くファイル名の接尾辞 */
 const KIND_SUFFIX = {
   entities: 'entity',
   'value-objects': 'value-object',
@@ -52,15 +52,15 @@ function walk(dir, out = []) {
   return out;
 }
 
-/** import されている名前を全部拾う。type だけの import も同じ道である */
+/** `import` されている名前を全部拾う。`import type` だけの参照も同じ依存として数える */
 function specifiersOf(text) {
   const found = [];
   for (const match of text.matchAll(/(?:from|import)\s*\(?\s*'([^']+)'/g)) found.push(match[1]);
   return found;
 }
 
-/* import の行き先を、層の名前に解く。
-   `~/` でも相対でも、最後は src からの位置で決まる。 */
+/* `import` の行き先を、層の名前に解決する。
+   `~/` でも相対パスでも、最後は `src` からの位置で決まる。 */
 function targetLayerOf(file, specifier) {
   if (specifier.startsWith('~/')) return specifier.slice(2).split('/')[0];
   if (!specifier.startsWith('.')) return null;
@@ -69,15 +69,16 @@ function targetLayerOf(file, specifier) {
   return path.relative(SRC, resolved).split(path.sep)[0];
 }
 
-/* bounded context の名前。層ごとに深さが違う。
+/* bounded context の名前。層ごとにディレクトリの深さが違う。
 
-   種類の置き場の直下に在るものは、どの境目にも属さない
-   (境目をまたいで使う写しなど)。そこはファイル名を境目と読み違えないよう `null` を返す。 */
+   種類ごとのディレクトリの直下に在るものは、どの bounded context にも属さない
+   (bounded context をまたいで使う共通の型など)。そこはファイル名を bounded context の
+   ディレクトリ名と読み違えないよう `null` を返す。 */
 function contextOf(file) {
   const parts = path.relative(SRC, file).split(path.sep);
   const [layer, ...rest] = parts;
   const depth = layer === 'application' && rest[0] === 'ports' ? 3 : 2;
-  // 末尾の 1 つはファイル名。それより浅ければ境目のディレクトリを持っていない
+  // 末尾の 1 つはファイル名。それより浅ければ bounded context のディレクトリを持っていない
   return rest.length > depth ? (rest[depth - 1] ?? null) : null;
 }
 
@@ -101,7 +102,7 @@ for (const file of walk(SRC)) {
   }
 
   const isSpec = /\.spec\.tsx?$/.test(file);
-  if (isSpec) report(file, '検査は /src に置かない。/test の鏡像へ移すこと');
+  if (isSpec) report(file, 'テストは /src に置かない。`src` を写した /test へ移すこと');
 
   const text = fs.readFileSync(file, 'utf8');
   const allowed = LAYERS[layer];
@@ -114,8 +115,8 @@ for (const file of walk(SRC)) {
     }
   }
 
-  /* domain は bounded context をまたがない。またぐ調整は application の仕事である。
-     同じ層の中なので道は通ってしまう — ここでしか止められない。 */
+  /* `domain` は bounded context をまたがない。またぐ調整は `application` の仕事である。
+     同じ層の中の `import` なので `tsconfig` の `paths` では止まらない — ここでしか止められない。 */
   if (layer === 'domain') {
     const own = contextOf(file);
     for (const specifier of specifiersOf(text)) {
@@ -130,7 +131,7 @@ for (const file of walk(SRC)) {
     }
   }
 
-  // 置き場の名前と、ファイルの接尾辞が噛み合っているか
+  // ディレクトリ名と、ファイル名の接尾辞が噛み合っているか
   const kind = layer === 'application' && parts[1] === 'ports' ? parts[2] : parts[1];
   const suffix = KIND_SUFFIX[kind];
   const name = parts.at(-1);
@@ -151,7 +152,7 @@ for (const file of walk(SRC)) {
 for (const file of walk(TEST)) {
   const parts = path.relative(TEST, file).split(path.sep);
   const layer = parts[0];
-  // 層に紐づかない検査は鏡像の外に置く。そちらは層の決まりを負わない
+  // 層に紐づかないテストは `src` を写した構造の外に置く。そちらは層の決まりを負わない
   if (!(layer in LAYERS)) continue;
 
   const text = fs.readFileSync(file, 'utf8');

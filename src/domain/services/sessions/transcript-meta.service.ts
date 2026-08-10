@@ -1,11 +1,13 @@
-/* 正本の頭と尻から、そのセッションの見出しを導き出す。
+/* `transcript` の先頭と末尾から、そのセッションのメタ情報を導き出す。
 
-   ここにファイルの読み方は無い。頭と尻の字だけを受け取って、字と真偽を返す。
-   どこまで読むかは外側の決め事で、読めた字からの導き方はどちらの窓でも変わらないからである。
+   ここにファイルの読み方は無い。先頭と末尾のテキストだけを受け取って、文字列と真偽を返す。
+   どこまで読むかは外側の決め事で、読めたテキストからの導き方は読み取り範囲が変わっても
+   同じだからである。
 
-   走る順は「頭の行、続けて尻の行」の 1 本。先に見えたものを採る欄(題・作業場所・起点)と、
-   後に見えたものを採る欄(枝・モデル・エフォート・いま何をしているか)が混ざっているので、
-   この順を崩すと値が変わる。題だけは例外で、道具が付けた題があれば走り終えてから被せる。 */
+   走る順は「先頭の行、続けて末尾の行」の 1 本。先に見えたものを採る欄(題・作業ディレクトリ・
+   開始時刻)と、後に見えたものを採る欄(ブランチ・モデル・エフォート・いま何をしているか)が
+   混ざっているので、この順を崩すと値が変わる。題だけは例外で、Claude Code が付けた題が
+   あれば走り終えてから被せる。 */
 
 import {
   asArray,
@@ -33,13 +35,13 @@ import {
   truncateChars,
 } from '~/domain/value-objects/sessions/text-limit.value-object.ts';
 
-/** 道具の名前が読めなかったときの呼び名 */
+/** ツール名が読めなかったときの既定の名前 */
 const TOOL_FALLBACK_NAME = 'tool';
 
-/** 道具の呼び出しから「何をしているか」を示す一言を探す欄と、その順 */
+/** ツールの呼び出しから「何をしているか」を示す一言を探す欄と、その順 */
 const SNIPPET_KEYS = ['description', 'command', 'file_path', 'prompt', 'query', 'pattern'] as const;
 
-/** 道具の結果を受け取った直後の様子。この行には assistant のような手掛かりが無い */
+/** ツールの結果を受け取った直後の状態。この行には assistant のような手掛かりが無い */
 const TOOL_RESULT_CURRENT = 'received tool result';
 
 export interface SessionMeta {
@@ -64,17 +66,17 @@ export interface SubagentMeta {
   readonly model: string | null;
   readonly effort: string | null;
   readonly current: string | null;
-  /** 取り組んでいる課題。cwd 1 本から導く */
+  /** 取り組んでいる課題。cwd 1 つから導く */
   readonly issue: string | null;
 }
 
-/** イベントの中身の塊。並びでないときは無い */
+/** イベントの中身のブロック。並びでないときは無い */
 function messageBlocks(record: JsonRecord): readonly unknown[] | undefined {
   const message = asRecord(record, 'message');
   return message === undefined ? undefined : asArray(message, 'content');
 }
 
-/** 中身が字で書かれていることもあるので、並びに縛らず素のまま返す */
+/** 中身が文字列で書かれていることもあるので、並びに縛らず素のまま返す */
 function messageContent(record: JsonRecord): unknown {
   const message = asRecord(record, 'message');
   return message === undefined ? undefined : message.content;
@@ -84,9 +86,9 @@ function hasToolResult(blocks: readonly unknown[] | undefined): boolean {
   return (blocks ?? []).some((block) => asString(block, 'type') === 'tool_result');
 }
 
-/* 種別の欄が中身を持っている塊か。字であるかまでは問わない —
-   知らない種別で書かれた塊も「そこで話が終わっている」ことに変わりはなく、
-   飛ばして手前を見に行くと、より古い塊を末尾と取り違える。 */
+/* 種別の欄が中身を持っているブロックか。文字列であるかまでは問わない —
+   知らない種別で書かれたブロックも「そこで話が終わっている」ことに変わりはなく、
+   飛ばして手前を見に行くと、より古いブロックを末尾と取り違える。 */
 function hasBlockType(block: unknown): boolean {
   if (typeof block !== 'object' || block === null) return false;
   return Boolean((block as JsonRecord).type);
@@ -94,7 +96,7 @@ function hasBlockType(block: unknown): boolean {
 
 /* user のイベントから、人が書いた一言を取り出す。
 
-   道具の包みや差し込まれた注意書きは人の言葉ではないので、`<` で始まる行と
+   ツールの出力や差し込まれた注意書きは人の言葉ではないので、`<` で始まる行と
    `Caveat:` で始まる行は飛ばし、残った最初の行を題とする。 */
 export function deriveUserTitle(record: JsonRecord): string | undefined {
   const content = messageContent(record);
@@ -113,15 +115,15 @@ export function deriveUserTitle(record: JsonRecord): string | undefined {
   return line === undefined ? undefined : truncateChars(line, TITLE_MAX_CHARS);
 }
 
-/** 道具が付けた題。人の発話より後に決まるので、これが在れば題はこちらになる */
+/** Claude Code が付けた題。人の発話より後に決まるので、これが在れば題はこちらになる */
 export function deriveAiTitle(record: JsonRecord): string | undefined {
   return asString(record, 'aiTitle');
 }
 
 /* assistant のイベントから「いま何をしているか」の短い言葉を作る。
 
-   塊は後ろから見る。最後の塊がその時点での様子だからである。
-   道具でも本文でも考えでもない塊は様子を語らないので、飛ばして更に手前を見る。 */
+   ブロックは後ろから見る。最後のブロックがその時点での状態だからである。
+   ツールでも本文でも thinking でもないブロックは状態を語らないので、飛ばして更に手前を見る。 */
 export function deriveCurrentActivity(record: JsonRecord): string | undefined {
   const blocks = messageBlocks(record);
   if (blocks === undefined) return undefined;
@@ -172,7 +174,7 @@ export function classifyLastEvent(record: JsonRecord): LastEventShape | null {
   return null;
 }
 
-/** 頭のあとに尻を、1 本の並びとして辿る */
+/** 先頭のあとに末尾を、1 本の並びとして辿る */
 function* headThenTail(head: string, tail: string): Generator<JsonRecord> {
   yield* parseJsonlLines(head);
   yield* parseJsonlLines(tail);
@@ -195,14 +197,14 @@ export function parseSessionMeta(head: string, tail: string): SessionMeta {
 
     const type = asString(record, 'type');
     if (type === 'user' || type === 'assistant') {
-      /* 作業場所と起点は同じ行から採る。両者が食い違うと、どこで何時に始まったのかが
-         繋がらなくなる。欄は在るのに字でない行では作業場所が決まらないので、
-         次の行でまた試す。 */
+      /* 作業ディレクトリと開始時刻は同じ行から採る。両者が食い違うと、どこで何時に
+         始まったのかが繋がらなくなる。欄は在るのに文字列でない行では作業ディレクトリが
+         決まらないので、次の行でまた試す。 */
       if (cwd === undefined && hasKey(record, 'cwd')) {
         cwd = asString(record, 'cwd');
         startedRaw = asString(record, 'timestamp');
       }
-      // 枝はセッションの途中で切り替わるので、最後に見えたものが現在地
+      // ブランチはセッションの途中で切り替わるので、最後に見えたものが現在の値
       const branch = asString(record, 'gitBranch');
       if (branch !== undefined) gitBranch = branch;
     }
@@ -224,11 +226,11 @@ export function parseSessionMeta(head: string, tail: string): SessionMeta {
     }
   }
 
-  // 道具が付けた題は最初の発話より後に決まるので、全部を辿り終えてから被せる
+  // Claude Code が付けた題は最初の発話より後に決まるので、全部を辿り終えてから被せる
   if (aiTitle !== undefined) title = aiTitle;
 
-  /* 名乗りは頭だけから拾い、課題は頭と尻の両方から拾う。
-     名乗りはセッションの始めに一度だけ差し込まれ、課題は途中で増えるからである。 */
+  /* actor の id は先頭だけから拾い、課題は先頭と末尾の両方から拾う。
+     actor の id はセッションの始めに一度だけ差し込まれ、課題は途中で増えるからである。 */
   const issues = scanWorktreeMentions(head);
   for (const issue of scanWorktreeMentions(tail)) {
     if (!issues.includes(issue)) issues.push(issue);
@@ -249,13 +251,13 @@ export function parseSessionMeta(head: string, tail: string): SessionMeta {
   };
 }
 
-/* 子の見出しを導き出す。
+/* サブエージェントのメタ情報を導き出す。
 
-   親と違って、頭は行の途中で切れていてよい。切れた行は読めないので落ちるだけで、
+   親と違って、先頭は行の途中で切れていてよい。切れた行は読めないので落ちるだけで、
    欲しいものは先頭の数行に揃っている。
 
-   `tail` は稼働している子のときだけ渡す。止まっている子には null を渡す —
-   モデルもエフォートも委譲のときに決まるので、頭を読めば足りる。 */
+   `tail` は稼働しているサブエージェントのときだけ渡す。止まっているものには null を渡す —
+   モデルもエフォートも委譲のときに決まるので、先頭を読めば足りる。 */
 export function parseSubagentMeta(head: string, tail: string | null): SubagentMeta {
   let startedRaw: string | undefined;
   let cwd: string | undefined;
@@ -264,7 +266,7 @@ export function parseSubagentMeta(head: string, tail: string | null): SubagentMe
   let effort: string | undefined;
   let current: string | undefined;
 
-  // 子の起点は先頭の 1 行に在る。委譲された時点の作業場所と枝もここで決まる
+  // サブエージェントの開始時刻は先頭の 1 行にある。委譲された時点の作業ディレクトリとブランチもここで決まる
   const first = parseFirstJsonLine(head);
   if (first !== undefined) {
     cwd = asString(first, 'cwd');
@@ -284,7 +286,7 @@ export function parseSubagentMeta(head: string, tail: string | null): SubagentMe
   }
 
   if (tail !== null) {
-    // 動いている子は途中で切り替わりうるので、末尾で見えたもので上書きする
+    // 動いているサブエージェントは途中で切り替わりうるので、末尾で見えたもので上書きする
     for (const record of parseJsonlLines(tail)) {
       const branch = asString(record, 'gitBranch');
       if (branch !== undefined) gitBranch = branch;
@@ -305,8 +307,8 @@ export function parseSubagentMeta(head: string, tail: string | null): SubagentMe
     model: model ?? null,
     effort: effort ?? null,
     current: current ?? null,
-    /* 子が取り組んでいる課題は、本文ではなく作業場所の字面から引く。
-       委譲された子は割り当てられた作業場所の中だけで動くので、そこに答えが出ている。 */
+    /* サブエージェントが取り組んでいる課題は、本文ではなく作業ディレクトリのパスから引く。
+       委譲されたサブエージェントは割り当てられた `worktree` の中だけで動くので、そこに答えが出ている。 */
     issue: cwd ? (scanWorktreeMentions(cwd)[0] ?? null) : null,
   };
 }

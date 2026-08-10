@@ -3,11 +3,12 @@ import type {
   ChangeMessage,
 } from '~/application/services/sessions/change-broadcast.service.ts';
 
-/* 動いたという合図を、開いたままの道で配る。
+/* 変更通知を、開いたままの接続で配る。
 
-   形は旧実装のまま(先頭に `: connected`、15 秒ごとに `: keep-alive`)。ブラウザーの
-   EventSource は切れたら自分で繋ぎ直すので、切断の面倒はこちらで持たなくてよい。
-   その代わり、**去った相手の見張りを必ず外す** のはこちらの責任である。 */
+   流すのは SSE のコメント行で、繋がった直後に `: connected`、以降 15 秒ごとに
+   `: keep-alive` を送る。ブラウザーの `EventSource` は切れたら自分で繋ぎ直すので、
+   再接続の面倒はこちらで持たなくてよい。その代わり、**切断したクライアントの
+   リスナーを必ず外す** のはこちらの責任である。 */
 
 const KEEPALIVE_MS = 15_000;
 
@@ -30,7 +31,7 @@ export function openChangeStream(broadcast: ChangeBroadcastService, signal: Abor
         }
       };
 
-      // 繋がったことを先に言う。最初の一言が出るまで、観る人には「止まっている」のと同じ
+      // 繋がったことを先に言う。最初の 1 行が出るまで、ユーザーには「止まっている」のと同じ
       send(': connected\n\n');
 
       const unsubscribe = broadcast.subscribe((message: ChangeMessage) => {

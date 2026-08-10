@@ -1,4 +1,4 @@
-// frameworks は interface の窓と composition の組み立てだけを見る。**application へは道が無い。**
+// `frameworks` は `interface` のコントローラーと `composition` の組み立てだけを見る。**`application` は `import` できない。**
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {

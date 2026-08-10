@@ -4,9 +4,9 @@ import { laneColor } from '../../palette.ts';
 /* どのモデルがどれだけ使ったか。
 
    表として列を揃えるのは、行ごとに並べると桁がずれて比べられなくなるからである。
-   `.sf-mrow` は `display: contents` で親の列へ直に流し込む — **包みを増やさない。** */
+   `.sf-mrow` は `display: contents` で親の列へ直に流し込む — **ラッパーを増やさない。** */
 
-/** 名前を出す上限。それより下は数だけ添える */
+/** 名前を出す行数の上限。それより下は件数だけ添える */
 const NAMED_ROWS = 4;
 
 export function ByModelPanel({

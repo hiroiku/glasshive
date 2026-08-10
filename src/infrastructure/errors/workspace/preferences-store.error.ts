@@ -1,21 +1,21 @@
 import { AppError } from '~/app-kernel/error.ts';
 
-/* 覚え書きを置く場所にまつわる誤り。
+/* `preferences.json` を置く場所にまつわるエラー。
 
-   この道具は観測元に一切書き込まない。**唯一の書き込みが覚え書きである。**
-   だから「書かないと決めた場所を指していた」ことを、独立した名札で外へ出す。 */
+   glasshive は観測元に一切書き込まない。**唯一の書き込みが `preferences.json` である。**
+   だから「書かないと決めたパスを指していた」ことを、独立したエラーコードで外へ出す。 */
 
-/** 書いてよい場所ではなかったので断った。もう一度求めても、置き場を変えるまでは同じ */
+/** 書いてよいパスではなかったので断った。もう一度求めても、保存先を変えるまでは同じ */
 export class PreferencesRefusedError extends AppError {
   readonly code = 'preferences.refused';
 }
 
-/** 断ってはいないが、置けなかった。権利が無い、書き込む余地が無い、など */
+/** 断ってはいないが、置けなかった。権限が無い、書き込む余地が無い、など */
 export class PreferencesWriteError extends AppError {
   readonly code = 'preferences.unwritable';
 }
 
-/** 覚え書きを読みに行けなかった。無かったのではない */
+/** `preferences.json` を読みに行けなかった。無かったのではない */
 export class PreferencesReadError extends AppError {
   readonly code = 'preferences.unreadable';
 }

@@ -16,12 +16,13 @@ import {
   presentRefDetail,
 } from '~/interface/presenters/git/git.presenter.ts';
 
-/* 記録を読む窓。
+/* `git` を読むコントローラー。
 
-   **場所は受け取らない。** 巣を名指せるのは自分の一覧に出た id だけで、場所はこちらが引く。
-   旧実装はここで任意の絶対パスを受けており、枝の名も題も差分も、尋ねられれば誰にでも渡した。
+   **パスは受け取らない。** プロジェクトを名指せるのは自分の一覧に出た id だけで、
+   パスはこちらが引く。ここで任意の絶対パスを受けると、ブランチ名も題も差分も、
+   尋ねられれば誰にでも渡すことになる。
 
-   指しの字は内側で形を確かめる。**ここでは確かめない** — 二か所で確かめると、
+   `rev` の文字列は内側で形を検証する。ここでは検証しない — 二か所で検証すると、
    片方だけが緩んだときに気付けない。 */
 
 export type GitOverviewResponse = ApiResponse<GitOverviewJson>;
@@ -33,7 +34,7 @@ export interface GitDeps {
   readonly tree: TreeSnapshotService;
 }
 
-/** 名指された巣の、解決済みの場所。引けない id は、形が違うのも一覧に無いのも同じ断り方 */
+/** 名指されたプロジェクトの、解決済みのパス。引けない id は、形が違うのも一覧に無いのも同じ断り方 */
 async function locate(tree: TreeSnapshotService, input: unknown): Promise<Result<string>> {
   const projectId = projectIdOf(input);
   if (!projectId.ok) return err(projectId.error);

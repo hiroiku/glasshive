@@ -1,4 +1,4 @@
-// interface は application の出力だけを見る。**domain へは道が無い。**
+// `interface` は `application` の出力だけを見る。**`domain` は `import` できない。**
 // 内側の形が変わっても、外へ出す形は use-case の出力を通してしか動かない。
 {
   "extends": "../../tsconfig.base.json",

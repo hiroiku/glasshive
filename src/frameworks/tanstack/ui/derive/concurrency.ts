@@ -1,8 +1,9 @@
-/* 同時に何頭が動いていたか。**純関数。**
+/* 同時に動いていたエージェントの数。純関数。
 
-   各エージェント(セッションと子)の稼働の帯を、見せる桶へ落とし、桶ごとに
-   「その間に動いていた頭数」を数える。**同じエージェントの帯が同じ桶に何本重なっても 1 と数える。**
-   数えないと、細かく途切れながら働いた 1 頭が数十頭に見える。 */
+   各エージェント(セッションと子)の稼働区間を、見せるバケットへ落とし、バケットごとに
+   「その間に動いていたエージェントの数」を数える。**同じエージェントの区間が同じバケットに
+   何本重なっても 1 と数える。** そうしないと、細かく途切れながら働いた 1 つのエージェントが
+   数十に見える。 */
 
 export interface ConcurrencyNode {
   readonly state: string;
@@ -26,7 +27,7 @@ export function concurrency(
       if (Number.isFinite(a) && Number.isFinite(b)) intervals.push([a, b]);
     }
     if (intervals.length === 0) continue;
-    // 動いている最後の帯は現在まで伸ばす。伸ばさないと、いま働いている頭が数から漏れる
+    // 動いている最後の区間は現在まで伸ばす。伸ばさないと、いま働いているエージェントが数から漏れる
     if (node.state === 'active') {
       const last = intervals[intervals.length - 1];
       if (last !== undefined) last[1] = nowMs;

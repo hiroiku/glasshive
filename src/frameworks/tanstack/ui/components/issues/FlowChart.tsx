@@ -1,15 +1,15 @@
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import { FLOW_BARS, flowSeries } from '../../derive/issueFlow.ts';
 
-/* 開いている数の面と、閉じた数の累計の線。
+/* 開いている件数の面と、閉じた件数の累計の線。
 
-   **近似だと言い切って出す。** 台帳に遷移の履歴が無いので、閉じた時刻は最後に触られた
-   時刻で代えている。数の動きの向きは読めるが、日ごとの正確な数としては読めない。 */
+   **近似だと言い切って出す。** 台帳に状態遷移の履歴が無いので、閉じた時刻は最後に
+   更新された時刻で代えている。増減の向きは読めるが、日ごとの正確な件数としては読めない。 */
 
-/** 描く座標の高さ。幅は足の数で決まる */
+/** 描画座標の高さ。幅はバーの本数で決まる */
 const HEIGHT = 64;
 
-/** 足 1 本の幅 */
+/** バー 1 本の幅 */
 const BAR_WIDTH = 10;
 
 export function FlowChart({

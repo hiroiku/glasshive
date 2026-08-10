@@ -7,11 +7,12 @@ Thanks for looking. Bug reports, questions, and patches are all welcome —
 
 ```sh
 npm install
-npm run dev     # http://127.0.0.1:4484
+npm run dev     # http://127.0.0.1:4483
 ```
 
-The dev server runs on 4484 so it never collides with a packaged `glasshive` on 4483. Both bind to
-`127.0.0.1` and reject requests whose `Host` header is not local.
+The dev server takes 4483, the same port a packaged `glasshive` uses — one number to remember. If
+4483 is already taken (say you left the packaged build running), Vite steps to the next free port
+and prints it. Both bind to `127.0.0.1` and reject requests whose `Host` header is not local.
 
 To run what users actually get:
 
@@ -90,10 +91,6 @@ Beyond the layers, three ideas carry most of the design:
 - **`ViewerPreferencesRepository` is the only port with a write method.** If you find yourself adding
   a second one, something has gone wrong.
 
-See [ADR 0002](docs/adr/0002-tanstack-start-spa.md) for why TanStack Start in SPA mode with a
-hand-written launcher, and [docs/differences.md](docs/differences.md) for what changed from the
-previous implementation. Both are in Japanese.
-
 ## Tests
 
 | Project | Environment | Covers |
@@ -112,6 +109,13 @@ Two rules are absolute:
 
 Code comments are written in Japanese and explain the *intent* of the code they sit on — not its
 history, not decisions already recorded in an ADR, not provisions for a future that has not arrived.
+
+Japanese here means ordinary Japanese technical prose, and it never means translating the English
+away. Technical terms keep their original spelling in backticks — identifiers, type names, API
+names, filenames, CSS properties and values (`transcript`, `subgrid`, `user-select`, `Observation`)
+— and general vocabulary uses the established katakana loanword (ディレクトリ, パネル, ランチャー,
+バンドラー, ウォッチャー). Do not coin private words or sustained metaphors for things the code
+already names; the Conventions section of [AGENTS.md](AGENTS.md) lists the fixed names.
 
 Everything users see is English: UI strings, `--help`, error messages that reach a screen or a
 terminal. `test/contracts/ui-language.spec.ts` strips comments and fails if Japanese shows up in a

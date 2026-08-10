@@ -6,27 +6,27 @@ import type {
 } from '~/application/use-cases/sessions/read-conversation.use-case.ts';
 import type { ObservationState } from '~/interface/presenters/sessions/tree.presenter.ts';
 
-/* 会話 1 頁を、外の道が読む形へ写す。
+/* 会話 1 ページを、外部 API が読む形へ写す。
 
-   バイトの位置をそのまま外へ出すのは、次の頁を求めるのが観る側だからである。
-   位置を隠すと、追記され続ける正本を同じ場所から読み直す手立てが無くなる。 */
+   バイトの位置をそのまま外へ出すのは、次のページを求めるのがクライアントだからである。
+   位置を隠すと、追記され続ける `transcript` を同じ場所から読み直す手立てが無くなる。 */
 
 export interface BlockJson {
   kind: ConversationBlock['kind'];
-  /** 道具の名前。名前を持たない塊では `null` */
+  /** ツールの名前。名前を持たないブロックでは `null` */
   name: string | null;
   text: string;
 }
 
 export interface EventJson {
   role: ConversationEvent['role'];
-  /** 正本に書かれていた字面そのまま */
+  /** `transcript` に書かれていた表記そのまま */
   ts: string | null;
   blocks: BlockJson[];
 }
 
 export interface EventPageJson {
-  /** 読めたか。**読めなかったことを空の頁で表さない** */
+  /** 読めたか。**読めなかったことを空のページで表さない** */
   state: ObservationState;
   reason: string | null;
   /** 実際に読み始めた位置。行の頭へ揃えた後の値 */
@@ -50,10 +50,11 @@ const presentEvent = (event: ConversationEvent): EventJson => ({
   blocks: event.blocks.map(presentBlock),
 });
 
-/* 見に行けたが無かった正本は、位置の無い空の頁にする。
+/* 観測はできたが無かった `transcript` は、位置の無い空のページにする。
 
-   0 を置くのは、そこから先を求める道が無いことを示すためである。`eof: true` と併せると、
-   観る側は「もう読むものが無い」と読む — 実際そのとおりで、消えた正本には続きが無い。 */
+   0 を置くのは、そこから先を求める手立てが無いことを示すためである。`eof: true` と
+   併せると、クライアントは「もう読むものが無い」と読む — 実際そのとおりで、
+   消えた `transcript` には続きが無い。 */
 export function presentConversation(page: Observation<ConversationPage>): EventPageJson {
   if (page.kind !== 'observed') {
     return {

@@ -14,24 +14,24 @@ import {
 } from '~/application/ports/integrations/git/git-command.integration.ts';
 import { GitCommandError } from '~/infrastructure/errors/git/git-command.error.ts';
 
-/* 記録を読む道具を、読み取りだけで起こす。何にも書き込まない。
+/* `git` を、読み取りだけで起動する。何にも書き込まない。
 
-   **指しは必ず `--end-of-options` の後ろに置く。** 形の確かめは値の側で済んでいるが、
-   確かめを通った字がいつまでも安全である保証は無い。ここで指定の切れ目を置いておけば、
-   後ろに何が並んでも外の道具の指定にはならない。
+   **リビジョンは必ず `--end-of-options` の後ろに置く。** 形式の検証は値オブジェクトの側で
+   済んでいるが、検証を通った文字列がいつまでも安全である保証は無い。ここでオプションの
+   切れ目を置いておけば、後ろに何が並んでも `git` のオプションにはならない。
 
-   `GIT_OPTIONAL_LOCKS=0` を渡すのは、`diff` や `branch` が索引を書き直すことがあるからで
-   ある。観るだけの道具が観られる側を書き換えては、観測そのものが嘘になる。
+   `GIT_OPTIONAL_LOCKS=0` を渡すのは、`diff` や `branch` がインデックスを書き直すことが
+   あるからである。観るだけの glasshive が観測元を書き換えては、観測そのものが嘘になる。
 
    落ちた理由はここで分ける。ここが errno の見える唯一の場所で、一度潰すと上の層では
    二度と分けられない。 */
 
 const execFileAsync = promisify(execFile);
 
-/** 答えを待つ上限。待ち続けると、画面がひと目ぶんの観測ごと止まる */
+/** 出力を待つ上限。待ち続けると、木の観測ごと画面が止まる */
 const DEFAULT_TIMEOUT_MS = 10_000;
 
-/** 受け皿の大きさ。触ったファイルの一覧は、大きな枝だと数 MiB になる */
+/** バッファの大きさ。触ったファイルの一覧は、大きなブランチだと数 MiB になる */
 const MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 
 export interface GitRunOptions {
@@ -39,18 +39,18 @@ export interface GitRunOptions {
   readonly timeoutMs: number;
 }
 
-/** 起こし方。**落ちたら投げる。** 空文字に均すと、上で理由を分けられなくなる */
+/** 起動の仕方。**落ちたら投げる。** 空文字に潰すと、上で理由を分けられなくなる */
 export type GitRunner = (args: readonly string[], options: GitRunOptions) => Promise<string>;
 
 export interface CliGitCommandOptions {
-  /** 検査で差し替える。既定は node:child_process の execFile を包んだもの */
+  /** テストで差し替える。既定は node:child_process の execFile を包んだもの */
   readonly run?: GitRunner;
   readonly timeoutMs?: number;
 }
 
-/* git は巣の場所を cwd からだけでなく環境からも受け取る。起こした側が `GIT_DIR` を
-   持っていると(git の掛かりや `rebase --exec` の下ではそうなる)、尋ねられた場所とは
-   別の巣の答えが返る。**どの巣を観るかは cwd だけが決める。** */
+/* git はリポジトリのパスを cwd からだけでなく環境変数からも受け取る。起動した側が
+   `GIT_DIR` を持っていると(git のフックや `rebase --exec` の下ではそうなる)、尋ねられた
+   パスとは別のリポジトリの出力が返る。**どのリポジトリを観るかは cwd だけが決める。** */
 const REPOSITORY_SELECTING_VARS = [
   'GIT_DIR',
   'GIT_COMMON_DIR',
@@ -61,7 +61,7 @@ const REPOSITORY_SELECTING_VARS = [
   'GIT_NAMESPACE',
 ] as const;
 
-/** 子に渡す環境。索引の書き直しを止め、巣を選ぶ変数を落とす */
+/** 子プロセスに渡す環境変数。インデックスの書き直しを止め、リポジトリを選ぶ変数を落とす */
 export function childEnv(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...source, GIT_OPTIONAL_LOCKS: '0' };
   for (const name of REPOSITORY_SELECTING_VARS) delete env[name];
@@ -82,8 +82,8 @@ const runGit: GitRunner = async (args, { cwd, timeoutMs }) => {
 const propOf = (error: unknown, key: string): unknown =>
   typeof error === 'object' && error !== null ? (error as Record<string, unknown>)[key] : undefined;
 
-/* execFile は落ち方で誤りの形を変える。起こせなかったときは `code` が errno の字、
-   非ゼロで終わったときは `code` が終わりの番号(数)になる。 */
+/* execFile は落ち方でエラーの形を変える。起動できなかったときは `code` が errno の文字列、
+   非ゼロで終わったときは `code` が終了コード(数値)になる。 */
 const errnoOf = (error: unknown): string | undefined => {
   const code = propOf(error, 'code');
   return typeof code === 'string' ? code : undefined;
@@ -102,10 +102,10 @@ const isDirectory = (candidate: string): boolean =>
 
 /* 落ちた理由を分ける。
 
-   **`ENOENT` と `ENOTDIR` は二つの意味を持つ。** 道具が手元に無いときと、起こす場所が
-   場所でないとき(消えた・ファイルだった)で同じ errno が返る。前者はすべてのリポジトリが
-   観られない話(503)、後者はその巣がもう無いだけの話(200 と「無い」)なので、場所を
-   確かめて分ける。 */
+   **`ENOENT` と `ENOTDIR` は二つの意味を持つ。** `git` がインストールされていないときと、
+   起動する cwd がディレクトリでないとき(消えた・ファイルだった)で同じ errno が返る。
+   前者はすべてのリポジトリが観られない話(503)、後者はそのリポジトリがもう無いだけの話
+   (200 と「無い」)なので、cwd を確かめて分ける。 */
 function classifyFailure(error: unknown, request: GitCommandRequest): Observation<never> {
   const details = { command: ['git', ...request.args].join(' ') };
   const errno = errnoOf(error);
@@ -141,7 +141,7 @@ function classifyFailure(error: unknown, request: GitCommandRequest): Observatio
     return unobservable(
       new GitCommandError('git exited non-zero', GIT_EXIT_NONZERO, {
         cause: error,
-        // 言い分を捨てない。なぜ非ゼロだったのかは、ここにしか残らない
+        // `stderr` を捨てない。なぜ非ゼロだったのかは、ここにしか残らない
         details: {
           ...details,
           status,
@@ -153,9 +153,10 @@ function classifyFailure(error: unknown, request: GitCommandRequest): Observatio
 
   /* 説明の付かない落ち方。ここに来るものは、たいてい直すべき穴である。
 
-     **言い分は自分で書く。** 投げられた誤りの字には errno も stderr も混ざっていて、
-     それは外へ出す包みの `message` にそのまま載る。ここが errno の見える最後の場所で、
-     渡してしまえば外の道へ漏れる。証跡は `details` に置いて内側に留める。 */
+     **メッセージは自分で書く。** 投げられたエラーの `message` には errno も stderr も
+     混ざっていて、それは外へ出すレスポンスの `message` にそのまま載る。ここが errno の
+     見える最後の場所で、渡してしまえば外部 API へ漏れる。証跡は `details` に置いて
+     内側に留める。 */
   return unobservable(
     new UnexpectedError('git failed in a way we cannot explain', {
       cause: error,
@@ -177,13 +178,13 @@ export function createCliGitCommandIntegration(
 
   return {
     async run(request) {
-      /* 巣の場所が絶対の道でなければ起こさない。相対の名や空の字を渡すと、git は
-         この道具自身の居場所で動き、尋ねられていない巣の答えを持って帰ってくる。 */
+      /* リポジトリのパスが絶対パスでなければ起動しない。相対パスや空文字列を渡すと、git は
+         glasshive 自身の cwd で動き、尋ねられていないリポジトリの出力を持って帰ってくる。 */
       if (!path.isAbsolute(request.cwd)) return absent('no-source');
 
       const revisions = request.revisions.map((revision) => revision.value);
-      /* 指しの手前で指定を打ち切る。ここから後ろの字は、`-` で始まっていても
-         外の道具の指定にはならない。 */
+      /* リビジョンの手前でオプションを打ち切る。ここから後ろの文字列は、`-` で始まって
+         いても `git` のオプションにはならない。 */
       const args =
         revisions.length === 0
           ? [...request.args]

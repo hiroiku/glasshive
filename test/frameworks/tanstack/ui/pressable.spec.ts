@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { pressable } from '~/frameworks/tanstack/ui/pressable.ts';
 
-/* 押しどころを鍵盤にも開く。
+/* 押せるところを、キーボードからも押せるようにする。
 
-   行も札も button に置き換えられない(入れ子の格子が崩れる、行の中に札が居る)ので、
-   鍵の受け口だけをここが持つ。**見た目が押しどころなら、button と同じ鍵で動く**こと。 */
+   行もチップも button に置き換えられない(入れ子のグリッドが崩れる、行の中にチップが居る)ので、
+   キー入力のハンドラだけをここが持つ。**見た目が押せるところなら、button と同じキーで動く**こと。 */
 
 type KeyEvent = Parameters<ReturnType<typeof pressable>['onKeyDown']>[0];
 
@@ -22,7 +22,7 @@ const mouseEvent = () =>
     ReturnType<typeof pressable>['onClick']
   >[0];
 
-describe('鍵盤から押す', () => {
+describe('キーボードから押す', () => {
   it('Enter で押したことになる', () => {
     const activate = vi.fn();
     pressable(activate).onKeyDown(keyEvent('Enter'));
@@ -37,7 +37,7 @@ describe('鍵盤から押す', () => {
     expect(activate).toHaveBeenCalledTimes(1);
   });
 
-  /* 空白は既定では画面を送る鍵である。受け切らないと、押すたびに一覧が飛ぶ。 */
+  /* 空白は既定では画面を送るキーである。受け切らないと、押すたびに一覧が飛ぶ。 */
   it('空白は受け切って、画面を送らせない', () => {
     const event = keyEvent(' ');
     pressable(vi.fn()).onKeyDown(event);
@@ -45,19 +45,19 @@ describe('鍵盤から押す', () => {
     expect(event.preventDefault).toHaveBeenCalled();
   });
 
-  it('ほかの鍵では何もしない', () => {
+  it('ほかのキーでは何もしない', () => {
     const activate = vi.fn();
     const event = keyEvent('a');
     pressable(activate).onKeyDown(event);
 
     expect(activate).not.toHaveBeenCalled();
-    expect(event.preventDefault, '受け切ると、字を打つ手から鍵を奪う').not.toHaveBeenCalled();
+    expect(event.preventDefault, '受け切ると、文字を打つ手からキーを奪う').not.toHaveBeenCalled();
   });
 });
 
 describe('外側へ伝えるか', () => {
-  /* 札は行の中に居る。伝えたままだと、札を押しただけで行の押しどころまで走り、
-     開くつもりのなかった窓が開く。 */
+  /* チップは行の中に居る。伝えたままだと、チップを押しただけで行の押せるところまで走り、
+     開くつもりのなかったパネルが開く。 */
   it('止めると言われたら、外側へ伝えない', () => {
     const event = mouseEvent();
     pressable(vi.fn(), { stopPropagation: true }).onClick(event);
@@ -72,7 +72,7 @@ describe('外側へ伝えるか', () => {
     expect(event.stopPropagation).not.toHaveBeenCalled();
   });
 
-  it('鍵盤から押したときも同じように止める', () => {
+  it('キーボードから押したときも同じように止める', () => {
     const event = keyEvent('Enter');
     pressable(vi.fn(), { stopPropagation: true }).onKeyDown(event);
 

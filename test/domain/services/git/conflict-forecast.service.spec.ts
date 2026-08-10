@@ -9,14 +9,14 @@ const touched = (name: string, files: readonly string[]): TouchedFiles => ({
   files: new Set(files),
 });
 
-describe('ぶつかりの見込み', () => {
+describe('コンフリクトの見込み', () => {
   it('同じファイルを触っている組だけを挙げる', () => {
     const forecasts = forecastConflicts([
       touched('a', ['src/x.ts', 'src/y.ts']),
       touched('b', ['src/y.ts']),
       touched('c', ['docs/z.md']),
     ]);
-    expect(forecasts, '触った場所が重ならない線どうしは、統合の順を気にしなくてよい').toEqual([
+    expect(forecasts, '触ったパスが重ならない線どうしは、統合の順を気にしなくてよい').toEqual([
       { a: 'a', b: 'b', count: 1, files: ['src/y.ts'] },
     ]);
   });
@@ -42,8 +42,8 @@ describe('ぶつかりの見込み', () => {
     ]);
   });
 
-  /* 上限は**数そのものを書く。** 定数と突き合わせると、上限が動いても常に釣り合うので、
-     見せる窓が変わったことを誰も言えない。 */
+  /* 上限は**リテラルの数値で書く。** 定数と突き合わせると上限が動いても常に釣り合ってしまい、
+     見せる件数が変わったことを誰も言えない。 */
 
   it('挙げる組は 8 で切る', () => {
     const lines = Array.from({ length: 8 }, (_, index) => touched(`t${index}`, ['same.ts']));

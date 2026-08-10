@@ -1,11 +1,11 @@
 import { edgeColorOf } from '../../derive/issueTree.ts';
 
-/* 課題の帯。探しと、状態の絞りと、線の読み方。
+/* 課題のツールバー。検索と、状態の絞り込みと、線の凡例。
 
-   **`#issues-list` の外に置く。** 一覧は 9 列の格子で、帯はその列とは関係が無い。
-   中へ入れると帯が列に割り付けられて、探し口が 1 列ぶんの幅に潰れる。 */
+   **`#issues-list` の外に置く。** 一覧は 9 列のグリッドで、ツールバーはその列とは
+   関係が無い。中へ入れるとツールバーが列に割り付けられて、検索欄が 1 列ぶんの幅に潰れる。 */
 
-/** 弧の色の読み方。親子だけは線ではなく罫線で表しているので、見本の形が違う */
+/** 弧の色の凡例。親子だけは線ではなく罫線で表しているので、サンプルの形が違う */
 const LEGEND: readonly (readonly [string, string])[] = [
   ['blocks', edgeColorOf('blocks')],
   ['other', edgeColorOf('')],
@@ -14,7 +14,7 @@ const LEGEND: readonly (readonly [string, string])[] = [
 export interface IssuesToolbarProps {
   readonly query: string;
   readonly onQuery: (query: string) => void;
-  /** 状態ごとの件数。閉じたものは別の札で出すので、ここには並べない */
+  /** 状態ごとの件数。閉じたものは別のチップで出すので、ここには並べない */
   readonly counts: Readonly<Record<string, number>>;
   readonly status: string | null;
   readonly onStatus: (status: string | null) => void;

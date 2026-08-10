@@ -14,12 +14,12 @@ import {
   type ObserveRepositoryUseCase,
 } from '~/application/use-cases/git/observe-repository.use-case.ts';
 
-/* git は起こさない。**尋ねた事柄ごとに答えの字を置いて、組み上がりだけを見る。**
-   どの字がどの導出に効くかは読み解きの検査で押さえてあるので、ここで見るのは
+/* `git` は起こさない。**尋ねた事柄ごとに出力のテキストを置いて、組み上がりだけを見る。**
+   どのテキストがどの導出に効くかはパースのテストで押さえてあるので、ここで見るのは
    「何を尋ねたか」と「起こせなかったときにどう倒れるか」である。 */
 
-/* 尋ねるときに渡す書式と上限。**答えの字を引く鍵になるので、内側の宣言と対で直すこと。**
-   食い違うと、この確かめは何も引けないまま「組み上がらなかった」とだけ言う。 */
+/* 尋ねるときに渡す書式と上限。**出力を引くキーになるので、内側の宣言と対で直すこと。**
+   食い違うと、この検証は何も引けないまま「組み上がらなかった」とだけ言う。 */
 const BRANCH_REF_FORMAT =
   '%(refname:short)%00%(objectname:short)%00%(committerdate:iso-strict)%00%(subject)%00%(HEAD)';
 const BRANCH_NAME_FORMAT = '%(refname:short)';
@@ -30,7 +30,7 @@ class GitFailure extends AppError {
   readonly code: string;
 
   constructor(code: string) {
-    super('検査で起こした失敗');
+    super('テストで起こした失敗');
     this.code = code;
   }
 }
@@ -84,8 +84,8 @@ const keyOf = (request: GitCommandRequest): string =>
   [...request.args, ...request.revisions.map((revision) => revision.value)].join(' ');
 
 /* 起こした命令の形。繋げて渡した相手は落とす — 相手が何であれ、命令の種類は変わらない。
-   **この道具の唯一の書き込みは自分の覚え書きだけである。** 観測元を書き換える種類の命令が
-   1 つでも紛れ込めば、観るだけの道具ではなくなる。 */
+   **glasshive が書き込む先は `preferences.json` だけである。** 観測元を書き換える種類の命令が
+   1 つでも紛れ込めば、読み取り専用ではなくなる。 */
 const shapeOf = (request: GitCommandRequest): string =>
   request.args.map((arg) => arg.replace(/=.*$/s, '=')).join(' ');
 
@@ -111,16 +111,16 @@ const observeOverview = async (overrides?: Record<string, Observation<string>>) 
 
 type OverviewResult = Awaited<ReturnType<ObserveRepositoryUseCase['execute']>>;
 
-/** 受理された求めだったことを先に言ってから、観測を取り出す */
+/** 受理された呼び出しだったことを先に言ってから、観測を取り出す */
 function observationOf(result: OverviewResult): Observation<GitOverview> {
-  expect(result.ok, '断る求めではない。求めの形は正しかった').toBe(true);
+  expect(result.ok, '断る呼び出しではない。呼び出しの形は正しかった').toBe(true);
   if (!result.ok) throw new Error('断られた');
   return result.value;
 }
 
-/* **見えたことを先に言う。** 尋ね方が変わって答えの字が引けなくなると、この道具は
+/* **見えたことを先に言う。** 尋ね方が変わって出力を引けなくなると、glasshive は
    「そこはリポジトリではない」に倒れる。そこで早々に切り上げる書き方をすると、
-   確かめは何も見ないまま通ってしまう。 */
+   検証は何も見ないまま通ってしまう。 */
 function observedOverview(result: OverviewResult): GitOverview {
   const observation = observationOf(result);
   expect(observation.kind, '見えるはずのものが見えないなら、その先の確かめに意味は無い').toBe(
@@ -131,7 +131,7 @@ function observedOverview(result: OverviewResult): GitOverview {
 }
 
 describe('リポジトリをひと目ぶん観る', () => {
-  it('統合の枝は主たる作業場所が出している枝', async () => {
+  it('統合のブランチは、主たる `worktree` が出しているブランチ', async () => {
     const overview = observedOverview(await observeOverview());
     expect(overview.base, '縦軸が変わると、生きている線の選び方まで変わる').toBe('main');
   });
@@ -181,13 +181,13 @@ describe('リポジトリをひと目ぶん観る', () => {
 });
 
 describe('尋ね方', () => {
-  it('指しは語に混ぜず、指しとして渡す', async () => {
+  it('revision は語に混ぜず、revision として渡す', async () => {
     const { git, requests } = fakeGit();
     await createObserveRepository({ git }).execute(CWD);
     const mergeBase = requests.find((request) => request.args[0] === 'merge-base');
     expect(
       mergeBase?.args,
-      '指しを語に混ぜると、起こす側は打ち切りをどこに置けばよいか分からない',
+      'revision を語に混ぜると、起こす側は打ち切りをどこに置けばよいか分からない',
     ).toEqual(['merge-base']);
     expect(
       mergeBase?.revisions.map((revision) => revision.value),
@@ -203,7 +203,7 @@ describe('尋ね方', () => {
     );
     expect(
       [...new Set(requests.map(shapeOf))].sort(),
-      'ここに載っていない命令を足すときは、それが巣を書き換えないことを先に確かめること',
+      'ここに載っていない命令を足すときは、それがプロジェクトを書き換えないことを先に確かめること',
     ).toEqual([
       'branch --format= --no-merged=',
       'diff --name-only',
@@ -222,12 +222,12 @@ describe('尋ね方', () => {
     expect(unmerged?.args.at(-1), '離して渡すと、指定の打ち切りのほうを相手として食われる').toBe(
       '--no-merged=main',
     );
-    expect(unmerged?.revisions, '相手を語に繋げたので、渡す指しは無い').toEqual([]);
+    expect(unmerged?.revisions, '相手を語に繋げたので、渡す revision は無い').toEqual([]);
   });
 });
 
 describe('起こせなかったとき', () => {
-  it('道具が手元に無ければ、観られなかったと言う', async () => {
+  it('`git` がインストールされていなければ、観測できなかったと言う', async () => {
     const observation = observationOf(
       await observeOverview({
         'worktree list --porcelain': unobservable(new GitFailure(GIT_NOT_INSTALLED)),
@@ -237,11 +237,11 @@ describe('起こせなかったとき', () => {
     );
     expect(
       observation.kind,
-      '道具が無いだけで「リポジトリではない」と答えると、すべての巣が消える',
+      '`git` が無いだけで「リポジトリではない」と答えると、すべてのプロジェクトが消える',
     ).toBe('unobservable');
   });
 
-  it('作業場所も枝も無ければ、そこはリポジトリではない', async () => {
+  it('`worktree` もブランチも無ければ、そこはリポジトリではない', async () => {
     const { git } = fakeGit({
       'worktree list --porcelain': unobservable(new GitFailure(GIT_EXIT_NONZERO)),
       [`for-each-ref refs/heads --sort=-committerdate --format=${BRANCH_REF_FORMAT}`]: unobservable(
@@ -250,11 +250,11 @@ describe('起こせなかったとき', () => {
     });
     expect(
       observationOf(await createObserveRepository({ git }).execute(CWD)),
-      '見に行けたうえで無かったのだから、誤りではなく「無い」である',
+      '観測できたうえで無かったのだから、誤りではなく「無い」である',
     ).toEqual({ kind: 'absent', reason: 'no-source' });
   });
 
-  it('枝が 1 本も無くても、作業場所が在ればリポジトリである', async () => {
+  it('ブランチが 1 本も無くても、`worktree` が在ればリポジトリである', async () => {
     const overview = observedOverview(
       await observeOverview({
         [`for-each-ref refs/heads --sort=-committerdate --format=${BRANCH_REF_FORMAT}`]:
@@ -263,9 +263,9 @@ describe('起こせなかったとき', () => {
     );
     expect(
       overview.base,
-      'まだ何も記録していない巣には枝が無い。片方が空なだけで「リポジトリではない」と言うと、作りたての巣が消える',
+      'まだ何も記録していないプロジェクトにはブランチが無い。片方が空なだけで「リポジトリではない」と言うと、作りたてのプロジェクトが消える',
     ).toBe('main');
-    expect(overview.branches, '枝はまだ 1 本も無い').toEqual([]);
+    expect(overview.branches, 'ブランチはまだ 1 本も無い').toEqual([]);
   });
 
   it('分かれ目が引けない線も落とさない', async () => {
@@ -283,7 +283,7 @@ describe('起こせなかったとき', () => {
     expect(tip?.ahead, '数えられなければ 0 として並べる').toBe(0);
   });
 
-  it('数え上げの途中で道具が居なくなれば、観られなかったと言う', async () => {
+  it('数え上げの途中で `git` が居なくなれば、観測できなかったと言う', async () => {
     const observation = observationOf(
       await observeOverview({
         'merge-base main topic': unobservable(new GitFailure(GIT_NOT_INSTALLED)),
@@ -308,9 +308,9 @@ describe('ぶつかりの見込みを覚える', () => {
 
     expect(
       second.requests.filter((request) => request.args[0] === 'diff').length,
-      '線の数だけ起こす見込みを毎回立て直すと、画面が尋ねるたびに巣が重くなる',
+      '線の数だけ起こす見込みを毎回立て直すと、画面が尋ねるたびにプロジェクトが重くなる',
     ).toBe(0);
-    expect(overview.conflicts, '覚えていた答えをそのまま返す').toEqual([
+    expect(overview.conflicts, '覚えていた結果をそのまま返す').toEqual([
       { a: 'topic', b: 'hive-topic', count: 1, files: ['src/b.ts'] },
     ]);
   });
@@ -330,7 +330,7 @@ describe('ぶつかりの見込みを覚える', () => {
     await createObserveRepository({ git: moved.git, conflicts }).execute(CWD);
     expect(
       moved.requests.filter((request) => request.args[0] === 'diff').length,
-      '先端が動けば触ったファイルも変わる。覚えた答えを返すと、無いぶつかりを見せる',
+      '先端が動けば触ったファイルも変わる。覚えた結果を返すと、無いぶつかりを見せる',
     ).toBe(2);
   });
 

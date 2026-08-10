@@ -17,11 +17,11 @@ const MIME: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
-/* 組み立て時に名前へ中身の指紋が入る一群。中身が変われば名前も変わるので、
-   いつまでも覚えていてよい。それ以外は毎回確かめさせる。 */
+/* ビルド時に名前へ中身の指紋が入る一群。中身が変われば名前も変わるので、
+   いつまでもキャッシュしてよい。それ以外は毎回確かめさせる。 */
 const FINGERPRINTED = '/assets/';
 
-/** 実在する資産だけを配る。木の外は配らない。配ったら true。 */
+/** 実在する静的ファイルだけを配る。`clientDir` の外は配らない。配ったら true。 */
 export function serveStatic(res: ServerResponse, clientDir: string, pathname: string): boolean {
   if (pathname === '/' || pathname.endsWith('/')) return false;
 
@@ -29,12 +29,12 @@ export function serveStatic(res: ServerResponse, clientDir: string, pathname: st
   try {
     decoded = decodeURIComponent(pathname);
   } catch {
-    return false; // 符号化が壊れている求めは資産の求めとして扱わない
+    return false; // 符号化が壊れているリクエストは、静的ファイルのリクエストとして扱わない
   }
   if (decoded.includes('\0')) return false;
 
-  /* 木の外へ出さない。normalize の後に根で始まるかを見る —
-     ".." を数えて弾くやり方は、符号化の違いで抜けられる。 */
+  /* `clientDir` の外へ出さない。`path.normalize` した後に `clientDir` で始まるかを
+     見る — ".." を数えて弾くやり方は、符号化の違いで抜けられる。 */
   const target = path.normalize(path.join(clientDir, decoded));
   if (!target.startsWith(clientDir + path.sep)) return false;
 
@@ -44,7 +44,7 @@ export function serveStatic(res: ServerResponse, clientDir: string, pathname: st
     if (!stat.isFile()) return false;
     body = fs.readFileSync(target);
   } catch {
-    return false; // 無いものは無い。画面の道かもしれないので、断らずに次へ渡す
+    return false; // 無いものは無い。画面のルートかもしれないので、断らずに次へ渡す
   }
 
   res.writeHead(200, {
@@ -57,7 +57,7 @@ export function serveStatic(res: ServerResponse, clientDir: string, pathname: st
   return true;
 }
 
-/** 画面の器を返す。どの道へ来ても、描くのはブラウザーである。 */
+/** HTML シェル(`_shell.html`)を返す。どのルートへ来ても、描くのはブラウザーである。 */
 export function serveShell(res: ServerResponse, clientDir: string): void {
   try {
     const body = fs.readFileSync(path.join(clientDir, '_shell.html'));

@@ -8,16 +8,16 @@ import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.pres
 
    近似であることを画面の側で言い落とさないこと。 */
 
-/** 足の本数 */
+/** バーの本数 */
 export const FLOW_BARS = 60;
 
-/** 見る窓 */
+/** 集計する期間 */
 export const FLOW_SPAN_MS = 30 * 86_400_000;
 
 export interface FlowSeries {
-  /** 足ごとの、その時点で開いていた数 */
+  /** バーごとの、その時点で開いていた数 */
   readonly open: readonly number[];
-  /** 足ごとの、そこまでに閉じた数の累計 */
+  /** バーごとの、そこまでに閉じた数の累計 */
   readonly closed: readonly number[];
 }
 

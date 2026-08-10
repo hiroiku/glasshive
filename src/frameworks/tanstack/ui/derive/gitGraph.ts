@@ -1,18 +1,18 @@
 import type { GitMainNodeJson, GitTipJson } from '~/interface/presenters/git/git.presenter.ts';
 
-/* 記録の枝を、縦に並ぶ行の上へ組み直す。
+/* Git のブランチを、縦に並ぶ行の上へ組み直す。
 
-   本流を 1 本の柱にして、生きている線を左から順の筋に割り当てる。線は自分の行から
+   本流を 1 本の柱にして、生きている線を左から順のレーンに割り当てる。線は自分の行から
    出て、分かれ目の行で柱へ合流する。**畳むのは本流の側だけである** — 生きている線は
    どれも「いま誰かが立っている場所」なので、畳むと画面から人が消える。
 
-   本流のうち、合流でも分かれ目でも先頭でもない記録は 1 行に折る。折らないと、
-   数百の記録が生きている線を画面の外へ押し出す。 */
+   本流のうち、合流でも分かれ目でも先頭でもないコミットは 1 行に折る。折らないと、
+   数百のコミットが生きている線を画面の外へ押し出す。 */
 
 /** 行の高さ。線を描く座標がこれを前提にしている */
 export const ROW_HEIGHT = 26;
 
-/** 筋どうしの間 */
+/** レーンどうしの間 */
 export const LANE_GAP = 13;
 
 /** 本流の柱の色。線の色とは別にして、どれが本流かを一目で分ける */
@@ -21,7 +21,7 @@ export const MAINLINE_COLOR = '#5b7ea6';
 export type GraphRow =
   | { readonly type: 'tip'; readonly tip: GitTipJson; readonly lane: number }
   | { readonly type: 'node'; readonly node: GitMainNodeJson }
-  /* 折った塊は、その中の最初の記録で名指す。行の位置で名指すと、上の行が
+  /* 折った塊は、その中の最初のコミットで名指す。行の位置で名指すと、上の行が
      1 つ増減しただけで別の塊として組み直される。 */
   | { readonly type: 'fold'; readonly count: number; readonly from: string };
 
@@ -63,7 +63,7 @@ export function buildRows(
   return rows;
 }
 
-/** 行と筋の割り当て。並べ替えは呼ぶ側が済ませてから渡す */
+/** 行とレーンの割り当て。並べ替えは呼ぶ側が済ませてから渡す */
 export function layoutOf(
   mainline: readonly GitMainNodeJson[],
   tips: readonly GitTipJson[],
@@ -85,7 +85,7 @@ export function layoutOf(
 export type TipSortKey = 'name' | 'ahead' | 'date';
 
 /* 生きている線だけを並べ替える。**本流は並べ替えない** —
-   本流の並びは記録そのものの順で、読み替えるものではない。 */
+   本流の並びはコミットそのものの順で、読み替えるものではない。 */
 export function sortTips(
   tips: readonly GitTipJson[],
   key: TipSortKey,

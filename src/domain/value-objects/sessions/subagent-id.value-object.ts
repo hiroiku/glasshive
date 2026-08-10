@@ -1,10 +1,10 @@
-/* 子の正本のファイル名から、同一性と呼び名を取り出す。
+/* サブエージェントの `transcript` のファイル名から、同一性とラベルを取り出す。
 
-   **同一性と呼び名は別物である。** `id` は正本を指す鍵なので、ファイル名から
+   **同一性とラベルは別物である。** `id` は `transcript` を指すキーなので、ファイル名から
    拡張子を落としただけのものを使う。`label` は人が読むための短い名前で、
-   前置きの `agent-` と、末尾に付く 16 桁の指紋を剥がす。
+   接頭辞の `agent-` と、末尾に付く 16 桁の指紋を剥がす。
 
-   剥がしたものを `id` に使うと、指紋だけが違う同名の子が同じものに見える。 */
+   剥がしたものを `id` に使うと、指紋だけが違う同名のサブエージェントが同じものに見える。 */
 
 export interface SubagentIdentity {
   readonly id: string;
@@ -15,7 +15,7 @@ const FILE_PREFIX = 'agent-';
 const FILE_SUFFIX = '.jsonl';
 const FINGERPRINT = /^(.*)-([0-9a-f]{16})$/;
 
-/** 子の正本として扱う名前か */
+/** サブエージェントの `transcript` として扱うファイル名か */
 export const isSubagentFileName = (fileName: string): boolean =>
   fileName.startsWith(FILE_PREFIX) && fileName.endsWith(FILE_SUFFIX);
 
@@ -26,12 +26,12 @@ export function subagentIdOf(fileName: string): SubagentIdentity {
   return { id, label: matched?.[1] ?? stem };
 }
 
-/* 覚え書きが呼んだ相手を指す字は、正本の名前から起こした鍵と形が揃っていない —
-   覚え書きは前置きの `agent-` を落とした字で書く。字のまま突き合わせると親が一人も見つからず、
-   木は 2 段に潰れたままになる。
+/* `*.meta.json` が親を指す文字列は、`transcript` のファイル名から起こしたキーと形が揃って
+   いない — `*.meta.json` は接頭辞の `agent-` を落とした文字列で書く。そのまま突き合わせると
+   親が一人も見つからず、木は 2 階層に潰れたままになる。
 
-   **棚に在るものとしか照らさない。** 当てが外れた字はそのまま残す —
-   落とすと、呼んだ相手が窓の外へ落ちただけの子まで根から消える。 */
+   **`known` に在るものとしか突き合わせない。** 当てが外れた文字列はそのまま残す —
+   落とすと、呼んだ親が観測の範囲の外へ落ちただけのサブエージェントまで根から消える。 */
 export function resolveSubagentId(raw: string | null, known: ReadonlySet<string>): string | null {
   if (raw === null || known.has(raw)) return raw;
   const prefixed = `${FILE_PREFIX}${raw}`;

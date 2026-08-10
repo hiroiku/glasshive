@@ -1,15 +1,16 @@
 import os from 'node:os';
 import path from 'node:path';
 
-/* どこを読み、どこに覚え書きを置くか。
+/* どこを読み、どこに `preferences.json` を置くか。
 
-   起動口は tsc で別に組まれるので、束ね役とは別の実体になる。設定は環境変数で渡す —
-   これが 2 つを繋ぐ唯一の道である。検査もここを差し替えて、本物の家に触れずに済ませる。 */
+   ランチャーは `tsc` で別にビルドされるので、サーバーバンドルとは別の実体になる。設定は
+   環境変数で渡す — これが 2 つを繋ぐ唯一の手段である。テストもここを差し替えて、本物の
+   ホームディレクトリに触れずに済ませる。 */
 
 export interface Settings {
-  /** 正本の置き場。~/.claude/projects */
+  /** `transcript` のルート。~/.claude/projects */
   transcriptsRoot: string;
-  /** 手元の覚え書きを置く場所。この道具自身の持ち物で、観測元ではない */
+  /** `preferences.json` を置くディレクトリ。glasshive 自身の持ち物で、観測元ではない */
   configDir: string;
   /** 最後の書き込みから何ミリ秒までを「稼働」と見るか */
   activeThresholdMs: number;

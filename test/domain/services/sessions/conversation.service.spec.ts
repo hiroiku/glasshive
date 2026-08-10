@@ -9,15 +9,18 @@ const line = (value: unknown): string => JSON.stringify(value);
 
 describe('運ぶ量の上限で切る', () => {
   it('上限ちょうどでは切らない', () => {
-    expect(capText('abcde', 5), '切っていない字に印を足すと、無い切り詰めを知らせる').toBe('abcde');
+    expect(
+      capText('abcde', 5),
+      '切っていない文字列に省略記号を足すと、起きていない切り詰めを知らせることになる',
+    ).toBe('abcde');
   });
 
-  it('1 つ超えたら切って、切った印を添える', () => {
+  it('1 つ超えたら切り詰めて、省略記号を添える', () => {
     expect(capText('abcdef', 5)).toBe(`abcde${TRUNCATION_NOTICE}`);
   });
 
   it('絵文字が途中で割れない', () => {
-    // UTF-16 の長さで切ると 'a' + 前半だけの代用対 になり、壊れた字が出る
+    // UTF-16 の長さで切ると 'a' + サロゲートペアの前半だけ になり、壊れた文字が出る
     expect(capText('a😀b', 2)).toBe(`a😀${TRUNCATION_NOTICE}`);
     expect(capText('😀😀😀', 2)).toBe(`😀😀${TRUNCATION_NOTICE}`);
   });
@@ -51,8 +54,8 @@ describe('会話に出さない行', () => {
   });
 });
 
-describe('人の側の行', () => {
-  it('中身が字なら、その字ひとつの塊になる', () => {
+describe('user の行', () => {
+  it('中身が文字列なら、その文字列ひとつのブロックになる', () => {
     expect(
       reduceEvent(
         line({
@@ -68,7 +71,7 @@ describe('人の側の行', () => {
     });
   });
 
-  it('時刻の字面には手を加えない', () => {
+  it('時刻の表記には手を加えない', () => {
     const event = reduceEvent(
       line({
         type: 'user',
@@ -79,12 +82,12 @@ describe('人の側の行', () => {
     expect(event?.ts).toBe('2026-08-04T00:00:00Z');
   });
 
-  it('時刻が字でなければ無しにする', () => {
+  it('時刻が文字列でなければ無しにする', () => {
     const event = reduceEvent(line({ type: 'user', timestamp: 12345, message: { content: 'a' } }));
     expect(event?.ts).toBeNull();
   });
 
-  it('道具の返しが並びのとき、字の text だけが改行で繋がる', () => {
+  it('ツールの結果が配列のとき、文字列の `text` だけが改行で繋がる', () => {
     const event = reduceEvent(
       line({
         type: 'user',
@@ -103,12 +106,12 @@ describe('人の側の行', () => {
         },
       }),
     );
-    expect(event?.blocks, '字でない返しは会話の流れとして読めない').toEqual([
+    expect(event?.blocks, '文字列でない結果は会話の流れとして読めない').toEqual([
       { kind: 'tool_result', text: '一行目\n二行目' },
     ]);
   });
 
-  it('道具の返しが字ならそのまま、中身が無ければ空になる', () => {
+  it('ツールの結果が文字列ならそのまま、中身が無ければ空になる', () => {
     const event = reduceEvent(
       line({
         type: 'user',
@@ -123,8 +126,8 @@ describe('人の側の行', () => {
     ]);
   });
 
-  it('返しが字でも並びでもなければ、空の返しとして見せる', () => {
-    // 内部の形をそのまま直列化して見せると、読む人には道具の中身が漏れるだけになる
+  it('結果が文字列でも配列でもなければ、空の結果として見せる', () => {
+    // 内部の形をそのまま直列化して見せると、ユーザーにはツールの内部形式が漏れるだけになる
     const event = reduceEvent(
       line({
         type: 'user',
@@ -144,12 +147,12 @@ describe('人の側の行', () => {
     ]);
   });
 
-  it('塊でない要素は落とす', () => {
-    // 並びに生の字が混ざる正本がある。型の欄が無い要素は、何の塊か決められない
+  it('ブロックでない要素は落とす', () => {
+    // 配列に生の文字列が混ざる `transcript` がある。型の欄が無い要素は、何のブロックか決められない
     const event = reduceEvent(
       line({
         type: 'user',
-        message: { content: ['そのままの字', { type: 'text', text: 'A' }] },
+        message: { content: ['そのままの文字列', { type: 'text', text: 'A' }] },
       }),
     );
     expect(event?.blocks).toEqual([{ kind: 'text', text: 'A' }]);
@@ -160,11 +163,11 @@ describe('人の側の行', () => {
           message: { content: [[{ type: 'text', text: 'A' }]] },
         }),
       ),
-      '入れ子の並びも塊ではない',
+      '入れ子の配列もブロックではない',
     ).toBeNull();
   });
 
-  it('text と tool_result 以外の塊は落ちるが、残りの並びは崩れない', () => {
+  it('text と tool_result 以外のブロックは落ちるが、残りの並びは崩れない', () => {
     const event = reduceEvent(
       line({
         type: 'user',
@@ -179,15 +182,15 @@ describe('人の側の行', () => {
         },
       }),
     );
-    expect(event?.blocks, '人の側に考えの塊は出ない').toEqual([
+    expect(event?.blocks, '人の側に考えのブロックは出ない').toEqual([
       { kind: 'text', text: 'A' },
       { kind: 'tool_result', text: 'R' },
       { kind: 'text', text: 'B' },
     ]);
   });
 
-  it('空白だけでも、人の言葉は塊になる', () => {
-    // 道具の側とは違い、人の側は空白を落とさない。人が空白を送ったことは事実である
+  it('空白だけでも、人の言葉はブロックになる', () => {
+    // ツール側とは違い、人の側は空白を落とさない。人が空白を送ったことは事実である
     expect(reduceEvent(line({ type: 'user', message: { content: '   ' } }))?.blocks).toEqual([
       { kind: 'text', text: '   ' },
     ]);
@@ -201,7 +204,7 @@ describe('人の側の行', () => {
     ).toEqual([{ kind: 'text', text: ' \n ' }]);
   });
 
-  it('見せる塊が 1 つも無ければイベントではない', () => {
+  it('見せるブロックが 1 つも無ければイベントではない', () => {
     expect(
       reduceEvent(
         line({
@@ -216,8 +219,8 @@ describe('人の側の行', () => {
   });
 });
 
-describe('道具の側の行', () => {
-  it('道具の呼び出しは、呼び名と整形された入力を持つ', () => {
+describe('assistant の行', () => {
+  it('`tool_use` は、名前と整形された入力を持つ', () => {
     const event = reduceEvent(
       line({
         type: 'assistant',
@@ -232,7 +235,7 @@ describe('道具の側の行', () => {
     ]);
   });
 
-  it('呼び名が無ければ、道具とだけ呼ぶ', () => {
+  it('名前が無ければ tool とだけ呼ぶ', () => {
     const event = reduceEvent(
       line({ type: 'assistant', message: { content: [{ type: 'tool_use' }] } }),
     );
@@ -241,8 +244,8 @@ describe('道具の側の行', () => {
     ]);
   });
 
-  it('呼び名が空の字でも、道具とだけ呼ぶ', () => {
-    // 欄の有無ではなく中身の有無で決める。名無しの塊に空の見出しを付けても読めない
+  it('名前が空文字列でも tool とだけ呼ぶ', () => {
+    // 欄の有無ではなく中身の有無で決める。名無しのブロックに空の見出しを付けても読めない
     const event = reduceEvent(
       line({
         type: 'assistant',
@@ -259,19 +262,19 @@ describe('道具の側の行', () => {
         message: {
           content: [
             { type: 'tool_use', name: 'A', input: null },
-            { type: 'tool_use', name: 'B', input: '字の入力' },
+            { type: 'tool_use', name: 'B', input: '文字列の入力' },
           ],
         },
       }),
     );
     expect(event?.blocks).toEqual([
       { kind: 'tool_use', name: 'A', text: '{}' },
-      { kind: 'tool_use', name: 'B', text: '"字の入力"' },
+      { kind: 'tool_use', name: 'B', text: '"文字列の入力"' },
     ]);
   });
 
-  it('道具の返しは道具の側には出ない', () => {
-    // 返しは人の側の行に書かれる。道具の側で拾うと同じ返しが二重に並ぶ
+  it('`tool_result` は assistant の行には出ない', () => {
+    // `tool_result` は user の行に書かれる。assistant 側でも拾うと同じ結果が二重に並ぶ
     expect(
       reduceEvent(
         line({
@@ -282,11 +285,11 @@ describe('道具の側の行', () => {
     ).toBeNull();
   });
 
-  it('並びが空ならイベントではない', () => {
+  it('配列が空ならイベントではない', () => {
     expect(reduceEvent(line({ type: 'assistant', message: { content: [] } }))).toBeNull();
   });
 
-  it('中身が空白だけの text と thinking は塊にならない', () => {
+  it('中身が空白だけの text と thinking はブロックにならない', () => {
     const event = reduceEvent(
       line({
         type: 'assistant',
@@ -312,12 +315,14 @@ describe('道具の側の行', () => {
           },
         }),
       ),
-      '空箱だけの行を出すと、読む人には意味の無い行が並ぶ',
+      '中身の無い行を出すと、ユーザーには意味の無い行が並ぶ',
     ).toBeNull();
   });
 
-  it('中身が並びでなければイベントではない', () => {
-    expect(reduceEvent(line({ type: 'assistant', message: { content: '字の本文' } }))).toBeNull();
+  it('中身が配列でなければイベントではない', () => {
+    expect(
+      reduceEvent(line({ type: 'assistant', message: { content: '文字列の本文' } })),
+    ).toBeNull();
   });
 
   it('考えは、本文があるときだけ見せる', () => {
@@ -331,8 +336,8 @@ describe('道具の側の行', () => {
   });
 });
 
-describe('仕組みの側の行', () => {
-  it('中身が字なら、下位の型を呼び名にした塊ひとつになる', () => {
+describe('system の行', () => {
+  it('中身が文字列なら、`subtype` を名前にしたブロックひとつになる', () => {
     expect(reduceEvent(line({ type: 'system', subtype: 'hook', content: '知らせ' }))).toEqual({
       role: 'system',
       ts: null,
@@ -340,29 +345,29 @@ describe('仕組みの側の行', () => {
     });
   });
 
-  it('下位の型が無ければ呼び名は無しになる', () => {
+  it('`subtype` が無ければ名前は無しになる', () => {
     const event = reduceEvent(line({ type: 'system', content: '知らせ' }));
     expect(event?.blocks).toEqual([{ kind: 'system', name: null, text: '知らせ' }]);
   });
 
-  it('下位の型が字でなければ呼び名は無しになる', () => {
+  it('`subtype` が文字列でなければ名前は無しになる', () => {
     const event = reduceEvent(line({ type: 'system', subtype: 7, content: '知らせ' }));
     expect(event?.blocks).toEqual([{ kind: 'system', name: null, text: '知らせ' }]);
   });
 
-  it('中身が字でなければイベントではない', () => {
+  it('中身が文字列でなければイベントではない', () => {
     expect(reduceEvent(line({ type: 'system', content: { text: '知らせ' } }))).toBeNull();
     expect(reduceEvent(line({ type: 'system', subtype: 'hook' }))).toBeNull();
   });
 
   it('中身は行の直下にあり、message の下ではない', () => {
-    // 仕組みの知らせだけは message を持たない。message を見に行くと全て落ちる
+    // `system` の行だけは message を持たない。message を見に行くと全て落ちる
     expect(reduceEvent(line({ type: 'system', message: { content: '知らせ' } }))).toBeNull();
   });
 });
 
-describe('塊ごとに運ぶ量を切る', () => {
-  it('どの塊も同じ上限で切られる', () => {
+describe('ブロックごとに運ぶ量を切る', () => {
+  it('どのブロックも同じ上限で切られる', () => {
     const event = reduceEvent(
       line({
         type: 'assistant',
@@ -381,8 +386,8 @@ describe('塊ごとに運ぶ量を切る', () => {
     ]);
   });
 
-  it('人の言葉も・道具の返しも・考えも・仕組みの知らせも切られる', () => {
-    // 1 箇所でも上限を渡し忘れると、その道だけが上限なしで運ばれる
+  it('人の言葉も・ツールの結果も・考えも・`system` の知らせも切られる', () => {
+    // 1 箇所でも上限を渡し忘れると、その経路だけが上限なしで運ばれる
     const cut = `abc${TRUNCATION_NOTICE}`;
     expect(reduceEvent(line({ type: 'user', message: { content: 'abcdef' } }), 3)?.blocks).toEqual([
       { kind: 'text', text: cut },

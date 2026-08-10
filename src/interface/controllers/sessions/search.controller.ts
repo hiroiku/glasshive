@@ -8,9 +8,9 @@ import {
   type SearchJson,
 } from '~/interface/presenters/sessions/search.presenter.ts';
 
-/* 正本を横断して語を探す窓。
+/* `transcript` を横断して語を探すコントローラー。
 
-   短すぎる語を断らないのは、打ち込んでいる途中の 1 字が毎回赤く咎められないためである。
+   短すぎる語を断らないのは、打ち込んでいる途中の 1 文字が毎回赤く咎められないためである。
    探した結果として何も当たらなかったことにする — 実際、絞り込みにならない語である。 */
 
 export type SearchResponse = ApiResponse<SearchJson>;

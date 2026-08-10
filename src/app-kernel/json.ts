@@ -1,26 +1,26 @@
-/* 型の分からない値を、安全に覗く道具。
+/* 型の分からない値を、安全に覗くためのヘルパー。
 
-   外から来た字は、こちらの型を守る義理が無い。欄が無い・型が違う・行そのものが
-   壊れている、はどれも起こって当たり前である。だから覗く側が毎回確かめる。
+   外から来た JSON は、こちらの型を守る義理が無い。欄が無い・型が違う・行そのものが
+   壊れている、はどれも起こって当たり前である。だから覗く側が毎回検証する。
 
    **壊れた行は記録ではない。** 投げて観測を止めるのではなく、その行だけを飛ばす。
-   1 行の壊れでひと目ぶんの観測を失うことのほうが、はるかに大きな嘘になる。
+   1 行の壊れで観測をまるごと失うことのほうが、はるかに大きな嘘になる。
 
-   どの境目にも属さない。ここに在るのは JSON の形の話だけで、業務の言葉は 1 つも無い。 */
+   どの bounded context にも属さない。ここに在るのは JSON の形の話だけで、業務の言葉は 1 つも無い。 */
 
 export type JsonRecord = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/* 持ち主自身の欄か。土台から生えてきた名前を欄として読まない。
+/* そのオブジェクト自身が持つ欄か。プロトタイプから生えてきた名前を欄として読まない。
 
-   素の索きだと `__proto__` や `constructor` が値を返し、欄が 1 つも無い記録が
+   素のプロパティ参照だと `__proto__` や `constructor` が値を返し、欄が 1 つも無い記録が
    「欄の揃った記録」として読めてしまう。 */
 const own = (source: JsonRecord, key: string): unknown =>
   Object.hasOwn(source, key) ? source[key] : undefined;
 
-/** 欄が字ならその字、そうでなければ無い */
+/** 欄が文字列ならその文字列、そうでなければ無い */
 export function asString(source: unknown, key: string): string | undefined {
   if (!isRecord(source)) return undefined;
   const value = own(source, key);
@@ -46,16 +46,16 @@ export function hasKey(source: unknown, key: string): boolean {
   return isRecord(source) && own(source, key) !== undefined;
 }
 
-/** 数として読めるならその数、そうでなければ 0 */
+/** 数値として読めるならその数値、そうでなければ 0 */
 export function asInt(source: unknown, key: string): number {
   if (!isRecord(source)) return 0;
   const value = own(source, key);
   return typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : 0;
 }
 
-/* 行ごとに読み解いて、記録として読めたものだけを流す。
+/* 行ごとにパースして、記録として読めたものだけを流す。
 
-   数や字だけの行、`null` の行、壊れた行は、どれも記録ではないので流さない。
+   数値や文字列だけの行、`null` の行、壊れた行は、どれも記録ではないので流さない。
    ここで落としておくことで、以降の導出は「記録である」ことだけを前提にできる。 */
 export function* parseJsonlLines(text: string): Generator<JsonRecord> {
   for (const line of text.split('\n')) {
@@ -70,7 +70,7 @@ export function* parseJsonlLines(text: string): Generator<JsonRecord> {
   }
 }
 
-/** 先頭の 1 行だけを読み解く */
+/** 先頭の 1 行だけをパースする */
 export function parseFirstJsonLine(text: string): JsonRecord | undefined {
   const end = text.indexOf('\n');
   const first = end >= 0 ? text.slice(0, end) : text;

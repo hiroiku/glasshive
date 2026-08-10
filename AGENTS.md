@@ -1,27 +1,90 @@
 # Agent Instructions
 
-This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
+glasshive — a read-only dashboard for watching Claude Code sessions and their subagents.
+It reads `~/.claude/projects/**/*.jsonl`, `.beads/issues.jsonl`, and `git`. It writes nothing
+back to anything it observes.
 
-> **Architecture in one line:** Issues live in a local Dolt database
-> (`.beads/dolt/`); cross-machine sync uses `bd dolt push/pull` (a
-> git-compatible protocol), stored under `refs/dolt/data` on your git
-> remote — separate from `refs/heads/*` where your code lives.
-> `.beads/issues.jsonl` is a passive export, not the wire protocol.
->
-> See [SYNC_CONCEPTS.md](https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md)
-> for the one-screen overview and anti-patterns (don't treat JSONL as the
-> source of truth; don't `bd import` during normal operation; don't
-> reach for third-party Dolt hosting before trying the default).
+`CLAUDE.md` is a symlink to this file. Edit this one.
 
-## Quick Reference
+## Build & Test
 
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work atomically
-bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
+```sh
+npm install
+npm run dev       # http://127.0.0.1:4483 (falls through to the next free port if taken)
+npm run check     # biome ci + layer boundaries + types (8 tsconfigs) + tests
+npm run build     # vite build + launcher tsc + external verification
+npm start         # http://127.0.0.1:4483 — what users actually get
 ```
+
+`npm run check` is the gate. Run it before saying anything is done. Bun works as-is —
+swap `npm` for `bun` (composite scripts use `$npm_execpath`).
+
+## Architecture
+
+Clean architecture, enforced by `scripts/check-architecture.mjs` — a layer that imports across an
+arrow it is not allowed to use fails the build, not the review.
+
+```
+app-kernel   ← nothing
+domain       ← app-kernel
+application  ← app-kernel, domain
+interface    ← app-kernel, application
+infrastructure ← app-kernel, application
+frameworks   ← app-kernel, interface, composition
+composition  ← everything except frameworks
+```
+
+`domain` never crosses a bounded context (`sessions` / `issues` / `git` / `workspace`).
+
+Three ideas carry the design. `Observation<T>` (`observed` | `absent` | `unobservable`) keeps
+"there was nothing" apart from "we could not look" — collapsing them is the one lie an observation
+tool must never tell. Repositories reconstruct our own model from a store we know the shape of;
+integrations translate someone else's program's answer. Exactly one port writes anything
+(`ViewerPreferencesRepository`), and it refuses to write under `~/.claude`, the transcripts root,
+`<nest>/.beads`, or `<nest>/.git`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full layout, the test projects, and how to work here.
+
+## Conventions
+
+**Comments explain the intent of the code they sit on.** Why this code is the way it is — not what
+changed, not what an older implementation did, not what a future one might want. No history, no
+ADRs, no provisions for the future.
+
+**Comments and test names are written in Japanese. Everything else is English:** identifiers, UI
+strings, `--help` output, error text a user reads, and all user-facing documentation.
+`test/contracts/ui-language.spec.ts` strips comments and fails if Japanese reaches a string literal
+or JSX text under `src/frameworks/tanstack`.
+
+"Written in Japanese" means ordinary Japanese technical prose — the register of any engineering
+document. It does **not** mean translating the English away:
+
+- **Never translate a technical term.** Identifiers, type names, API names, filenames, CSS
+  properties and values keep their original spelling, quoted in backticks: `transcript`, `subgrid`,
+  `user-select`, `Observation`, `mkdtemp`, `fit-content`.
+- **Use the established katakana loanword** for general technical vocabulary: スレッド, ワーカー,
+  キーボード, ディレクトリ, プロジェクト, セッション, パネル, タブ, タイムライン, ラベル, イベント,
+  ガード, ルーター, ルート, バンドラー, ランチャー, パッケージ, テスト, キャッシュ, ハンドラ,
+  ミドルウェア, ストリーム, スナップショット. Do not coin a native-Japanese replacement for a word
+  that already has a normal one.
+- **No private vocabulary, no sustained metaphors.** Calling a transcript 「正本」, a project
+  「巣」, a chip 「札」, or an `fs.watch` watcher 「見張り」 forces every reader to learn a second
+  glossary, and makes the comment impossible to check against the code. Call things what the code
+  calls them. `test/contracts/comment-vocabulary.spec.ts` fails the build on the coined words we
+  have already had to remove; the words it cannot check (「場所」, 「求め」, 「答え」) are the ones
+  ordinary Japanese also uses, so those stay on you.
+- **Plain sentences.** Avoid runs of noun-final fragments and literary phrasing. Use `**bold**` only
+  for the one thing that breaks when ignored — at most once per comment.
+
+Fixed names for our own concepts: the session logs under `~/.claude/projects` are `transcript`;
+what `ProjectJson` describes is プロジェクト; `ActivityInterval` is 稼働区間; `AppError.code` is
+エラーコード; UI chips are チップ; the `fs.watch` watcher is ウォッチャー; the SSE notification is
+変更通知. Keep `preferences.json` (the one file we write) and `*.meta.json` (subagent metadata)
+distinct by name — a comment that confuses them is simply false. For `Observation`, `absent` is
+「無かった」 and `unobservable` is 「観測できなかった」; never let those two words collapse.
+
+**Tests write only under `mkdtemp`.** Never write to `~/.claude` or `.beads`. If a test replaces
+`process.env.HOME`, it must restore it.
 
 ## Non-Interactive Shell Commands
 
@@ -125,13 +188,3 @@ bd prime                # Refresh Beads context
 
 **Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
 <!-- END BEADS CODEX SETUP -->
-
-<!-- agents-harness:begin -->
-## Review
-
-When implementation or a fix is done, delegate verification to the applicable review agents before reporting completion.
-
-## Code
-
-Comments explain the intent of the code they sit on. No history, no ADRs, no provisions for the future.
-<!-- agents-harness:end -->

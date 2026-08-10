@@ -2,21 +2,20 @@ import { useNavigate } from '@tanstack/react-router';
 import { createContext, useContext, useMemo } from 'react';
 import type { ProjectSearch } from './search.ts';
 
-/* 画面を渡り歩く口。
+/* 画面を渡り歩くためのコンテキスト。
 
-   旧実装はこれを 9 つのファイル・30 か所以上に props で通していた。どこからでも
-   道を呼べるので、通す必要が無い。**この移し替えで得られる最大の簡素化である。**
+   どこからでも `useNav()` を呼べるので、ルーターを props で通す必要が無い。
 
-   ここが薄いのは、行き先がすべて道の印だからである。窓を開くのは印を書き換えることで、
-   開いたという覚えはどこにも持たない。おかげで **戻る印がそのまま効く** —
-   旧実装は履歴を差し替えるだけだったので、開いた窓から戻れなかった。 */
+   ここが薄いのは、行き先がすべて URL の検索パラメータだからである。パネルを開くのは
+   検索パラメータを書き換えることで、開いたという状態はどこにも持たない。おかげで
+   **ブラウザーの戻るがそのまま効く** — 開いたパネルは 1 つ戻れば閉じる。 */
 
 export interface Nav {
-  /** 会話の窓を開く。指すのは正本の在り処 */
+  /** 会話のパネルを開く。指すのは `transcript` のパス */
   openConv(file: string): void;
   openIssue(id: string): void;
   openRef(rev: string, label: string): void;
-  /** 記録の画面へ移り、その語で絞る */
+  /** Git の画面へ移り、その語で絞る */
   gotoGit(token: string): void;
   /** 課題の画面へ移り、その語で絞る */
   gotoBeads(token: string): void;
@@ -29,8 +28,8 @@ export function NavProvider({ slug, children }: { slug: string; children: React.
   const navigate = useNavigate();
 
   const nav = useMemo<Nav>(() => {
-    /* 印は足すだけにする。**他の印を消さない。** 消すと、窓を開いただけで
-       絞り込みも並べ替えも初期値へ戻り、観ていた盤面が失われる。 */
+    /* 検索パラメータは足すだけにする。**他のパラメータを消さない。** 消すと、パネルを
+       開いただけで絞り込みも並べ替えも初期値へ戻り、見ていた画面が失われる。 */
     const patch = (next: Partial<ProjectSearch>) => {
       void navigate({
         to: '.',
@@ -60,7 +59,7 @@ export function NavProvider({ slug, children }: { slug: string; children: React.
 
 export function useNav(): Nav {
   const nav = useContext(NavContext);
-  // 道を持たない場所で道を呼ぼうとしたなら、それは組み立ての誤りである
+  // `NavProvider` の外で `useNav()` を呼んだなら、それは組み立ての誤りである
   if (nav === null) throw new Error('useNav was called outside NavProvider');
   return nav;
 }

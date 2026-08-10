@@ -1,14 +1,14 @@
 import { useEffect, useRef } from 'react';
 import type { TreeJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 
-/* 「あなたの返事待ち」に変わったことを、画面を観ていない人へ知らせる。
+/* 「あなたの返事待ち」に変わったことを、画面を見ていないユーザーへ知らせる。
 
    **変わった瞬間だけ知らせる。** 待っている状態が続いているあいだ鳴らし続けると、
    知らせが騒音になって切られる。
 
-   **最初の一巡では鳴らさない。** 開いた瞬間に、既に待っていた分が全部鳴る。
+   最初の一巡では鳴らさない。開いた瞬間に、既に待っていた分が全部鳴ってしまう。
 
-   **画面を観ているときは鳴らさない。** 目の前に出ているものを、わざわざ横から言わない。 */
+   画面を見ているときも鳴らさない。目の前に出ているものを、わざわざ横から言わない。 */
 
 export function useAwaitingNotice(tree: TreeJson | undefined, enabled: boolean): void {
   const previousRef = useRef(new Map<string, string | null>());

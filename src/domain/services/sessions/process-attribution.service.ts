@@ -1,16 +1,16 @@
 import { containsPath, pathDepth } from '~/app-kernel/path.ts';
 import type { AgentProcess } from '~/domain/value-objects/sessions/agent-process.value-object.ts';
 
-/* 生きている道具を、巣へ割り振る。
+/* 生きているプロセスを、プロジェクトへ割り振る。
 
-   **1 つの道具は 1 つの巣にしか数えない。** 祖先にも子孫にも波及させると、
-   home で動く 1 つの道具が、その配下の巣を残らず生きているように見せてしまう。
-   だから作業場所を含む巣のうち、最も深いものだけを選ぶ。
+   **1 つのプロセスは 1 つのプロジェクトにしか数えない。** 祖先にも子孫にも波及させると、
+   `~` で動く 1 つのプロセスが、その配下のプロジェクトを残らず生きているように見せてしまう。
+   だから作業ディレクトリを含むプロジェクトのうち、最も深いものだけを選ぶ。
 
-   含むかと深さは同じ一つの決め方の両輪なので、どちらも app-kernel の側に
-   任せる。片方だけが字面を畳むと、浅い巣が深いことになって選び方が壊れる。 */
+   含むかどうかと深さは同じ決め方の両輪なので、どちらも `app-kernel` に任せる。
+   片方だけがパスを正規化すると、浅いプロジェクトが深いことになって選び方が壊れる。 */
 
-/** 巣ごとの、帰属した道具の数。返す並びは projectPaths と同じ順・同じ長さ */
+/** プロジェクトごとの、帰属したプロセスの数。返す並びは projectPaths と同じ順・同じ長さ */
 export function attributeProcesses(
   projectPaths: readonly (string | null)[],
   processes: readonly AgentProcess[],

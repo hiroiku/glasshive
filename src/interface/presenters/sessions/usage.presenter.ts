@@ -4,13 +4,13 @@ import type {
 } from '~/application/use-cases/sessions/observe-usage.use-case.ts';
 import type { ObservationState } from '~/interface/presenters/sessions/tree.presenter.ts';
 
-/* 消費の桶を、外の道が読む形へ写す。
+/* 消費のバケットを、外部 API が読む形へ写す。
 
-   欄の名前を 1 字にしてあるのは、桶が数千並ぶからである。ここだけは字数が
+   欄の名前を 1 文字にしてあるのは、バケットが数千並ぶからである。ここだけは文字数が
    そのまま転送量になるので、読みやすさより短さを採っている。 */
 
 export interface UsageBucketJson {
-  /** 桶の始まりの時刻。エポックのミリ秒 */
+  /** バケットの始まりの時刻。エポックのミリ秒 */
   t: number;
   model: string;
   i: number;
@@ -18,14 +18,14 @@ export interface UsageBucketJson {
   /** 読み直した分。**消費には足さない** — 同じ会話を続けるほど膨らみ、大小が読めなくなる */
   cr: number;
   cw: number;
-  /** 畳んだ応答の数 */
+  /** このバケットに集計した応答の数 */
   n: number;
 }
 
 export interface UsageJson {
   state: ObservationState;
   reason: string | null;
-  /** 桶が遡る先。空の一覧が「静かだった」のか「窓の外」なのかを、ここで見分ける */
+  /** バケットが遡る先。空の一覧が「静かだった」のか「対象期間の外」なのかを、ここで見分ける */
   since: number;
   buckets: UsageBucketJson[];
 }

@@ -2,8 +2,8 @@ import type { ConflictForecast } from '~/domain/entities/git/git-overview.entity
 
 /* 統合したときにぶつかる見込みを立てる。
 
-   **実際に統合を試してはいない。** 試すには書き込む場所が要るし、この道具は何も書かない。
-   代わりに「同じファイルを触っている線どうしはぶつかる公算が高い」という当てずっぽうを、
+   実際に統合を試してはいない。試すには書き込む場所が要るし、glasshive は何も書かない。
+   代わりに「同じファイルを触っている先端どうしはぶつかる公算が高い」という当てずっぽうを、
    触ったファイルの集合の重なりだけで出す。行が離れていればぶつからないので、これは
    ぶつかることの証拠ではなく、**先に統合する順を決めるための目印**である。
 
@@ -15,7 +15,7 @@ export const MAX_CONFLICTS = 8;
 /** 1 組につき挙げるファイルの本数 */
 export const MAX_CONFLICT_FILES = 6;
 
-/** 線 1 本が触ったファイル */
+/** 先端 1 つが触ったファイル */
 export interface TouchedFiles {
   readonly name: string;
   readonly files: ReadonlySet<string>;
@@ -39,7 +39,7 @@ export function forecastConflicts(touched: readonly TouchedFiles[]): ConflictFor
       });
     }
   }
-  // 重なりの深い組から。深さが同じなら、線の並び(最後の記録が新しい順)のまま
+  // 重なりの深い組から。深さが同じなら、先端の並び(最後のコミットが新しい順)のまま
   forecasts.sort((x, y) => y.count - x.count);
   return forecasts;
 }

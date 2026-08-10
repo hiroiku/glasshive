@@ -1,5 +1,5 @@
-// infrastructure は application が宣言した口を実装する。**domain へは道が無い。**
-// 読み解きは domain の仕事で、ここは外の世界から素材を持ってくるだけである。
+// infrastructure は application が宣言したポートを実装する。**`domain` は `import` できない。**
+// パースは domain の仕事で、ここは外の世界から素材を持ってくるだけである。
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {

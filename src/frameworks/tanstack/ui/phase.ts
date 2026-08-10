@@ -1,19 +1,19 @@
-/* 呼吸の位相を、時計そのものから決める。
+/* 明滅の位相を、時計そのものから決める。
 
    点の明滅を要素ごとに始めると、描き直しのたびに位相がばらけて、画面が騒がしくなる。
    始まりを「今が周期のどこか」から逆算して負の遅れとして与えると、いつ現れた点も
-   同じ息づかいに揃う。 */
+   同じ明滅に揃う。 */
 
 export const PULSE_MS = 1600;
 
 export const pulseDelay = (nowMs: number): string => `-${nowMs % PULSE_MS}ms`;
 
-/* 変わった行にだけ、一撃の光を当てる。
+/* 変わった行にだけ、一瞬の光を当てる。
 
    観測は絶えず入れ替わるので、全部を光らせると画面が点滅するだけになる。
    **意味のある欄の指紋を比べ、実際に変わった行にだけ当てる。**
 
-   React の状態にしないのは、光は 0.7 秒で消える見た目だけの出来事だからである。
+   React の状態にしないのは、光は 0.7 秒で消える見た目だけのイベントだからである。
    状態に載せると、行が 1 つ変わるたびに表全体を描き直すことになる。 */
 
 export const POP_MS = 700;
@@ -34,7 +34,7 @@ export function touchFingerprint(
   fingerprints.set(id, fingerprint);
 }
 
-/** 消えた光を落とす。落とさないと、開けっ放しの窓で覚えが増え続ける */
+/** 消えた光を落とす。落とさないと、開けっ放しのタブで `poppedAt` が増え続ける */
 export function prunePops(nowMs: number): void {
   for (const [id, at] of poppedAt) if (nowMs - at > POP_MS) poppedAt.delete(id);
 }

@@ -4,15 +4,15 @@ import type {
   Unsubscribe,
 } from '~/application/ports/integrations/sessions/transcript-watch.integration.ts';
 
-/* 動いたという合図を、観ている人みんなへ配る。
+/* 変更通知を、接続しているクライアント全員へ配る。
 
-   見張りは **この道具に 1 つだけ** 持つ。窓ごとに張ると、画面を開け閉てするたびに
-   OS の見張りが増え、やがて機械が張れる数の上限に当たる — そのとき壊れるのは
-   最後に開いた窓ではなく、たまたま次に張ろうとした誰かである。
+   ウォッチャーは **glasshive 全体で 1 つだけ** 持つ。接続ごとに張ると、画面を開け閉てする
+   たびに OS のファイル監視が増え、やがて機械が張れる数の上限に当たる — そのとき壊れるのは
+   最後に開いたクライアントではなく、たまたま次に張ろうとした誰かである。
 
-   250 ミリ秒の静けさで束ねるのは旧実装から引き継いだ判断。エージェントは 1 つの返答を
-   書くあいだに正本へ何度も追記するので、その 1 回ずつを配ると、観る人の画面は
-   落ち着きなく描き直され続ける。 */
+   250 ミリ秒の静けさで束ねる。エージェントは 1 つの返答を書くあいだに `transcript` へ
+   何度も追記するので、その 1 回ずつを配ると、クライアントの画面は落ち着きなく
+   描き直され続ける。 */
 
 export type ChangeMessage = { readonly kind: 'file'; readonly path: string } | { kind: 'tree' };
 
@@ -23,9 +23,9 @@ type Listener = (message: ChangeMessage) => void;
 
 export interface ChangeBroadcastService {
   subscribe(listener: Listener): Unsubscribe;
-  /** いま何人が観ているか。見張りが漏れていないことを検査から確かめるために置く */
+  /** いま何人が接続しているか。リスナーが漏れていないことをテストから確かめるために置く */
   listenerCount(): number;
-  /** 見張りを張れたか。張れていなければ、画面は「更新は届かない」と言える */
+  /** ウォッチャーを張れたか。張れていなければ、画面は「更新は届かない」と言える */
   watchState(): Observation<true>;
   close(): void;
 }
@@ -53,7 +53,7 @@ export function createChangeBroadcast(
       try {
         listener(message);
       } catch {
-        /* 1 人の窓が壊れても、他の窓へは配り続ける */
+        /* 1 つのクライアントが壊れても、他のクライアントへは配り続ける */
       }
     }
   };
@@ -65,8 +65,8 @@ export function createChangeBroadcast(
 
   const unwatch: Unsubscribe | undefined = started.kind === 'observed' ? started.value : undefined;
 
-  /* 張れたかどうかだけを外へ渡す。外し方(unwatch)は渡さない —
-     見張りを外してよいのは、この道具を畳むときだけである */
+  /* 張れたかどうかだけを外へ渡す。外し方(`unwatch`)は渡さない —
+     ウォッチャーを外してよいのは、この service を閉じるときだけである */
   const state: Observation<true> = started.kind === 'observed' ? observed(true) : started;
 
   return {

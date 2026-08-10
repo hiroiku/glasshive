@@ -1,10 +1,10 @@
 import type { Bin, QuotaWindow } from '../../derive/usage.ts';
 import { absTime, formatMinutes, formatTokens } from '../../format.ts';
 
-/* 定額の窓と、週ぶんと、内訳。
+/* 利用枠の期間と、週ぶんの合計と、内訳。
 
-   **正本から観測できる範囲の近似である。** 課金側の正とは一致しないことがあり、
-   しかもここに出るのはこの巣ぶんだけである。題にそう書いてある。 */
+   **`transcript` から観測できる範囲の近似である。** 課金側の数字とは一致しないことが
+   あり、しかもここに出るのはこのプロジェクトぶんだけである。`title` にそう書いてある。 */
 
 export function WindowsPanel({
   quota,

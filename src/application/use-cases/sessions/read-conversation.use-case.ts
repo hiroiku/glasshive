@@ -19,12 +19,13 @@ import {
   TAIL_WINDOW_BYTES,
 } from '~/domain/value-objects/sessions/event-page.value-object.ts';
 
-/* 会話を 1 頁ぶん読む。
+/* 会話を 1 ページぶん読む。
 
-   **開いてよいのは、いまの一覧が実際に観測した正本だけである。** 判定は集合帰属で行う。
-   前方一致で見ると、観測した正本の隣に置かれただけの別のファイルが「中にある」ことになる。
+   **開いてよいのは、いまの一覧が実際に観測した `transcript` だけである。** 判定は集合に
+   含まれるかどうかで行う。前方一致で見ると、観測した `transcript` の隣に置かれただけの
+   別のファイルが「中にある」ことになる。
 
-   頁の広さと上限は domain の値をそのまま口へ渡す。実装は言われたとおりに開くだけで、
+   ページの広さと上限は domain の値をそのままポートへ渡す。実装は言われたとおりに開くだけで、
    どこまで読むかを自分では決めない。 */
 
 export type {
@@ -37,7 +38,7 @@ export type ConversationPage = TranscriptPage<ConversationEvent>;
 
 export interface ConversationRequest {
   readonly file: string;
-  /** 読み始める位置。`null` なら末尾の窓 */
+  /** 読み始める位置。`null` なら末尾の読み取り範囲 */
   readonly from: number | null;
   /** ここで止める位置。`null` なら上限に当たるまで */
   readonly to: number | null;
@@ -60,7 +61,7 @@ export function createReadConversation(deps: {
 
       const scope = fromTree(snapshot.value);
       /* 在るか無いかは答えない。断り方を分けると、尋ねて回るだけで
-         置き場に何が在るかが分かってしまう。 */
+         `~/.claude/projects` に何が在るかが分かってしまう。 */
       if (!allowsTranscript(scope, file)) {
         return err(new TranscriptOutOfScopeError('Not an observed transcript'));
       }
@@ -75,8 +76,8 @@ export function createReadConversation(deps: {
           maxItems: MAX_EVENTS,
           readBlockBytes: READ_BLOCK_BYTES,
         },
-        /* 上限は「見せるイベント」で数える。行で数えると、道具どうしの内部の
-           やりとりばかりの区間で、見せるものが 1 つも無い頁が返る。 */
+        /* 上限は「見せるイベント」で数える。行で数えると、ツールの呼び出しと結果ばかりが
+           並ぶ区間で、見せるものが 1 つも無いページが返る。 */
         (line) => reduceEvent(line),
       );
       return ok(page);

@@ -9,9 +9,9 @@ import { ConcurrencyPanel } from './ConcurrencyPanel.tsx';
 import { TokensPanel } from './TokensPanel.tsx';
 import { WindowsPanel } from './WindowsPanel.tsx';
 
-/* 表の下の帯。4 枚が同じ足の長さを共有する。
+/* 表の下のバー。4 枚のパネルが同じ `footMs` を共有する。
 
-   分け合っているのは足の長さと窓の始まりと本数の 3 つだけなので、4 枚を 1 つの
+   分け合っているのはバー 1 本の長さと期間の始まりと本数の 3 つだけなので、4 枚を 1 つの
    ファイルにする理由が無い。ここは 3 つを配るだけである。 */
 
 const DEFAULT_FOOT_MS = 15 * 60_000;
@@ -24,7 +24,7 @@ export function StatsFooter({ project, nowMs }: { project: ProjectJson; nowMs: n
 
   const buckets = useMemo(() => {
     const response = usage.data;
-    // 読めなかったことは空の桶で表さない。空にすると「静かだった」に見える
+    // 観測できなかったことを空のバケットで表さない。空にすると「静かだった」に見える
     if (response === undefined || !response.ok || response.body.state !== 'observed') return [];
     return response.body.buckets;
   }, [usage.data]);

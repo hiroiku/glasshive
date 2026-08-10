@@ -1,7 +1,7 @@
 /* 会話の 1 イベント。
 
-   正本の行は道具の内部の形をそのまま持っているので、人が読める塊の並びへ還元する。
-   還元して塊が 1 つも残らない行(道具の内部だけのやりとり)は、イベントではない。 */
+   `transcript` の行はツールの内部形式をそのまま持っているので、人が読めるブロックの並びへ変換する。
+   変換してブロックが 1 つも残らない行(ツールの内部だけのやりとり)は、イベントではない。 */
 
 export type ConversationRole = 'user' | 'assistant' | 'system';
 
@@ -18,7 +18,7 @@ export type ConversationBlock =
 
 export interface ConversationEvent {
   readonly role: ConversationRole;
-  /** 正本に書かれていた時刻の字面。手を加えない */
+  /** `transcript` に書かれていた時刻の表記。手を加えない */
   readonly ts: string | null;
   readonly blocks: readonly ConversationBlock[];
 }

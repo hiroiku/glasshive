@@ -3,15 +3,15 @@ import { formatDuration, mdhms } from '../../format.ts';
 import { pulseDelay } from '../../phase.ts';
 import { type Axis, intervalsOf, type TimelineNode } from '../../timeline/axis.ts';
 
-/* 行 1 本ぶんの帯。
+/* 行 1 本ぶんの稼働区間のバー。
 
-   帯を区間ごとに分けるのは、**動いていた時間と、待っていた時間を混ぜないため**である。
-   1 本の長い帯にすると、10 分動いて 3 時間待ったセッションが「3 時間 10 分働いた」ように見える。
+   区間ごとに分けて描くのは、**動いていた時間と、待っていた時間を混ぜないため**である。
+   1 本の長いバーにすると、10 分動いて 3 時間待ったセッションが「3 時間 10 分働いた」ように見える。
 
-   **窓の外の区間は端に吸着させず、描かない。** 吸着させると位置も長さも嘘になる。
-   窓を跨ぐ区間は端で切るが、載せたときに出す時刻は切る前の本当の値にする。 */
+   表示範囲の外の区間は端に吸着させず、描かない。吸着させると位置も長さも嘘になる。
+   表示範囲を跨ぐ区間は端で切るが、ホバー時に出す時刻は切る前の本当の値にする。 */
 
-/** 点のような出来事も見えるように保つ最小の幅(%) */
+/** 一瞬で終わった区間も見えるように保つ最小の幅(%) */
 const MIN_BAR_PCT = 0.6;
 
 export function TlBar({
@@ -23,7 +23,7 @@ export function TlBar({
 }: {
   node: TimelineNode;
   axis: Axis;
-  /** 帯が正本の先頭まで届いているか。届いていない手前は「濃さ不明」の細線で示す */
+  /** 区間が `transcript` の先頭まで届いているか。届いていない手前は「密度不明」の細線で示す */
   intervalsComplete: boolean;
   nowMs: number;
   onPanStart: (event: React.MouseEvent) => void;
@@ -34,8 +34,9 @@ export function TlBar({
 
   const intervals = intervalsOf(node, nowMs);
   const firstStart = intervals[0]?.[0] ?? axis.t0;
-  /* 有界の走査で届かなかった昔の区間。**在ったことは確かで、濃さだけが分からない。**
-     何も描かないと「その頃は静かだった」に見えるので、細線で在ったことだけを示す。 */
+  /* 有界の読み取りで届かなかった、より古い区間。**在ったことは確かで、密度だけが
+     分からない。** 何も描かないと「その頃は静かだった」に見えるので、細線で在ったこと
+     だけを示す。 */
   const unknownEnd = intervalsComplete || intervals.length === 0 ? null : firstStart;
   const startedMs = Date.parse(node.started ?? node.last_activity) || axis.t0;
 
@@ -44,7 +45,7 @@ export function TlBar({
     .map(([from, to], index) => ({
       from: Math.max(from, axis.t0),
       to: Math.min(to, axis.t1),
-      // 載せたときに出すのは切る前の本当の時刻
+      // ホバー時に出すのは切る前の本当の時刻
       trueFrom: from,
       trueTo: to,
       isLast: index === last,
@@ -55,7 +56,7 @@ export function TlBar({
   const unknownTo = unknownEnd === null ? 0 : Math.min(unknownEnd, axis.t1);
 
   return (
-    /* 帯を掴んで窓を横へ送るのは近道で、同じことは下の摘みと期間の札からできる */
+    /* バーを掴んで表示範囲を横へ送るのはショートカットで、同じことはスライダーと期間のチップでもできる */
     // biome-ignore lint/a11y/noStaticElementInteractions: 掴んで動かすためだけの面
     <span
       className="tl"
@@ -75,7 +76,7 @@ export function TlBar({
       {bars.map((bar) => {
         const left = Math.min(pct(bar.from), 100 - MIN_BAR_PCT);
         const width = Math.min(100 - left, Math.max(MIN_BAR_PCT, pct(bar.to) - left));
-        // 呼吸するのは、いままさに動いている最後の区間だけ
+        // 明滅させるのは、いままさに動いている最後の区間だけ
         const live = node.state === 'active' && bar.isLast;
         return (
           <i

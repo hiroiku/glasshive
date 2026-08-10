@@ -1,10 +1,10 @@
-/* 正本の 1 行を、人が読める会話のイベントへ還元する。
+/* `transcript` の 1 行を、人が読める会話のイベントへ変換する。
 
-   正本の行は道具の内部の形をそのまま持っている。見る側に要るのは、誰が・いつ・何を
-   言ったかだけなので、見せる値のある塊だけを拾い、それ以外は落とす。
+   `transcript` の行はツールの内部形式をそのまま持っている。見る側に要るのは、誰が・いつ・
+   何を言ったかだけなので、見せる値のあるブロックだけを拾い、それ以外は落とす。
 
-   落とした結果、塊が 1 つも残らない行はイベントではない。道具どうしの内部のやりとりを
-   会話に混ぜると、読む人の目には意味の無い行が並ぶだけになる。 */
+   落とした結果、ブロックが 1 つも残らない行はイベントではない。ツールどうしの内部のやりとりを
+   会話に混ぜると、ユーザーの目には意味の無い行が並ぶだけになる。 */
 
 import { asString, type JsonRecord } from '~/app-kernel/json.ts';
 import type {
@@ -18,26 +18,26 @@ import {
 
 /* 型の分からない値から欄をそのまま取り出す。
 
-   中身が字か並びかを問わない場に使う。並びの添字を名前で引くことはしないので、
+   中身が文字列か並びかを問わない場所に使う。並びの添字を名前で引くことはしないので、
    記録(入れ子の並びでない object)のときだけ覗く。 */
 function fieldOf(source: unknown, key: string): unknown {
   if (typeof source !== 'object' || source === null || Array.isArray(source)) return undefined;
   return (source as JsonRecord)[key];
 }
 
-/* 運ぶ量の上限で切る。切ったことが分かる印を末尾に添える。
+/* 運ぶ量の上限で切る。切り詰めたことが分かる省略記号を末尾に添える。
 
    数えるのは **符号位置**([...s] で分ける)。UTF-16 の長さで切ると、絵文字のような
-   2 単位で 1 字を成すものが割れて、壊れた字が出る。 */
+   2 単位で 1 文字を成すものが割れて、壊れた文字が出る。 */
 export function capText(text: string, maxChars: number = MAX_TEXT_CHARS): string {
   const chars = [...text];
   return chars.length > maxChars ? chars.slice(0, maxChars).join('') + TRUNCATION_NOTICE : text;
 }
 
-/* 道具の返しを 1 つの字へ均す。
+/* ツールの結果を 1 つの文字列へ正規化する。
 
-   返しは字のことも塊の並びのこともある。並びのときは各塊の text 欄のうち字であるものだけを
-   繋ぐ。画像などの字でない返しは、会話の流れとして読めないので落とす。 */
+   結果は文字列のこともブロックの並びのこともある。並びのときは各ブロックの text 欄のうち文字列である
+   ものだけを繋ぐ。画像などの文字列でない結果は、会話の流れとして読めないので落とす。 */
 function flattenResult(content: unknown): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
@@ -49,7 +49,7 @@ function flattenResult(content: unknown): string {
   return texts.join('\n');
 }
 
-/** 1 行を人が読める形へ還元する。読めない行・見せる塊が無い行は null */
+/** 1 行を人が読める形へ変換する。読めない行・見せるブロックが無い行は null */
 export function reduceEvent(
   line: string,
   maxChars: number = MAX_TEXT_CHARS,
@@ -95,7 +95,7 @@ export function reduceEvent(
           blocks.push({ kind: 'text', text: capText(text, maxChars) });
         }
       } else if (kind === 'thinking') {
-        // 本文なし(signature のみ)の thinking を書くハーネスがある — 空箱は見せない
+        // 本文なし(signature のみ)の thinking を書くハーネスがある — 中身の無いブロックは見せない
         const thinking = asString(block, 'thinking');
         if (thinking?.trim()) {
           blocks.push({ kind: 'thinking', text: capText(thinking, maxChars) });

@@ -11,8 +11,8 @@ import {
 
 /* 時間の軸。**ここが狂うと画面全体が嘘になる。**
 
-   軸の取り方は「どの帯が読めるか」をそのまま決める。1 週間前に終わった
-   セッションに軸を引き伸ばされると、いま動いている帯が 1 本の線に潰れる。 */
+   軸の取り方は「どの稼働区間が読めるか」をそのまま決める。1 週間前に終わった
+   セッションに軸を引き伸ばされると、いま動いている稼働区間が 1 本の線に潰れる。 */
 
 const NOW = Date.parse('2026-08-09T12:00:00.000Z');
 const at = (ms: number) => new Date(NOW - ms).toISOString();
@@ -25,21 +25,21 @@ const node = (over: Partial<TimelineNode> = {}): TimelineNode => ({
   ...over,
 });
 
-describe('帯を数の組にする', () => {
-  it('書かれている帯をそのまま数にする', () => {
+describe('稼働区間を数の組にする', () => {
+  it('書かれている稼働区間をそのまま数にする', () => {
     const intervals = intervalsOf(node({ intervals: [[at(3_600_000), at(1_800_000)]] }), NOW);
 
     expect(intervals).toEqual([[NOW - 3_600_000, NOW - 1_800_000]]);
   });
 
-  /* 帯が 1 本も読めなかったエージェントを空にすると、画面から消える。 */
-  it('帯が無ければ、起点と最後の動きで 1 本引く', () => {
+  /* 稼働区間が 1 本も読めなかったエージェントを空にすると、画面から消える。 */
+  it('稼働区間が無ければ、起点と最後の動きで 1 本引く', () => {
     const intervals = intervalsOf(node({ started: at(600_000), last_activity: at(60_000) }), NOW);
 
     expect(intervals).toEqual([[NOW - 600_000, NOW - 60_000]]);
   });
 
-  it('動いている最後の帯は現在まで伸ばす', () => {
+  it('動いている最後の稼働区間は現在まで伸ばす', () => {
     const intervals = intervalsOf(
       node({ state: 'active', intervals: [[at(600_000), at(300_000)]] }),
       NOW,
@@ -48,7 +48,7 @@ describe('帯を数の組にする', () => {
     expect(intervals).toEqual([[NOW - 600_000, NOW]]);
   });
 
-  it('時刻として読めない帯は落とす', () => {
+  it('時刻として読めない稼働区間は落とす', () => {
     const intervals = intervalsOf(
       node({
         intervals: [
@@ -64,9 +64,9 @@ describe('帯を数の組にする', () => {
 });
 
 describe('軸の両端を決める', () => {
-  /* Auto は動いているものの実際の帯だけで決める。終わったものまで含めると、
-     昔のセッションが軸を引き伸ばして、いまの帯が読めなくなる。 */
-  it('Auto は、終わっていないものの帯だけで決める', () => {
+  /* Auto は動いているものの実際の稼働区間だけで決める。終わったものまで含めると、
+     昔のセッションが軸を引き伸ばして、いまの稼働区間が読めなくなる。 */
+  it('Auto は、終わっていないものの稼働区間だけで決める', () => {
     const axis = axisOf(
       [
         node({ state: 'ended', intervals: [[at(30 * 86_400_000), at(29 * 86_400_000)]] }),
@@ -128,7 +128,7 @@ describe('軸の両端を決める', () => {
     expect(axis.t1 - axis.t0).toBe(60_000);
   });
 
-  it('潰れた窓は 1 分まで広げる', () => {
+  it('潰れた表示範囲は 1 分まで広げる', () => {
     const axis = axisOf(
       [node({ state: 'waiting', intervals: [[at(1000), at(500)]] })],
       'auto',
@@ -150,7 +150,7 @@ describe('動かせる全域', () => {
     expect(domain).toEqual({ t0: NOW - 7_200_000, t1: NOW });
   });
 
-  it('いま見ている窓が全域より外なら、全域を広げる', () => {
+  it('いま見ている表示範囲が全域より外なら、全域を広げる', () => {
     const domain = domainOf(
       [node({ started: at(600_000) })],
       { t0: NOW - 86_400_000, t1: NOW },
@@ -180,7 +180,7 @@ describe('目盛りを置く', () => {
     }
   });
 
-  it('窓が 1 日を跨ぐときだけ日付を添える', () => {
+  it('表示範囲が 1 日を跨ぐときだけ日付を添える', () => {
     expect(formatTick(NOW, 3_600_000)).not.toMatch(/\//);
     expect(formatTick(NOW, 2 * 86_400_000)).toMatch(/\//);
   });
@@ -201,8 +201,8 @@ describe('打ち込まれた日付を読む', () => {
     expect(parseTimeInput('21:15', base)).toBe(new Date(2026, 7, 9, 21, 15).getTime());
   });
 
-  /* 読めない字を当てずっぽうの時刻にすると、窓が思わぬところへ飛ぶ。 */
-  it('読めない字は読めないと言う', () => {
+  /* 読めない文字列を当てずっぽうの時刻にすると、表示範囲が思わぬところへ飛ぶ。 */
+  it('読めない文字列は読めないと言う', () => {
     expect(parseTimeInput('きのう', NOW)).toBeNull();
     expect(parseTimeInput('', NOW)).toBeNull();
   });

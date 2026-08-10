@@ -3,11 +3,11 @@ import {
   type TabSelection,
 } from '~/domain/value-objects/workspace/tab-selection.value-object.ts';
 
-/* 選びを組み替える。ここは純粋で、ディスクにも時計にも触らない。
+/* 選択を組み替える。ここは純粋で、ディスクにも時計にも触らない。
 
    **「残す」ことと「出す」ことを分けてある。** 覚えておくのは人が選んだ id で、
-   タブに出すのは そのうち いま観測できているものだけ。混ぜると、選びが観測を
-   作り出す道ができてしまう。 */
+   タブに出すのは そのうち いま観測できているものだけ。混ぜると、選択が観測を
+   作り出す経路ができてしまう。 */
 
 /** 重複を落とす。残すのは先に出てきたほうなので、並びの順は変わらない */
 function dedupe(ids: readonly string[]): string[] {
@@ -21,19 +21,19 @@ function dedupe(ids: readonly string[]): string[] {
   return kept;
 }
 
-/* 覚え書きと観測を突き合わせる。
+/* `preferences.json` の中身と観測を突き合わせる。
 
-   **突き合わせても選びは減らない。** 一覧から消えた id も `pinned` に残す —
-   作業領域は外して後で繋ぎ直されることがあり、そのたびに留め直させるのは
-   「自分の机の並び」を毎回崩すことになる。
+   突き合わせても選択は減らない。一覧から消えた id も `pinned` に残す —
+   `worktree` は外して後で繋ぎ直されることがあり、そのたびに留め直させるのは
+   ユーザーが並べたタブの順を毎回崩すことになる。
 
    **観測を受け取らない。** 受け取れば、いつか誰かがそれで削る。観測に合わせて削ると、
-   置き場をひととき読めなかっただけの日に選びが丸ごと消える — ここは純粋で、空の一覧が
-   「無い」なのか「見に行けなかった」なのかを知らない。観測は、出す対象を決める
+   `~/.claude/projects` をひととき読めなかっただけの日に選択が丸ごと消える — ここは純粋で、
+   空の一覧が「無かった」のか「観測できなかった」のかを知らない。観測は、出す対象を決める
    `visibleTabs` の側でだけ効かせる。
 
    ここでするのは形を整えることだけ: 重複を落とし、順を保ち、
-   `pinned` と `hidden` の食い違いを解く(留めたほうが後の、強い申し出なので勝つ)。 */
+   `pinned` と `hidden` の食い違いを解く(留めたほうが後の、強い操作なので勝つ)。 */
 export function reconcile(selection: TabSelection): TabSelection {
   const pinned = dedupe(selection.pinned);
   const pinnedIds = new Set(pinned);
@@ -48,8 +48,8 @@ export function reconcile(selection: TabSelection): TabSelection {
 
 /* タブに出す id。**観測に在るものだけが並ぶ。**
 
-   `pinned` に在っても観測していない id は出さない。出すと、消えた作業領域を指す
-   タブが残り、押しても何も無い窓が開く。留めた印そのものは `reconcile` の側に残る。
+   `pinned` に在っても観測していない id は出さない。出すと、消えた `worktree` を指す
+   タブが残り、押しても何も無い画面が開く。ピン留めそのものは `reconcile` の側に残る。
 
    `hidden` は一覧を絞るためのもので、タブ行には効かない。タブに何が並ぶかは
    `pinned` だけで決まる。 */
@@ -74,8 +74,8 @@ export function pin(selection: TabSelection, id: string): TabSelection {
 
 /* 外す。伏せるほうへは移さない。
 
-   外すのは「机の上から下ろす」ことで、「一覧から消す」ことではない。
-   ここで伏せると、外したつもりの巣が一覧からも居なくなり、戻し方が分からなくなる。 */
+   外すのはタブ行から下ろすことで、「一覧から消す」ことではない。
+   ここで伏せると、外したつもりのプロジェクトが一覧からも居なくなり、戻し方が分からなくなる。 */
 export function unpin(selection: TabSelection, id: string): TabSelection {
   return {
     version: TAB_SELECTION_VERSION,
@@ -88,7 +88,7 @@ export function unpin(selection: TabSelection, id: string): TabSelection {
 /* 留めたものの並びを変える。落とす先が端をはみ出したら端で丸める。
 
    **留めていない id は動かせない。** ここで足すと、並べ替えという操作が
-   選びを増やすことになる。 */
+   選択を増やすことになる。 */
 export function move(selection: TabSelection, id: string, toIndex: number): TabSelection {
   if (!Number.isFinite(toIndex)) return selection;
   const pinned = dedupe(selection.pinned);

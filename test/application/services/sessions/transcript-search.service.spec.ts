@@ -8,15 +8,15 @@ import type {
 } from '~/application/ports/repositories/sessions/transcript.repository.ts';
 import { createTranscriptSearch } from '~/application/services/sessions/transcript-search.service.ts';
 
-/* 探しは置き場を開くかどうかの決め事の塊なので、下地は答えを並べるだけの偽物でよい。
-   確かめるのは「どれを開いたか」と「見付からないことと見に行けないことを分けているか」である。 */
+/* 検索は `~/.claude/projects` を開くかどうかの決め事の塊なので、ポートは結果を並べるだけのスタブでよい。
+   確かめるのは「どれを開いたか」と「無かったことと観測できなかったことを分けているか」である。 */
 
 const MIB = 1024 * 1024;
 const NOW = Date.parse('2026-08-09T12:00:00.000Z');
 const DAY_MS = 86_400_000;
 const SINCE = NOW - 7 * DAY_MS;
 
-/** 探しが末尾から読む量。**この数は契約である** */
+/** 検索が末尾から読む量。**この数は契約である** */
 const SEARCH_TAIL = 1 * MIB;
 
 interface Fake {
@@ -60,28 +60,28 @@ function createStub(files: Readonly<Record<string, Fake>>) {
 
 const options = { sinceMs: SINCE, limit: 200 };
 
-describe('正本の末尾から探す', () => {
-  it('語を含む正本だけを返す', async () => {
+describe('`transcript` の末尾から探す', () => {
+  it('語を含む `transcript` だけを返す', async () => {
     const stub = createStub({
       '/w/a.jsonl': found('ここに NEEDLE がある'),
       '/w/b.jsonl': found('ここには無い'),
     });
 
     const hits = await stub.search.findTails(['/w/a.jsonl', '/w/b.jsonl'], 'needle', options);
-    expect(hits, '小文字に均してから当てるので、大文字で書かれていても当たる').toEqual({
+    expect(hits, '小文字に正規化してから当てるので、大文字で書かれていても当たる').toEqual({
       kind: 'observed',
       value: ['/w/a.jsonl'],
     });
   });
 
-  it('末尾 1MiB だけを見る。字面で当てるので、切れた行は繕わない', async () => {
+  it('末尾 1MiB だけを見る。テキストをそのまま走査するので、切れた行は繕わない', async () => {
     const stub = createStub({ '/w/a.jsonl': found('needle') });
 
     await stub.search.findTails(['/w/a.jsonl'], 'needle', options);
     expect(stub.asks).toEqual([{ maxBytes: SEARCH_TAIL, trimPartialLine: false }]);
   });
 
-  it('窓より前に書き終わった正本は開かない', async () => {
+  it('対象期間より前に書き終わった `transcript` は開かない', async () => {
     const stub = createStub({
       '/w/a.jsonl': found('needle', NOW - 8 * DAY_MS),
     });
@@ -108,14 +108,14 @@ describe('正本の末尾から探す', () => {
     expect(stub.opened).toEqual(['/w/a.jsonl']);
   });
 
-  it('消えた正本は飛ばして、探しを続ける', async () => {
+  it('消えた `transcript` は飛ばして、検索を続ける', async () => {
     const stub = createStub({ '/w/a.jsonl': found('needle') });
 
     const hits = await stub.search.findTails(['/w/いない.jsonl', '/w/a.jsonl'], 'needle', options);
     expect(hits).toEqual({ kind: 'observed', value: ['/w/a.jsonl'] });
   });
 
-  it('読めない正本があれば、探しそのものを見に行けなかったことにする', async () => {
+  it('読めない `transcript` があれば、検索そのものを観測できなかったことにする', async () => {
     const stub = createStub({
       '/w/a.jsonl': {
         stat: observed({ mtimeMs: NOW, sizeBytes: 10 }),
@@ -124,15 +124,15 @@ describe('正本の末尾から探す', () => {
     });
 
     const hits = await stub.search.findTails(['/w/a.jsonl'], 'needle', options);
-    expect(hits.kind, '見付からなかったのか、見に行けなかったのかを取り違えさせない').toBe(
+    expect(hits.kind, '見付からなかったのか、観測できなかったのかを取り違えさせない').toBe(
       'unobservable',
     );
   });
 
-  it('大きさすら見に行けない正本も、飛ばさず持ち帰る', async () => {
+  it('大きさすら観測できない `transcript` も、飛ばさず持ち帰る', async () => {
     const stub = createStub({
       '/w/a.jsonl': {
-        stat: unobservable(new UnexpectedError('棚に入れない')),
+        stat: unobservable(new UnexpectedError('ディレクトリに入れない')),
         tail: observed({ text: 'needle', complete: true }),
       },
     });

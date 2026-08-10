@@ -8,11 +8,11 @@ import {
   parseSubagentMeta,
 } from '~/domain/services/sessions/transcript-meta.service.ts';
 
-/** 正本の字面をその場で組む。ファイルは 1 つも要らない */
+/** `transcript` のテキストをその場で組む。ファイルは 1 つも要らない */
 const jsonl = (...records: readonly unknown[]): string =>
   records.map((record) => `${JSON.stringify(record)}\n`).join('');
 
-describe('セッションの見出しを導き出す', () => {
+describe('セッションのメタ情報を導き出す', () => {
   const head = jsonl(
     {
       type: 'user',
@@ -50,26 +50,28 @@ describe('セッションの見出しを導き出す', () => {
   it('ai-title が最初の発話より優先される', () => {
     expect(
       parseSessionMeta(head, '').title,
-      '道具が付けた題は最初の発話より後に決まるので、走査を終えてから被せる',
+      'Claude Code が付けた題は最初の発話より後に決まるので、走査を終えてから被せる',
     ).toBe('タイトルはこれ');
   });
 
-  it('作業場所・起点・枝・モデル・エフォート・様子を 1 度の走査で揃える', () => {
+  it('作業ディレクトリ・起点・ブランチ・モデル・エフォート・状態を 1 度の走査で揃える', () => {
     const meta = parseSessionMeta(head, '');
     expect(meta.cwd).toBe('/work/myproj');
-    expect(meta.startedRaw, '起点は作業場所を決めた行の時刻と揃う').toBe('2026-08-04T00:00:00Z');
+    expect(meta.startedRaw, '起点は作業ディレクトリを決めた行の時刻と揃う').toBe(
+      '2026-08-04T00:00:00Z',
+    );
     expect(meta.gitBranch).toBe('main');
     expect(meta.model).toBe('claude-opus-5');
     expect(meta.effort).toBe('xhigh');
     expect(meta.actor).toBe('mgr-deadbeef');
     expect(meta.issues).toEqual(['foo-123']);
-    expect(meta.current, '道具の一言は description を先に見る').toBe('Bash: テスト実行');
+    expect(meta.current, 'ツールの一言は `description` を先に見る').toBe('Bash: テスト実行');
   });
 
   it('末尾が tool_use なら自分の番は終わっていない', () => {
     const meta = parseSessionMeta(head, '');
     expect(meta.lastEventShape).toBe('tool');
-    expect(meta.awaitingCandidate, '道具を呼んだ直後はまだ自分の番である').toBe(false);
+    expect(meta.awaitingCandidate, 'ツールを呼んだ直後はまだ自分の番である').toBe(false);
   });
 
   it('末尾が本文なら人の入力待ちの候補になる', () => {
@@ -90,7 +92,7 @@ describe('セッションの見出しを導き出す', () => {
       },
     });
     const meta = parseSessionMeta(head, tail);
-    expect(meta.lastEventShape, '問いかけだけは道具ではなく待ちとして数える').toBe('ask');
+    expect(meta.lastEventShape, '問いかけだけはツールではなく待ちとして数える').toBe('ask');
     expect(meta.awaitingCandidate).toBe(true);
   });
 
@@ -125,7 +127,7 @@ describe('セッションの見出しを導き出す', () => {
     expect(meta.awaitingCandidate).toBe(false);
   });
 
-  it('末尾が道具の結果なら待ちにならず、様子は定まった言葉になる', () => {
+  it('末尾が `tool_result` なら待ちにならず、状態は定まった言葉になる', () => {
     const tail = jsonl({
       type: 'user',
       message: { content: [{ type: 'tool_result', content: 'hi' }] },
@@ -133,10 +135,12 @@ describe('セッションの見出しを導き出す', () => {
     const meta = parseSessionMeta(head, tail);
     expect(meta.lastEventShape).toBe('tool_result');
     expect(meta.awaitingCandidate).toBe(false);
-    expect(meta.current, '道具の結果の行には様子を語る手掛かりが無い').toBe('received tool result');
+    expect(meta.current, '`tool_result` の行には状態を語る手掛かりが無い').toBe(
+      'received tool result',
+    );
   });
 
-  it('知らない種別の塊が末尾に在るときは末尾の形が変わらない', () => {
+  it('知らない種別のブロックが末尾に在るときは末尾の形が変わらない', () => {
     const tail = jsonl(
       {
         type: 'assistant',
@@ -149,11 +153,11 @@ describe('セッションの見出しを導き出す', () => {
     );
     expect(
       parseSessionMeta(head, tail).lastEventShape,
-      '種別を持つ最後の塊で判断を止めるので、手前の本文までは遡らない',
+      '種別を持つ最後のブロックで判断を止めるので、手前の本文までは遡らない',
     ).toBe('text');
   });
 
-  it('actor が尻にしか無いときは拾わない', () => {
+  it('actor が `tail` にしか無いときは拾わない', () => {
     const bare = jsonl({
       type: 'user',
       cwd: '/w',
@@ -166,11 +170,11 @@ describe('セッションの見出しを導き出す', () => {
     });
     expect(
       parseSessionMeta(bare, tail).actor,
-      '名乗りはセッションの始めに一度だけ差し込まれるので、頭だけを見る',
+      'actor はセッションの始めに一度だけ差し込まれるので、`head` だけを見る',
     ).toBeNull();
   });
 
-  it('issues は頭と尻から併合され、5 件で切られる', () => {
+  it('issues は `head` と `tail` から併合され、5 件で切られる', () => {
     const headIssues = jsonl({
       type: 'user',
       cwd: '/w',
@@ -192,7 +196,7 @@ describe('セッションの見出しを導き出す', () => {
     ]);
   });
 
-  it('<synthetic> の行でもエフォートと様子は採る', () => {
+  it('<synthetic> の行でもエフォートと状態は採る', () => {
     const lines = jsonl(
       {
         type: 'assistant',
@@ -231,7 +235,7 @@ describe('セッションの見出しを導き出す', () => {
     ).toBe('最初の依頼');
   });
 
-  it('様子を語らない行は、直前の様子を消さない', () => {
+  it('状態を語らない行は、直前の状態を消さない', () => {
     const lines = jsonl(
       {
         type: 'assistant',
@@ -242,13 +246,13 @@ describe('セッションの見出しを導き出す', () => {
       { type: 'assistant', message: { content: [] } },
     );
     const meta = parseSessionMeta(lines, '');
-    expect(meta.current, '様子は「最後に見えたもの」であって「最後の行のもの」ではない').toBe(
+    expect(meta.current, '状態は「最後に見えたもの」であって「最後の行のもの」ではない').toBe(
       'responding',
     );
-    expect(meta.lastEventShape, '塊が 1 つも無い行では末尾の形も決まらない').toBe('user');
+    expect(meta.lastEventShape, 'ブロックが 1 つも無い行では末尾の形も決まらない').toBe('user');
   });
 
-  it('道具の結果でない user の行は、待ちにならない形として数える', () => {
+  it('`tool_result` でない user の行は、待ちにならない形として数える', () => {
     const meta = parseSessionMeta(
       jsonl({ type: 'user', cwd: '/w', message: { content: '依頼' } }),
       '',
@@ -257,7 +261,7 @@ describe('セッションの見出しを導き出す', () => {
     expect(meta.awaitingCandidate, '人が書いた直後は自分の番である').toBe(false);
   });
 
-  it('作業場所が最後まで決まらなくても、起点だけは置かれる', () => {
+  it('作業ディレクトリが最後まで決まらなくても、起点だけは置かれる', () => {
     const lines = jsonl(
       {
         type: 'user',
@@ -274,7 +278,7 @@ describe('セッションの見出しを導き出す', () => {
     );
   });
 
-  it('作業場所が字でない行では起点だけを置き直し、次の行でまた試す', () => {
+  it('作業ディレクトリが文字列でない行では起点だけを置き直し、次の行でまた試す', () => {
     const lines = jsonl(
       { type: 'user', cwd: 42, timestamp: 't1', message: { content: '依頼' } },
       {
@@ -292,7 +296,9 @@ describe('セッションの見出しを導き出す', () => {
     );
     const meta = parseSessionMeta(lines, '');
     expect(meta.cwd).toBe('/work/myproj');
-    expect(meta.startedRaw, '作業場所と起点は同じ行から採らないと両者が繋がらない').toBe('t3');
+    expect(meta.startedRaw, '作業ディレクトリと起点は同じ行から採らないと両者が繋がらない').toBe(
+      't3',
+    );
   });
 
   it('題は最初に読めた発話が残る', () => {
@@ -315,7 +321,7 @@ describe('セッションの見出しを導き出す', () => {
     ).toBe('本当の依頼');
   });
 
-  it('枝は user と assistant の行からだけ、最後に見えたものを採る', () => {
+  it('ブランチは user と assistant の行からだけ、最後に見えたものを採る', () => {
     const lines = jsonl({
       type: 'user',
       cwd: '/w',
@@ -341,11 +347,11 @@ describe('セッションの見出しを導き出す', () => {
       message: { content: '依頼' },
     })}`;
     const meta = parseSessionMeta(lines, '');
-    expect(meta.cwd, '1 行の壊れで巣ひとつぶんの観測を失ってはいけない').toBe('/w');
+    expect(meta.cwd, '1 行の壊れでプロジェクトひとつぶんの観測を失ってはいけない').toBe('/w');
     expect(meta.title).toBe('依頼');
   });
 
-  it('何も読めないときは空の見出しを返す', () => {
+  it('何も読めないときは空のメタ情報を返す', () => {
     const meta = parseSessionMeta('', '');
     expect(meta).toEqual({
       title: null,
@@ -364,11 +370,11 @@ describe('セッションの見出しを導き出す', () => {
 });
 
 describe('人が書いた一言を取り出す', () => {
-  it('中身が字ならそのまま読む', () => {
+  it('中身が文字列ならそのまま読む', () => {
     expect(deriveUserTitle({ message: { content: '依頼' } })).toBe('依頼');
   });
 
-  it('中身が並びなら最初の本文の塊から読む', () => {
+  it('中身が配列なら最初の本文のブロックから読む', () => {
     expect(
       deriveUserTitle({
         message: {
@@ -381,7 +387,7 @@ describe('人が書いた一言を取り出す', () => {
     ).toBe('依頼');
   });
 
-  it('最初の本文の塊が字を持たないときは、後ろの塊を探しに行かない', () => {
+  it('最初の本文のブロックが文字列を持たないときは、後ろのブロックを探しに行かない', () => {
     expect(
       deriveUserTitle({
         message: {
@@ -395,7 +401,7 @@ describe('人が書いた一言を取り出す', () => {
     ).toBeUndefined();
   });
 
-  it('包みと注意書きの行は飛ばす', () => {
+  it('タグで始まる行と注意書きの行は飛ばす', () => {
     expect(
       deriveUserTitle({
         message: {
@@ -409,13 +415,13 @@ describe('人が書いた一言を取り出す', () => {
     expect(deriveUserTitle({ message: { content: '<a>\n\nCaveat: 注意' } })).toBeUndefined();
   });
 
-  it('60 字を超える行は切り詰める', () => {
+  it('60 文字を超える行は切り詰める', () => {
     const long = 'あ'.repeat(70);
     expect(deriveUserTitle({ message: { content: long } })).toBe(`${'あ'.repeat(60)}…`);
   });
 });
 
-describe('道具が付けた題', () => {
+describe('Claude Code が付けた題', () => {
   it('aiTitle の欄をそのまま読む', () => {
     expect(deriveAiTitle({ type: 'ai-title', aiTitle: 'タイトルはこれ' })).toBe('タイトルはこれ');
     expect(deriveAiTitle({ type: 'ai-title' })).toBeUndefined();
@@ -423,7 +429,7 @@ describe('道具が付けた題', () => {
 });
 
 describe('いま何をしているかを組み立てる', () => {
-  it('道具の呼び出しは名前と一言を並べる', () => {
+  it('`tool_use` は名前と一言を並べる', () => {
     expect(
       deriveCurrentActivity({
         message: {
@@ -450,11 +456,11 @@ describe('いま何をしているかを組み立てる', () => {
     ).toBe('Bash: ls');
   });
 
-  it('名前も一言も無い道具は既定の呼び名で並べる', () => {
+  it('名前も一言も無いツールは既定の名前で並べる', () => {
     expect(deriveCurrentActivity({ message: { content: [{ type: 'tool_use' }] } })).toBe('tool: ');
   });
 
-  it('90 字を超える一言は切り詰める', () => {
+  it('90 文字を超える一言は切り詰める', () => {
     const current = deriveCurrentActivity({
       message: {
         content: [
@@ -471,12 +477,12 @@ describe('いま何をしているかを組み立てる', () => {
     );
   });
 
-  it('道具の入れ物が記録でなければ一言は空になる', () => {
+  it('ツールの `input` が記録でなければ一言は空になる', () => {
     expect(
       deriveCurrentActivity({
         message: { content: [{ type: 'tool_use', name: 'Bash', input: 'ls' }] },
       }),
-      '入れ物が壊れていても、道具を呼んだことは見せる',
+      '`input` が壊れていても、ツールを呼んだことは見せる',
     ).toBe('Bash: ');
   });
 
@@ -493,7 +499,7 @@ describe('いま何をしているかを組み立てる', () => {
     ).toBe('thinking');
   });
 
-  it('知らない種別の塊は飛ばして、更に手前を見る', () => {
+  it('知らない種別のブロックは飛ばして、更に手前を見る', () => {
     expect(
       deriveCurrentActivity({
         message: {
@@ -503,18 +509,18 @@ describe('いま何をしているかを組み立てる', () => {
           ],
         },
       }),
-      '様子を語らない塊で止まると、いま何をしているかが空になる',
+      '状態を語らないブロックで止まると、いま何をしているかが空になる',
     ).toBe('responding');
   });
 
-  it('中身が並びでなければ様子は無い', () => {
+  it('中身が配列でなければ状態は無い', () => {
     expect(deriveCurrentActivity({ message: { content: 'a' } })).toBeUndefined();
     expect(deriveCurrentActivity({})).toBeUndefined();
   });
 });
 
 describe('末尾の形を読む', () => {
-  it('問いかけの道具だけは ask として数える', () => {
+  it('問いかけのツールだけは ask として数える', () => {
     expect(
       classifyLastEvent({
         type: 'assistant',
@@ -529,7 +535,7 @@ describe('末尾の形を読む', () => {
     ).toBe('tool');
   });
 
-  it('種別を持つ最後の塊で判断を止める', () => {
+  it('種別を持つ最後のブロックで判断を止める', () => {
     expect(
       classifyLastEvent({
         type: 'assistant',
@@ -539,7 +545,7 @@ describe('末尾の形を読む', () => {
     ).toBeNull();
   });
 
-  it('種別の欄が空の塊は最後の塊とみなさない', () => {
+  it('種別の欄が空のブロックは最後のブロックとみなさない', () => {
     expect(
       classifyLastEvent({
         type: 'assistant',
@@ -555,7 +561,7 @@ describe('末尾の形を読む', () => {
   });
 });
 
-describe('子の見出しを導き出す', () => {
+describe('子のメタ情報を導き出す', () => {
   const head = jsonl(
     {
       type: 'user',
@@ -583,37 +589,39 @@ describe('子の見出しを導き出す', () => {
     },
   });
 
-  it('先頭の 1 行から起点と作業場所と枝を採る', () => {
+  it('先頭の 1 行から起点と作業ディレクトリとブランチを採る', () => {
     const meta = parseSubagentMeta(head, null);
     expect(meta.startedRaw).toBe('2026-08-04T00:00:10Z');
     expect(meta.cwd).toBe('/work/myproj/.worktrees/foo-123');
     expect(meta.gitBranch).toBe('mgr-x/foo-123');
   });
 
-  it('取り組んでいる課題は作業場所の字面から引く', () => {
+  it('取り組んでいる課題は作業ディレクトリのパスから引く', () => {
     expect(parseSubagentMeta(head, null).issue).toBe('foo-123');
     const plain = jsonl({ type: 'user', cwd: '/work/myproj', timestamp: 't1' });
     expect(parseSubagentMeta(plain, null).issue).toBeNull();
   });
 
-  it('稼働していない子には尻を渡さないので、末尾のモデルが反映されない', () => {
+  it('稼働していない子には `tail` を渡さないので、末尾のモデルが反映されない', () => {
     const meta = parseSubagentMeta(head, null);
-    expect(meta.model, '止まった子は頭を読めば足りる').toBe('claude-haiku-5');
+    expect(meta.model, '止まった子は `head` を読めば足りる').toBe('claude-haiku-5');
     expect(meta.effort).toBe('low');
     expect(meta.gitBranch).toBe('mgr-x/foo-123');
     expect(meta.current, '止まった子に「いま」は無い').toBeNull();
   });
 
-  it('稼働している子は尻で見えたもので上書きする', () => {
+  it('稼働している子は `tail` で見えたもので上書きする', () => {
     const meta = parseSubagentMeta(head, tail);
     expect(meta.model).toBe('claude-opus-5');
     expect(meta.effort).toBe('xhigh');
     expect(meta.gitBranch).toBe('mgr-x/foo-999');
     expect(meta.current).toBe('Read: /w/a.ts');
-    expect(meta.startedRaw, '起点は先頭の行で決まり、尻では動かない').toBe('2026-08-04T00:00:10Z');
+    expect(meta.startedRaw, '起点は先頭の行で決まり、`tail` では動かない').toBe(
+      '2026-08-04T00:00:10Z',
+    );
   });
 
-  it('頭のモデルとエフォートは最初に見えたものを採る', () => {
+  it('`head` のモデルとエフォートは最初に見えたものを採る', () => {
     const lines = jsonl(
       { type: 'user', cwd: '/w', timestamp: 't1' },
       {
@@ -632,7 +640,7 @@ describe('子の見出しを導き出す', () => {
     expect(meta.effort).toBe('low');
   });
 
-  it('頭では <synthetic> のモデルだけを見送り、エフォートは採る', () => {
+  it('`head` では <synthetic> のモデルだけを見送り、エフォートは採る', () => {
     const lines = jsonl(
       { type: 'user', cwd: '/w', timestamp: 't1' },
       {
@@ -651,7 +659,7 @@ describe('子の見出しを導き出す', () => {
     expect(meta.effort, 'エフォートは合成メッセージの行でも読める').toBe('xhigh');
   });
 
-  it('頭が行の途中で切れていても、読める行までは採る', () => {
+  it('`head` が行の途中で切れていても、読める行までは採る', () => {
     const cut = `${head}{"type":"assistant","message":{"mod`;
     const meta = parseSubagentMeta(cut, null);
     expect(meta.model).toBe('claude-haiku-5');
@@ -669,7 +677,7 @@ describe('子の見出しを導き出す', () => {
     expect(meta.model).toBe('claude-haiku-5');
   });
 
-  it('尻でも <synthetic> のモデルだけを見送る', () => {
+  it('`tail` でも <synthetic> のモデルだけを見送る', () => {
     const other = jsonl({
       type: 'assistant',
       effort: 'xhigh',
@@ -681,7 +689,7 @@ describe('子の見出しを導き出す', () => {
     expect(meta.current).toBe('responding');
   });
 
-  it('尻の枝は行の種別を問わず、最後に見えたものを採る', () => {
+  it('`tail` のブランチは行の種別を問わず、最後に見えたものを採る', () => {
     const other = jsonl({
       type: 'system',
       subtype: 'info',
@@ -690,7 +698,7 @@ describe('子の見出しを導き出す', () => {
     expect(parseSubagentMeta(head, other).gitBranch).toBe('mgr-x/foo-777');
   });
 
-  it('何も読めないときは空の見出しを返す', () => {
+  it('何も読めないときは空のメタ情報を返す', () => {
     expect(parseSubagentMeta('', null)).toEqual({
       startedRaw: null,
       cwd: null,

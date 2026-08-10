@@ -11,7 +11,7 @@ import {
    **親子は階層、それ以外は弧。** 混ぜると、ほとんどの課題に親が居るせいで
    余白が親子の弧で埋まり、どれが本当の依存か読めなくなる。 */
 
-/* 課題の形は、畳む役自身から引く。ここは外の層の名前を見に行けないし、
+/* 課題の形は、階層にまとめる実装そのものから引く。ここは外の層の名前を `import` できないし、
    写して持てば、形が変わったときに片方だけ古いまま残る。 */
 type Issue = Parameters<typeof buildHierarchy>[0][number];
 type Dep = Issue['deps'][number];
@@ -33,7 +33,7 @@ const issue = (id: string, over: Partial<Issue> = {}): Issue => ({
 
 const dep = (on: string, type: string): Dep => ({ on, type });
 
-describe('親子を階層に畳む', () => {
+describe('親子を階層にまとめる', () => {
   it('一覧に出ている親の下へ子を入れる', () => {
     const rows = buildHierarchy([issue('a'), issue('b', { deps: [dep('a', 'parent-child')] })]);
 
@@ -60,8 +60,8 @@ describe('親子を階層に畳む', () => {
     expect(rows.map((row) => row.last)).toEqual([true, false, true]);
   });
 
-  /* 親子が輪になっていると、根から辿っても出てこない。落とすと行が画面から消える。 */
-  it('親子が輪になっていても、行を落とさない', () => {
+  /* 親子が循環していると、根から辿っても出てこない。落とすと行が画面から消える。 */
+  it('親子が循環していても、行を落とさない', () => {
     const rows = buildHierarchy([
       issue('a', { deps: [dep('b', 'parent-child')] }),
       issue('b', { deps: [dep('a', 'parent-child')] }),
@@ -88,7 +88,7 @@ describe('依存を弧にする', () => {
     expect(edges[0]).toMatchObject({ a: 0, b: 1, to: 0, type: 'blocks' });
   });
 
-  it('重なる弧は別の筋へ寄せる', () => {
+  it('重なる弧は別のトラックへ寄せる', () => {
     const { edges, lanes } = buildEdges([
       issue('a'),
       issue('b'),
@@ -101,7 +101,7 @@ describe('依存を弧にする', () => {
   });
 
   /* 読めない密度の弧は、描かないほうが正しい。 */
-  it('筋を使い切ったら、それ以上は描かない', () => {
+  it('トラックを使い切ったら、それ以上は描かない', () => {
     const rows = [
       ...Array.from({ length: 8 }, (_, index) => issue(`t${index}`)),
       ...Array.from({ length: 8 }, (_, index) =>
@@ -139,7 +139,7 @@ describe('着手の順', () => {
     expect(rank([done, next], next)).toBe(0);
   });
 
-  it('着手済み・統合待ち・見送り・閉じたもの、の順に下がる', () => {
+  it('着手済み・マージ待ち・見送り・閉じたもの、の順に下がる', () => {
     const rows = [
       issue('p', { status: 'in_progress' }),
       issue('m', { status: 'merge-ready' }),

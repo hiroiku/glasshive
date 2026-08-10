@@ -10,7 +10,7 @@ import {
 } from '~/app-kernel/json.ts';
 
 describe('型の分からない値を覗く', () => {
-  it('字の欄だけを字として返す', () => {
+  it('文字列の欄だけを文字列として返す', () => {
     expect(asString({ a: 'x' }, 'a')).toBe('x');
     expect(asString({ a: 1 }, 'a')).toBe(undefined);
     expect(asString({ a: null }, 'a')).toBe(undefined);
@@ -46,7 +46,7 @@ describe('型の分からない値を覗く', () => {
   });
 });
 
-describe('行ごとの読み解き', () => {
+describe('行ごとのパース', () => {
   it('記録として読めた行だけを流す', () => {
     const text = ['{"a":1}', '{"b":2}'].join('\n');
     expect([...parseJsonlLines(text)]).toEqual([{ a: 1 }, { b: 2 }]);

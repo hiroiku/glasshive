@@ -15,7 +15,7 @@ class Denied extends AppError {
   readonly code = 'test.denied';
 }
 
-/** 桶の境目にちょうど載る時刻。ここを起点にすると、丸めの向きが読みやすい */
+/** バケットの境目にちょうど載る時刻。ここを起点にすると、丸めの向きが読みやすい */
 const BUCKET_START = 1_800_000_000_000;
 
 const at = (ms: number): string => new Date(ms).toISOString();
@@ -58,7 +58,7 @@ const bucket = (parts: Partial<UsageBucket> & Pick<UsageBucket, 'atMs'>): UsageB
   ...parts,
 });
 
-describe('正本から応答ごとの消費を拾う', () => {
+describe('`transcript` から応答ごとの消費を拾う', () => {
   it('assistant の行で usage を持つものだけを採る', () => {
     const text = [
       // usage が付いていても、応答の行でなければ消費ではない
@@ -112,7 +112,7 @@ describe('正本から応答ごとの消費を拾う', () => {
 
     expect(
       extractUsageRecords(text).map((record) => record.key),
-      '欄が並びでも「すべて 0 の応答」にはしない',
+      '欄が配列でも「すべて 0 の応答」にはしない',
     ).toEqual(['req-3']);
   });
 
@@ -134,7 +134,7 @@ describe('正本から応答ごとの消費を拾う', () => {
 
     const records = extractUsageRecords(text);
 
-    expect(records, '流し書きの途中の行と最後の行は、同じ 1 応答である').toHaveLength(1);
+    expect(records, 'ストリーミングの途中の行と最後の行は、同じ 1 応答である').toHaveLength(1);
     expect(records[0]?.output, '後の行ほど累積が進んでいる').toBe(40);
   });
 
@@ -237,7 +237,7 @@ describe('正本から応答ごとの消費を拾う', () => {
     const collapsed = extractUsageRecords(sameTime);
 
     expect(collapsed, '同じ時刻の行は見分けようがない').toHaveLength(1);
-    expect(collapsed[0]?.key, '時刻そのものが鍵になる').toBe(String(BUCKET_START));
+    expect(collapsed[0]?.key, '時刻そのものがキーになる').toBe(String(BUCKET_START));
     expect(collapsed[0]?.output, '見分けられない以上、後に現れたもので上書きする').toBe(8);
     expect(extractUsageRecords(otherTime)).toHaveLength(2);
   });
@@ -258,7 +258,7 @@ describe('正本から応答ごとの消費を拾う', () => {
 
     expect(
       extractUsageRecords(text).map((record) => record.key),
-      '素材は正本に現れた順のまま渡す。並べ替えは畳む側の仕事',
+      '素材は `transcript` に現れた順のまま渡す。並べ替えは集計する側の仕事',
     ).toEqual(['req-late', 'req-early']);
   });
 
@@ -280,11 +280,11 @@ describe('正本から応答ごとの消費を拾う', () => {
 
     expect(
       records.map((record) => record.key),
-      '道具が差し込んだ行に消費は無い',
+      'Claude Code が差し込んだ行に消費は無い',
     ).toEqual(['req-2']);
   });
 
-  it('モデル名が無い・字でない行は unknown として数える', () => {
+  it('モデル名が無い・文字列でない行は unknown として数える', () => {
     const missing = JSON.stringify({
       type: 'assistant',
       timestamp: at(BUCKET_START),
@@ -299,7 +299,7 @@ describe('正本から応答ごとの消費を拾う', () => {
     });
 
     expect(extractUsageRecords(missing)[0]?.model).toBe('unknown');
-    expect(extractUsageRecords(notString)[0]?.model, 'モデル名は字でなければ名前ではない').toBe(
+    expect(extractUsageRecords(notString)[0]?.model, 'モデル名は文字列でなければ名前ではない').toBe(
       'unknown',
     );
   });
@@ -314,7 +314,7 @@ describe('正本から応答ごとの消費を拾う', () => {
       }),
     ].join('\n');
 
-    expect(extractUsageRecords(text), '桶に入れる先が無い').toHaveLength(0);
+    expect(extractUsageRecords(text), 'バケットに入れる先が無い').toHaveLength(0);
   });
 
   it('欄が無い・数でない usage は 0 として数える', () => {
@@ -327,7 +327,7 @@ describe('正本から応答ごとの消費を拾う', () => {
 
     const record = extractUsageRecords(text)[0];
 
-    expect(record?.input, '字は数ではない').toBe(0);
+    expect(record?.input, '文字列は数値ではない').toBe(0);
     expect(record?.output).toBe(5);
     expect(record?.cacheRead).toBe(0);
     expect(record?.cacheWrite).toBe(0);
@@ -344,12 +344,15 @@ describe('正本から応答ごとの消費を拾う', () => {
       }),
     ].join('\n');
 
-    expect(extractUsageRecords(text), '1 行の壊れで正本ひとつぶんを失わない').toHaveLength(1);
+    expect(
+      extractUsageRecords(text),
+      '1 行の壊れで `transcript` ひとつぶんを失わない',
+    ).toHaveLength(1);
   });
 });
 
-describe('5 分の桶に畳む', () => {
-  it('桶の時刻は幅の始まりへ丸める', () => {
+describe('5 分のバケットにまとめる', () => {
+  it('バケットの時刻は幅の始まりへ丸める', () => {
     const text = assistantLine({
       timestamp: at(BUCKET_START + 1000),
       requestId: 'req-1',
@@ -361,7 +364,7 @@ describe('5 分の桶に畳む', () => {
     expect(buckets[0]?.atMs).toBe(BUCKET_START);
   });
 
-  it('ちょうど境目の時刻は、次の桶の始まりになる', () => {
+  it('ちょうど境目の時刻は、次のバケットの始まりになる', () => {
     const text = [
       assistantLine({
         timestamp: at(BUCKET_START - 1),
@@ -379,12 +382,12 @@ describe('5 分の桶に畳む', () => {
 
     expect(
       buckets.map((b) => b.atMs),
-      '境目の 1 ミリ秒手前までが前の桶',
+      '境目の 1 ミリ秒手前までが前のバケット',
     ).toEqual([BUCKET_START - BUCKET_MS, BUCKET_START]);
     expect(buckets.map((b) => b.input)).toEqual([1, 2]);
   });
 
-  it('同じ 5 分でもモデルが違えば別の桶になる', () => {
+  it('同じ 5 分でもモデルが違えば別のバケットになる', () => {
     const text = [
       assistantLine({
         timestamp: at(BUCKET_START),
@@ -406,7 +409,7 @@ describe('5 分の桶に畳む', () => {
     expect(buckets.map((b) => b.model).sort()).toEqual(['haiku', 'opus']);
   });
 
-  it('同じ桶の応答を足し合わせ、畳んだ数を持つ', () => {
+  it('同じバケットの応答を足し合わせ、まとめた数を持つ', () => {
     const text = [
       assistantLine({
         timestamp: at(BUCKET_START),
@@ -440,7 +443,7 @@ describe('5 分の桶に畳む', () => {
     ]);
   });
 
-  it('流し書きで重ねて現れた応答は 1 つとして数える', () => {
+  it('ストリーミングで重ねて現れた応答は 1 つとして数える', () => {
     const text = [
       assistantLine({
         timestamp: at(BUCKET_START),
@@ -461,7 +464,7 @@ describe('5 分の桶に畳む', () => {
     ]);
   });
 
-  it('桶は時刻の昇順で返す', () => {
+  it('バケットは時刻の昇順で返す', () => {
     const text = [
       assistantLine({
         timestamp: at(BUCKET_START + BUCKET_MS * 2),
@@ -478,17 +481,17 @@ describe('5 分の桶に畳む', () => {
 
     expect(
       buckets.map((b) => b.atMs),
-      '正本に現れた順ではなく、山の形が読める順で渡す',
+      '`transcript` に現れた順ではなく、山の形が読める順で渡す',
     ).toEqual([BUCKET_START, BUCKET_START + BUCKET_MS, BUCKET_START + BUCKET_MS * 2]);
   });
 
-  it('応答が 1 つも無ければ桶も無い', () => {
+  it('応答が 1 つも無ければバケットも無い', () => {
     expect(bucketByFiveMinutes([])).toEqual([]);
   });
 });
 
-describe('1 正本の総消費', () => {
-  it('読み直した分は数えず、すべての桶を足す', () => {
+describe('1 `transcript` の総消費', () => {
+  it('読み直した分は数えず、すべてのバケットを足す', () => {
     const buckets = [
       bucket({
         atMs: BUCKET_START,
@@ -509,13 +512,13 @@ describe('1 正本の総消費', () => {
     expect(totalTokens(buckets), 'cacheRead は前に書いた分の読み直しである').toBe(77);
   });
 
-  it('桶が無ければ 0', () => {
+  it('バケットが無ければ 0', () => {
     expect(totalTokens([])).toBe(0);
   });
 });
 
-describe('複数の正本を合流する', () => {
-  it('同じ時刻と同じモデルの桶を足し合わせる', () => {
+describe('複数の `transcript` を合流する', () => {
+  it('同じ時刻と同じモデルのバケットを足し合わせる', () => {
     const session = [
       bucket({
         atMs: BUCKET_START,
@@ -549,12 +552,12 @@ describe('複数の正本を合流する', () => {
     ]);
   });
 
-  it('渡された桶を書き換えない', () => {
+  it('渡されたバケットを書き換えない', () => {
     const session = [bucket({ atMs: BUCKET_START, input: 1, responses: 1 })];
 
     mergeBuckets([session, session], 0);
 
-    expect(session[0]?.input, '合流は新しい桶を作る。素材はそのまま残る').toBe(1);
+    expect(session[0]?.input, '合流は新しいバケットを作る。素材はそのまま残る').toBe(1);
   });
 
   it('モデルが違えば足さない', () => {
@@ -564,7 +567,7 @@ describe('複数の正本を合流する', () => {
     expect(mergeBuckets([a, b], 0)).toHaveLength(2);
   });
 
-  it('窓より前の桶は落とす', () => {
+  it('対象期間より前のバケットは落とす', () => {
     const buckets = [
       bucket({ atMs: BUCKET_START - BUCKET_MS, input: 1 }),
       bucket({ atMs: BUCKET_START, input: 2 }),
@@ -574,7 +577,7 @@ describe('複数の正本を合流する', () => {
 
     expect(
       merged.map((b) => b.atMs),
-      '窓の始まりに載る桶は残る',
+      '対象期間の始まりに載るバケットは残る',
     ).toEqual([BUCKET_START]);
   });
 
@@ -590,13 +593,13 @@ describe('複数の正本を合流する', () => {
     ]);
   });
 
-  it('正本が 1 つも無ければ桶も無い', () => {
+  it('`transcript` が 1 つも無ければバケットも無い', () => {
     expect(mergeBuckets([], 0)).toEqual([]);
   });
 });
 
-describe('直近の窓だけの消費', () => {
-  it('窓より前の桶を数に混ぜない', () => {
+describe('直近の期間だけの消費', () => {
+  it('対象期間より前のバケットを数に混ぜない', () => {
     const buckets = [
       bucket({
         atMs: BUCKET_START - BUCKET_MS,
@@ -612,10 +615,10 @@ describe('直近の窓だけの消費', () => {
       }),
     ];
 
-    expect(tokensSince(buckets, BUCKET_START), '窓の外の 300 は入らない').toBe(7);
+    expect(tokensSince(buckets, BUCKET_START), '対象期間の外の 300 は入らない').toBe(7);
   });
 
-  it('窓の境目にちょうど載る桶は内側に数える', () => {
+  it('対象期間の境目にちょうど載るバケットは内側に数える', () => {
     const buckets = [bucket({ atMs: BUCKET_START, input: 5, output: 0, cacheWrite: 0 })];
 
     expect(tokensSince(buckets, BUCKET_START)).toBe(5);
@@ -627,25 +630,25 @@ describe('直近の窓だけの消費', () => {
     expect(tokensSince(buckets, BUCKET_START)).toBe(3);
   });
 
-  it('窓の中に桶が 1 つも無ければ 0', () => {
+  it('対象期間の中にバケットが 1 つも無ければ 0', () => {
     const buckets = [bucket({ atMs: BUCKET_START - 1, input: 500 })];
 
     expect(tokensSince(buckets, BUCKET_START), '静かだったのだから 0 である').toBe(0);
   });
 });
 
-describe('正本ごとの数を巣ひとつぶんに束ねる', () => {
+describe('`transcript` ごとの数をプロジェクト 1 つぶんに束ねる', () => {
   it('見えた数を足す', () => {
     expect(combineTokens([observed(3), observed(4)])).toEqual(observed(7));
   });
 
-  it('無かった正本は 0 として足す', () => {
+  it('無かった `transcript` は 0 として足す', () => {
     const parts = [observed(5), absent('out-of-window'), absent('no-source')];
 
-    expect(combineTokens(parts), '窓の外に消費が無いことは分かっている').toEqual(observed(5));
+    expect(combineTokens(parts), '対象期間の外に消費が無いことは分かっている').toEqual(observed(5));
   });
 
-  it('1 つでも読めなければ束ねた数も読めなかったことにする', () => {
+  it('1 つでも観測できなければ、束ねた数も観測できなかったことにする', () => {
     const blocked = unobservable(new Denied('読めない'));
     const parts = [observed(1_000_000), blocked, observed(2_000_000)];
 
@@ -655,14 +658,14 @@ describe('正本ごとの数を巣ひとつぶんに束ねる', () => {
     ).toEqual(blocked);
   });
 
-  it('読めなかったものが複数あっても、最初のものを理由に採る', () => {
+  it('観測できなかったものが複数あっても、最初のものを理由に採る', () => {
     const first = unobservable(new Denied('読めない'));
     const second = unobservable(new Denied('読めない'));
 
     expect(combineTokens([first, second])).toBe(first);
   });
 
-  it('正本が 1 つも無ければ 0', () => {
+  it('`transcript` が 1 つも無ければ 0', () => {
     expect(combineTokens([])).toEqual(observed(0));
   });
 });

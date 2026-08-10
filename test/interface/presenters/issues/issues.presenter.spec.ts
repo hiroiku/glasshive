@@ -3,7 +3,7 @@ import { AppError } from '~/app-kernel/error.ts';
 import { absent, observed, unobservable } from '~/app-kernel/observation.ts';
 import { presentIssue, presentIssues } from '~/interface/presenters/issues/issues.presenter.ts';
 
-/* 写す側は名札しか見ない。誤りの型を持ち込まずに、名札だけを与えて確かめる。 */
+/* 写す側はエラーコードしか見ない。エラー型を持ち込まずに、エラーコードだけを与えて確かめる。 */
 class LedgerUnreadable extends AppError {
   readonly code = 'ledger.unreadable';
 }
@@ -75,7 +75,7 @@ describe('一覧を外の形へ写す', () => {
 
     expect(
       presented.issues[0],
-      '写す途中で既定へ倒すと、書かれていなかった欄が書かれていた欄に化ける。優先度の 0 は最も高いの意味で「無い」ではなく、札の無い課題は札が空の課題ではなく、掛かっている先の分からない繋がりは自分に掛かった繋がりではない',
+      '写す途中で既定へ倒すと、書かれていなかった欄が書かれていた欄に化ける。優先度の 0 は最も高いの意味で「無い」ではなく、ラベルの無い課題はラベルが空の課題ではなく、掛かっている先の分からない繋がりは自分に掛かった繋がりではない',
     ).toEqual({
       id: null,
       title: null,
@@ -91,34 +91,34 @@ describe('一覧を外の形へ写す', () => {
     });
   });
 
-  it('継いだ名前と同じ状態の札も、そのまま外へ出す', () => {
-    /* 素の代入では欄そのものを作れない(`__proto__` は親の付け替えに化ける)ので、
-       欄を直に置く形で組む。台帳の状態がこの字だったときと同じ形である。 */
+  it('継いだ名前と同じ状態の件数も、そのまま外へ出す', () => {
+    /* 素の代入では欄そのものを作れない(`__proto__` はプロトタイプの付け替えに化ける)ので、
+       欄を直に置く形で組む。台帳の状態がこの文字列だったときと同じ形である。 */
     const counts: Record<string, number> = Object.fromEntries([
       ['__proto__', 1],
       ['constructor', 2],
     ]);
 
     const presented = presentIssues(observed({ issues: [], counts }));
-    /* 写しは `Object.assign` ではなく展開で作る。`assign` は代入の仕掛けを起こすので、
-       `__proto__` の欄が黙って消え、札が 1 つ足りない一覧が外へ出る。 */
+    /* コピーは `Object.assign` ではなく展開で作る。`assign` は setter を起こすので、
+       `__proto__` の欄が黙って消え、件数が 1 つ足りない一覧が外へ出る。 */
     expect(
       JSON.stringify(presented.counts),
-      '状態の字を決めるのは台帳。写す途中で欄が消えると、数が合わない理由を誰も辿れない',
+      '状態の文字列を決めるのは台帳。写す途中で欄が消えると、数が合わない理由を誰も辿れない',
     ).toBe('{"__proto__":1,"constructor":2}');
   });
 
   it('台帳が無いことを、空の一覧として黙らせない', () => {
     expect(
       presentIssues(absent('no-source')),
-      '空の一覧だけを返すと、bd を使っていない巣と課題が 1 件も無い巣が同じに見える',
+      '空の一覧だけを返すと、bd を使っていないプロジェクトと課題が 1 件も無いプロジェクトが同じに見える',
     ).toEqual({ state: 'absent', reason: 'no-source', issues: [], counts: {} });
   });
 
-  it('見に行けなかったことも、空の一覧として黙らせない', () => {
+  it('観測できなかったことも、空の一覧として黙らせない', () => {
     expect(
       presentIssues(unobservable(new LedgerUnreadable('読めない'))),
-      '名札をそのまま言う',
+      'エラーコードをそのまま言う',
     ).toEqual({
       state: 'unobservable',
       reason: 'ledger.unreadable',
@@ -143,7 +143,7 @@ describe('1 件を外の形へ写す', () => {
     });
   });
 
-  it('見に行けたが無かったことを、理由ごと返す', () => {
+  it('観測はできたが無かったことを、理由ごと返す', () => {
     expect(
       presentIssue(absent('empty')),
       '台帳ごと無い(no-source)のか、その課題だけが無いのかを分ける',

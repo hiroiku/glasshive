@@ -11,19 +11,21 @@ import {
   presentConversation,
 } from '~/interface/presenters/sessions/conversation.presenter.ts';
 
-/* 会話 1 頁を返す窓。
+/* 会話 1 ページを返すコントローラー。
 
-   枠組みを知らない形にしてある。求めも答えも素の値で、`Request` も `Response` も出てこない。
+   `frameworks` を知らない形にしてある。リクエストもレスポンスも素の値で、`Request` も
+   `Response` も出てこない。
 
-   **届いた形を検めるのはここの仕事である。** 位置は数として読めるかだけを見て、
+   **入力を検証するのはここの仕事である。** 位置は数として読めるかだけを見て、
    どこまでが正しい位置かは内側が決める — 端の丸めを二か所でやると必ず食い違う。 */
 
 export type ConversationResponse = ApiResponse<EventPageJson>;
 
-/* 位置として読む。無いのと、負の数と、読めない字は同じ扱いにする。
+/* 位置として読む。無いのと、負の数と、数として読めない値は同じ扱いにする。
 
-   どれも「末尾から読め」という意味になる。旧実装が `-1` を末尾の合図に使っていたので、
-   負の数をここで受けておかないと、古いしおりが黙って先頭から読み直される。 */
+   どれも「末尾から読め」という意味になる。`-1` を「末尾から」のマーカーとして送ってくる
+   クライアントがあるので、負の数をここで受けておかないと、古い位置が黙って
+   先頭から読み直される。 */
 function positionOf(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
   return Math.floor(value);
@@ -50,12 +52,12 @@ export async function readConversation(
   input: unknown,
 ): Promise<ConversationResponse> {
   const request = requestOf(input);
-  // 形が読めない求めは、観測にも正本にも触らずに断る
+  // 形が読めないリクエストは、観測にも `transcript` にも触らずに断る
   if (!request.ok) return { ok: false, ...presentError(request.error) };
 
   const page = await useCase.execute(request.value);
   if (!page.ok) return { ok: false, ...presentError(page.error) };
-  /* 読めなかったことは値のまま渡す。**空の頁で表さない。**
-     空にすると、開けなかった正本が「何も喋っていない」ものとして並ぶ。 */
+  /* 読めなかったことは値のまま渡す。**空のページで表さない。**
+     空にすると、開けなかった `transcript` が「何も喋っていない」ものとして並ぶ。 */
   return { ok: true, body: presentConversation(page.value) };
 }

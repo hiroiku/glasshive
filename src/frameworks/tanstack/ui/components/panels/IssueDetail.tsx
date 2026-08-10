@@ -13,18 +13,18 @@ import { type GraphNode, MiniGraph } from '../issues/MiniGraph.tsx';
 import { MdView } from '../text/MdView.tsx';
 import { SubjectText } from '../text/SubjectText.tsx';
 
-/* 課題 1 件の窓。台帳が言うことと、観測が言うことを並べて置く。
+/* 課題 1 件のパネル。台帳が言うことと、観測が言うことを並べて置く。
 
-   台帳の中身は bd が決めている。**欄ごとに確かめて読む** — 版が変われば欄も変わるので、
-   読めない欄は無かったことにして、読めた欄だけを出す。 */
+   台帳の中身は bd が決めている。**欄ごとに型を確かめて読む** — バージョンが変われば
+   欄も変わるので、読めない欄は無かったことにして、読めた欄だけを出す。 */
 
-/** 窓に並べる名札の数 */
+/** パネルに並べるエージェントのチップの数 */
 const MAX_LISTED_WORKERS = 4;
 
-/** 前後に並べる繋がりの数。溢れたぶんは数だけ添える */
+/** 前後に並べる繋がりの数。溢れたぶんは件数だけ添える */
 const MAX_GRAPH_NODES = 6;
 
-/** 活動の帯に出すエージェントの数 */
+/** 稼働区間のバーに出すエージェントの数 */
 const MAX_ACTIVITY_ROWS = 8;
 
 type Record_ = Readonly<Record<string, JsonValue>>;
@@ -58,7 +58,7 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
   const one = useQuery({ ...issueQuery(slug, id), enabled: slug !== '' });
   const ledger = useQuery({ ...issuesQuery(slug, false), enabled: slug !== '' });
   const workers = useMemo(() => workerIndex(project), [project]);
-  /* コメントの書き手は名前でしか書かれていない。命名の決め事から会話へ辿る */
+  /* コメントの書き手は名前でしか書かれていない。命名規則を頼りに会話へ辿る */
   const actors = useMemo(() => agentTokens(project), [project]);
 
   const answer = one.data;

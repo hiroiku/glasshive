@@ -6,14 +6,15 @@ import type {
 } from '~/application/use-cases/issues/list-issues.use-case.ts';
 import type { ObservationState } from '~/interface/presenters/sessions/tree.presenter.ts';
 
-/* 課題の観測を、外の道が読む形へ写す。
+/* 課題の観測を、外部 API が読む形へ写す。
 
-   見るのは求めの出力だけである。内側がどんな形で課題を持っているかは、ここへは届かない。
+   見るのは呼び出しの出力だけである。内側がどんな形で課題を持っているかは、ここへは届かない。
 
    snake_case の名前はここだけが知っている。内側は camelCase のまま、外の都合を何も知らない。
 
-   **空の一覧を、そのまま空の一覧として返さない。** 台帳が無い巣・課題が 1 件も無い巣・
-   台帳を読めなかった巣は、どれも `issues: []` になる。`state` を添えて初めて見分けが付く。 */
+   **空の一覧を、そのまま空の一覧として返さない。** 台帳が無いプロジェクト・課題が 1 件も
+   無いプロジェクト・台帳を読めなかったプロジェクトは、どれも `issues: []` になる。
+   `state` を添えて初めて見分けが付く。 */
 
 export interface IssueDependencyJson {
   on: string | null;
@@ -37,7 +38,7 @@ export interface IssueSummaryJson {
 
 export interface IssuesJson {
   state: ObservationState;
-  /** 見えなかった言い分。見えたときは理由が無いので `null` */
+  /** 観測できなかった理由。観測できたときは理由が無いので `null` */
   reason: string | null;
   issues: IssueSummaryJson[];
   /** 状態ごとの件数。一覧から落とした閉じた課題も、ここには出る */
@@ -46,9 +47,9 @@ export interface IssuesJson {
 
 /* 台帳から出てきた値。**JSON でしかありえない。**
 
-   台帳は 1 行 1 記録の JSON なので、読み解いた結果に JSON でない値は入らない。
+   台帳は 1 行 1 記録の JSON なので、パースした結果に JSON でない値は入らない。
    内側は `unknown` のまま持っている(何の欄が来るか知らないので当然である)が、
-   外へ出す道はここなので、ここで JSON だと言い切る。 */
+   外へ出す形を決めるのはここなので、ここで JSON だと言い切る。 */
 export type JsonValue =
   | string
   | number
@@ -64,7 +65,7 @@ export interface IssueJson {
   issue: Record<string, JsonValue> | null;
 }
 
-/** 見えなかった理由の名札。無いなら何が無いのか、読めなかったならどの誤りか */
+/** 理由を 1 つの文字列で返す。`absent` なら何が無いのか、`unobservable` ならエラーコード */
 const reasonOf = <T>(observation: Observation<T>): string | null => {
   if (observation.kind === 'absent') return observation.reason;
   if (observation.kind === 'unobservable') return observation.error.code;
@@ -88,11 +89,11 @@ const presentSummary = (issue: IssueSummary): IssueSummaryJson => ({
   })),
 });
 
-/* 見に行けなかったときも、この形で言える。
+/* 観測できなかったときも、この形で言える。
 
-   道の側は `unobservable` を 503 へ写す(`api-error.presenter.ts` の `ledger.unreadable`)ので、
+   API の側は `unobservable` を 503 へ写す(`api-error.presenter.ts` の `ledger.unreadable`)ので、
    ふつうここへは `observed` と `absent` しか来ない。それでも三つとも写せるようにしてあるのは、
-   読めなかった台帳をうっかり「課題が 1 件も無い巣」として出さないためである。 */
+   読めなかった台帳をうっかり「課題が 1 件も無いプロジェクト」として出さないためである。 */
 export function presentIssues(ledger: Observation<IssueLedger>): IssuesJson {
   return {
     state: ledger.kind,
@@ -106,7 +107,7 @@ export function presentIssue(record: Observation<IssueRecord>): IssueJson {
   return {
     state: record.kind,
     reason: reasonOf(record),
-    /* 台帳の 1 行を読み解いたものなので、中身は JSON である。
+    /* 台帳の 1 行をパースしたものなので、中身は JSON である。
        欄ごとに確かめないのは、確かめても直しようが無いからである — 何の欄が来るかを
        決めているのは bd であって、こちらではない。 */
     issue: record.kind === 'observed' ? (record.value as Record<string, JsonValue>) : null,

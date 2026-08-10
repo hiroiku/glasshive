@@ -11,7 +11,7 @@ class TestError extends AppError {
   readonly code = 'test.watch_failed';
 }
 
-/** 見張りの偽物。合図を好きなときに起こせる */
+/** ウォッチャーの偽物。変更通知を好きなときに起こせる */
 function fakeWatcher() {
   let notify: ((path: string) => void) | undefined;
   let closed = false;
@@ -32,11 +32,11 @@ function fakeWatcher() {
   };
 }
 
-describe('動いたという合図を配る', () => {
+describe('変更通知を配る', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('静けさが続くまで束ね、最後に木そのものの合図を 1 度だけ添える', () => {
+  it('静けさが続くまで束ね、最後に木そのものの通知を 1 度だけ添える', () => {
     const watcher = fakeWatcher();
     const broadcast = createChangeBroadcast(watcher.integration, {
       quietMs: 250,
@@ -46,7 +46,7 @@ describe('動いたという合図を配る', () => {
 
     watcher.fire('/a.jsonl');
     watcher.fire('/b.jsonl');
-    watcher.fire('/a.jsonl'); // 同じものは 1 つに畳まれる
+    watcher.fire('/a.jsonl'); // 同じものは 1 つにまとめられる
 
     expect(got, '静けさが来るまでは配らない').toEqual([]);
 
@@ -59,7 +59,7 @@ describe('動いたという合図を配る', () => {
     ]);
   });
 
-  it('観るのをやめた人には、もう配らない', () => {
+  it('購読をやめたクライアントには、もう配らない', () => {
     const watcher = fakeWatcher();
     const broadcast = createChangeBroadcast(watcher.integration, {
       quietMs: 10,
@@ -69,7 +69,7 @@ describe('動いたという合図を配る', () => {
 
     expect(broadcast.listenerCount()).toBe(1);
     stop();
-    expect(broadcast.listenerCount(), '去った人は数から外れる').toBe(0);
+    expect(broadcast.listenerCount(), '去ったクライアントは数から外れる').toBe(0);
 
     watcher.fire('/a.jsonl');
     vi.advanceTimersByTime(10);
@@ -77,14 +77,14 @@ describe('動いたという合図を配る', () => {
     expect(got, '去った後に届いてはいけない').toEqual([]);
   });
 
-  it('1 人の窓が壊れても、他の窓へは配り続ける', () => {
+  it('1 つのクライアントが壊れても、他のクライアントへは配り続ける', () => {
     const watcher = fakeWatcher();
     const broadcast = createChangeBroadcast(watcher.integration, {
       quietMs: 10,
     });
     const got: ChangeMessage[] = [];
     broadcast.subscribe(() => {
-      throw new Error('この窓は壊れている');
+      throw new Error('このクライアントは壊れている');
     });
     broadcast.subscribe((m) => got.push(m));
 
@@ -94,19 +94,21 @@ describe('動いたという合図を配る', () => {
     expect(got).toEqual([{ kind: 'file', path: '/a.jsonl' }, { kind: 'tree' }]);
   });
 
-  it('見張りを張れなかったことは、値として残る', () => {
+  it('ウォッチャーを張れなかったことは、値として残る', () => {
     const broken: TranscriptWatchIntegration = {
       watch: () => unobservable(new TestError('張れませんでした')),
     };
     const broadcast = createChangeBroadcast(broken, { quietMs: 10 });
 
     const state = broadcast.watchState();
-    expect(state.kind, '張れないことは欠落ではなく、見に行けなかったこと').toBe('unobservable');
-    expect(broadcast.listenerCount(), '張れなくても観る人は受け付ける').toBe(0);
+    expect(state.kind, '張れないことは、無かったのではなく観測できなかったこと').toBe(
+      'unobservable',
+    );
+    expect(broadcast.listenerCount(), '張れなくてもクライアントは受け付ける').toBe(0);
     expect(() => broadcast.subscribe(() => {})).not.toThrow();
   });
 
-  it('閉じると、OS の見張りも外れる', () => {
+  it('閉じると、OS のファイル監視も外れる', () => {
     const watcher = fakeWatcher();
     const broadcast = createChangeBroadcast(watcher.integration, {
       quietMs: 10,
@@ -115,7 +117,7 @@ describe('動いたという合図を配る', () => {
 
     broadcast.close();
 
-    expect(watcher.closed, 'OS の見張りを掴んだままにしない').toBe(true);
+    expect(watcher.closed, 'OS のファイル監視を掴んだままにしない').toBe(true);
     expect(broadcast.listenerCount()).toBe(0);
   });
 });

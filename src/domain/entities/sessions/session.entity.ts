@@ -13,12 +13,12 @@ export interface TranscriptSession {
   readonly state: SessionState;
   readonly awaiting: AwaitingKind | null;
   readonly title: string | null;
-  /** 正本に書かれていた起点の字面。手を加えない */
+  /** `transcript` に書かれていた開始時刻の表記。手を加えない */
   readonly startedRaw: string | null;
-  /** 自分と子のうち、最も新しい書き込み。木の並びと稼働の判定はこれで見る */
+  /** 自分とサブエージェントのうち、最も新しい書き込み。木の並びと稼働の判定はこれで見る */
   readonly lastActivityMs: number;
-  /* 自分だけの書き込み。子待ちの判定に要る — 子が動いていて自分が止まっている、
-     という区別は、両者を分けて持っていないと付けられない。 */
+  /* 自分だけの書き込み。サブエージェント待ちの判定に要る — サブエージェントが動いていて
+     自分が止まっている、という区別は、両者を分けて持っていないと付けられない。 */
   readonly ownMtimeMs: number;
   readonly tokens: Observation<number>;
   readonly model: string | null;
@@ -28,10 +28,11 @@ export interface TranscriptSession {
   readonly actor: string | null;
   readonly issues: readonly string[];
   readonly current: string | null;
-  /* 動いていた帯。**読めたかどうかごと持つ。**
+  /* 動いていた稼働区間。**観測できたかどうかごと持つ。**
 
-     帯の中身から読めたかを当てることはできない。静かだった正本も、開けなかった
-     正本も、どちらも空の一覧になるからである。潰すのは外へ出す直前でよい。 */
+     区間の中身から観測できたかを当てることはできない。静かだった `transcript` も、
+     開けなかった `transcript` も、どちらも空の一覧になるからである。
+     潰すのは外へ出す直前でよい。 */
   readonly activity: Observation<ActivityIntervalSet>;
   readonly sizeBytes: number;
   readonly subagents: readonly SubagentSession[];

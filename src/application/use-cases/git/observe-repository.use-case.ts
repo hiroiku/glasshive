@@ -39,33 +39,33 @@ import {
 } from '~/domain/value-objects/git/commit-summary.value-object.ts';
 import { Revision, RevisionRange } from '~/domain/value-objects/git/revision.value-object.ts';
 
-/* リポジトリをひと目ぶん観る。
+/* リポジトリの全体を 1 回で観る。
 
-   起こす回数は線の数で増える。線 1 本につき分かれ目・先・遅れ・触ったファイルで 4 回、
-   線が 18 本なら 70 を超える。**同じ答えを出すことを先に決め、速さは並べることだけで稼ぐ**
-   — 尋ねる事柄と数は旧実装と同じままにしてある。
+   起こす回数は先端の数で増える。先端 1 つにつき分かれ目・`ahead`・`behind`・触ったファイルで
+   4 回、先端が 18 個なら 70 を超える。尋ねる事柄も回数も削らず、速さは並列に起こすことだけで
+   稼ぐ。
 
-   そこがリポジトリでないことは、旧実装と同じ見立てで決める。作業場所も枝も 1 つも無ければ
-   リポジトリではない、という当てである。**それは「見に行けなかった」ではないので、
-   `absent` で返す。** 記録を読む道具が手元に無いだけのときは、その前に諦めている。 */
+   そこがリポジトリでないことは、`worktree` もブランチも 1 つも無ければリポジトリではない、という
+   当てで決める。**それは観測できなかったのではないので、`absent` で返す。**
+   `git` がインストールされていないだけのときは、その前に諦めている。 */
 
-/** この求めの出力。外へ写す側はこの名前だけを見る */
+/** この呼び出しの出力。外へ写す側はこの名前だけを見る */
 export type { GitOverview };
 
 export interface ObserveRepositoryUseCase {
-  /* 断る求めが無くても `Result` で返す。求めを受けてよいかと、観に行けたかは別の話で、
+  /* 断る呼び出しが無くても `Result` で返す。呼び出しを受けてよいかと、観測できたかは別の話で、
      受け取る側がその 2 つを毎回同じ順に開けるようにしておく。 */
   execute(projectPath: string): Promise<Result<Observation<GitOverview>>>;
 }
 
 export function createObserveRepository(deps: {
   readonly git: GitCommandIntegration;
-  /** 覚えておく相手。無ければ毎回すべての線の差分を起こす(答えは変わらない) */
+  /** キャッシュ。無ければ毎回すべての先端の差分を起こす(結果は変わらない) */
   readonly conflicts?: ConflictCacheService;
 }): ObserveRepositoryUseCase {
   const { git, conflicts } = deps;
 
-  /** 線 1 本ぶんの隔たりを数える。3 回起こすが、どれも他の線を待たない */
+  /** 先端 1 つぶんの隔たりを数える。3 回起こすが、どれも他の先端を待たない */
   async function measureTip(
     cwd: string,
     base: Revision,
@@ -101,7 +101,7 @@ export function createObserveRepository(deps: {
     });
   }
 
-  /** 線どうしが同じファイルを触っていないかを見る。線 1 本につき 1 回起こす */
+  /** 先端どうしが同じファイルを触っていないかを見る。先端 1 つにつき 1 回起こす */
   async function observeConflicts(
     cwd: string,
     base: Revision,
@@ -122,7 +122,7 @@ export function createObserveRepository(deps: {
         output: await git.run({
           cwd,
           args: ['diff', '--name-only'],
-          // 分かれ目から先だけを見る。本流が進んだぶんは、この線が触ったものではない
+          // 分かれ目から先だけを見る。本流が進んだぶんは、この先端が触ったものではない
           revisions: [RevisionRange.sinceFork(base, Revision.fromGitOutput(tip.sha))],
         }),
       })),
@@ -164,13 +164,13 @@ export function createObserveRepository(deps: {
 
       const worktrees = parseWorktreeList(outputOrEmpty(worktreeOutput));
       const branches = parseBranchRefs(outputOrEmpty(branchOutput));
-      // 作業場所も枝も 1 つも無い。そこはリポジトリではない
+      // `worktree` もブランチも 1 つも無い。そこはリポジトリではない
       if (worktrees.length === 0 && branches.length === 0) return ok(absent('no-source'));
 
-      // 統合の枝 = 主たる作業場所が出している枝。決められなければ、いま出ているものを縦軸にする
+      // 統合ブランチ = 主たる `worktree` が出しているブランチ。決められなければ、いま出ているものを縦軸にする
       const base = worktrees[0]?.branch || 'HEAD';
       const baseRev = Revision.fromGitOutput(base);
-      // 縦軸がどこまで進んでいるか。見込みを覚えておく鍵に要る
+      // 縦軸がどこまで進んでいるか。見込みを覚えておくキーに要る
       const baseSha =
         branches.find((branch) => branch.name === base)?.sha ?? worktrees[0]?.sha ?? '';
 
@@ -186,7 +186,7 @@ export function createObserveRepository(deps: {
           ],
           revisions: [baseRev],
         }),
-        /* 本流に入っていない枝を尋ねる。**`--no-merged` の相手は繋げて渡す。**
+        /* 本流に入っていないブランチを尋ねる。**`--no-merged` の相手は繋げて渡す。**
            離して渡すと `--end-of-options` のほうを相手として食われる。 */
         git.run({
           cwd,

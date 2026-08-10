@@ -9,18 +9,18 @@ import { AgentChip } from '../chips/Chips.tsx';
 import { Icon } from '../primitives/Icon.tsx';
 import { SubjectText } from '../text/SubjectText.tsx';
 
-/* 指し 1 つの窓。何が変わったか、誰が触っているか。
+/* `ref` 1 つのパネル。何が変わったか、誰が触っているか。
 
-   **指しに居る手は、名前の突き合わせで引く。** 記録の側は誰が居るかを知らないので、
-   枝の名か作業場所の名が一致する手を観測から拾う。 */
+   **`ref` に居るエージェントは、名前の突き合わせで引く。** `git` の側は誰が居るかを
+   知らないので、ブランチの名か worktree の名が一致するエージェントを観測から拾う。 */
 
-/** 頭に並べる名札の数 */
+/** ヘッダーに並べるエージェントのチップの数 */
 const MAX_LISTED_AGENTS = 5;
 
-/** 帯に出す名札の数 */
+/** 稼働区間のバーに出すエージェントの数 */
 const MAX_ACTIVITY_ROWS = 8;
 
-/** 名札の長さ */
+/** ラベルの最大長 */
 const MAX_LABEL = 24;
 
 interface RefAgent {
@@ -30,9 +30,10 @@ interface RefAgent {
   readonly where: string;
 }
 
-/* この指しの上に居る手。枝の名がそのまま一致するか、作業場所の名の末尾が一致するか。
+/* この `ref` の上に居るエージェント。ブランチの名がそのまま一致するか、worktree の名の末尾が
+   一致するか。
 
-   末尾で見るのは、作業場所が `.worktrees/<名前>` の形で切られるからである。 */
+   末尾で見るのは、worktree のパスが `.worktrees/<name>` の形になるからである。 */
 function refAgents(project: ProjectJson | undefined, label: string): RefAgent[] {
   const found: RefAgent[] = [];
   if (project === undefined) return found;
@@ -63,7 +64,7 @@ function refAgents(project: ProjectJson | undefined, label: string): RefAgent[] 
       add(subagent.file, subagent.state, subagent.label, subagent.git_branch, subagent.cwd);
     }
   }
-  // 生きている手を先に。終わった手は文脈でしかない
+  // 生きているエージェントを先に。終わったものは文脈でしかない
   return found.sort((a, b) => (a.state === 'ended' ? 1 : 0) - (b.state === 'ended' ? 1 : 0));
 }
 

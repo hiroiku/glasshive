@@ -1,17 +1,18 @@
 import { err, ok, type Result } from '~/app-kernel/result.ts';
 import { InvalidRevisionError } from '~/domain/errors/git/revision.error.ts';
 
-/* git に渡す「指し」。
+/* `git` に渡すリビジョン。
 
-   **外から来た字をそのまま渡すと、外の道具の指定として読まれる。**
-   `--upload-pack=…` は git が自分で起こす別の道具を指す指定で、渡した先で任意の命令が動く。
-   だから求めと共に来た字は、この型を通してしか git まで届かないようにする。
+   **外から来た文字列をそのまま渡すと、`git` のオプションとして読まれる。**
+   `--upload-pack=…` は `git` が自分で起動する別のコマンドを指すオプションで、
+   渡した先で任意の命令が動く。だから呼び出しと共に来た文字列は、この型を通してしか
+   `git` まで届かないようにする。
 
-   確かめるのは求めと共に来た字だけでよい。枝の名や sha は git 自身が答えたもので、
-   こちらの求めが決めた字ではないので `fromGitOutput` で通す。どちらの道で作った指しも、
-   起こすときには `--end-of-options` の後ろに置かれる(二重の守り)。 */
+   検証するのは呼び出しと共に来た文字列だけでよい。ブランチの名や sha は `git` 自身が答えた
+   もので、こちらの呼び出しが決めた文字列ではないので `fromGitOutput` で通す。どちらの経路で作った
+   リビジョンも、起動するときには `--end-of-options` の後ろに置かれる(二重の守り)。 */
 
-/** 先頭を英数字に限る。`-` で始まれないので、単体では指定になり得ない */
+/** 先頭を英数字に限る。`-` で始まれないので、単体ではオプションになり得ない */
 const REVISION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 
 export class Revision {
@@ -21,7 +22,7 @@ export class Revision {
     this.value = value;
   }
 
-  /** 求めと共に来た字から作る。形が合わなければ断る */
+  /** 呼び出しと共に来た文字列から作る。形が合わなければ断る */
   static create(raw: string): Result<Revision, InvalidRevisionError> {
     if (!REVISION_PATTERN.test(raw)) {
       return err(
@@ -33,13 +34,13 @@ export class Revision {
     return ok(new Revision(raw));
   }
 
-  /** git 自身が答えた字から作る。求めの側が決めた字ではないので、形は問わない */
+  /** `git` 自身が答えた文字列から作る。呼び出しの側が決めた文字列ではないので、形は問わない */
   static fromGitOutput(raw: string): Revision {
     return new Revision(raw);
   }
 }
 
-/** 2 つの指しの隔たり。git はこれも 1 つの指しとして受ける */
+/** 2 つのリビジョンの隔たり。`git` はこれも 1 つのリビジョンとして受ける */
 export class RevisionRange {
   readonly value: string;
 
@@ -47,7 +48,7 @@ export class RevisionRange {
     this.value = value;
   }
 
-  /** `a..b` — b にあって a に無い記録 */
+  /** `a..b` — b にあって a に無いコミット */
   static between(from: Revision, to: Revision): RevisionRange {
     return new RevisionRange(`${from.value}..${to.value}`);
   }

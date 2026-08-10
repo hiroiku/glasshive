@@ -1,6 +1,6 @@
 import type { UsageBucketJson } from '~/interface/presenters/sessions/usage.presenter.ts';
 
-/* 消費の桶から、画面に出す形を導く。**純関数。**
+/* 消費のバケットから、画面に出す形を導く。純関数。
 
    「消費」は input + output + cache 書き込み。**cache 読みは足さない。**
    毎応答で文脈を丸ごと読み直すので桁が違い、足すと同じ会話を続けるほど数が膨らんで、
@@ -8,7 +8,7 @@ import type { UsageBucketJson } from '~/interface/presenters/sessions/usage.pres
 
 export const spendOf = (bucket: UsageBucketJson): number => bucket.i + bucket.o + bucket.cw;
 
-/** ローソク足と同じ語彙: 範囲ではなく足の長さを選ぶ。素材が 5 分の桶なので 5m が最小 */
+/** ローソク足と同じ語彙: 範囲ではなく足の長さを選ぶ。素材が 5 分のバケットなので 5m が最小 */
 export const FEET: readonly { readonly key: number; readonly label: string }[] = [
   { key: 5 * 60_000, label: '5m' },
   { key: 15 * 60_000, label: '15m' },
@@ -23,7 +23,7 @@ export const MAX_BARS = 72;
 /** 素材が遡る範囲 */
 export const WINDOW_MS = 7 * 86_400_000;
 
-/** 定額の窓の長さ。正本から観測できる範囲での近似で、課金側の正とは一致しないことがある */
+/** 定額枠の期間の長さ。`transcript` から観測できる範囲での近似で、課金側の正とは一致しないことがある */
 export const QUOTA_WINDOW_MS = 5 * 3_600_000;
 
 export interface Bin {
@@ -36,7 +36,7 @@ export interface Bin {
 
 /* 足の境目は現在からの相対ではなく、キリの良い時刻に置く。
 
-   手元の深夜を起点に足の倍数で区切り、**最新の 1 本だけが「直前の境目〜現在」の
+   ローカルタイムの深夜を起点に足の倍数で区切り、**最新の 1 本だけが「直前の境目〜現在」の
    形成中の足**になる。相対に置くと、描き直すたびに全部の足が少しずつ横へ流れる。 */
 export function gridOf(nowMs: number, footMs: number): { fromMs: number; bars: number } {
   const midnight = new Date(nowMs);
@@ -86,14 +86,14 @@ export function byModel(buckets: readonly UsageBucketJson[]): [string, number][]
 export interface QuotaWindow {
   readonly active: boolean;
   readonly tokens: number;
-  /** 窓が明ける時刻 */
+  /** 期間が明ける時刻 */
   readonly endsAtMs: number;
 }
 
-/* 定額の窓の連なりを近似する。
+/* 定額枠の期間の連なりを近似する。
 
-   最初の活動が窓を開き、窓が明けた後の最初の活動が次の窓を開く。
-   **正本から観測できる範囲の近似であって、課金側の正ではない。** */
+   最初の活動が期間を開き、期間が明けた後の最初の活動が次の期間を開く。
+   **`transcript` から観測できる範囲の近似であって、課金側の正ではない。** */
 export function quotaWindow(
   buckets: readonly UsageBucketJson[],
   nowMs: number,
@@ -116,7 +116,7 @@ export function quotaWindow(
   return { active: true, tokens, endsAtMs: endsAt };
 }
 
-/** 束ねた内訳。窓の内側だけ */
+/** 束ねた内訳。対象期間の内側だけ */
 export function totalsOf(buckets: readonly UsageBucketJson[]): Bin {
   const sum: Bin = {
     total: 0,
@@ -135,7 +135,7 @@ export function totalsOf(buckets: readonly UsageBucketJson[]): Bin {
   return sum;
 }
 
-/** 窓の広さの札 */
+/** 期間の長さのラベル */
 export const rangeLabel = (ms: number): string =>
   ms >= 86_400_000
     ? `${(ms / 86_400_000).toFixed(ms % 86_400_000 ? 1 : 0)}d`

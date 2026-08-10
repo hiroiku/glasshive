@@ -1,18 +1,18 @@
-/* セッションの三つの様子と、待っている相手。
+/* セッションの三つの状態と、待っている相手。
 
    稼働と終了だけでは足りない。手が空いていて人の返事を待っているセッションは、
-   終わったセッションと見分けが付かなければならない — この道具の主目的は
+   終わったセッションと見分けが付かなければならない — glasshive の主目的は
    「あなたを待っているものを見つける」ことだからである。 */
 
 export type SessionState = 'active' | 'waiting' | 'ended';
 
-/** 子は待たない。委譲された仕事は自分で完結するか、終わるかのどちらかである */
+/** サブエージェントは待たない。委譲された仕事は自分で完結するか、終わるかのどちらかである */
 export type SubagentState = 'active' | 'ended';
 
-/** 何を待っているか。`user` = 人の入力待ち、`agents` = 委譲した子の完了待ち */
+/** 何を待っているか。`user` = 人の入力待ち、`agents` = 委譲したサブエージェントの完了待ち */
 export type AwaitingKind = 'user' | 'agents';
 
-/* 正本の最後の意味あるイベントの形。ここから「人の入力を待っているか」が決まる。
+/* `transcript` の最後の意味あるイベントの形。ここから「人の入力を待っているか」が決まる。
 
    `tool` と `tool_result` と `think` は「まだ自分の番」なので待ちではない。
    `text`(本文で完結した応答)・`ask`(問いかけ)・`stop`(停止フック)は自分の番が
@@ -26,5 +26,5 @@ export const AWAITING_USER_SHAPES: readonly LastEventShape[] = ['text', 'ask', '
 export const isAwaitingUserShape = (shape: LastEventShape | null): boolean =>
   shape !== null && AWAITING_USER_SHAPES.includes(shape);
 
-/** 問いかけを表す道具の名前。これだけは `tool` ではなく `ask` として数える */
+/** 問いかけを表すツール名。これだけは `tool` ではなく `ask` として数える */
 export const ASK_TOOL_NAME = 'AskUserQuestion';

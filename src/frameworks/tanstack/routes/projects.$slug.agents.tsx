@@ -9,21 +9,21 @@ import { useNowMs } from '../ui/hooks/useNowMs.ts';
 import { openPanelOf, type ProjectSearch } from '../ui/nav/search.ts';
 import { usePrefs } from '../ui/prefs/PrefsContext.tsx';
 
-/* 誰が動いていて、誰が待っているか。この道具の主画面。
+/* 誰が動いていて、誰が待っているか。glasshive の主画面。
 
-   絞りと並べ替えは道の印に載せる。**「この条件で観て」と人に渡せるものだから**である。
-   木の開閉と時間帯は載せない — 開閉は見せたい対象ではなく、時間帯は絶対の時刻なので
-   渡した先では別のものを指す。 */
+   絞り込みと並べ替えは URL の検索パラメータに載せる。**「この条件で観て」と人に渡せる
+   ものだから**である。木の開閉と時間帯は載せない — 開閉は見せたい対象ではなく、
+   時間帯は絶対の時刻なので渡した先では別のものを指す。 */
 
 export const Route = createFileRoute('/projects/$slug/agents')({
   component: AgentsView,
 });
 
-/** 印が何も言っていないときの並び。起点の早い順 = 物語の順 */
+/** 検索パラメータが何も言っていないときの並び。起点の早い順 = イベントの起きた順 */
 const DEFAULT_SORTING: SortingState = [{ id: 'timeline', desc: false }];
 
-/* 様子と帯は合図が無くても変わる。待ち続けているだけで「30 分動きが無い」に変わり、
-   動いている帯は現在まで伸び続けるので、静かなときも時計を進める。 */
+/* 状態と稼働区間は変更通知が無くても変わる。待ち続けているだけで「30 分動きが無い」に
+   変わり、動いている稼働区間は現在まで伸び続けるので、静かなときも時計を進める。 */
 const TICK_MS = 5000;
 
 function AgentsView() {
@@ -36,7 +36,7 @@ function AgentsView() {
 
   const project = tree.data?.projects.find((candidate) => candidate.id === slug);
 
-  /* この巣を初めて描くか。**初回は変化の光を当てない** —
+  /* このプロジェクトを初めて描くか。**初回は変化のハイライトを当てない** —
      開いた瞬間に、そこに在っただけの行が一斉に光る。 */
   const seenRef = useRef(new Set<string>());
   const firstPaint = !seenRef.current.has(slug);

@@ -4,10 +4,10 @@ import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { useTabSelection } from '~/frameworks/tanstack/ui/hooks/useTabSelection.ts';
 
-/* 画面が向こう側とやり取りする一区間。**ここが観測の最後の一歩である。**
+/* 画面がサーバーとやり取りするところ。**ここが観測の最後の一歩である。**
 
-   途中の層がどれだけ「無かった」と「見に行けなかった」を分けて運んでも、
-   最後に画面が両方を同じ見た目へ倒せば、観る人にとっては潰れているのと変わらない。 */
+   途中の層がどれだけ「無かった」と「観測できなかった」を分けて運んでも、
+   最後に画面が両方を同じ見た目へ倒せば、ユーザーにとっては潰れているのと変わらない。 */
 
 const server = vi.hoisted(() => ({
   get: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock('~/frameworks/tanstack/functions/preferences.ts', () => ({
   setPreferences: (args: unknown) => server.set(args),
 }));
 
-/** 向こう側が返す形は、画面が受け取る形から取る。字を書き写すと、形が変わっても気づけない */
+/** サーバーが返す形は、画面が受け取る形から取る。型を書き写すと、形が変わっても気づけない */
 type Handle = ReturnType<typeof useTabSelection>;
 type StoredState = Handle['storedState'];
 
@@ -46,8 +46,8 @@ function mount() {
   return renderHook(() => useTabSelection(), { wrapper });
 }
 
-describe('覚え書きをどう読めたかを、画面まで落とさずに運ぶ', () => {
-  it('読めた日は、読めたと名乗る', async () => {
+describe('`preferences.json` をどう読めたかを、画面まで落とさずに運ぶ', () => {
+  it('読めた日は、読めたと言う', async () => {
     server.get.mockResolvedValue(body(['-w-a'], { state: 'observed', reason: null }));
 
     const { result } = mount();
@@ -56,7 +56,7 @@ describe('覚え書きをどう読めたかを、画面まで落とさずに運�
     expect(result.current.pinned).toEqual(new Set(['-w-a']));
   });
 
-  it('まだ覚え書きが無い日は、無いと名乗る', async () => {
+  it('まだ `preferences.json` が無い日は、無いと言う', async () => {
     server.get.mockResolvedValue(body([], { state: 'absent', reason: 'no-source' }));
 
     const { result } = mount();
@@ -64,7 +64,7 @@ describe('覚え書きをどう読めたかを、画面まで落とさずに運�
     await waitFor(() => expect(result.current.storedState).toBe('absent'));
   });
 
-  it('向こう側が読めなかった日は、そのまま読めなかったと名乗る', async () => {
+  it('サーバーが観測できなかった日は、そのまま観測できなかったと言う', async () => {
     server.get.mockResolvedValue(
       body([], { state: 'unobservable', reason: 'preferences.unreadable' }),
     );
@@ -74,7 +74,7 @@ describe('覚え書きをどう読めたかを、画面まで落とさずに運�
     await waitFor(() => expect(result.current.storedState).toBe('unobservable'));
   });
 
-  it('取りに行って落ちた日は、「留めていない」と名乗らない', async () => {
+  it('取りに行って落ちた日は、「ピン留めしていない」と言わない', async () => {
     server.get.mockRejectedValue(new Error('つながらない'));
 
     const { result } = mount();
@@ -82,10 +82,10 @@ describe('覚え書きをどう読めたかを、画面まで落とさずに運�
     await waitFor(() =>
       expect(
         result.current.storedState,
-        '答えを一度も受け取れていないのを absent と名乗ると、印が黙って消えたようにしか見えない',
+        '結果を一度も受け取れていないのを absent と言うと、ピン留めが黙って消えたようにしか見えない',
       ).toBe('unobservable'),
     );
-    expect(result.current.pinned, '留めた印は分からないので、空で描くほかない').toEqual(new Set());
+    expect(result.current.pinned, 'ピン留めは分からないので、空で描くほかない').toEqual(new Set());
   });
 
   it('まだ届いていない間は、何も言わない', () => {
@@ -98,8 +98,8 @@ describe('覚え書きをどう読めたかを、画面まで落とさずに運�
   });
 });
 
-describe('置きに行った答えを、手元へ正しく戻す', () => {
-  it('通った答えで、手元を丸ごと入れ替える', async () => {
+describe('置きに行った結果を、クライアント側の状態へ正しく戻す', () => {
+  it('通った結果で、クライアント側の状態を丸ごと入れ替える', async () => {
     server.get.mockResolvedValue(body([], { state: 'absent', reason: 'no-source' }));
     server.set.mockResolvedValue({
       ok: true,
@@ -115,7 +115,7 @@ describe('置きに行った答えを、手元へ正しく戻す', () => {
     expect(result.current.pinned).toEqual(new Set(['-w-a']));
   });
 
-  it('断られたら、手元を元へ戻す', async () => {
+  it('断られたら、クライアント側の状態を元へ戻す', async () => {
     server.get.mockResolvedValue(body(['-w-a'], { state: 'observed', reason: null }));
     server.set.mockResolvedValue({
       ok: false,
@@ -135,11 +135,11 @@ describe('置きに行った答えを、手元へ正しく戻す', () => {
     await waitFor(() => expect(result.current.error).not.toBeNull());
     expect(
       result.current.pinned,
-      '置けなかったのに印だけ残ると、次に開いたときに黙って消える',
+      '置けなかったのにピン留めだけ残ると、次に開いたときに黙って消える',
     ).toEqual(new Set(['-w-a']));
   });
 
-  it('送るのは「何をしたいか」だけで、丸ごとの選びは送らない', async () => {
+  it('送るのは「何をしたいか」だけで、丸ごとの選択は送らない', async () => {
     server.get.mockResolvedValue(body(['-w-a'], { state: 'observed', reason: null }));
     server.set.mockResolvedValue({
       ok: true,
@@ -154,7 +154,7 @@ describe('置きに行った答えを、手元へ正しく戻す', () => {
     await waitFor(() => expect(server.set).toHaveBeenCalled());
     expect(
       server.set.mock.calls.at(-1)?.[0],
-      '丸ごと送ると、読んでから送るまでの間に別の窓が留めたぶんが消える',
+      '丸ごと送ると、読んでから送るまでの間に別のクライアントがピン留めしたぶんが消える',
     ).toEqual({ data: { action: 'unpin', id: '-w-a' } });
   });
 });

@@ -1,5 +1,5 @@
 // domain が見てよいのは app-kernel だけ。
-// bounded context をまたぐ import は道の上では防げないので、scripts/check-architecture.mjs が見る。
+// bounded context をまたぐ import は paths では防げないので、scripts/check-architecture.mjs が見る。
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {

@@ -3,14 +3,15 @@ import type { EventJson } from '~/interface/presenters/sessions/conversation.pre
 import { fetchConversation } from '../../queries/sessions.query.ts';
 import { subscribeToFile } from './useChangeStream.ts';
 
-/* 会話の窓。**ここだけ問い合わせの仕組みに載せない。**
+/* 会話の読み取り範囲。**ここだけ問い合わせの仕組みに載せない。**
 
-   頁の鍵がバイトの位置で、向こう側で境が動く(行の頭へ揃えるので、頼んだ位置と
-   読み始めた位置が違う)。合図で末尾が伸び、巻きの位置の持ち直しが描画と絡む。
-   載せると、鍵の作り直しと巻き戻しの取り合いになって、追いかけるたびに位置が飛ぶ。
+   ページのキーがバイトの位置で、向こう側で境が動く(行の頭へ揃えるので、頼んだ位置と
+   読み始めた位置が違う)。変更通知で末尾が伸び、スクロール位置の持ち直しが描画と絡む。
+   載せると、キーの作り直しと巻き戻しの取り合いになって、追いかけるたびに位置が飛ぶ。
 
-   だから覚えはここが自分で持つ。持つものは 3 つ — 並んでいるイベント、窓の始まり、
-   次に読む位置。**次に読む位置が進まないことが、書き込み途中の行を消費しなかった証である。** */
+   だから状態はここが自分で持つ。持つものは 3 つ — 並んでいるイベント、読み取り範囲の
+   先頭、次に読む位置。次に読む位置が進まないことが、書き込み途中の行を消費しなかった
+   ことを表す。 */
 
 /** 「もっと前」を押したときに遡る量 */
 const OLDER_STEP_BYTES = 256 * 1024;
@@ -21,14 +22,14 @@ const OLDER_MAX_STEPS = 8;
 /** ここより下まで巻いていたら、追記に合わせて末尾へ吸い付く */
 const STICK_THRESHOLD_PX = 80;
 
-/** 頁の始まりと通し番号で鍵を組む */
+/** ページの先頭と通し番号でキーを組む */
 const keyed = (start: number, events: readonly EventJson[]): KeyedEvent[] =>
   events.map((event, index) => ({ key: `${start}:${index}`, event }));
 
-/* 並べるときの鍵つきの出来事。
+/* 並べるときのキー付きのイベント。
 
-   **添字を鍵にできない。** 前を読み足すと全部の添字がずれ、React は別の出来事を
-   同じものとして扱う(開いていた畳みが別の塊に付き替わる)。頁の始まりの位置は
+   **添字をキーにできない。** 前を読み足すと全部の添字がずれ、React は別のイベントを
+   同じものとして扱う(開いていた折り畳みが別の塊に付き替わる)。ページの先頭の位置は
    その向きに 1 度しか読まないので、そこからの通し番号なら重ならない。 */
 export interface KeyedEvent {
   readonly key: string;
@@ -39,7 +40,7 @@ export interface TranscriptWindowHandle {
   readonly events: readonly KeyedEvent[];
   /** まだ前が在るか */
   readonly hasOlder: boolean;
-  /** 読みに行けなかったか。**空の会話と区別する** */
+  /** 観測できなかったか。**空の会話と区別する** */
   readonly failed: boolean;
   readonly boxRef: React.RefObject<HTMLDivElement | null>;
   readonly loadOlder: () => void;
@@ -53,7 +54,7 @@ export function useTranscriptWindow(file: string | null): TranscriptWindowHandle
   const loadingRef = useRef(false);
   const boxRef = useRef<HTMLDivElement | null>(null);
 
-  /* 開いたら末尾の窓から。読み終えたら一番下へ落とす。
+  /* 開いたら末尾の読み取り範囲から。読み終えたら一番下へ落とす。
      会話は末尾がいまなので、上から読ませる理由が無い。 */
   useEffect(() => {
     if (file === null) return;
@@ -83,7 +84,7 @@ export function useTranscriptWindow(file: string | null): TranscriptWindowHandle
     };
   }, [file]);
 
-  /* 正本が伸びた合図で末尾を追う。**次に読む位置から先だけを足す。**
+  /* `transcript` に追記された変更通知で末尾を追う。**次に読む位置から先だけを足す。**
      取り直すと、開いている会話が毎回いちばん下へ跳ぶ。 */
   useEffect(() => {
     if (file === null) return;
@@ -125,7 +126,7 @@ export function useTranscriptWindow(file: string | null): TranscriptWindowHandle
         const keep = box === null ? 0 : box.scrollHeight - box.scrollTop;
         let to = windowStart;
         /* 何も読めなかったら、もう一歩遡る。1 行が一歩ぶんより長いと、その一歩には
-           行の頭が 1 つも無く、頁が空で返る。押した人には「動かない」としか見えない。 */
+           行の頭が 1 つも無く、ページが空で返る。押した人には「動かない」としか見えない。 */
         for (let step = 0; step < OLDER_MAX_STEPS && to > 0; step += 1) {
           const from = Math.max(0, to - OLDER_STEP_BYTES);
           const response = await fetchConversation(file, from, to);
