@@ -1,5 +1,5 @@
 {
-	"name": "dotagents",
-	"description": "dotagents — architecture · beads · harness",
-	"version": "2.0.0"
+  "name": "dotagents",
+  "description": "dotagents — beads",
+  "version": "0.0.1"
 }
