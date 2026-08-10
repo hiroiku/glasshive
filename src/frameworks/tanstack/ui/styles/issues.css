@@ -782,6 +782,24 @@
   padding: 1px 4px;
 }
 
+/* 2 行目の右側。親・子の消化・コメント数。**堰き止めではないので辺にはならない** ——
+   親子は階層であって、待ちではない。カードに出しておかないと、絵から外れた課題が
+   何にも繋がっていないように見える。 */
+.dg-parent,
+.dg-sub,
+.dg-cmt {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 9.5px;
+  color: var(--ended);
+  white-space: nowrap;
+}
+.dg-sub {
+  font-family: var(--mono);
+}
+
 .dg-bot .lbl {
   cursor: inherit;
   font-size: 9px;
@@ -869,59 +887,29 @@
   color: var(--dim);
   margin-bottom: 7px;
 }
-/* **同じ幅の列に落とす。** 折り返しに任せると、題名の短いチップがそのぶん細くなり、
-   その行だけ以降の左端がずれる。列の数は幅に合わせて決まり、余りは列で分け合う */
+/* **同じ幅の列に落とす。** 折り返しに任せると、題名の短いカードがそのぶん細くなり、
+   その行だけ以降の左端がずれる。列の数は幅に合わせて決まり、余りは列で分け合う。
+   下限が絵のカードより広いのは、2 行目に並ぶものがここでは同じ幅に収まらないからである */
 .dg-loose-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 5px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px;
 }
 /* 絵の中で 1 枚に触れているあいだは、こちらも引く。**引かないと**、絵のカードが
    薄くなったぶんこの `band` だけが明るく残り、触れた課題が空ける先に見える。
    辺を持たないのだから、何を触っても空かない。 */
-.dg-loose.hot .dg-chip {
+.dg-loose.hot .dg-node {
   opacity: 0.26;
 }
-/* 1 行のチップ。カードの左端のバーと同じ色で状態を言う。
-   幅は列が決めるので、ここでは持たない */
-.dg-chip {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-  padding: 2px 8px 2px 7px;
-  border: 1px solid color-mix(in srgb, var(--st) 28%, var(--border));
-  border-left: 3px solid var(--st);
-  border-radius: 4px;
-  background: var(--bg);
-  cursor: pointer;
-  transition:
-    opacity 0.18s,
-    border-color 0.18s;
+/* 絵の中と同じカードを、グリッドのセルに置く。**寸法だけを外す** ——
+   位置は列が決め、幅も列が決める。高さは絵の中と揃える */
+.dg-node.loose {
+  position: static;
+  width: auto;
 }
-.dg-chip:hover,
-.dg-chip:focus-visible {
+.dg-node.loose:hover,
+.dg-node.loose:focus-visible {
   border-color: var(--accent);
-}
-.dg-chip-t {
-  font-size: 11px;
-  color: var(--fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-.dg-chip-beat {
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-.dg-chip-beat.active {
-  background: var(--active);
-}
-.dg-chip-beat.waiting {
-  background: var(--waiting);
 }
 
 .legend-bar {

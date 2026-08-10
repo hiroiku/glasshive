@@ -1,4 +1,4 @@
-import { mdiSourceBranch } from '@mdi/js';
+import { mdiCommentOutline, mdiSourceBranch } from '@mdi/js';
 import { useMemo, useState } from 'react';
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import {
@@ -8,7 +8,7 @@ import {
   type PlacedNode,
 } from '../../derive/dependencyGraph.ts';
 import { ARROW } from '../../derive/edgeShape.ts';
-import { labelColors, leadPullRequest } from '../../derive/githubIssue.ts';
+import { labelColors, leadPullRequest, subProgress } from '../../derive/githubIssue.ts';
 import {
   liveCount,
   type MatchedWorker,
@@ -216,7 +216,13 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
             </div>
             <div className="dg-loose-list">
               {loose.map((node) => (
-                <LooseChip key={node.issue.id} node={node} workers={workers} onOpen={onOpen} />
+                <LooseCard
+                  key={node.issue.id}
+                  node={node}
+                  workers={workers}
+                  join={join}
+                  onOpen={onOpen}
+                />
               ))}
             </div>
           </div>
@@ -246,6 +252,19 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
         </span>
         <span>
           <b className="dg-unlock">+n</b> finishing it frees n issues
+        </span>
+        {/* 親子はここにしか出ない。**辺にはならない** — 階層であって、待ちではない */}
+        <span>
+          <b className="dg-parent">↳#n</b> it is a sub-issue of #n
+        </span>
+        <span>
+          <b className="dg-sub">n/m</b> n of its m sub-issues are closed
+        </span>
+        <span>
+          <b className="dg-cmt">
+            <Icon path={mdiCommentOutline} size={9} />n
+          </b>{' '}
+          it has n comments
         </span>
         <span>
           <b className="dg-br">
@@ -301,22 +320,15 @@ interface CardProps {
 
 function Card({ placed, workers, hot, downstream, join, onEnter, onLeave, onOpen }: CardProps) {
   const node: GraphNode = placed.node;
-  const issue = node.issue;
-  const id = issue.id ?? '';
-  const colors = labelColors(issue);
-  const labels = issue.labels ?? [];
-  const pull = leadPullRequest(issue);
-  const found = workersOn(workers, issue);
-  const beat = leadWorker(found);
+  const id = node.issue.id ?? '';
 
   const self = hot === id;
   const lit = self || downstream?.has(id) === true;
-  const branch = join === undefined ? null : branchStateOf(issue, join.tips, join.conflicts);
 
   return (
     // biome-ignore lint/a11y/useSemanticElements: 中にチップを持つカードは button にできない
     <div
-      className={`dg-node st-${issue.status}${placed.caught ? ' caught' : ''}${lit ? ' lit' : ''}${self ? ' self' : ''}`}
+      className={`dg-node st-${node.issue.status}${placed.caught ? ' caught' : ''}${lit ? ' lit' : ''}${self ? ' self' : ''}`}
       style={{ left: placed.x, top: placed.y }}
       role="button"
       tabIndex={0}
@@ -327,8 +339,68 @@ function Card({ placed, workers, hot, downstream, join, onEnter, onLeave, onOpen
       onBlur={onLeave}
       {...pressable(() => onOpen(id))}
     >
+      <CardFace node={node} workers={workers} join={join} />
+    </div>
+  );
+}
+
+interface LooseCardProps {
+  readonly node: GraphNode;
+  readonly workers: WorkerIndex;
+  readonly join?: WorkJoin | undefined;
+  readonly onOpen: (id: string) => void;
+}
+
+/* 辺を持たない課題の 1 枚。**絵の中のカードと同じ中身を出す。** 堰き止める先が無いだけで、
+   ラベルも担当もコメントも親子も持っている。ここを id と題名だけにすると、開いてみるまで
+   何ひとつ分からない。置き場所だけが違う —— あちらは絶対座標、こちらはグリッドのセルである。
+
+   触れても何も光らせない。空ける先が無いのだから、絵を薄くして見せるものが無い。 */
+function LooseCard({ node, workers, join, onOpen }: LooseCardProps) {
+  const id = node.issue.id ?? '';
+
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: 中にチップを持つカードは button にできない
+    <div
+      className={`dg-node loose st-${node.issue.status}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open issue ${id}`}
+      {...pressable(() => onOpen(id))}
+    >
+      <CardFace node={node} workers={workers} join={join} />
+    </div>
+  );
+}
+
+interface CardFaceProps {
+  readonly node: GraphNode;
+  readonly workers: WorkerIndex;
+  readonly join?: WorkJoin | undefined;
+}
+
+/* カード 1 枚の中身。**絵の中と、辺を持たない課題の `band` とで、同じものを出す。**
+   同じものが 2 か所で別の顔をしていると、読む人はどちらが全部なのかを確かめに行くことになる。
+
+   2 行しか無いので、載せるものは選んである。1 行目は名前と、終わらせると何件空くか。
+   2 行目はこの課題の今 —— ラベル、担当、動いているエージェント、親子、コメント、PR。 */
+function CardFace({ node, workers, join }: CardFaceProps) {
+  const issue = node.issue;
+  const colors = labelColors(issue);
+  const labels = issue.labels ?? [];
+  const pull = leadPullRequest(issue);
+  const beat = leadWorker(workersOn(workers, issue));
+  const branch = join === undefined ? null : branchStateOf(issue, join.tips, join.conflicts);
+
+  const progress = subProgress(issue, undefined);
+  /* 親。堰き止めではないので `layer` には出ないが、この課題がどこに属するかは言う */
+  const parent = issue.deps.find((dependency) => dependency.type === 'parent-child')?.on ?? null;
+  const comments = issue.github?.comments ?? 0;
+
+  return (
+    <>
       <div className="dg-top">
-        <span className="dg-id">{id}</span>
+        <span className="dg-id">{issue.id ?? ''}</span>
         <span className="dg-title-t" title={issue.title ?? ''}>
           {cut(issue.title ?? '', 34)}
         </span>
@@ -365,6 +437,25 @@ function Card({ placed, workers, hot, downstream, join, onEnter, onLeave, onOpen
           </span>
         )}
         <span className="dg-grow" />
+        {parent !== null && (
+          <span className="dg-parent" title={`Sub-issue of ${parent}`}>
+            ↳{parent}
+          </span>
+        )}
+        {progress !== null && progress.total > 0 && (
+          <span
+            className="dg-sub"
+            title={`${progress.closed} of ${progress.total} sub-issues closed`}
+          >
+            {progress.closed}/{progress.total}
+          </span>
+        )}
+        {comments > 0 && (
+          <span className="dg-cmt" title={`${comments} comments`}>
+            <Icon path={mdiCommentOutline} size={9} />
+            {comments}
+          </span>
+        )}
         {/* PR のブランチが手元でどうなっているか。**この 1 つだけを持ち込む** —
             カードは 2 行しか無いので、遅れと衝突だけに絞る */}
         {branch !== null && (branch.behind > 0 || branch.conflictsWith.length > 0) && (
@@ -389,38 +480,7 @@ function Card({ placed, workers, hot, downstream, join, onEnter, onLeave, onOpen
           </span>
         )}
       </div>
-    </div>
-  );
-}
-
-interface LooseChipProps {
-  readonly node: GraphNode;
-  readonly workers: WorkerIndex;
-  readonly onOpen: (id: string) => void;
-}
-
-/* 辺を持たない課題の 1 枚。**カードを小さくしたものではない** —— 空ける数も堰き止める先も
-   無いのだから、カードが 2 行目に載せているものはどれも出しようがない。id と題名と、
-   誰かが今そこに居るかだけを持つ。 */
-function LooseChip({ node, workers, onOpen }: LooseChipProps) {
-  const issue = node.issue;
-  const id = issue.id ?? '';
-  const beat = leadWorker(workersOn(workers, issue));
-
-  return (
-    // biome-ignore lint/a11y/useSemanticElements: カードと同じ見た目と挙動を保つ
-    <div
-      className={`dg-chip st-${issue.status}`}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open issue ${id}`}
-      title={issue.title ?? id}
-      {...pressable(() => onOpen(id))}
-    >
-      <span className="dg-id">{id}</span>
-      <span className="dg-chip-t">{cut(issue.title ?? '', 30)}</span>
-      {beat !== null && <i className={`dg-chip-beat ${beat.state}`} />}
-    </div>
+    </>
   );
 }
 
