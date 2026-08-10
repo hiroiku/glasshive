@@ -25,6 +25,8 @@ npx glasshive
 待ち受けるのは `127.0.0.1:4483` だけで、ブラウザーを開く。インストールの手順も、設定も、
 ネットワークへのアクセスも無い — 公開しているパッケージの実行時の依存はゼロだ。要るのは
 Node.js 22.12 以降と、`~/.claude/projects` の下に少なくとも 1 つの Claude Code のセッション。
+組み立てと動作の確認は macOS と Linux でしている。Windows では生きているエージェントの数が
+「観測できなかった」として返る — 数えるのに `ps` と、`/proc/<pid>/cwd` か `lsof` が要るからだ。
 
 ![glasshive の一巡り](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 
@@ -79,6 +81,10 @@ glasshive をどこで起動しても、エージェントが作業したすべ�
   タブと表示の好みが入る。書く前に glasshive は、そのパスが `~/.claude`、セッションログの
   ルートディレクトリ、観測している `.beads` や `.git` のディレクトリの中に無いことを確かめ、
   中にあれば断る — 観測している先へ書かないことは、約束ではなく仕組みで塞いである。
+  このファイルを消せば、glasshive が書いたものは 1 つも残らない。
+- **公開しているパッケージは、このリポジトリまで辿れる。** どのバージョンも GitHub Actions から
+  OIDC で publish していて provenance の attestation が付くので、`npm audit signatures` で、
+  手元に入れたパッケージを、組み立てた workflow とコミットまで照合できる。
 - **何もこの機械から出ない。** `127.0.0.1` に結び、`Host` ヘッダーがローカルでない要求は
   拒み(敵意のあるページが DNS リバインディングで届かないように)、外へは何も投げず、
   フォントは CDN から取らずに自分で抱えている。
@@ -105,6 +111,7 @@ npx glasshive --config-dir ~/somewhere  # preferences.json を置く場所
 | キー | 何が起きるか |
 | --- | --- |
 | `⌘1` … `⌘9` | 位置でタブへ飛ぶ(1 は Overview) |
+| `⌘⇧←` / `⌘⇧→` | いま居るタブを 1 つ左右へ動かす |
 | `Tab` | 行、チップ、並べ替えの見出し、つまみを順に辿る |
 | `Esc` | パネルを閉じる |
 

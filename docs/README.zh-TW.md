@@ -22,7 +22,9 @@ npx glasshive
 
 它只在 `127.0.0.1:4483` 上提供服務，並開啟你的瀏覽器。不需安裝步驟、不需設定、不需網路連線——
 發佈的套件沒有任何執行期相依套件。你需要 Node.js 22.12 或更新的版本，以及 `~/.claude/projects`
-底下至少一個 Claude Code 的 session。
+底下至少一個 Claude Code 的 session。建置與驗證都在 macOS 與 Linux 上進行；在 Windows 上，
+存活 agent 的數量會以「無法觀察」回傳，因為讀取它需要 `ps`，以及 `/proc/<pid>/cwd` 或 `lsof`
+其中之一。
 
 ![glasshive 導覽](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 
@@ -72,6 +74,10 @@ open/closed 隨時間的流動。沒有使用 `bd` 的專案會看到一段簡�
 - **它唯一會寫的檔案是它自己的。** `~/.config/glasshive/preferences.json` 存放你釘選的分頁與檢視偏好。
   寫入之前，glasshive 會檢查該路徑不在 `~/.claude`、transcript 根目錄，或任何被觀察的 `.beads` 或 `.git`
   目錄底下，若在其中就拒絕——寫入自己觀察的對象是由結構擋下的，不是靠慣例。
+  刪掉這一個檔案，glasshive 寫過的東西就一點也不剩。
+- **發佈的套件可以追溯到這個儲存庫。** 每個版本都由 GitHub Actions 透過 OIDC 發佈，並帶有
+  provenance attestation，所以 `npm audit signatures` 能把你裝到的套件，對上建置它的 workflow
+  與 commit。
 - **沒有任何東西離開你的機器。** 它只綁定 `127.0.0.1`，拒絕 `Host` 標頭不是本機的請求
   （因此惡意網頁無法透過 DNS rebinding 觸及它），不發出任何對外請求，
   字型也是自行打包而不是從 CDN 抓取。
@@ -97,6 +103,7 @@ npx glasshive --config-dir ~/somewhere  # preferences.json 的存放位置
 | 按鍵 | 作用 |
 | --- | --- |
 | `⌘1` … `⌘9` | 依位置跳到分頁（1 是 Overview） |
+| `⌘⇧←` / `⌘⇧→` | 把目前所在的分頁往左或往右挪一格 |
 | `Tab` | 在列、標籤、排序標頭與拖曳把手之間移動 |
 | `Esc` | 關閉面板 |
 

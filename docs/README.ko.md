@@ -23,7 +23,9 @@ npx glasshive
 
 `127.0.0.1:4483`에서만 서비스하고, 브라우저를 엽니다. 설치 단계도, 설정도, 네트워크 접근도
 없습니다 — 배포된 패키지에는 런타임 의존성이 하나도 없습니다. Node.js 22.12 이상과,
-`~/.claude/projects` 아래에 최소 하나의 Claude Code 세션이 필요합니다.
+`~/.claude/projects` 아래에 최소 하나의 Claude Code 세션이 필요합니다. 빌드와 동작 확인은
+macOS와 Linux에서 합니다. Windows에서는 살아 있는 에이전트의 수가 "관찰할 수 없음"으로
+돌아옵니다 — 세는 데 `ps`와, `/proc/<pid>/cwd` 또는 `lsof`가 필요하기 때문입니다.
 
 ![glasshive 둘러보기](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 
@@ -77,7 +79,11 @@ worktree, 지금 실행 중인 도구, 그리고 좌우로 끌고 확대·축소
 - **쓰는 파일은 자기 것 하나뿐입니다.** `~/.config/glasshive/preferences.json`에 고정한 탭과 화면
   설정이 들어갑니다. 쓰기 전에 glasshive는 그 경로가 `~/.claude`, 트랜스크립트 루트, 또는 관찰 중인
   어떤 `.beads`나 `.git` 디렉터리 안에 있지 않은지 확인하고, 안에 있으면 거부합니다 — 관찰하는 대상에
-  쓰는 일은 관례가 아니라 구조로 막혀 있습니다.
+  쓰는 일은 관례가 아니라 구조로 막혀 있습니다. 그 파일 하나를 지우면 glasshive가 쓴 것은
+  아무것도 남지 않습니다.
+- **배포된 패키지는 이 저장소까지 추적할 수 있습니다.** 모든 버전은 GitHub Actions에서 OIDC로
+  publish되며 provenance attestation이 붙으므로, `npm audit signatures`로 설치한 패키지를
+  그것을 빌드한 workflow와 커밋까지 대조할 수 있습니다.
 - **아무것도 당신의 기기를 벗어나지 않습니다.** `127.0.0.1`에 바인딩하고, `Host` 헤더가 로컬이 아닌
   요청은 거부하며(그래서 악의적인 페이지가 DNS 리바인딩으로 닿을 수 없습니다), 바깥으로 요청을 보내지
   않고, 폰트를 CDN에서 가져오는 대신 직접 번들합니다.
@@ -104,6 +110,7 @@ npx glasshive --config-dir ~/somewhere  # preferences.json을 둘 곳
 | 키 | 하는 일 |
 | --- | --- |
 | `⌘1` … `⌘9` | 위치로 탭 이동 (1은 Overview) |
+| `⌘⇧←` / `⌘⇧→` | 지금 있는 탭을 한 칸 왼쪽·오른쪽으로 이동 |
 | `Tab` | 행, 칩, 정렬 헤더, 핸들 사이를 이동 |
 | `Esc` | 패널 닫기 |
 

@@ -24,7 +24,9 @@ npx glasshive
 
 Il n'écoute que sur `127.0.0.1:4483` et ouvre votre navigateur. Aucune installation, aucune
 configuration, aucun accès réseau — le paquet publié n'a aucune dépendance d'exécution. Il vous faut
-Node.js 22.12 ou plus récent et au moins une session Claude Code sous `~/.claude/projects`.
+Node.js 22.12 ou plus récent et au moins une session Claude Code sous `~/.claude/projects`. Il est
+construit et testé sur macOS et Linux ; sous Windows le compte des agents vivants revient comme
+« non observable », car le lire demande `ps` et soit `/proc/<pid>/cwd`, soit `lsof`.
 
 ![glasshive walkthrough](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 
@@ -80,7 +82,11 @@ code et les appels d'outils sont rendus ; la transcription brute n'est jamais r�
   onglets épinglés et vos préférences d'affichage. Avant d'écrire, glasshive vérifie que le chemin
   n'est ni dans `~/.claude`, ni dans la racine des transcriptions, ni dans un répertoire `.beads` ou
   `.git` observé, et refuse si c'est le cas — écrire dans ce qu'il observe est empêché par
-  construction, pas par convention.
+  construction, pas par convention. Supprimez ce seul fichier et il ne reste rien de ce que
+  glasshive a écrit.
+- **Le paquet publié remonte jusqu'à ce dépôt.** Chaque version est publiée depuis GitHub Actions
+  via OIDC et porte une attestation de provenance ; `npm audit signatures` peut donc confronter le
+  paquet que vous avez installé au workflow et au commit à partir desquels il a été construit.
 - **Rien ne quitte votre machine.** Il écoute sur `127.0.0.1`, rejette les requêtes dont l'en-tête
   `Host` n'est pas local (pour qu'une page hostile ne puisse pas l'atteindre par DNS rebinding),
   n'émet aucune requête sortante et embarque ses propres polices au lieu de les récupérer depuis
@@ -109,6 +115,7 @@ des onglets.
 | Touche | Effet |
 | --- | --- |
 | `⌘1` … `⌘9` | Aller à un onglet par sa position (1 = Overview) |
+| `⌘⇧←` / `⌘⇧→` | Déplacer d'un cran à gauche ou à droite l'onglet où vous êtes |
 | `Tab` | Parcourir les lignes, les puces, les en-têtes de tri et les poignées |
 | `Esc` | Fermer le panneau |
 

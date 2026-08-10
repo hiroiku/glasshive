@@ -22,7 +22,8 @@ npx glasshive
 
 它只在 `127.0.0.1:4483` 上提供服务，并打开你的浏览器。没有安装步骤，没有配置，不访问网络 ——
 发布出来的包没有任何运行时依赖。你需要 Node.js 22.12 或更新的版本，以及 `~/.claude/projects`
-下至少一个 Claude Code 会话。
+下至少一个 Claude Code 会话。构建和验证都在 macOS 与 Linux 上进行；在 Windows 上，存活 agent
+的数量会以「无法观察」返回，因为读取它需要 `ps`，以及 `/proc/<pid>/cwd` 或 `lsof` 之一。
 
 ![glasshive walkthrough](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 
@@ -71,6 +72,10 @@ open/closed 随时间的流动。不使用 `bd` 的项目会得到一条简短�
 - **它唯一会写的文件是它自己的。** `~/.config/glasshive/preferences.json` 保存你固定的标签和视图偏好。
   写入之前，glasshive 会检查这个路径不在 `~/.claude`、会话记录的根目录，或任何被观察的 `.beads` 或
   `.git` 目录里面，只要在就拒绝 —— 不写入自己观察的东西，是由构造挡住的，不是靠约定。
+  删掉这一个文件，glasshive 写过的东西就一点也不剩。
+- **发布出来的包可以追溯到这个仓库。** 每个版本都由 GitHub Actions 通过 OIDC 发布，并带有
+  provenance attestation，所以 `npm audit signatures` 能把你装到的包，对上构建它的 workflow
+  和 commit。
 - **没有东西离开你的机器。** 它绑定到 `127.0.0.1`，拒绝 `Host` 头不是本地的请求（这样恶意页面无法
   通过 DNS 重绑定够到它），不发出任何对外请求，并且自带字体，而不是从 CDN 取。
 - **“空”和“读不到”永远不会长得一样。** 读不到的字段会以 `null` 的形式带上原因一起传下来，所以一块
@@ -95,6 +100,7 @@ npx glasshive --config-dir ~/somewhere  # preferences.json 的存放位置
 | 按键 | 作用 |
 | --- | --- |
 | `⌘1` … `⌘9` | 按位置跳到某个标签（1 是 Overview） |
+| `⌘⇧←` / `⌘⇧→` | 把当前所在的标签向左或向右挪一位 |
 | `Tab` | 在行、chip、排序表头和手柄之间移动 |
 | `Esc` | 关闭面板 |
 

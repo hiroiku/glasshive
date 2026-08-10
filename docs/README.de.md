@@ -25,7 +25,9 @@ npx glasshive
 Es lauscht ausschließlich auf `127.0.0.1:4483` und öffnet deinen Browser. Kein Installationsschritt,
 keine Konfiguration, kein Netzwerkzugriff – das veröffentlichte Paket hat null
 Laufzeitabhängigkeiten. Du brauchst Node.js 22.12 oder neuer und mindestens eine Session von
-Claude Code unter `~/.claude/projects`.
+Claude Code unter `~/.claude/projects`. Gebaut und getestet wird auf macOS und Linux; unter Windows
+kommt die Zahl der lebenden Agenten als „nicht beobachtbar“ zurück, denn sie zu lesen braucht `ps`
+und entweder `/proc/<pid>/cwd` oder `lsof`.
 
 ![glasshive walkthrough](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 
@@ -81,7 +83,12 @@ Tool-Aufrufe werden gerendert; das rohe Transkript wird nie umgeschrieben.
   enthält deine angehefteten Tabs und Ansichtseinstellungen. Vor dem Schreiben prüft glasshive, dass
   der Pfad nicht in `~/.claude`, im Wurzelverzeichnis der Transkripte oder in einem beobachteten
   `.beads`- oder `.git`-Verzeichnis liegt, und verweigert es andernfalls – in das zu schreiben, was es
-  beobachtet, ist bauartbedingt ausgeschlossen, nicht bloß per Konvention.
+  beobachtet, ist bauartbedingt ausgeschlossen, nicht bloß per Konvention. Lösche diese eine Datei,
+  und von allem, was glasshive je geschrieben hat, bleibt nichts übrig.
+- **Das veröffentlichte Paket lässt sich zu diesem Repository zurückverfolgen.** Jede Version wird
+  aus GitHub Actions über OIDC veröffentlicht und trägt eine Provenance-Attestation, sodass
+  `npm audit signatures` das installierte Paket gegen den Workflow und den Commit prüfen kann, aus
+  denen es gebaut wurde.
 - **Nichts verlässt deinen Rechner.** Es bindet an `127.0.0.1`, weist Anfragen ab, deren
   `Host`-Header nicht lokal ist (damit eine feindselige Seite es nicht per DNS-Rebinding erreicht),
   stellt keine ausgehenden Anfragen und bringt seine Schriften selbst mit, statt sie von einem CDN zu
@@ -110,6 +117,7 @@ werden.
 | Taste | Wirkung |
 | --- | --- |
 | `⌘1` … `⌘9` | Nach Position zu einem Tab springen (1 ist Overview) |
+| `⌘⇧←` / `⌘⇧→` | Den Tab, auf dem du bist, eine Position nach links oder rechts schieben |
 | `Tab` | Durch Zeilen, Chips, Sortier-Header und Griffe wandern |
 | `Esc` | Das Panel schließen |
 

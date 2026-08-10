@@ -24,7 +24,9 @@ npx glasshive
 
 Sirve solo en `127.0.0.1:4483` y abre tu navegador. Sin paso de instalación, sin configuración, sin
 acceso a la red: el paquete publicado tiene cero dependencias en tiempo de ejecución. Necesitas
-Node.js 22.12 o posterior y al menos una sesión de Claude Code dentro de `~/.claude/projects`.
+Node.js 22.12 o posterior y al menos una sesión de Claude Code dentro de `~/.claude/projects`. Se
+compila y se prueba en macOS y Linux; en Windows el recuento de agentes vivos vuelve como «no se
+pudo observar», porque leerlo necesita `ps` y `/proc/<pid>/cwd` o `lsof`.
 
 ![glasshive walkthrough](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 
@@ -80,7 +82,11 @@ código y las llamadas a herramientas se renderizan; la transcripción original 
   pestañas fijadas y tus preferencias de vista. Antes de escribir, glasshive comprueba que la ruta no
   esté dentro de `~/.claude`, de la raíz de las transcripciones ni de ningún directorio `.beads` o
   `.git` observado, y se niega si lo está: escribir en lo que observa está bloqueado por
-  construcción, no por convención.
+  construcción, no por convención. Borra ese único archivo y no queda nada de lo que glasshive
+  haya escrito.
+- **El paquete publicado se puede rastrear hasta este repositorio.** Cada versión se publica desde
+  GitHub Actions mediante OIDC y lleva una atestación de procedencia, así que `npm audit signatures`
+  puede contrastar el paquete que instalaste con el workflow y el commit desde los que se compiló.
 - **Nada sale de tu máquina.** Se enlaza a `127.0.0.1`, rechaza las peticiones cuya cabecera `Host`
   no sea local (para que una página hostil no pueda alcanzarlo mediante DNS rebinding), no hace
   peticiones salientes e incluye sus propias fuentes en lugar de descargarlas de una CDN.
@@ -107,6 +113,7 @@ listan todos los proyectos en los que ha trabajado un agente, y tú eliges cuál
 | Tecla | Qué hace |
 | --- | --- |
 | `⌘1` … `⌘9` | Saltar a una pestaña por su posición (la 1 es Overview) |
+| `⌘⇧←` / `⌘⇧→` | Mover un lugar a la izquierda o a la derecha la pestaña en la que estás |
 | `Tab` | Recorrer filas, chips, encabezados de ordenación y tiradores |
 | `Esc` | Cerrar el panel |
 

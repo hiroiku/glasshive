@@ -24,7 +24,9 @@ npx glasshive
 
 It serves on `127.0.0.1:4483` only and opens your browser. No install step, no configuration, no
 network access — the published package has zero runtime dependencies. You need Node.js 22.12 or
-newer and at least one Claude Code session under `~/.claude/projects`.
+newer and at least one Claude Code session under `~/.claude/projects`. It is built and tested on
+macOS and Linux; on Windows the live agent count comes back as unobservable, because reading it
+needs `ps` and either `/proc/<pid>/cwd` or `lsof`.
 
 ![glasshive walkthrough](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/media/glasshive.gif)
 
@@ -78,7 +80,11 @@ rendered; the raw transcript is never rewritten.
 - **The one file it writes is its own.** `~/.config/glasshive/preferences.json` holds your pinned
   tabs and view preferences. Before writing, glasshive checks that the path is not inside `~/.claude`,
   the transcripts root, or any observed `.beads` or `.git` directory, and refuses if it is — writing
-  to what it observes is blocked by construction, not by convention.
+  to what it observes is blocked by construction, not by convention. Delete that one file and
+  nothing glasshive has ever written is left behind.
+- **The published package is traceable to this repository.** Every version is published from GitHub
+  Actions over OIDC and carries a provenance attestation, so `npm audit signatures` can check the
+  package you installed against the workflow and the commit it was built from.
 - **Nothing leaves your machine.** It binds to `127.0.0.1`, rejects requests whose `Host` header is
   not local (so a hostile page cannot reach it by DNS rebinding), makes no outbound requests, and
   bundles its own fonts instead of fetching them from a CDN.
@@ -105,6 +111,7 @@ worked in is listed, and you pick which ones become tabs.
 | Key | Does |
 | --- | --- |
 | `⌘1` … `⌘9` | Jump to a tab by position (1 is Overview) |
+| `⌘⇧←` / `⌘⇧→` | Move the tab you are on one place left or right |
 | `Tab` | Move through rows, chips, sort headers, and handles |
 | `Esc` | Close the panel |
 
