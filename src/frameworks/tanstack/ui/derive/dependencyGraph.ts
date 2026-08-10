@@ -3,9 +3,11 @@ import { roundedPath } from './edgeShape.ts';
 
 /* 依存の並びを、着手順そのものにする。
 
-   **横に並ぶ位置が意味を持つ。** `layer` 0 は「いま手を付けられる課題の全部」で、`layer` 1 は
-   「`layer` 0 が 1 つ片付けば空くもの」である。飾りの並びではないので、`layer` が嘘をつくと
-   着手できないものが着手できると読める。
+   **横に並ぶ位置が意味を持つ。** `layer` 0 は「いま手を付けられて、何かを堰き止めているもの」で、
+   `layer` 1 は「`layer` 0 が 1 つ片付けば空くもの」である。飾りの並びではないので、`layer` が
+   嘘をつくと着手できないものが着手できると読める。辺を 1 本も持たない課題はどの `layer` にも
+   置かず、`loose` として別に返す —— いま着手できる点では `layer` 0 と同じだが、その右に
+   続くものが無いので、横軸に置く意味が無い。
 
    GitHub は依存の輪を通す(自己参照だけを拒む)。**輪は解かずに、輪だと言う。** `layer` に置けば
    「n つ先」に見えるが、輪の中の課題は横軸のどこにも居ない —— それが輪であることの意味である。
@@ -31,8 +33,13 @@ export interface GraphNode {
 
 export interface DependencyGraph {
   readonly nodes: readonly GraphNode[];
-  /** `layer` ごとの id。輪に囚われているものは入らない */
+  /** `layer` ごとの id。`loose` と `caught` は入らない */
   readonly layers: readonly (readonly string[])[];
+  /* 辺を 1 本も持たない id。堰き止めても堰き止められてもいない。
+     **`layer` のグリッドに混ぜない** —— 実際のリポジトリではここが大多数で、
+     190x50 のカードで敷き詰めると、依存を持つ数件がその陰に埋もれる。
+     いま着手できることに変わりはないので、消さずに別の `band` として出す。 */
+  readonly loose: readonly string[];
   /** `layer` に乗らなかった id。輪の中に居るか、輪の下流に居る */
   readonly caught: readonly string[];
   /* この絵が全部だと言えるか。
@@ -127,10 +134,20 @@ export function buildDependencyGraph(issues: readonly IssueSummaryJson[]): Depen
      どれも今すぐ取れるので、順番を決めるのは「取ると何が動くか」だけである。 */
   const depth = Math.max(0, ...[...layer.values()].map((value) => value + 1));
   const layers: string[][] = Array.from({ length: depth }, () => []);
+  const loose: string[] = [];
   for (const node of nodes) {
     if (node.layer === null) continue;
+    if (node.blockedBy.length === 0 && node.blocking.length === 0) {
+      loose.push(node.issue.id ?? '');
+      continue;
+    }
     layers[node.layer]?.push(node.issue.id ?? '');
   }
+  /* 触った日の新しい順。**id の文字列順では並べない** —— `#9` が `#10` より後ろに来るし、
+     どれも空ける数が 0 なので、順位を決められるのは「最後に動いたのがいつか」しか無い。
+     一覧の既定の並びもこれである。 */
+  const touchedOf = (id: string) => placed.get(id)?.updated_at ?? '';
+  loose.sort((a, b) => touchedOf(b).localeCompare(touchedOf(a)) || a.localeCompare(b));
   const rankOf = new Map(nodes.map((node) => [node.issue.id ?? '', node.unlocks]));
   for (const column of layers) {
     column.sort((a, b) => (rankOf.get(b) ?? 0) - (rankOf.get(a) ?? 0) || a.localeCompare(b));
@@ -139,6 +156,7 @@ export function buildDependencyGraph(issues: readonly IssueSummaryJson[]): Depen
   return {
     nodes,
     layers,
+    loose,
     caught,
     complete: issues.every((issue) => issue.deps_complete),
   };

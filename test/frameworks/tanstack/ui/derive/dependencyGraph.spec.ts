@@ -208,6 +208,70 @@ describe('着手順は 3 つに分ける', () => {
   });
 });
 
+describe('辺を持たない課題は `layer` のグリッドに置かない', () => {
+  /* 実際のリポジトリでは、依存を 1 本も持たない課題が大多数である。撮影用の atlas-api で
+     数えると 37 件のうち 25 件がそうだった。全部を `layer` 0 に積むと 190x50 のカードが
+     3 列 11 行の長方形を占め、依存を持つ数件はその右へ押しやられる。 */
+  const mixed = [issue('#1'), issue('#2'), issue('#3'), issue('#10'), issue('#11', ['#10'])];
+
+  it('辺の無いものを `loose` に分ける', () => {
+    const graph = buildDependencyGraph(mixed);
+
+    expect(graph.loose).toEqual(['#1', '#2', '#3']);
+    expect(graph.layers[0], '堰き止めているものだけが `layer` 0 に残る').toEqual(['#10']);
+    expect(graph.layers[1]).toEqual(['#11']);
+  });
+
+  it('`loose` は絵に置かない', () => {
+    const layout = layoutGraph(buildDependencyGraph(mixed));
+
+    expect(
+      layout.nodes.map((placed) => placed.node.issue.id).sort(),
+      '置くとグリッドを占めて、依存を持つものが陰に入る',
+    ).toEqual(['#10', '#11']);
+  });
+
+  it('`loose` も「いま着手できる」ままにする', () => {
+    const order = startOrder(buildDependencyGraph(mixed));
+
+    expect(
+      order.startable.map((node) => node.issue.id).sort(),
+      '絵から外すのは置き場所の話で、着手できるかどうかの話ではない',
+    ).toEqual(['#1', '#10', '#2', '#3']);
+  });
+
+  it('`layer` `loose` `caught` は重ならず、全部を覆う', () => {
+    const graph = buildDependencyGraph([...mixed, issue('#8', ['#9']), issue('#9', ['#8'])]);
+    const placed = [...graph.layers.flat(), ...graph.loose, ...graph.caught];
+
+    expect(new Set(placed).size, '同じ課題が 2 か所に出てはいけない').toBe(placed.length);
+    expect(placed.sort()).toEqual(graph.nodes.map((node) => node.issue.id ?? '').sort());
+  });
+
+  it('`loose` は触った日の新しい順に並べる', () => {
+    const graph = buildDependencyGraph([
+      issue('#9', [], { updated_at: '2026-08-01T00:00:00Z' }),
+      issue('#10', [], { updated_at: '2026-08-03T00:00:00Z' }),
+      issue('#11', [], { updated_at: '2026-08-02T00:00:00Z' }),
+    ]);
+
+    expect(graph.loose, 'id の文字列順だと `#10` が `#9` より前に来る').toEqual([
+      '#10',
+      '#11',
+      '#9',
+    ]);
+  });
+
+  it('全部が辺を持たないなら、絵は空になる', () => {
+    const layout = layoutGraph(buildDependencyGraph([issue('#1'), issue('#2')]));
+
+    expect(layout.nodes, '堰き止め合うものが無いのにグリッドだけ描いても、読むものが無い').toEqual(
+      [],
+    );
+    expect(layout.columns).toEqual([]);
+  });
+});
+
 describe('辺は直角に折れる', () => {
   /* 曲線で結ぶと、どこを通っているのかが読めない。一覧の弧も Git の画面の線も直角に
      折れて角だけを丸めてあるので、ここだけ別の描き方にすると同じ依存が別の顔で出る。 */
@@ -256,8 +320,17 @@ describe('辺は直角に折れる', () => {
 
 describe('行数の多い `layer` は横へ折り返す', () => {
   /* `layer` 0 に 100 件在るリポジトリは珍しくない。1 列に積み切ると縦に数千 px 伸びて、
-     横軸が着手順だという読み方そのものが画面から出る。 */
-  const many = Array.from({ length: 40 }, (_, at) => issue(`#${at + 1}`));
+     横軸が着手順だという読み方そのものが画面から出る。
+
+     全部が 1 つの `#sink` を堰き止めている。**辺を持たせるのが要る** —— 辺の無い課題は
+     `layer` に乗らないので、素の 40 件ではグリッドそのものが空になる。 */
+  const many = [
+    ...Array.from({ length: 40 }, (_, at) => issue(`#${at + 1}`)),
+    issue(
+      '#sink',
+      Array.from({ length: 40 }, (_, at) => `#${at + 1}`),
+    ),
+  ];
 
   it('1 列の行数は上限を超えない', () => {
     const layout = layoutGraph(buildDependencyGraph(many));
@@ -269,8 +342,9 @@ describe('行数の多い `layer` は横へ折り返す', () => {
   it('折り返しても、`layer` は 1 つのまま', () => {
     const layout = layoutGraph(buildDependencyGraph(many));
 
-    expect(layout.columns.length, '折り返しを別の `layer` にすると「n つ先」が嘘になる').toBe(1);
+    expect(layout.columns.length, '折り返しを別の `layer` にすると「n つ先」が嘘になる').toBe(2);
     expect(layout.columns[0]?.layer).toBe(0);
+    expect(layout.columns[1]?.layer, '`#sink` だけの `layer` 1').toBe(1);
   });
 
   it('見出しは、折り返したぶんをまたぐ幅を持つ', () => {

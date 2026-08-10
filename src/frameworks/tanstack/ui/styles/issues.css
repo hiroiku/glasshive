@@ -88,7 +88,8 @@
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
   align-items: center;
-  min-height: 28px;
+  /* Agents の表と同じ行の高さ。同じ画面を行き来するので、密度が違うと別の画面に見える */
+  min-height: 26px;
   padding: 3px 14px 3px 8px;
   border-left: 2px solid transparent;
   cursor: pointer;
@@ -273,6 +274,14 @@
 .issue-row .ititle .prchip,
 .issue-row .ititle .mschip {
   margin-left: 8px;
+}
+/* **チップは行送りより背が高くなってはいけない。** 高いと行box がそのぶん伸びて、
+   そのチップの付いた行だけが高くなる。`prchip` と `mschip` は自前の行送りを持っているが、
+   ここに挙げた 3 つは持たず、この列の 20px を継いでちょうど溢れる。 */
+.issue-row .ititle .epic-prog,
+.issue-row .ititle .brstate,
+.issue-row .ititle .wk {
+  line-height: 14px;
 }
 .issue-row .iupd {
   color: var(--dim);
@@ -550,7 +559,11 @@
   object-fit: cover;
 }
 
-.issue-row .iupd .cmt {
+/* コメント数。`panel.css` の `.cmt`(サイドパネルに積むコメントそのもの)とは別物なので、
+   一覧の列と同じ `i` を頭に付けて名前を分ける。**同じ名前にすると、あちらの
+   `padding` と `margin-bottom` を貰う** —— 行内の箱の外側の余白は行の高さに足されるので、
+   コメント数の付いた行だけが 9px 高くなる。 */
+.issue-row .iupd .icmt {
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -827,6 +840,81 @@
   .dg-beat.active i {
     animation: none;
   }
+}
+
+/* 辺を持たない課題の `band`。**絵の高さを取り合わない** —— 画面の 4 割までに収めて、
+   それを超えたぶんはこの中で流す。依存の絵が主で、こちらは残りの数え上げである */
+.dg-loose {
+  flex: none;
+  max-height: 40%;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  padding: 9px 14px 11px;
+}
+.dg-loose-head {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 7px;
+}
+.dg-loose-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+/* 絵の中で 1 枚に触れているあいだは、こちらも引く。**引かないと**、絵のカードが
+   薄くなったぶんこの `band` だけが明るく残り、触れた課題が空ける先に見える。
+   辺を持たないのだから、何を触っても空かない。 */
+.dg-loose.hot .dg-chip {
+  opacity: 0.26;
+}
+/* 1 行のチップ。カードの左端のバーと同じ色で状態を言う */
+.dg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 2px 8px 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--st) 28%, var(--border));
+  border-left: 3px solid var(--st);
+  border-radius: 4px;
+  background: var(--bg);
+  cursor: pointer;
+  transition:
+    opacity 0.18s,
+    border-color 0.18s;
+}
+.dg-chip:hover,
+.dg-chip:focus-visible {
+  border-color: var(--accent);
+}
+.dg-chip-t {
+  font-size: 11px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.dg-chip-beat {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.dg-chip-beat.active {
+  background: var(--active);
+}
+.dg-chip-beat.waiting {
+  background: var(--waiting);
+}
+
+/* 堰き止め合う課題が 1 つも無いとき。カードが無いので絵の側は空になる */
+.dg-scroll.bare {
+  flex: none;
+  padding: 18px;
 }
 
 .legend-bar {

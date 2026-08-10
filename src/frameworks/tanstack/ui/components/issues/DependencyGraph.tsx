@@ -25,9 +25,10 @@ import { EdgeSample } from './Legend.tsx';
 
 /* 依存を、着手順そのものとして描く。
 
-   **横に並ぶ位置が意味を持つ。** 左端の列は「いま手を付けられる課題の全部」で、
+   **横に並ぶ位置が意味を持つ。** 左端の列は「いま手を付けられて、何かを堰き止めているもの」で、
    その右は「左が 1 つ片付けば空くもの」である。輪に囚われたものは `layer` に置かず、
    下の `band` へ落とす —— `layer` に置けば「n つ先」に見えるが、輪の中はどの `layer` にも居ない。
+   辺を 1 本も持たない課題は絵から外し、下の `band` にチップとして並べる。
 
    ノードに触れると、それを終わらせたとき何が空くかが伝わる。ここがこの画面の値打ちで、
    一覧では「この 1 件が 4 件を堰き止めている」が読めない。 */
@@ -74,7 +75,13 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
     return seen;
   }, [graph, hot]);
 
-  if (layout.nodes.length === 0) {
+  const byId = new Map(graph.nodes.map((node) => [node.issue.id ?? '', node]));
+  const loose = graph.loose.flatMap((id) => {
+    const node = byId.get(id);
+    return node === undefined ? [] : [node];
+  });
+
+  if (layout.nodes.length === 0 && loose.length === 0) {
     return <div className="empty">No open issues to place</div>;
   }
 
@@ -92,7 +99,8 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
         <span className="dg-readout">{readoutOf(hot, downstream, graph)}</span>
       </div>
 
-      <div className="dg-scroll">
+      <div className={`dg-scroll${layout.nodes.length === 0 ? ' bare' : ''}`}>
+        {layout.nodes.length === 0 && <div className="empty">No issue blocks another one</div>}
         <div
           className={`dg-canvas${hot === null ? '' : ' hot'}`}
           style={{ width: layout.width, height: layout.height }}
@@ -191,6 +199,22 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
           ))}
         </div>
       </div>
+
+      {/* 辺を持たない課題。**絵の中に混ぜない** —— 依存の絵に置くものが何も無いのに
+          `layer` のグリッドを占めて、依存を持つ数件を陰に追いやる。ここは絶対座標を持たない
+          素の折り返しなので、表示範囲の幅に合わせて自分で畳む。 */}
+      {loose.length > 0 && (
+        <div className={`dg-loose${hot === null ? '' : ' hot'}`}>
+          <div className="dg-loose-head">
+            {`No dependencies — ${loose.length} ${loose.length === 1 ? 'issue' : 'issues'} you can start any time`}
+          </div>
+          <div className="dg-loose-list">
+            {loose.map((node) => (
+              <LooseChip key={node.issue.id} node={node} workers={workers} onOpen={onOpen} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* カードに出るものは、全部ここに書く。**説明を書かないアイコンやチップを出さない** —
           読めないアイコンは、読む人にとって在っても無くても同じである */}
@@ -358,6 +382,37 @@ function Card({ placed, workers, hot, downstream, join, onEnter, onLeave, onOpen
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+interface LooseChipProps {
+  readonly node: GraphNode;
+  readonly workers: WorkerIndex;
+  readonly onOpen: (id: string) => void;
+}
+
+/* 辺を持たない課題の 1 枚。**カードを小さくしたものではない** —— 空ける数も堰き止める先も
+   無いのだから、カードが 2 行目に載せているものはどれも出しようがない。id と題名と、
+   誰かが今そこに居るかだけを持つ。 */
+function LooseChip({ node, workers, onOpen }: LooseChipProps) {
+  const issue = node.issue;
+  const id = issue.id ?? '';
+  const beat = leadWorker(workersOn(workers, issue));
+
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: カードと同じ見た目と挙動を保つ
+    <div
+      className={`dg-chip st-${issue.status}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open issue ${id}`}
+      title={issue.title ?? id}
+      {...pressable(() => onOpen(id))}
+    >
+      <span className="dg-id">{id}</span>
+      <span className="dg-chip-t">{cut(issue.title ?? '', 30)}</span>
+      {beat !== null && <i className={`dg-chip-beat ${beat.state}`} />}
     </div>
   );
 }

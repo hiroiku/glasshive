@@ -632,7 +632,7 @@ const IssueRow = memo(function IssueRow({
       </span>
       <span className="iupd">
         {comments > 0 && (
-          <span className="cmt" title={`${comments} comments`}>
+          <span className="icmt" title={`${comments} comments`}>
             <Icon path={mdiCommentOutline} size={10} /> {comments}
           </span>
         )}
