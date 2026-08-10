@@ -36,6 +36,7 @@
     "fix": "biome check --write .",
     "test": "vitest run --project unit --project ui",
     "test:smoke": "vitest run --project smoke",
+    "fixture": "node scripts/make-screenshot-fixture.mjs",
     "check": "biome ci . && $npm_execpath run arch && $npm_execpath run typecheck && $npm_execpath run test",
     "prepack": "$npm_execpath run build 1>&2",
     "prepublishOnly": "$npm_execpath run build && $npm_execpath run check && $npm_execpath run test:smoke"

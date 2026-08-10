@@ -67,6 +67,8 @@ bekommst ihre Commits, Diff-Statistiken und die Agenten, die auf ihr aktiv waren
 Branch werden nur über den Head-Branch eines Pull Requests verbunden – ein Beinahe-Treffer bleibt
 unverbunden, statt auf Verdacht verknüpft zu werden.
 
+![Work](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/work.png)
+
 ### Side panel
 
 Konversationen, Issues und Refs öffnen sich in einem Panel rechts. Was geöffnet ist, steht in der

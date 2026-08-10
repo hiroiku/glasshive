@@ -64,6 +64,8 @@ Pairs heading for the same files are lifted to the top. Pick a ref to get its co
 and which agents have been active on it. An issue and a branch are joined only by a pull request's
 head branch — a near-miss is left unjoined rather than guessed.
 
+![Work](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/work.png)
+
 ### Side panel
 
 Conversations, issues, and refs open in a panel on the right. What is open lives in the URL, so

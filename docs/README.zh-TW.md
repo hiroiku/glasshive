@@ -59,6 +59,8 @@ branch 與 worktree 疊畫在主 worktree 所在的 branch 上，讓你看得出
 組合會被提到最上面。點一個 ref，就會看到它的 commit、diff 統計，以及有哪些代理程式在上面活動過。
 issue 與 branch 只靠 pull request 的 head branch 相接——差一點對上的就讓它保持不相接，而不是用猜的。
 
+![Work](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/work.png)
+
 ### Side panel
 
 對話、issue 與 ref 會在右側的面板中開啟。目前開著什麼記在 URL 裡，所以把連結貼給別人，

@@ -64,6 +64,8 @@ issue は [`gh`](https://cli.github.com) CLI 越しに GitHub から、あるい
 統計、そこで動いていたエージェントが出る。issue とブランチが結びつくのは pull request の head
 ブランチを介したときだけで、惜しい一致は推測せず、結ばないままにする。
 
+![Work](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/work.png)
+
 ### Side panel
 
 会話、issue、ref は右のパネルに開く。何を開いているかは URL に入るので、そのリンクを貼れば

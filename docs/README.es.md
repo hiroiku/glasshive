@@ -67,6 +67,8 @@ sus commits, sus estadísticas de diff y qué agentes han estado activos en ella
 solo se vinculan a través de la rama head de un pull request: una coincidencia aproximada se deja
 sin vincular en lugar de adivinar el vínculo.
 
+![Work](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/work.png)
+
 ### Side panel
 
 Las conversaciones, los issues y las refs se abren en un panel a la derecha. Lo que está abierto vive

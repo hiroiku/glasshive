@@ -59,6 +59,8 @@ issue 来自 GitHub，通过 [`gh`](https://cli.github.com) CLI 读取 —— gl
 顶部。选中一个 ref，就能看到它的提交、差异统计，以及哪些智能体在它上面活动过。issue 和分支只靠
 pull request 的 head 分支相连 —— 差一点点对上的，宁可留着不连，也不去猜。
 
+![Work](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/work.png)
+
 ### Side panel
 
 对话、issue 和 ref 在右侧的面板中打开。当前打开的是什么记在 URL 里，所以把链接贴给别人，对方屏幕上

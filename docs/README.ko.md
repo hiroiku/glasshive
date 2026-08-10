@@ -63,6 +63,8 @@ worktree, 지금 실행 중인 도구, 그리고 좌우로 끌고 확대·축소
 위에서 활동했는지를 볼 수 있습니다. 이슈와 브랜치는 pull request의 head 브랜치로만 이어집니다 —
 비슷해 보이지만 어긋나는 것은 추측으로 잇지 않고 그대로 둡니다.
 
+![Work](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/work.png)
+
 ### Side panel
 
 대화, 이슈, ref는 오른쪽 패널에서 열립니다. 무엇이 열려 있는지는 URL에 담기므로, 그 링크를 붙여 넣으면

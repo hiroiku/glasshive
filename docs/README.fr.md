@@ -67,6 +67,8 @@ pour obtenir ses commits, ses statistiques de diff et les agents qui y ont été
 une branche ne sont reliés que par la branche head d'une pull request — en cas de correspondance
 approximative, le lien est laissé de côté plutôt que deviné.
 
+![Work](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/work.png)
+
 ### Side panel
 
 Les conversations, les tickets et les refs s'ouvrent dans un panneau sur la droite. Ce qui est ouvert
