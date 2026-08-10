@@ -1257,6 +1257,58 @@ function writeLedger(repo, nowMs) {
 
 // ── GitHub の課題 ────────────────────────────────────────────────────────────
 
+/* 課題の本文。glasshive は開いた 1 件だけ `gh` に尋ねるので、ここも 1 件ずつ持つ。
+
+   Markdown で書く。**見出しと箇条書きと引用と `code` を混ぜる** —— パネルは Markdown を
+   自分で描いており、撮った 1 枚がその描き方の見本になる。素の 1 段落だけだと、何も
+   確かめられない絵が残る。 */
+const ISSUE_BODIES = [
+  `The cursor is written before the batch commits, so a crash between the two leaves a
+cursor pointing at rows nobody wrote.
+
+### What we see
+
+- the shard reports \`0 rows\` for a window that has data
+- \`backfill --resume\` skips straight past it
+- the gap only shows up in the weekly reconcile
+
+### What to do
+
+Move the cursor write into the same transaction as the batch. If that turns out to be too
+coarse, write it *after* and accept one replayed batch — replays are idempotent, gaps are not.`,
+
+  `\`page_token\` is consumed before the page is acknowledged, so a retry starts one page
+further along than it should.
+
+> Reproduced on the 5h window with a forced 503 on the third page.
+
+The fix is small but the test is not: it needs a source that can fail mid-page.`,
+
+  `Both views build their own scale, so the same number lands at a different height
+depending on which one you are looking at.
+
+- \`5h\` uses a linear scale from 0
+- \`7d\` uses the window maximum
+
+Pick one. The window maximum reads better day to day, but it hides a quiet week, which is
+exactly what the view is for.`,
+
+  `Anything over 2 GiB goes through a single buffer and the writer holds all of it.
+
+### Constraints
+
+- the reader hands us row groups, not rows
+- we cannot know the final size before the last group
+
+Streaming the groups straight to the object store is the only shape that fits both.`,
+
+  `Notes from moving the three panes into one view.
+
+The branch list and the milestone list were already reading the same issues; only the
+grouping differed. What actually took the time was the URL — three routes had to keep
+working, and \`?panel=\` had to survive the redirect.`,
+];
+
 const ISSUE_TITLES = [
   'Backfill drops rows whose source cursor is null',
   'Cursor resume is off by one page after a retry',
@@ -1465,6 +1517,10 @@ function buildIssues(repoName, nowMs) {
     nodes.push({
       number,
       title,
+      /* 一覧の問い合わせはこれを求めない。**それでも持たせる** —— パネルが 1 件を開いたときに
+         別の問い合わせで尋ねに来るので、答えるものがここに無いと本文が読めない。
+         5 件に 1 件は空にしてある。本文の無い課題も普通に在る。 */
+      body: i % 5 === 4 ? '' : ISSUE_BODIES[(titleFrom + i) % ISSUE_BODIES.length],
       state: closed || notPlanned ? 'CLOSED' : 'OPEN',
       stateReason: notPlanned ? 'NOT_PLANNED' : closed ? 'COMPLETED' : null,
       createdAt: iso(nowMs - (60 - i) * DAY),
@@ -1522,9 +1578,10 @@ import path from 'node:path';
 
 /* A stand-in for the gh CLI, written by scripts/make-screenshot-fixture.mjs.
 
-   It answers exactly one call — the GraphQL issue page glasshive asks for — with canned
-   data from issues.json next to this directory. Anything else exits non-zero, the same
-   way the real gh does when it cannot serve a request. It never touches the network. */
+   It answers the two GraphQL calls glasshive makes — a page of issues, and the body of a
+   single issue — with canned data from issues.json next to this directory. Anything else
+   exits non-zero, the same way the real gh does when it cannot serve a request. It never
+   touches the network. */
 
 const args = process.argv.slice(2);
 if (args[0] !== 'api' || args[1] !== 'graphql') {
@@ -1551,6 +1608,19 @@ if (nodes === undefined) {
   process.exit(0);
 }
 
+/* The body of one issue. GraphQL returns only the fields a query asks for, so this answer
+   carries the body and nothing else — the panel already holds the rest. A number that is
+   not here comes back as a null issue, which is what GitHub does too. */
+if (fields.has('number')) {
+  const found = nodes.find((node) => node.number === Number(fields.get('number')));
+  process.stdout.write(
+    JSON.stringify({
+      data: { repository: { issue: found === undefined ? null : { body: found.body ?? '' } } },
+    }),
+  );
+  process.exit(0);
+}
+
 // GitHub's cursor is opaque base64; this one carries the offset it stands for.
 const pageSize = Number(fields.get('pageSize')) || 100;
 const cursor = fields.get('cursor');
@@ -1566,7 +1636,8 @@ process.stdout.write(
       repository: {
         issues: {
           pageInfo: { hasNextPage: next < nodes.length, endCursor },
-          nodes: page,
+          // The page query does not ask for the body, so the answer does not carry it.
+          nodes: page.map(({ body, ...rest }) => rest),
         },
       },
     },
@@ -1616,7 +1687,8 @@ Run that from a glasshive checkout (or replace \`node bin/glasshive.js\` with
 
 \`GLASSHIVE_CONFIG_DIR\` points inside this directory, so taking a screenshot cannot
 touch your own \`preferences.json\`. \`PATH\` puts the stub \`gh\` first; it answers the
-issue query from \`issues.json\` and never reaches the network.
+issue queries from \`issues.json\` — both the page glasshive lists from and the body it
+fetches when you open one — and never reaches the network.
 
 ### Active rows go stale in 60 seconds
 
@@ -1660,7 +1732,7 @@ Where things are:
 
 - Transcripts: \`${projectsRoot}\`
 - Stub \`gh\`: \`${binDir}/gh\`
-- Canned issue pages: \`${outDir}/issues.json\`
+- Canned issues, bodies included: \`${outDir}/issues.json\`
 
 ## What it cannot show
 
@@ -1783,6 +1855,23 @@ function main() {
   const ghFile = path.join(binDir, 'gh');
   fs.writeFileSync(ghFile, GH_STUB);
   fs.chmodSync(ghFile, 0o755);
+
+  /* タブに留めるものを先に決めておく。**留めないと 22 個ぶんのタブが並ぶ** —— 撮る人が
+     毎回手で留め直すことになり、撮った 2 枚でタブの並びが違うことになる。glasshive が
+     唯一書くファイルと同じ形式で、同じ場所へ置く。留めるのは動いている 4 つだけ。 */
+  fs.writeFileSync(
+    path.join(configDir, 'preferences.json'),
+    `${JSON.stringify(
+      {
+        version: 1,
+        mode: 'pinned',
+        pinned: PROJECTS.map((project) => slugOf(repoPaths[project.name])),
+        hidden: [],
+      },
+      null,
+      1,
+    )}\n`,
+  );
 
   fs.writeFileSync(
     path.join(root, 'README.md'),

@@ -1,6 +1,6 @@
 {
   "name": "glasshive",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Glass-walled observation hive for AI agents — a read-only local dashboard of running sessions, subagents, issues, and git",
   "license": "MIT",
   "type": "module",
