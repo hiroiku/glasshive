@@ -608,11 +608,24 @@
   color: var(--dim);
 }
 
-/* グラフは自分の中で流す。**画面ごと伸びてはいけない** */
-.dg-scroll {
+/* グラフは自分の中で流す。**画面ごと伸びてはいけない**。
+   縦に流すのはここだけで、絵と辺を持たない課題の `band` を続けて送る */
+.dg-body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+}
+.dg-body > .empty {
+  color: var(--dim);
+  padding: 34px;
+  text-align: center;
+}
+/* 絵は横にだけ流す。縦は親が持っているので、ここは `dg-canvas` の高さぶんで止まる ——
+   **止まるから、`layer` が浅いときに余りをこちらが抱え込まない**。
+   片方の軸だけを `visible` にはできないので縦も `auto` になるが、
+   高さが内容ぶんである以上、縦のスクロールバーは出ない。 */
+.dg-scroll {
+  overflow-x: auto;
   padding: 30px 18px 16px;
 }
 .dg-canvas {
@@ -842,14 +855,11 @@
   }
 }
 
-/* 辺を持たない課題の `band`。**絵の高さを取り合わない** —— 画面の 4 割までに収めて、
-   それを超えたぶんはこの中で流す。依存の絵が主で、こちらは残りの数え上げである */
+/* 辺を持たない課題の `band`。絵の続きとして流れるので、自分では高さを決めない。
+   左端は絵と揃える —— 上の区切り線を跨いで並ぶので、揃わないとそこでずれて見える */
 .dg-loose {
-  flex: none;
-  max-height: 40%;
-  overflow: auto;
   border-top: 1px solid var(--border);
-  padding: 9px 14px 11px;
+  padding: 11px 18px 14px;
 }
 .dg-loose-head {
   font-size: 9.5px;
@@ -859,9 +869,11 @@
   color: var(--dim);
   margin-bottom: 7px;
 }
+/* **同じ幅の列に落とす。** 折り返しに任せると、題名の短いチップがそのぶん細くなり、
+   その行だけ以降の左端がずれる。列の数は幅に合わせて決まり、余りは列で分け合う */
 .dg-loose-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 5px;
 }
 /* 絵の中で 1 枚に触れているあいだは、こちらも引く。**引かないと**、絵のカードが
@@ -870,12 +882,13 @@
 .dg-loose.hot .dg-chip {
   opacity: 0.26;
 }
-/* 1 行のチップ。カードの左端のバーと同じ色で状態を言う */
+/* 1 行のチップ。カードの左端のバーと同じ色で状態を言う。
+   幅は列が決めるので、ここでは持たない */
 .dg-chip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 5px;
-  max-width: 220px;
+  min-width: 0;
   padding: 2px 8px 2px 7px;
   border: 1px solid color-mix(in srgb, var(--st) 28%, var(--border));
   border-left: 3px solid var(--st);
@@ -909,12 +922,6 @@
 }
 .dg-chip-beat.waiting {
   background: var(--waiting);
-}
-
-/* 堰き止め合う課題が 1 つも無いとき。カードが無いので絵の側は空になる */
-.dg-scroll.bare {
-  flex: none;
-  padding: 18px;
 }
 
 .legend-bar {

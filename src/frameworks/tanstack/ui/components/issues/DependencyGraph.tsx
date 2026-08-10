@@ -99,122 +99,129 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
         <span className="dg-readout">{readoutOf(hot, downstream, graph)}</span>
       </div>
 
-      <div className={`dg-scroll${layout.nodes.length === 0 ? ' bare' : ''}`}>
-        {layout.nodes.length === 0 && <div className="empty">No issue blocks another one</div>}
-        <div
-          className={`dg-canvas${hot === null ? '' : ' hot'}`}
-          style={{ width: layout.width, height: layout.height }}
-        >
-          {/* 辺はレイアウトの外に置く。カードは絶対座標なので、重ねても位置は動かない */}
-          <svg
-            className="dg-edges"
-            viewBox={`0 0 ${layout.width} ${layout.height}`}
-            aria-hidden="true"
-          >
-            <defs>
-              {/* 矢じりの大きさは一覧と同じにする。線の太さでは伸び縮みさせない —
-                  太さは「光っているか」で変わるので、太さに乗せると矢だけが跳ねる */}
-              <marker
-                id="dg-arrow"
-                viewBox={`0 0 ${ARROW.length} ${ARROW.half * 2}`}
-                refX={ARROW.length}
-                refY={ARROW.half}
-                markerWidth={ARROW.length}
-                markerHeight={ARROW.half * 2}
-                markerUnits="userSpaceOnUse"
-                orient="auto"
+      {/* 縦に流すのはここ 1 か所だけ。**絵とチップで分け合わない** —— 分けると絵が浅いときに
+          余りを絵が抱え込み、チップだけが窮屈になる。続けて流せば、絵はその高さぶんで済む。 */}
+      <div className="dg-body">
+        {layout.nodes.length === 0 ? (
+          <div className="empty">No issue blocks another one</div>
+        ) : (
+          <div className="dg-scroll">
+            <div
+              className={`dg-canvas${hot === null ? '' : ' hot'}`}
+              style={{ width: layout.width, height: layout.height }}
+            >
+              {/* 辺はレイアウトの外に置く。カードは絶対座標なので、重ねても位置は動かない */}
+              <svg
+                className="dg-edges"
+                viewBox={`0 0 ${layout.width} ${layout.height}`}
+                aria-hidden="true"
               >
-                <path
-                  d={`M0 0 L${ARROW.length} ${ARROW.half} L0 ${ARROW.half * 2} z`}
-                  fill="currentColor"
-                />
-              </marker>
-            </defs>
+                <defs>
+                  {/* 矢じりの大きさは一覧と同じにする。線の太さでは伸び縮みさせない —
+                  太さは「光っているか」で変わるので、太さに乗せると矢だけが跳ねる */}
+                  <marker
+                    id="dg-arrow"
+                    viewBox={`0 0 ${ARROW.length} ${ARROW.half * 2}`}
+                    refX={ARROW.length}
+                    refY={ARROW.half}
+                    markerWidth={ARROW.length}
+                    markerHeight={ARROW.half * 2}
+                    markerUnits="userSpaceOnUse"
+                    orient="auto"
+                  >
+                    <path
+                      d={`M0 0 L${ARROW.length} ${ARROW.half} L0 ${ARROW.half * 2} z`}
+                      fill="currentColor"
+                    />
+                  </marker>
+                </defs>
 
-            {layout.band !== null && (
-              <>
-                <rect
-                  className="dg-pen"
-                  x={-13}
-                  y={layout.band.y - 15}
-                  width={layout.band.width}
-                  height={layout.band.height}
-                  rx={11}
-                />
-                <text className="dg-pen-label" x={-11} y={layout.band.y - 23}>
-                  {`Caught in a cycle — ${caughtCount} cannot start`}
-                </text>
-              </>
-            )}
+                {layout.band !== null && (
+                  <>
+                    <rect
+                      className="dg-pen"
+                      x={-13}
+                      y={layout.band.y - 15}
+                      width={layout.band.width}
+                      height={layout.band.height}
+                      rx={11}
+                    />
+                    <text className="dg-pen-label" x={-11} y={layout.band.y - 23}>
+                      {`Caught in a cycle — ${caughtCount} cannot start`}
+                    </text>
+                  </>
+                )}
 
-            {/* `layer` の見出しと、その `layer` がどこまで続くかの線。**線が要る** ——
+                {/* `layer` の見出しと、その `layer` がどこまで続くかの線。**線が要る** ——
                 行数の多い `layer` は横へ折り返すので、線が無いと隣の `layer` と見分けが付かない */}
-            {layout.columns.map((column) => (
-              <g key={column.layer}>
-                <text
-                  className={`dg-col${column.layer === 0 ? ' ready' : ''}`}
-                  x={column.x}
-                  y={-12}
-                >
-                  {column.layer === 0 ? 'Ready now' : `${column.layer} away`}
-                </text>
-                <line
-                  className={`dg-col-rule${column.layer === 0 ? ' ready' : ''}`}
-                  x1={column.x}
-                  y1={-6}
-                  x2={column.x + column.width}
-                  y2={-6}
+                {layout.columns.map((column) => (
+                  <g key={column.layer}>
+                    <text
+                      className={`dg-col${column.layer === 0 ? ' ready' : ''}`}
+                      x={column.x}
+                      y={-12}
+                    >
+                      {column.layer === 0 ? 'Ready now' : `${column.layer} away`}
+                    </text>
+                    <line
+                      className={`dg-col-rule${column.layer === 0 ? ' ready' : ''}`}
+                      x1={column.x}
+                      y1={-6}
+                      x2={column.x + column.width}
+                      y2={-6}
+                    />
+                  </g>
+                ))}
+
+                {layout.edges.map((edge) => (
+                  <path
+                    key={`${edge.from}->${edge.to}`}
+                    className={`dg-edge${edge.cyclic ? ' cyc' : ''}${
+                      downstream !== null &&
+                      (edge.from === hot || downstream.has(edge.from)) &&
+                      downstream.has(edge.to)
+                        ? ' lit'
+                        : ''
+                    }`}
+                    d={edge.path}
+                    markerEnd="url(#dg-arrow)"
+                  />
+                ))}
+              </svg>
+
+              {layout.nodes.map((placed) => (
+                <Card
+                  key={placed.node.issue.id}
+                  placed={placed}
+                  workers={workers}
+                  hot={hot}
+                  downstream={downstream}
+                  join={join}
+                  onEnter={() => setHot(placed.node.issue.id)}
+                  onLeave={() => setHot(null)}
+                  onOpen={onOpen}
                 />
-              </g>
-            ))}
+              ))}
+            </div>
+          </div>
+        )}
 
-            {layout.edges.map((edge) => (
-              <path
-                key={`${edge.from}->${edge.to}`}
-                className={`dg-edge${edge.cyclic ? ' cyc' : ''}${
-                  downstream !== null &&
-                  (edge.from === hot || downstream.has(edge.from)) &&
-                  downstream.has(edge.to)
-                    ? ' lit'
-                    : ''
-                }`}
-                d={edge.path}
-                markerEnd="url(#dg-arrow)"
-              />
-            ))}
-          </svg>
-
-          {layout.nodes.map((placed) => (
-            <Card
-              key={placed.node.issue.id}
-              placed={placed}
-              workers={workers}
-              hot={hot}
-              downstream={downstream}
-              join={join}
-              onEnter={() => setHot(placed.node.issue.id)}
-              onLeave={() => setHot(null)}
-              onOpen={onOpen}
-            />
-          ))}
-        </div>
+        {/* 辺を持たない課題。**絵の中に混ぜない** —— 依存の絵に置くものが何も無いのに
+            `layer` のグリッドを占めて、依存を持つ数件を陰に追いやる。絶対座標を持たないので、
+            表示範囲の幅に合わせて自分で畳む。 */}
+        {loose.length > 0 && (
+          <div className={`dg-loose${hot === null ? '' : ' hot'}`}>
+            <div className="dg-loose-head">
+              {`No dependencies — ${loose.length} ${loose.length === 1 ? 'issue' : 'issues'} you can start any time`}
+            </div>
+            <div className="dg-loose-list">
+              {loose.map((node) => (
+                <LooseChip key={node.issue.id} node={node} workers={workers} onOpen={onOpen} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* 辺を持たない課題。**絵の中に混ぜない** —— 依存の絵に置くものが何も無いのに
-          `layer` のグリッドを占めて、依存を持つ数件を陰に追いやる。ここは絶対座標を持たない
-          素の折り返しなので、表示範囲の幅に合わせて自分で畳む。 */}
-      {loose.length > 0 && (
-        <div className={`dg-loose${hot === null ? '' : ' hot'}`}>
-          <div className="dg-loose-head">
-            {`No dependencies — ${loose.length} ${loose.length === 1 ? 'issue' : 'issues'} you can start any time`}
-          </div>
-          <div className="dg-loose-list">
-            {loose.map((node) => (
-              <LooseChip key={node.issue.id} node={node} workers={workers} onOpen={onOpen} />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* カードに出るものは、全部ここに書く。**説明を書かないアイコンやチップを出さない** —
           読めないアイコンは、読む人にとって在っても無くても同じである */}
