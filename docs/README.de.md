@@ -141,9 +141,6 @@ Quality Gates und wie man hier arbeitet, stehen in [CONTRIBUTING.md](../CONTRIBU
 Einen Fehler gefunden oder etwas vermisst, das glasshive nicht kann?
 [Öffne ein Issue](https://github.com/hiroiku/glasshive/issues).
 
-Verwandt: [Claude Code](https://claude.com/claude-code) ·
-[beads](https://github.com/gastownhall/beads)
-
 ## Lizenz
 
 MIT – siehe [LICENSE](../LICENSE).

@@ -140,9 +140,6 @@ travailler dessus.
 Vous avez trouvé un bug, ou vous voulez quelque chose que glasshive ne fait pas ?
 [Ouvrez une issue](https://github.com/hiroiku/glasshive/issues).
 
-Voir aussi : [Claude Code](https://claude.com/claude-code) ·
-[beads](https://github.com/gastownhall/beads)
-
 ## Licence
 
 MIT — voir [LICENSE](../LICENSE).

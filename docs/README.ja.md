@@ -135,9 +135,6 @@ npm run build
 バグを見つけた、あるいは glasshive にできないことが欲しい?
 [issue を立ててほしい](https://github.com/hiroiku/glasshive/issues)。
 
-関連: [Claude Code](https://claude.com/claude-code) ·
-[beads](https://github.com/gastownhall/beads)
-
 ## ライセンス
 
 MIT — [LICENSE](../LICENSE) を参照。

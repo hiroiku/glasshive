@@ -126,9 +126,6 @@ npm run build
 發現了 bug，或想要 glasshive 做不到的事？
 [開一個 issue](https://github.com/hiroiku/glasshive/issues)。
 
-相關：[Claude Code](https://claude.com/claude-code) ·
-[beads](https://github.com/gastownhall/beads)
-
 ## 授權條款
 
 MIT — 見 [LICENSE](../LICENSE)。

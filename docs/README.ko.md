@@ -134,9 +134,6 @@ npm run build
 버그를 찾았거나, glasshive가 하지 못하는 무언가가 필요한가요?
 [이슈를 열어 주세요](https://github.com/hiroiku/glasshive/issues).
 
-관련: [Claude Code](https://claude.com/claude-code) ·
-[beads](https://github.com/gastownhall/beads)
-
 ## 라이선스
 
 MIT — [LICENSE](../LICENSE)를 보세요.

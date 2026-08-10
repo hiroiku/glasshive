@@ -135,9 +135,6 @@ for the architecture, the quality gates, and how to work on this.
 Found a bug, or want something glasshive does not do?
 [Open an issue](https://github.com/hiroiku/glasshive/issues).
 
-Related: [Claude Code](https://claude.com/claude-code) ·
-[beads](https://github.com/gastownhall/beads)
-
 ## License
 
 MIT — see [LICENSE](LICENSE).

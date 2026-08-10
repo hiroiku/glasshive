@@ -138,9 +138,6 @@ esto.
 ¿Has encontrado un error, o quieres algo que glasshive no hace?
 [Abre un issue](https://github.com/hiroiku/glasshive/issues).
 
-Relacionado: [Claude Code](https://claude.com/claude-code) ·
-[beads](https://github.com/gastownhall/beads)
-
 ## Licencia
 
 MIT — consulta [LICENSE](../LICENSE).
