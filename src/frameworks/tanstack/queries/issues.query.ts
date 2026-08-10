@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query';
-import { getGithubIssues, getIssue, getIssues } from '../functions/issues.ts';
+import { getGithubIssueBody, getGithubIssues, getIssue, getIssues } from '../functions/issues.ts';
 
 /* 課題の問い合わせ。
 
@@ -25,6 +25,17 @@ export const githubIssuesQuery = (projectId: string, includeClosed: boolean) =>
     queryKey: ['github-issues', projectId, includeClosed] as const,
     queryFn: () => getGithubIssues({ data: { projectId, includeClosed } }),
     staleTime: 300_000,
+  });
+
+/* GitHub の課題 1 件の本文。**パネルを開いたときだけ求める** —— 一覧に混ぜると
+   100 件ぶんの本文を運ぶことになり、一覧そのものが開かなくなる。
+
+   本文は課題の他の欄より動かないので、置く時間は一覧より更に長くしてある。 */
+export const githubIssueBodyQuery = (projectId: string, number: number) =>
+  queryOptions({
+    queryKey: ['github-issue-body', projectId, number] as const,
+    queryFn: () => getGithubIssueBody({ data: { projectId, number } }),
+    staleTime: 600_000,
   });
 
 export const issueQuery = (projectId: string, id: string) =>

@@ -118,3 +118,58 @@ describe('gh に課題を尋ねる', () => {
     ).not.toContain('ghp_secret');
   });
 });
+
+describe('gh に課題 1 件の本文を尋ねる', () => {
+  const one = { owner: 'hiroiku', name: 'glasshive', number: 209 };
+
+  it('番号も、問い合わせの文字列に埋めずに渡す', async () => {
+    let seen: readonly string[] = [];
+    const tracker = createGhIssueTrackerIntegration({
+      run: async (args) => {
+        seen = args;
+        return '{}';
+      },
+    });
+
+    await tracker.fetchIssueBody(one);
+
+    expect(seen.slice(0, 2)).toEqual(['api', 'graphql']);
+    expect(seen).toContain('owner=hiroiku');
+    expect(seen).toContain('name=glasshive');
+    expect(seen).toContain('number=209');
+  });
+
+  it('求めるのは本文だけにする', async () => {
+    let query = '';
+    const tracker = createGhIssueTrackerIntegration({
+      run: async (args) => {
+        query = args.find((arg) => arg.startsWith('query=')) ?? '';
+        return '{}';
+      },
+    });
+
+    await tracker.fetchIssueBody(one);
+
+    expect(query).toContain('body');
+    expect(
+      query,
+      'ここが一覧の欄まで採り直すと、同じものを 2 度運んでどちらが新しいかを決める仕事が増える',
+    ).not.toContain('labels');
+    expect(
+      query,
+      'こちらは Markdown を自分で描いている。他所で組まれた HTML を差し込むことはしない',
+    ).not.toContain('bodyHTML');
+  });
+
+  it('落ちた理由は一覧のときと同じに分ける', async () => {
+    const tracker = createGhIssueTrackerIntegration({
+      run: async () => {
+        throw errnoError('ENOENT');
+      },
+    });
+
+    const answer = await tracker.fetchIssueBody(one);
+
+    expect(answer.kind === 'unobservable' && answer.error.code).toBe('tracker.not_installed');
+  });
+});

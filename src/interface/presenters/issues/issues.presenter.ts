@@ -113,6 +113,15 @@ export interface IssueJson {
   issue: Record<string, JsonValue> | null;
 }
 
+/* GitHub の課題 1 件の本文。**空の本文と、読めなかったことを分けて運ぶ。**
+   `body: ''` を `null` と同じ形で返すと、本文の無い課題が読めなかった課題に見える。 */
+export interface GithubIssueBodyJson {
+  state: ObservationState;
+  reason: string | null;
+  /** 書かれたままの Markdown。読めなかった・その番号が無かったときは `null` */
+  body: string | null;
+}
+
 /** 理由を 1 つの文字列で返す。`absent` なら何が無いのか、`unobservable` ならエラーコード */
 const reasonOf = <T>(observation: Observation<T>): string | null => {
   if (observation.kind === 'absent') return observation.reason;
@@ -197,5 +206,13 @@ export function presentIssue(record: Observation<IssueRecord>): IssueJson {
        欄ごとに確かめないのは、確かめても直しようが無いからである — 何の欄が来るかを
        決めているのは bd であって、こちらではない。 */
     issue: record.kind === 'observed' ? (record.value as Record<string, JsonValue>) : null,
+  };
+}
+
+export function presentGithubIssueBody(body: Observation<string>): GithubIssueBodyJson {
+  return {
+    state: body.kind,
+    reason: reasonOf(body),
+    body: body.kind === 'observed' ? body.value : null,
   };
 }

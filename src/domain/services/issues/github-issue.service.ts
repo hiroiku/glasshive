@@ -265,6 +265,29 @@ export function parseIssuePage(text: string): GithubIssuePage {
   };
 }
 
+/* 課題 1 件の本文を取り出す。
+
+   **本文が空なのと、本文を採れなかったのを分ける。** GitHub は本文の無い課題に空文字列を
+   返すので、それをそのまま `null` に潰すと、応答が壊れていたのと区別が付かなくなる。
+   ここが `null` を返すのは、応答から `issue` を辿れなかったときだけである。 */
+export function parseIssueBody(text: string): string | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+
+  const data = asRecord(parsed as JsonRecord, 'data');
+  const repository = asRecord(data ?? {}, 'repository');
+  const issue = asRecord(repository ?? {}, 'issue');
+  if (issue === undefined) return null;
+
+  const body = issue.body;
+  return typeof body === 'string' ? body : null;
+}
+
 /* 集めたページを 1 つの台帳にする。
 
    **順序が意味を持つ。** 状態を採る → 数える → 落とす、の順である。数えるより先に落とすと、

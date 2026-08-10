@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { JsonRecord } from '~/app-kernel/json.ts';
-import { buildLedger, parseIssuePage } from '~/domain/services/issues/github-issue.service.ts';
+import {
+  buildLedger,
+  parseIssueBody,
+  parseIssuePage,
+} from '~/domain/services/issues/github-issue.service.ts';
 
 /** 応答 1 件ぶんの素材。書いていない欄は GitHub が返さなかったものとして扱われる */
 const node = (overrides: Partial<Record<string, unknown>> = {}): JsonRecord => ({
@@ -315,5 +319,26 @@ describe('依存が全部見えたかを言う', () => {
         issueDependenciesSummary: { totalBlockedBy: 0, totalBlocking: 0 },
       }),
     ).toBe(true);
+  });
+});
+
+describe('課題 1 件の本文を取り出す', () => {
+  const answerOf = (issue: unknown) => JSON.stringify({ data: { repository: { issue } } });
+
+  it('書かれたままの Markdown を返す', () => {
+    expect(parseIssueBody(answerOf({ body: '# 見出し\n本文' }))).toBe('# 見出し\n本文');
+  });
+
+  it('本文が空でも、空のまま返す', () => {
+    expect(
+      parseIssueBody(answerOf({ body: '' })),
+      'null に潰すと、本文の無い課題と応答の壊れた課題が同じになる',
+    ).toBe('');
+  });
+
+  it('課題を辿れなければ、無いと言う', () => {
+    expect(parseIssueBody(answerOf(null))).toBe(null);
+    expect(parseIssueBody('{}')).toBe(null);
+    expect(parseIssueBody('これは JSON ではない')).toBe(null);
   });
 });

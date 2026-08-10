@@ -25,6 +25,10 @@ import {
   type ObserveRepositoryUseCase,
 } from '~/application/use-cases/git/observe-repository.use-case.ts';
 import {
+  createGetGithubIssueBody,
+  type GetGithubIssueBodyUseCase,
+} from '~/application/use-cases/issues/get-github-issue-body.use-case.ts';
+import {
   createGetIssue,
   type GetIssueUseCase,
 } from '~/application/use-cases/issues/get-issue.use-case.ts';
@@ -93,6 +97,8 @@ export interface Kernel {
   listIssues: ListIssuesUseCase;
   getIssue: GetIssueUseCase;
   listGithubIssues: ListGithubIssuesUseCase;
+  /** GitHub の課題 1 件の本文。一覧は本文を運ばないので、開いた 1 件だけをここで尋ねる */
+  githubIssueBody: GetGithubIssueBodyUseCase;
   /** 顔を、こちらで読んで、こちらから返す。画面は GitHub に触らない */
   avatars: AvatarCacheService;
   gitOverview: ObserveRepositoryUseCase;
@@ -175,6 +181,7 @@ function assemble(): Kernel {
     listIssues: createListIssues({ ledger }),
     getIssue: createGetIssue({ ledger }),
     listGithubIssues: createListGithubIssues({ git, tracker, avatars }),
+    githubIssueBody: createGetGithubIssueBody({ git, tracker }),
     avatars,
     gitOverview: createObserveRepository({ git, conflicts: createConflictCache() }),
     gitRef: createObserveRef({ git }),

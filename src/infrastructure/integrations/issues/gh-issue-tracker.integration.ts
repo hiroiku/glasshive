@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { UnexpectedError } from '~/app-kernel/error.ts';
 import { type Observation, observed, unobservable } from '~/app-kernel/observation.ts';
 import {
+  type IssueBodyRequest,
   type IssuePageRequest,
   type IssueTrackerIntegration,
   TRACKER_DENIED,
@@ -73,6 +74,21 @@ query($owner:String!,$name:String!,$pageSize:Int!,$cursor:String){
   }
 }`;
 
+/* 課題 1 件の本文。
+
+   求めるのは `body` だけである。**一覧が持っている欄をここで採り直さない** —— 開いている
+   パネルは既に一覧の 1 行を持っていて、同じものを 2 度運ぶと、どちらが新しいかを
+   決める仕事が増える。ここが足すのは、一覧が持っていない本文だけ。
+
+   `body` は書かれたままの Markdown である。`bodyHTML` は求めない —— こちらは Markdown を
+   自分で描いていて、他所で組まれた HTML をこの画面に差し込むことはしない。 */
+const ISSUE_BODY_QUERY = `
+query($owner:String!,$name:String!,$number:Int!){
+  repository(owner:$owner,name:$name){
+    issue(number:$number){ body }
+  }
+}`;
+
 export interface GhRunOptions {
   readonly timeoutMs: number;
 }
@@ -118,7 +134,10 @@ const textOf = (value: unknown): string =>
 
    `gh` は `git` と違って、どのディレクトリで起こしても同じものである。`ENOENT` の意味は
    1 つしかない — 入っていない。 */
-function classifyFailure(error: unknown, request: IssuePageRequest): Observation<never> {
+function classifyFailure(
+  error: unknown,
+  request: IssuePageRequest | IssueBodyRequest,
+): Observation<never> {
   const details = { repository: `${request.owner}/${request.name}` };
   const errno = errnoOf(error);
 
@@ -190,6 +209,27 @@ export function createGhIssueTrackerIntegration(
       /* 最初のページには続きの位置が無い。`cursor=` と空で渡すと `gh` は空文字列を送り、
          GitHub は「そこから先」を 0 件と答える。 */
       if (request.cursor !== null) args.push('-F', `cursor=${request.cursor}`);
+
+      try {
+        return observed(await run(args, { timeoutMs }));
+      } catch (error) {
+        return classifyFailure(error, request);
+      }
+    },
+
+    async fetchIssueBody(request) {
+      const args = [
+        'api',
+        'graphql',
+        '-f',
+        `query=${ISSUE_BODY_QUERY}`,
+        '-F',
+        `owner=${request.owner}`,
+        '-F',
+        `name=${request.name}`,
+        '-F',
+        `number=${request.number}`,
+      ];
 
       try {
         return observed(await run(args, { timeoutMs }));

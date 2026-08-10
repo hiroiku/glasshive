@@ -4,6 +4,7 @@ import {
   fromIndex,
   resolveProject,
 } from '~/application/services/workspace/readable-scope.service.ts';
+import type { GetGithubIssueBodyUseCase } from '~/application/use-cases/issues/get-github-issue-body.use-case.ts';
 import type { GetIssueUseCase } from '~/application/use-cases/issues/get-issue.use-case.ts';
 import type { ListGithubIssuesUseCase } from '~/application/use-cases/issues/list-github-issues.use-case.ts';
 import type { ListIssuesUseCase } from '~/application/use-cases/issues/list-issues.use-case.ts';
@@ -11,8 +12,10 @@ import { own, projectIdOf } from '~/interface/controllers/sessions/project-query
 import { InvalidSessionsRequestError } from '~/interface/errors/sessions/request.error.ts';
 import { type ApiResponse, presentError } from '~/interface/presenters/api-error.presenter.ts';
 import {
+  type GithubIssueBodyJson,
   type IssueJson,
   type IssuesJson,
+  presentGithubIssueBody,
   presentIssue,
   presentIssues,
 } from '~/interface/presenters/issues/issues.presenter.ts';
@@ -25,6 +28,7 @@ import {
 
 export type IssuesResponse = ApiResponse<IssuesJson>;
 export type IssueResponse = ApiResponse<IssueJson>;
+export type GithubIssueBodyResponse = ApiResponse<GithubIssueBodyJson>;
 
 export interface IssuesDeps {
   readonly list: ListIssuesUseCase;
@@ -34,6 +38,7 @@ export interface IssuesDeps {
 
 export interface GithubIssuesDeps {
   readonly list: ListGithubIssuesUseCase;
+  readonly body: GetGithubIssueBodyUseCase;
   readonly index: TranscriptIndexService;
 }
 
@@ -80,6 +85,30 @@ export async function listGithubIssues(
   const ledger = await deps.list.execute({ projectPath: path.value, includeClosed });
   if (!ledger.ok) return { ok: false, ...presentError(ledger.error) };
   return { ok: true, body: presentIssues(ledger.value) };
+}
+
+/* GitHub の課題 1 件の本文。**番号は一覧に出ていたものを渡す。**
+
+   一覧と同じ id でプロジェクトを名指し、尋ね先はこちらが remote から引く。番号だけを
+   受け取っても、それが指す先はこちらが決めたリポジトリの中にしかない。 */
+export async function getGithubIssueBody(
+  deps: GithubIssuesDeps,
+  input: unknown,
+): Promise<GithubIssueBodyResponse> {
+  const path = await locate(deps.index, input);
+  if (!path.ok) return { ok: false, ...presentError(path.error) };
+
+  const number = own(input, 'number');
+  if (typeof number !== 'number' || !Number.isSafeInteger(number) || number <= 0) {
+    return {
+      ok: false,
+      ...presentError(new InvalidSessionsRequestError('No issue number to fetch')),
+    };
+  }
+
+  const body = await deps.body.execute({ projectPath: path.value, number });
+  if (!body.ok) return { ok: false, ...presentError(body.error) };
+  return { ok: true, body: presentGithubIssueBody(body.value) };
 }
 
 export async function getIssue(deps: IssuesDeps, input: unknown): Promise<IssueResponse> {

@@ -3,6 +3,7 @@ import { getKernel } from '~/composition/kernel.ts';
 import {
   type GithubIssuesDeps,
   type IssuesDeps,
+  getGithubIssueBody as readGithubIssueBody,
   listGithubIssues as readGithubIssues,
   getIssue as readIssue,
   listIssues as readIssues,
@@ -28,9 +29,14 @@ export const getIssue = createServerFn({ method: 'GET' })
 
 const githubDeps = (): GithubIssuesDeps => {
   const kernel = getKernel();
-  return { list: kernel.listGithubIssues, index: kernel.index };
+  return { list: kernel.listGithubIssues, body: kernel.githubIssueBody, index: kernel.index };
 };
 
 export const getGithubIssues = createServerFn({ method: 'GET' })
   .validator((value: unknown) => value)
   .handler(({ data }) => readGithubIssues(githubDeps(), data));
+
+/* 開いた 1 件の本文。**一覧とは別に叩く。** 一覧に本文を混ぜると、100 件ぶんを運ぶことになる */
+export const getGithubIssueBody = createServerFn({ method: 'GET' })
+  .validator((value: unknown) => value)
+  .handler(({ data }) => readGithubIssueBody(githubDeps(), data));

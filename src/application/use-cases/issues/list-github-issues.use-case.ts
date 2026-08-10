@@ -1,33 +1,28 @@
 import type { JsonRecord } from '~/app-kernel/json.ts';
-import { absent, type Observation, observed } from '~/app-kernel/observation.ts';
+import type { Observation } from '~/app-kernel/observation.ts';
+import { observed } from '~/app-kernel/observation.ts';
 import { ok, type Result } from '~/app-kernel/result.ts';
 import type { GitCommandIntegration } from '~/application/ports/integrations/git/git-command.integration.ts';
 import type { IssueTrackerIntegration } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
 import type { AvatarCacheService } from '~/application/services/issues/avatar-cache.service.ts';
+import { locateGithubRepository } from '~/application/services/issues/github-repository.service.ts';
 import type {
   GithubActor,
   GithubIssueExtra,
 } from '~/domain/entities/issues/github-issue.entity.ts';
 import type { IssueLedger } from '~/domain/entities/issues/issue.entity.ts';
-import { parseRemoteConfig, parseRemoteUrl } from '~/domain/services/git/remote-parsing.service.ts';
 import { buildLedger, parseIssuePage } from '~/domain/services/issues/github-issue.service.ts';
 
 /* プロジェクト 1 つぶんの GitHub の課題を一覧にする。
 
-   **bounded context をまたぐのはここだけである。** どのリポジトリを尋ねるかは `git` の
-   remote が知っていて、課題は `issues` の言葉で返ってくる。domain は文脈をまたげないので、
-   両方を持って突き合わせるのは呼び出しの仕事になる。
-
-   remote から owner を引くのに `git` を起こすが、**その失敗をそのまま課題の失敗にしない。**
-   remote を持たないリポジトリも、そもそも git のリポジトリでないディレクトリも、
-   「GitHub の課題が無い」であって「課題を読めなかった」ではない。 */
+   尋ね先を決めるのは `locateGithubRepository` である。そこが `git` の remote を読むので、
+   **その失敗をそのまま課題の失敗にしない。** remote を持たないリポジトリも、そもそも git の
+   リポジトリでないディレクトリも、「GitHub の課題が無い」であって「課題を読めなかった」
+   ではない。 */
 
 /* GitHub の課題が持つ形は、外へ出すときにもそのまま要る。
    `interface` は domain を直に見られないので、ここが受け渡しの場所になる。 */
 export type { GithubActor, GithubIssueExtra, IssueLedger };
-
-/** GitHub のホスト。ここに載っていないホストの remote は、このトラッカーの相手ではない */
-const GITHUB_HOSTS = new Set(['github.com']);
 
 /* 1 ページで求める件数と、辿るページ数の上限。
 
@@ -47,72 +42,6 @@ export interface ListGithubIssuesUseCase {
   execute(input: ListGithubIssuesInput): Promise<Result<Observation<IssueLedger>, never>>;
 }
 
-/* 名前だけで本命を選ぶときの順。`gh` が同じ順で選ぶ。
-
-   fork では課題が元のリポジトリに在るので、`upstream` が `origin` より先に来る。
-   ここに載っていない名前の remote は、`.git/config` に書かれている順で後ろに続く。 */
-const REMOTE_ORDER = ['upstream', 'github', 'origin'];
-
-const rankOf = (name: string): number => {
-  const at = REMOTE_ORDER.indexOf(name);
-  return at < 0 ? REMOTE_ORDER.length : at;
-};
-
-/** remote の URL が GitHub を指していれば、その owner と名前 */
-function githubOf(url: string): { owner: string; name: string } | null {
-  const remote = parseRemoteUrl(url);
-  if (remote === null || !GITHUB_HOSTS.has(remote.host)) return null;
-  return { owner: remote.owner, name: remote.name };
-}
-
-/* このプロジェクトが指している GitHub のリポジトリ。
-
-   remote を複数持つリポジトリで「どれが本命か」を決める手立ては git に無い。**推し量らず、
-   `gh` に合わせる。** 課題を取りに行くのは `gh` なので、同じディレクトリで `gh issue list`
-   が出すものと画面が食い違わない。`gh repo set-default` を打ってあれば、その答えを使う。
-   打っていなければ名前の順で選ぶ。
-
-   `origin` だけを見ることはしない。remote が 1 つしか無いリポジトリでも、その名前が
-   `origin` でなければ「GitHub のリポジトリではない」と出てしまう。 */
-async function locateRepository(
-  git: GitCommandIntegration,
-  projectPath: string,
-): Promise<Observation<{ owner: string; name: string }>> {
-  const output = await git.run({
-    cwd: projectPath,
-    args: ['config', '--get-regexp', '^remote\\..+\\.(url|gh-resolved)$'],
-    revisions: [],
-  });
-  /* 起こせなかったのも、非ゼロで終わったのも、ここでは「GitHub のリポジトリではない」に
-     倒す。remote を持たないリポジトリで `git config --get-regexp` は 1 で終わるので、これを
-     観測できなかったことにすると、ほとんどのプロジェクトが赤い画面になる。 */
-  if (output.kind !== 'observed') return absent('no-source');
-
-  const remotes = parseRemoteConfig(output.value);
-
-  /* `gh-resolved` が書かれていれば、それが答えである。**名前の順より先に見る** ——
-     これは「どれが本命か」をユーザーが自分で決めた結果で、こちらが推し量る余地は無い。 */
-  for (const remote of remotes) {
-    if (remote.ghResolved === null) continue;
-    if (remote.ghResolved === 'base') {
-      const found = githubOf(remote.url);
-      if (found !== null) return observed(found);
-      continue;
-    }
-    const [owner, name] = remote.ghResolved.split('/');
-    if (owner !== undefined && owner !== '' && name !== undefined && name !== '') {
-      return observed({ owner, name });
-    }
-  }
-
-  const ranked = [...remotes].sort((a, b) => rankOf(a.name) - rankOf(b.name));
-  for (const remote of ranked) {
-    const found = githubOf(remote.url);
-    if (found !== null) return observed(found);
-  }
-  return absent('no-source');
-}
-
 export function createListGithubIssues(deps: {
   readonly git: GitCommandIntegration;
   readonly tracker: IssueTrackerIntegration;
@@ -123,7 +52,7 @@ export function createListGithubIssues(deps: {
 }): ListGithubIssuesUseCase {
   return {
     async execute({ projectPath, includeClosed }) {
-      const repository = await locateRepository(deps.git, projectPath);
+      const repository = await locateGithubRepository(deps.git, projectPath);
       if (repository.kind !== 'observed') return ok(repository);
 
       const nodes: JsonRecord[] = [];

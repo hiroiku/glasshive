@@ -41,6 +41,13 @@ export interface IssuePageRequest {
   readonly pageSize: number;
 }
 
+export interface IssueBodyRequest {
+  readonly owner: string;
+  readonly name: string;
+  /** 課題の番号。**一覧に出ていた番号だけを渡す** — 尋ねてきた側の値ではない */
+  readonly number: number;
+}
+
 export interface IssueTrackerIntegration {
   /* 課題 1 ページぶんの応答テキスト。
 
@@ -51,4 +58,10 @@ export interface IssueTrackerIntegration {
      どのリポジトリも指していないプロジェクトを `absent` と言うのは、ここではなく呼ぶ側である。
      このポートは owner と name を受け取った時点で、尋ねる先を持っている。 */
   fetchIssuePage(request: IssuePageRequest): Promise<Observation<string>>;
+
+  /* 課題 1 件の本文を求める応答テキスト。
+
+     **一覧とは別の呼び出しである。** 一覧は本文を求めない —— 100 件ぶんを運ぶと一覧そのものが
+     開かなくなる。読む人が 1 件を開いたときだけ、その 1 件を尋ねる。 */
+  fetchIssueBody(request: IssueBodyRequest): Promise<Observation<string>>;
 }

@@ -1,7 +1,9 @@
 import { mdiCommentOutline, mdiGithub, mdiHeartOutline, mdiSourceBranch } from '@mdi/js';
+import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
+import { githubIssueBodyQuery } from '../../../queries/issues.query.ts';
 import { labelColors, subProgress } from '../../derive/githubIssue.ts';
 import { viaLabel, workerIndex, workersOn } from '../../derive/workers.ts';
 import { absTime, formatSinceIso } from '../../format.ts';
@@ -12,15 +14,16 @@ import { type GraphNode, MiniGraph } from '../issues/MiniGraph.tsx';
 import { AvatarStack } from '../primitives/Avatar.tsx';
 import { Icon } from '../primitives/Icon.tsx';
 import { NotObserved } from '../primitives/NotObserved.tsx';
+import { MdView } from '../text/MdView.tsx';
 import { SubjectText } from '../text/SubjectText.tsx';
 
 /* GitHub の課題 1 件のパネル。
 
-   **本文は持っていない。** 一覧を引くときに本文まで求めると、100 件ぶんの markdown を
-   運ぶことになって一覧そのものが開かなくなる。だからここに出せるのは、一覧と同じ欄で
-   組み立てられるところまでである —— 出せないものは、出せないと書いて GitHub へ渡す。
+   **本文はここで、この 1 件だけを尋ねる。** 一覧を引くときに本文まで求めると、100 件ぶんの
+   markdown を運ぶことになって一覧そのものが開かなくなる。開いた 1 件なら、`gh` を 1 回
+   起こすだけで済む。
 
-   代わりに、GitHub の画面には無いものを並べてある。いまこの課題を触っているエージェント、
+   加えて、GitHub の画面には無いものを並べてある。いまこの課題を触っているエージェント、
    その稼働区間、PR が乗っているブランチ。**それがこのパネルの値打ちである。** */
 
 /** パネルに並べるエージェントのチップの数 */
@@ -79,6 +82,19 @@ export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDet
   const labels = issue.labels ?? [];
   const progress = subProgress(issue, undefined);
   const milestone = github?.milestone ?? null;
+
+  /* 本文。**開いてから尋ねる。** id は `#209` の形なので、番号だけを取り出して渡す。
+     取り出せなければ尋ねない —— 番号の分からない課題の本文は、そもそもどこにも無い。 */
+  const number = Number.parseInt(id.replace(/^#/, ''), 10);
+  const slug = project?.id ?? '';
+  const askable = slug !== '' && Number.isSafeInteger(number) && number > 0;
+  const body = useQuery({ ...githubIssueBodyQuery(slug, number), enabled: askable });
+  const answer = body.data;
+  const text = answer?.ok === true && answer.body.state === 'observed' ? answer.body.body : null;
+  /* 読めなかった理由。`gh` が入っていないのか、認証が切れたのか、その番号が無かったのかは
+     ここにしか残らない */
+  const bodyReason =
+    answer === undefined ? null : answer.ok ? answer.body.reason : (answer.body.code ?? null);
 
   return (
     <div className="detail">
@@ -281,16 +297,22 @@ export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDet
           </>
         )}
 
-        {/* 本文が無いことを黙らない。空のまま出すと、本文の無い課題に見える */}
-        <NotObserved
-          partial
-          icon={mdiGithub}
-          title="The description is not read"
-          detail="glasshive fetches the fields it can draw with — labels, dependencies, assignees, pull requests — but not the body text. Carrying a body for every issue is what makes a list of this size slow to open."
-          {...(github?.url == null
-            ? {}
-            : { steps: [{ text: 'Read the whole issue on GitHub', href: github.url }] })}
-        />
+        {/* 本文。**読めなかったことを黙らない** —— 空のまま出すと、本文の無い課題に見える。
+            尋ねている最中も黙る。まだ答えが返っていないだけで、読めなかったのではない。 */}
+        {text !== null ? (
+          text !== '' && <MdView text={text} project={project} />
+        ) : body.isPending && askable ? null : (
+          <NotObserved
+            partial
+            icon={mdiGithub}
+            title="The description did not come back"
+            detail="The rest of this panel is built from the issue list, which glasshive already has. The body text is fetched on its own when you open an issue, and that fetch did not answer."
+            {...(bodyReason === null ? {} : { code: bodyReason })}
+            {...(github?.url == null
+              ? {}
+              : { steps: [{ text: 'Read the whole issue on GitHub', href: github.url }] })}
+          />
+        )}
       </div>
     </div>
   );
