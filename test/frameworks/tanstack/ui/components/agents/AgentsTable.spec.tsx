@@ -498,12 +498,46 @@ describe('行の中身を、支援技術に渡す', () => {
     expect(sorted[0]?.getAttribute('aria-sort')).toBe('ascending');
   });
 
-  it('見出しはキーボードからも並べ替えられる', () => {
+  /* 並べ替えられる列は `columnheader` と `button` の入れ子である。**片方に寄せない** ——
+     `columnheader` が押しどころを兼ねると「押せる」ことが読み上げから消え、`button` だけに
+     すると `aria-sort` を置く先が無くなる。 */
+  it('見出しの押しどころは、`columnheader` の中の `button` である', () => {
+    mount({ project: three });
+
+    for (const header of document.querySelectorAll('.head [role="columnheader"]')) {
+      expect(
+        header.querySelector('button.sortable'),
+        '押せることが、支援技術のどこにも出ていない',
+      ).not.toBeNull();
+    }
+  });
+
+  it('見出しそのものは、押しどころを名乗らない', () => {
+    mount({ project: three });
+
+    for (const header of document.querySelectorAll('.head [role="columnheader"]')) {
+      expect(header.getAttribute('tabindex'), '同じ場所にタブ順が 2 つ在る').toBeNull();
+      expect(header.getAttribute('role')).toBe('columnheader');
+    }
+  });
+
+  /* 時間軸の列だけは、見出しの中身が語ではなく目盛りの時刻である。列が狭くて目盛りが
+     1 本も残らないときは、名前を持たない押しどころになる。 */
+  it('時間軸の列も、名前を名乗る', () => {
+    mount({ project: three });
+    const headers = [...document.querySelectorAll('.head [role="columnheader"]')];
+    const timeline = headers.find((header) => header.querySelector('.tl-head') !== null);
+
+    expect(timeline?.getAttribute('aria-label')).toBe('Timeline');
+    expect(timeline?.querySelector('button')?.getAttribute('aria-label')).toBe('Timeline');
+  });
+
+  it('見出しの `button` を押すと並べ替わる', () => {
     const onSorting = vi.fn();
     mount({ project: three, sorting: [{ id: 'state', desc: false }], onSorting });
-    const header = document.querySelectorAll('.head [role="columnheader"]')[1];
+    const button = document.querySelectorAll('.head [role="columnheader"] button')[1];
 
-    fireEvent.keyDown(header as HTMLElement, { key: 'Enter' });
+    fireEvent.click(button as HTMLElement);
 
     expect(onSorting).toHaveBeenCalled();
   });
@@ -745,6 +779,22 @@ describe('メッセージの矢印を、行の束の中へ浮かせない', () =
       nav.openConv,
       '矢印を隠した先に、同じ操作へキーボードで届く入口が無い',
     ).toHaveBeenCalledWith('/x/sess.jsonl');
+  });
+
+  /* 面ごと隠したのは正しいが、`aria-label` が運んでいた「どの組がいつ何を話したか」の
+     行き先がどこにも無かった。集計はツールバーのチップに残っても、1 本ずつの中身は残らない。 */
+  it('矢が語っていた中身を、送り手の行に読み上げ用の文字として残す', async () => {
+    await drawn();
+
+    expect(rowOf('sess').textContent, '矢を隠した先に、話した相手と要約の行き先が無い').toContain(
+      'sess → child · go',
+    );
+  });
+
+  it('矢を送っていない行には、何も足さない', async () => {
+    await drawn();
+
+    expect(rowOf('child').querySelector('.vhidden')).toBeNull();
   });
 
   it('行の束の直の子は、行か、読み上げから外したものだけにする', async () => {

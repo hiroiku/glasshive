@@ -31,6 +31,7 @@ vi.mock('~/frameworks/tanstack/ui/hooks/useHydrated.ts', () => ({ useHydrated: (
 vi.mock('~/frameworks/tanstack/ui/hooks/useCommandMark.ts', () => ({ useCommandMark: () => '^' }));
 
 type ProjectJson = NonNullable<TabBarProps['projects']>[number];
+type SubagentJson = ProjectJson['sessions'][number]['subagents'][number];
 
 const NOW = Date.parse('2026-08-09T12:00:00Z');
 
@@ -70,6 +71,32 @@ const project = (id: string, name: string): ProjectJson => ({
       subagents: [],
     },
   ],
+});
+
+const subagent = (over: Partial<SubagentJson> = {}): SubagentJson => ({
+  id: 'a1',
+  label: 'a1',
+  agent_type: null,
+  name: null,
+  tool_use: null,
+  parent: null,
+  depth: 1,
+  file: '/x/a1.jsonl',
+  state: 'active',
+  started: new Date(NOW).toISOString(),
+  last_activity: new Date(NOW).toISOString(),
+  tokens: null,
+  tokens_state: 'observed',
+  model: null,
+  effort: null,
+  git_branch: null,
+  cwd: null,
+  issue: null,
+  current: null,
+  intervals: [],
+  intervals_complete: true,
+  intervals_state: 'observed',
+  ...over,
 });
 
 /* タブは「一覧へ戻る」から始まってピン留めの順に続き、暫定タブが末尾に付く。
@@ -228,6 +255,57 @@ describe('数え上げられなかったプロジェクトのタブ', () => {
     const { pinned } = draw({ projects: [short] });
 
     expect(pinned.dot).toContain('active');
+  });
+});
+
+/* まだ読んでいないプロジェクトのタブ。
+
+   木は `streamedQuery` で届き、最初のチャンクは全プロジェクトが `read: false` で
+   `sessions` が空のスタブである。**その間のタブが「ここでは何も動いていない」と言っては
+   いけない。** 同じ画面の Overview は、同じ行を `unknown` と `—` で描いている。 */
+describe('まだ読んでいないプロジェクトのタブ', () => {
+  const unread = (): ProjectJson => ({
+    ...project('-w-alpha', 'alpha'),
+    read: false,
+    sessions: [],
+  });
+
+  it('読む前のプロジェクトの点を、`ended` に落とさない', () => {
+    const { pinned } = draw({ projects: [unread()] });
+
+    expect(pinned.dot, '読む前の行について「何も動いていない」とは言えない').toContain('unknown');
+  });
+
+  it('読む前の件数を、空欄にしない', () => {
+    const { pinned } = draw({ projects: [unread()] });
+
+    expect(pinned.count, '空欄は「1 つも動いていない」という断定である').toBe('?');
+  });
+
+  it('まだ読んでいないことを、指せば分かるようにする', () => {
+    const { pinned } = draw({ projects: [unread()] });
+
+    expect(pinned.slotTitle).toBe('Not read yet');
+  });
+
+  it('読み終えたプロジェクトには、その一言を添えない', () => {
+    expect(draw().pinned.slotTitle).toBeNull();
+  });
+
+  /* 一覧とタブは同じ木を読んでいる。同じプロジェクトについて 2 つの答えが出るのは、
+     節を写した先が写し損ねているからである。 */
+  it('子だけが動いているプロジェクトも、動いていると言う', () => {
+    const onlyChild = project('-w-alpha', 'alpha');
+    const first = onlyChild.sessions[0];
+    if (first === undefined) throw new Error('セッションが無い');
+    first.state = 'waiting';
+    first.subagents = [subagent()];
+
+    const { pinned } = draw({ projects: [onlyChild] });
+
+    expect(pinned.dot, '一覧とタブが、同じプロジェクトについて別の答えを出している').toContain(
+      'active',
+    );
   });
 });
 

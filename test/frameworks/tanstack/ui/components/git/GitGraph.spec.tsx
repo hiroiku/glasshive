@@ -90,6 +90,15 @@ const rowOf = (name: string): HTMLElement => {
 
 const cellsOf = (row: HTMLElement) => [...row.querySelectorAll(':scope > [role="gridcell"]')];
 
+/** 列の見出しを、そこに出ている名前で引く */
+const headOf = (label: string): HTMLElement => {
+  const found = [...document.querySelectorAll('.git-row.head [role="columnheader"]')].find(
+    (header) => header.textContent === label,
+  );
+  if (found === null || found === undefined) throw new Error(`no column header for ${label}`);
+  return found as HTMLElement;
+};
+
 describe('行の中身を、支援技術に渡す', () => {
   it('表として並び、行は 5 個のセルを持つ', () => {
     draw();
@@ -162,16 +171,35 @@ describe('行の中身を、支援技術に渡す', () => {
     expect(sorted[0]?.textContent).toBe('Ahead');
   });
 
-  it('見出しはキーボードからも並べ替えられる', () => {
+  /* 並びの向きは `columnheader` にしか置けず、`columnheader` を押しどころにすると
+     今度は「押せる」ことが読み上げから消える。入れ子にすれば、どちらも失わない。 */
+  it('並べ替えられる見出しは、押しどころを中に持つ', () => {
+    draw({ order: { key: 'ahead', direction: 'desc' } });
+    const header = headOf('Ahead');
+    const press = header.querySelector('button');
+
+    expect(press, '見出しそのものを押しどころにすると、押せることが読まれない').not.toBeNull();
+    expect(press?.getAttribute('type')).toBe('button');
+    expect(header.getAttribute('aria-sort')).toBe('descending');
+    expect(press?.getAttribute('aria-sort'), '並びの向きを言うのはセルの側である').toBeNull();
+  });
+
+  it('見出しを押すと、その列で並べ替わる', () => {
     const onSort = vi.fn();
     draw({ onSort });
-    const header = [...document.querySelectorAll('.git-row.head [role="columnheader"]')].find(
-      (found) => found.textContent === 'Ahead',
-    );
 
-    fireEvent.keyDown(header as HTMLElement, { key: 'Enter' });
+    fireEvent.click(headOf('Ahead').querySelector('button') as HTMLElement);
 
     expect(onSort).toHaveBeenCalledWith('ahead');
+  });
+
+  it('見出しのセルそのものは、タブ順に入らない', () => {
+    draw();
+
+    expect(
+      headOf('Ahead').getAttribute('tabindex'),
+      '止まる場所が 2 つ並ぶと、押せるのがどちらか分からない',
+    ).toBeNull();
   });
 
   /* `grid` が持てるのは `row` と `rowgroup` だけである。列を持たないものを中に置くと、

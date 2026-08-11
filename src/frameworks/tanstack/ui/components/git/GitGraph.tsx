@@ -468,9 +468,10 @@ interface HeadProps {
   readonly right?: boolean;
 }
 
-/* 並べ替えられる列の見出し。**`button` には置き換えられない** — 役が `button` だと、
-   この列がいまどう並んでいるかを言う `aria-sort` を置く先が無くなる。押しどころとしての
-   振る舞いは `pressable` が持つ。 */
+/* 並べ替えられる列の見出し。**セルと押しどころを入れ子にする。** この列がいまどう
+   並んでいるかを言う `aria-sort` は `columnheader` にしか置けず、その `columnheader` 自身を
+   押しどころにすると、今度は「押せる」ことが読み上げから消える。中の `button` が押しどころを
+   持てば、どちらも失わない。 */
 function SortHead({ label, sortKey, order, onSort, right }: HeadProps) {
   const on = order.key === sortKey;
   const className = [
@@ -483,13 +484,12 @@ function SortHead({ label, sortKey, order, onSort, right }: HeadProps) {
     .join(' ');
   return (
     <div
-      className={className}
       role="columnheader"
-      tabIndex={0}
       aria-sort={on ? (order.direction === 'desc' ? 'descending' : 'ascending') : 'none'}
-      {...pressable(() => onSort(sortKey))}
     >
-      {label}
+      <button type="button" className={className} onClick={() => onSort(sortKey)}>
+        {label}
+      </button>
     </div>
   );
 }

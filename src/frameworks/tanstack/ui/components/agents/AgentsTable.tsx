@@ -24,6 +24,7 @@ import {
   visibleSubagents,
 } from '~/interface/presenters/sessions/visibility.presenter.ts';
 import { messagesQuery } from '../../../queries/messages.query.ts';
+import { sourcesStateOf } from '../../derive/sources.ts';
 import {
   agentTypeShort,
   cut,
@@ -176,6 +177,9 @@ interface TalkHops {
 /** 行を開く操作の説明を指す id。全部の行が同じ 1 つを指す */
 const OPEN_HINT_ID = 'agents-open-hint';
 
+/** 矢が 1 本も出ていない行が受け取るもの。作り直すと、行が毎回描き直される */
+const NO_TALK: readonly string[] = [];
+
 /* この表が持つ列の `id`。**並べ替えの名前はこの一覧の中にしか無い。**
 
    URL の `sort` はここに在るものだけを通す。通さないと TanStack が知らない列を黙って捨て、
@@ -204,6 +208,9 @@ const TOKENS_NOTE = 'input + output + cache write (transcripts active in the las
 /** 子を数え上げられなかったセッションに添える断り。見えている子は本当に居るが、それで全部とは言えない */
 const SUBAGENTS_SHORT = 'Subagents could not be counted — this session may have more';
 
+/** 時間軸の列の名前。ほかの 10 列と違い、見出しの中身は語ではなく目盛りの時刻である */
+const TIMELINE_HEADER = 'Timeline';
+
 /* 行が 1 本も出ていないときに言えること。**「無かった」と「観測できなかった」を同じ文にしない。**
 
    走査できなかったプロジェクトの `sessions` は空のまま届くので、長さだけを見ると
@@ -211,15 +218,18 @@ const SUBAGENTS_SHORT = 'Subagents could not be counted — this session may hav
    同じ `sources` を読んで観測できなかったと言うので、ここで断定すると 1 つの画面の中で
    表とフッターの言うことが食い違う。 */
 function emptyNoteOf(project: ProjectJson): string {
-  const counted = project.sources.state !== 'unobservable';
+  const state = sourcesStateOf(project);
   /* 絞り込んで何も残らなかった。**分母も数え上げた数でしかない**ので、
      数え上げられていなければ `+?` を添える */
   if (project.sessions.length > 0) {
-    return `No matching sessions (0 of ${project.sessions.length}${counted ? '' : '+?'})`;
+    const short = state === 'unobservable' ? '+?' : '';
+    return `No matching sessions (0 of ${project.sessions.length}${short})`;
   }
-  if (!counted) return 'Unknown — the sessions in this project could not be counted';
+  if (state === 'unobservable') {
+    return 'Unknown — the sessions in this project could not be counted';
+  }
   if (!project.read) return 'Reading the transcripts in this project';
-  return project.sources.state === 'absent'
+  return state === 'absent'
     ? 'Nothing to read — the directory for this project is not there'
     : 'No sessions to show';
 }
@@ -723,6 +733,22 @@ export function AgentsTable({
     };
   }, [talk, talkQuery.data, rows, data, axis, span, tlGeom.width]);
 
+  /* 矢が語っている中身を、送り手の行にも置く。
+
+     **矢そのものは読み上げから外してある。** `#rows` は `rowgroup` なので、行を挟まずに
+     押しどころを置けず、面ごと `aria-hidden` にするしかない。それだけで終わらせると、
+     どの組がいつ何を話したかが、どの支援技術からも読めなくなる。行の中の文字なら、
+     その行を辿った人にそのまま届く。 */
+  const talkByRow = useMemo(() => {
+    const byRow = new Map<number, string[]>();
+    for (const arrow of talkHops?.drawn ?? []) {
+      const found = byRow.get(arrow.from) ?? [];
+      found.push(arrow.label);
+      byRow.set(arrow.from, found);
+    }
+    return byRow;
+  }, [talkHops]);
+
   return (
     <>
       {/* 行を開く操作の説明。全部の行が指す 1 つで足りるので、行の中には置かない —
@@ -785,38 +811,47 @@ export function AgentsTable({
               .filter(Boolean)
               .join(' ');
             return (
-              /* 見出しは `columnheader` である。**`button` には置き換えられない** —
-                 役が `button` だと、この列がいまどう並んでいるかを言う `aria-sort` を
-                 置く先が無くなる。押しどころとしての振る舞いは `pressable` が持つ。 */
+              /* 並べ替えられる列は、`columnheader` の中に `button` を入れた形にする。
+                 **どちらか一方に寄せない** — `columnheader` に押す役を持たせると
+                 「押せる」ことが支援技術に届かず、`button` だけにすると、この列がいまどう
+                 並んでいるかを言う `aria-sort` を置く先が無くなる。 */
               <div
                 key={header.id}
-                className={className}
                 role="columnheader"
-                tabIndex={0}
+                /* 時間軸の列は、見出しの中身が目盛りの時刻そのものである。名前を付けないと
+                   「13:00 14:00 15:00」が列の名前になり、幅が狭くて目盛りが 1 本も残らない
+                   ときは名前がまったく無くなる。 */
+                aria-label={header.column.id === 'timeline' ? TIMELINE_HEADER : undefined}
                 aria-sort={
                   sorted === false ? 'none' : sorted === 'desc' ? 'descending' : 'ascending'
                 }
-                {...pressable(() => header.column.toggleSorting())}
               >
-                {header.column.id === 'timeline'
-                  ? shownTicks.map((tick, index) => (
-                      <span
-                        key={tick.at}
-                        /* 1 本しか残らないときは左端の寄せだけを当てる。両方当てると
-                           `.last` が後勝ちして、真ん中の目盛りが左へ引っ張られる */
-                        className={[
-                          'tick',
-                          index === 0 ? 'first' : '',
-                          index > 0 && index === shownTicks.length - 1 ? 'last' : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ')}
-                        style={{ '--tick-x': `${tick.x}%` } as React.CSSProperties}
-                      >
-                        {formatTick(tick.at, span)}
-                      </span>
-                    ))
-                  : flexRender(header.column.columnDef.header, header.getContext())}
+                <button
+                  type="button"
+                  className={className}
+                  aria-label={header.column.id === 'timeline' ? TIMELINE_HEADER : undefined}
+                  onClick={() => header.column.toggleSorting()}
+                >
+                  {header.column.id === 'timeline'
+                    ? shownTicks.map((tick, index) => (
+                        <span
+                          key={tick.at}
+                          /* 1 本しか残らないときは左端の寄せだけを当てる。両方当てると
+                             `.last` が後勝ちして、真ん中の目盛りが左へ引っ張られる */
+                          className={[
+                            'tick',
+                            index === 0 ? 'first' : '',
+                            index > 0 && index === shownTicks.length - 1 ? 'last' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                          style={{ '--tick-x': `${tick.x}%` } as React.CSSProperties}
+                        >
+                          {formatTick(tick.at, span)}
+                        </span>
+                      ))
+                    : flexRender(header.column.columnDef.header, header.getContext())}
+                </button>
               </div>
             );
           })}
@@ -963,6 +998,7 @@ export function AgentsTable({
                   (index === rows.length - 1 || (rows[index + 1]?.depth ?? 0) < row.depth)
                 }
                 selected={selectedFile !== null && selectedFile === row.original.node.file}
+                talk={talkByRow.get(index) ?? NO_TALK}
                 axis={axis}
                 nowMs={nowMs}
                 tokenTotal={tokenTotal}
@@ -996,6 +1032,7 @@ function AgentRowView({
   row,
   last,
   selected,
+  talk,
   axis,
   nowMs,
   tokenTotal,
@@ -1009,6 +1046,8 @@ function AgentRowView({
   row: Row<AgentRow>;
   last: boolean;
   selected: boolean;
+  /** この行が送ったメッセージ 1 本ずつの、相手と件数と要約 */
+  talk: readonly string[];
   axis: Axis;
   nowMs: number;
   /** バーの長さを決める分母。いま出ている行の消費の合計 */
@@ -1094,6 +1133,10 @@ function AgentRowView({
             {agentTypeShort(calledAs)}
           </span>
         )}
+        {/* 矢が語っている中身を、読み上げにだけ残す。**矢の面は `aria-hidden` である** ——
+            `#rows` は `rowgroup` なので、行を挟まずに押しどころを置けない。ここに置かないと、
+            どの組がいつ何を話したかは、どの支援技術からも読めない */}
+        {talk.length > 0 && <span className="vhidden">{`Messages sent: ${talk.join('; ')}`}</span>}
       </span>
 
       <span role="gridcell">

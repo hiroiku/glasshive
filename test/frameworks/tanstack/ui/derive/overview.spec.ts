@@ -3,6 +3,7 @@ import {
   DEFAULT_SORT,
   DEFAULT_SPAN,
   deriveRows,
+  dotFactsOf,
   dotStateOf,
   filterRows,
   holdOrder,
@@ -279,6 +280,55 @@ describe('行の頭の点', () => {
       dotStateOf(row({ sourcesState: 'unobservable', active: 1 })),
       '見えた 1 本が動いていることは、何本見落としていても変わらない',
     ).toBe('active');
+  });
+});
+
+/* 行を起こさない画面 —— タブ行 —— も、同じ点を同じ関数から出す。
+   **節を写すと、写した先が 1 つ落とすだけで、1 つの画面が同じプロジェクトについて
+   2 つの答えを出す。** */
+describe('プロジェクトから、そのまま点の材料を作る', () => {
+  it('まだ読んでいないプロジェクトは `unknown`', () => {
+    expect(dotStateOf(dotFactsOf(project({ read: false, sessions: [] })))).toBe('unknown');
+  });
+
+  it('子だけが動いていても、動いていると言う', () => {
+    const facts = dotFactsOf(
+      project({
+        sessions: [session({ state: 'waiting', subagents: [subagent({ state: 'active' })] })],
+      }),
+    );
+
+    expect(dotStateOf(facts), '子はプロジェクトごとの行には現れない').toBe('active');
+  });
+
+  it('人待ちを最優先に見せる', () => {
+    const facts = dotFactsOf(
+      project({ sessions: [session({ state: 'active', awaiting: 'user' })] }),
+    );
+
+    expect(dotStateOf(facts)).toBe('input');
+  });
+
+  it('子のディレクトリを歩けなかったプロジェクトに、終了の点を置かない', () => {
+    const facts = dotFactsOf(
+      project({
+        sessions: [session({ sources: { state: 'unobservable', reason: 'EACCES' } })],
+      }),
+    );
+
+    expect(dotStateOf(facts), 'プロジェクトの側だけを見ると、断定になる').toBe('unknown');
+  });
+
+  it('全部歩けて何も動いていなければ、終了と言ってよい', () => {
+    expect(dotStateOf(dotFactsOf(project()))).toBe('ended');
+  });
+
+  it('一覧の行と同じ答えを出す', () => {
+    const one = project({ sessions: [session({ state: 'waiting' })], live_process: true });
+    const first = deriveRows([one])[0];
+    if (first === undefined) throw new Error('行が無い');
+
+    expect(dotStateOf(dotFactsOf(one))).toBe(dotStateOf(first));
   });
 });
 

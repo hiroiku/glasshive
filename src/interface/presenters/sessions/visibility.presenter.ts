@@ -57,10 +57,3 @@ export function visibleSubagents(
   }
   return session.subagents.filter((subagent) => keep.has(subagent));
 }
-
-/** プロジェクト 1 つをドット 1 つで言い表す。**応答待ちを最優先に見せる** — 稼働は勝手に進む */
-export function projectDotState(project: ProjectJson): string {
-  if (project.sessions.some((session) => session.awaiting === 'user')) return 'input';
-  if (project.sessions.some((session) => session.state === 'active')) return 'active';
-  return project.live_process ? 'waiting' : 'ended';
-}

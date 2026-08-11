@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   OverviewTable,
@@ -65,7 +65,7 @@ const unreadRow = (overrides: Partial<Row> = {}): Row => ({
   ...overrides,
 });
 
-const draw = (rows: readonly Row[]) =>
+const draw = (rows: readonly Row[], over: Partial<OverviewTableProps> = {}) =>
   render(
     <OverviewTable
       rows={rows}
@@ -75,6 +75,7 @@ const draw = (rows: readonly Row[]) =>
       onTogglePin={() => undefined}
       nowMs={NOW}
       spanMs={DAY_MS}
+      {...over}
     />,
   );
 
@@ -222,6 +223,98 @@ describe('読み終えた行と読み終えていない行が混じるとき', (
     expect(rows).toHaveLength(2);
     expect(rows[0]?.textContent, '読んだ行は数を出す').toContain('2');
     expect(rows[1]?.textContent, '読んでいない行は数を出さない').toContain('—');
+  });
+});
+
+/* 一覧は表である。**`aria-sort` は `columnheader` にしか置けず、`columnheader` は `row` の
+   中、`row` は `grid` の中にしか居られない。** 見出しを `button` にしただけでは、その並びが
+   どの列の話なのかがどこにも結び付かない。 */
+describe('表として、支援技術に渡す', () => {
+  /** 列の見出しを、そこに出ている名前で引く */
+  const headOf = (container: HTMLElement, label: string): HTMLElement => {
+    const found = [...container.querySelectorAll('.dash-row.head > [role="columnheader"]')].find(
+      (header) => header.textContent === label,
+    );
+    if (found === null || found === undefined) throw new Error(`no column header for ${label}`);
+    return found as HTMLElement;
+  };
+
+  it('表として並ぶ', () => {
+    const { container } = draw([readRow()]);
+    const grid = container.querySelector('.dash-grid');
+
+    expect(grid?.getAttribute('role')).toBe('grid');
+    expect(grid?.getAttribute('aria-label'), '名前の無い表は、何の表か言えない').not.toBeNull();
+  });
+
+  /* `grid` が持てるのは `row` と `rowgroup` だけである。列を持たないものを中に置くと、
+     読み上げは表として辿れなくなる。 */
+  it('表の直の子は、行だけにする', () => {
+    const { container } = draw([readRow(), unreadRow()]);
+    const grid = container.querySelector('.dash-grid');
+
+    expect([...(grid?.children ?? [])].map((child) => child.getAttribute('role'))).toEqual([
+      'row',
+      'row',
+      'row',
+    ]);
+  });
+
+  it('見出しの数と、行のセルの数が揃う', () => {
+    const { container } = draw([readRow()]);
+    const headers = container.querySelectorAll('.dash-row.head > [role="columnheader"]');
+
+    expect(headers.length).toBeGreaterThan(0);
+    expect(
+      container.querySelectorAll('.dash-row:not(.head) > [role="gridcell"]'),
+      '数が食い違う行は、どの列を読んでいるのか分からなくなる',
+    ).toHaveLength(headers.length);
+  });
+
+  it('見出しは、いまどう並んでいるかを名乗る', () => {
+    const { container } = draw([readRow()], { order: { key: 'active', direction: 'desc' } });
+
+    expect(headOf(container, 'Active').getAttribute('aria-sort')).toBe('descending');
+    expect(headOf(container, 'Waiting').getAttribute('aria-sort')).toBe('none');
+  });
+
+  /* 並びの向きは `columnheader` にしか置けず、その `columnheader` を押しどころにすると
+     今度は「押せる」ことが読み上げから消える。入れ子にすれば、どちらも失わない。 */
+  it('並べ替えられる見出しは、押しどころを中に持つ', () => {
+    const { container } = draw([readRow()], { order: { key: 'active', direction: 'asc' } });
+    const press = headOf(container, 'Active').querySelector('button');
+
+    expect(press, '見出しそのものを押しどころにすると、押せることが読まれない').not.toBeNull();
+    expect(press?.getAttribute('type')).toBe('button');
+    expect(press?.getAttribute('aria-sort'), '並びの向きを言うのはセルの側である').toBeNull();
+  });
+
+  it('見出しを押すと並べ替わる', () => {
+    const onSort = vi.fn();
+    const { container } = draw([readRow()], { onSort });
+
+    fireEvent.click(headOf(container, 'Active').querySelector('button') as HTMLElement);
+
+    expect(onSort).toHaveBeenCalledWith('active');
+  });
+
+  it('ピン留めは、セルの中の button のままである', () => {
+    const { container } = draw([readRow()]);
+    const pin = container.querySelector('.pin');
+
+    expect(pin?.tagName, 'セルそのものを押しどころにすると、留めたかどうかが読めない').toBe(
+      'BUTTON',
+    );
+    expect(pin?.getAttribute('aria-pressed')).toBe('false');
+    expect(pin?.closest('[role="gridcell"]')).not.toBeNull();
+  });
+
+  it('プロジェクトの名前は、セルの中のリンクのままである', () => {
+    const { container } = draw([readRow()]);
+    const link = container.querySelector('.dash-name');
+
+    expect(link?.tagName).toBe('A');
+    expect(link?.closest('[role="gridcell"]')).not.toBeNull();
   });
 });
 

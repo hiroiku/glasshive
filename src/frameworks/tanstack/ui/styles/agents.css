@@ -84,6 +84,16 @@
 .head .sortable {
   cursor: pointer;
 }
+/* 並べ替えられる列は `columnheader` の中に `button` を入れた形である。押しどころを列の幅
+   いっぱいに広げる —— 文字の幅しか無いと、見出しの空いている所を押しても並べ替えが起きない。
+
+   `block` にするのは、`inline-block` のままだと行送りの分だけ列が高くなるからである
+   (中身が絶対配置しかないタイムラインの見出しでは、`button` の底が親のベースラインに座る)。
+   `button` が連れてくる残りの見た目は `base.css` の `.sortable` が落としている。 */
+.head [role="columnheader"] > .sortable {
+  display: block;
+  width: 100%;
+}
 .head .dep-sort {
   white-space: nowrap;
 }
@@ -372,7 +382,7 @@
   height: 14px;
 }
 .grid-row > .tl,
-.grid-row > .tl-head {
+.grid-row .tl-head {
   overflow: visible;
 }
 /* ウォーターフォール内はドラッグでパンできる(素のクリックは行選択のまま)。

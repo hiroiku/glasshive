@@ -74,6 +74,14 @@ p.warn {
   border-radius: 0;
   padding-bottom: 6px;
 }
+/* ピン留めと名前のセル。押しどころはセルの中の button とリンクで、セル自身は列の枠でしかない。
+   中の 1 つを列いっぱいに敷いて、行の高さは中身の高さのままにする */
+.dash-row > .pin-col,
+.dash-row > .name-col {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+}
 .dash-row:not(.head) {
   cursor: pointer;
 }
