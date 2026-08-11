@@ -200,9 +200,9 @@ describe('GitHub の課題を一覧にする', () => {
     const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
 
     expect(asked[1]?.cursor, '前のページが答えた続きの位置から尋ねる').toBe('cur1');
-    expect(result.ok && result.value.kind === 'observed' && result.value.value.issues).toHaveLength(
-      3,
-    );
+    expect(
+      result.ok && result.value.kind === 'observed' && result.value.value.ledger.issues,
+    ).toHaveLength(3);
   });
 
   it('上限に当たったら、そう言う', async () => {
@@ -219,7 +219,7 @@ describe('GitHub の課題を一覧にする', () => {
 
     expect(asked.length, '際限なく辿らない').toBe(5);
     expect(
-      result.ok && result.value.kind === 'observed' && result.value.value.truncated,
+      result.ok && result.value.kind === 'observed' && result.value.value.ledger.truncated,
       '黙って切ると、上限より後ろの課題が「無かった」ことになる',
     ).toBe(true);
   });
@@ -323,9 +323,12 @@ describe('GitHub の課題を一覧にする', () => {
     expect(asked, '辿れなかったページの続きを、読めたページとして辿り続けない').toHaveLength(2);
     expect(result.ok && result.value.kind).toBe('observed');
     if (result.ok && result.value.kind === 'observed') {
-      expect(result.value.value.issues, '観えた 2 件を捨てると、一覧が空になる').toHaveLength(2);
       expect(
-        result.value.value.truncated,
+        result.value.value.ledger.issues,
+        '観えた 2 件を捨てると、一覧が空になる',
+      ).toHaveLength(2);
+      expect(
+        result.value.value.ledger.truncated,
         '黙って切ると、辿れなかったページより後ろの課題が「無かった」ことになる',
       ).toBe(true);
     }
@@ -343,9 +346,12 @@ describe('GitHub の課題を一覧にする', () => {
 
     expect(result.ok && result.value.kind).toBe('observed');
     if (result.ok && result.value.kind === 'observed') {
-      expect(result.value.value.issues, '観えた 2 件を捨てると、一覧が空になる').toHaveLength(2);
       expect(
-        result.value.value.truncated,
+        result.value.value.ledger.issues,
+        '観えた 2 件を捨てると、一覧が空になる',
+      ).toHaveLength(2);
+      expect(
+        result.value.value.ledger.truncated,
         '黙って切ると、歩けなかったページより後ろの課題が「無かった」ことになる',
       ).toBe(true);
     }
@@ -373,7 +379,7 @@ describe('GitHub の課題を一覧にする', () => {
 
     expect(asked, '続きの位置が無ければ、次を尋ねようが無い').toHaveLength(1);
     expect(
-      result.ok && result.value.kind === 'observed' && result.value.value.truncated,
+      result.ok && result.value.kind === 'observed' && result.value.value.ledger.truncated,
       '続きが在ると言われたまま止まったのだから、全部は読んでいない',
     ).toBe(true);
   });
@@ -425,8 +431,11 @@ describe('GitHub の課題を一覧にする', () => {
 
     expect(result.ok && result.value.kind).toBe('observed');
     if (result.ok && result.value.kind === 'observed') {
-      expect(result.value.value.issues, '観えた 2 件を捨てると、一覧が空になる').toHaveLength(2);
-      expect(result.value.value.truncated, 'その先を読んでいないことは言う').toBe(true);
+      expect(
+        result.value.value.ledger.issues,
+        '観えた 2 件を捨てると、一覧が空になる',
+      ).toHaveLength(2);
+      expect(result.value.value.ledger.truncated, 'その先を読んでいないことは言う').toBe(true);
     }
   });
 });

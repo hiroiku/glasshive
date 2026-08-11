@@ -31,12 +31,32 @@ export interface GithubRepository {
   readonly name: string;
 }
 
+/* 課題を尋ねる先と、そこをどう決めたか。
+
+   **選んだことを黙らない。** GitHub を指す remote が 2 つ以上あるとき、どれが本命かを
+   決める手立ては git に無いので、glasshive が名前の順で 1 つ選んでいる。黙ると、選ばれ
+   なかったリポジトリの課題が「無い」ものとして画面に出る。`gh repo set-default` が
+   書いてあれば選んでいないので、`others` は `0` になる。 */
+export interface GithubSource {
+  readonly repository: GithubRepository;
+  /** 尋ねなかった GitHub のリポジトリの数 */
+  readonly others: number;
+}
+
 /** remote の URL が GitHub を指していれば、その owner と名前 */
 function githubOf(url: string): GithubRepository | null {
   const remote = parseRemoteUrl(url);
   if (remote === null || !GITHUB_HOSTS.has(remote.host)) return null;
   return { owner: remote.owner, name: remote.name };
 }
+
+/* 同じ場所を指す remote を 2 つと数えないための鍵。
+
+   `origin` と `github` が同じリポジトリを指している設定は珍しくない。それを 2 つと数えると、
+   選ぶ余地の無いところで「どちらを見ているのか」という迷いだけを作ることになる。
+   GitHub は owner と名前の大小を区別しないので、揃えてから比べる。 */
+const keyOf = (repository: GithubRepository): string =>
+  `${repository.owner.toLowerCase()}/${repository.name.toLowerCase()}`;
 
 /* このプロジェクトが指している GitHub のリポジトリ。
 
@@ -46,11 +66,14 @@ function githubOf(url: string): GithubRepository | null {
    打っていなければ名前の順で選ぶ。
 
    `origin` だけを見ることはしない。remote が 1 つしか無いリポジトリでも、その名前が
-   `origin` でなければ「GitHub のリポジトリではない」と出てしまう。 */
+   `origin` でなければ「GitHub のリポジトリではない」と出てしまう。
+
+   選んだときは、選ばなかった数を添えて返す。**選び方を変えないまま、選んだことだけを
+   言えるようにする** —— 尋ね先が画面と食い違わないことのほうが、複数を並べることより先に来る。 */
 export async function locateGithubRepository(
   git: GitCommandIntegration,
   projectPath: string,
-): Promise<Observation<GithubRepository>> {
+): Promise<Observation<GithubSource>> {
   const output = await git.run({
     cwd: projectPath,
     args: ['config', '--get-regexp', '^remote\\..+\\.(url|gh-resolved)$'],
@@ -64,24 +87,26 @@ export async function locateGithubRepository(
   const remotes = parseRemoteConfig(output.value);
 
   /* `gh-resolved` が書かれていれば、それが答えである。**名前の順より先に見る** ——
-     これは「どれが本命か」をユーザーが自分で決めた結果で、こちらが推し量る余地は無い。 */
+     これは「どれが本命か」をユーザーが自分で決めた結果で、こちらが推し量る余地は無い。
+     選んでいないので、他に何本あっても `others` は `0` である。 */
   for (const remote of remotes) {
     if (remote.ghResolved === null) continue;
     if (remote.ghResolved === 'base') {
       const found = githubOf(remote.url);
-      if (found !== null) return observed(found);
+      if (found !== null) return observed({ repository: found, others: 0 });
       continue;
     }
     const [owner, name] = remote.ghResolved.split('/');
     if (owner !== undefined && owner !== '' && name !== undefined && name !== '') {
-      return observed({ owner, name });
+      return observed({ repository: { owner, name }, others: 0 });
     }
   }
 
   const ranked = [...remotes].sort((a, b) => rankOf(a.name) - rankOf(b.name));
-  for (const remote of ranked) {
-    const found = githubOf(remote.url);
-    if (found !== null) return observed(found);
-  }
-  return absent('no-source');
+  const candidates = ranked
+    .map((remote) => githubOf(remote.url))
+    .filter((found): found is GithubRepository => found !== null);
+  const chosen = candidates[0];
+  if (chosen === undefined) return absent('no-source');
+  return observed({ repository: chosen, others: new Set(candidates.map(keyOf)).size - 1 });
 }

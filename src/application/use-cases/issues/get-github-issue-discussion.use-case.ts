@@ -51,8 +51,9 @@ export function createGetGithubIssueDiscussion(deps: {
 }): GetGithubIssueDiscussionUseCase {
   return {
     async execute({ projectPath, number }) {
-      const repository = await locateGithubRepository(deps.git, projectPath);
-      if (repository.kind !== 'observed') return ok(repository);
+      const source = await locateGithubRepository(deps.git, projectPath);
+      if (source.kind !== 'observed') return ok(source);
+      const { repository } = source.value;
 
       const entries: GithubIssueDiscussionEntry[] = [];
       let cursor: string | null = null;
@@ -60,8 +61,8 @@ export function createGetGithubIssueDiscussion(deps: {
 
       for (let page = 0; page < MAX_PAGES; page++) {
         const answer = await deps.tracker.fetchIssueDiscussion({
-          owner: repository.value.owner,
-          name: repository.value.name,
+          owner: repository.owner,
+          name: repository.name,
           number,
           cursor,
         });

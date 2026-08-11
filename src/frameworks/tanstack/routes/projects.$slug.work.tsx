@@ -329,6 +329,15 @@ function WorkView() {
   return (
     <>
       {toolbar(chips)}
+      {/* GitHub を指す remote が 2 つ以上あって、どれを尋ねるかを glasshive が選んだ。
+       **選んだことを黙らない** —— 黙ると、選ばなかったほうの課題が「無い」ことになる */}
+      {body.other_repositories > 0 && body.repository !== null && (
+        <p className="empty truncated">
+          Reading issues from <code>{body.repository}</code>. This project&rsquo;s remotes point at{' '}
+          {body.other_repositories + 1} GitHub repositories — run <code>gh repo set-default</code>{' '}
+          to change which one glasshive reads.
+        </p>
+      )}
       {/* 上限に当たったなら黙らない。黙ると、その先の課題が「無かった」ことになる */}
       {body.truncated && (
         <p className="empty truncated">

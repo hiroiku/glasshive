@@ -30,12 +30,13 @@ export function createGetGithubIssueBody(deps: {
 }): GetGithubIssueBodyUseCase {
   return {
     async execute({ projectPath, number }) {
-      const repository = await locateGithubRepository(deps.git, projectPath);
-      if (repository.kind !== 'observed') return ok(repository);
+      const source = await locateGithubRepository(deps.git, projectPath);
+      if (source.kind !== 'observed') return ok(source);
+      const { repository } = source.value;
 
       const answer = await deps.tracker.fetchIssueBody({
-        owner: repository.value.owner,
-        name: repository.value.name,
+        owner: repository.owner,
+        name: repository.name,
         number,
       });
       if (answer.kind !== 'observed') return ok(answer);

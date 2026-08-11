@@ -66,9 +66,15 @@ const LEDGER = {
   truncated: false,
 };
 
+/** 一覧と、その一覧をどこから取ったか。尋ね先まで揃えて初めて外の形になる */
+const listing = <T>(ledger: T, others = 0) => ({
+  ledger,
+  source: { repository: { owner: 'hiroiku', name: 'glasshive' }, others },
+});
+
 describe('一覧を外の形へ写す', () => {
   it('外の名前に写し、件数はそのまま渡す', () => {
-    expect(presentIssues(observed(LEDGER))).toEqual({
+    expect(presentIssues(observed(listing(LEDGER)))).toEqual({
       state: 'observed',
       reason: null,
       issues: [
@@ -108,11 +114,13 @@ describe('一覧を外の形へ写す', () => {
       ],
       counts: { open: 1, closed: 1 },
       truncated: false,
+      repository: 'hiroiku/glasshive',
+      other_repositories: 0,
     });
   });
 
   it('GitHub の顔の URL は外へ出さない', () => {
-    const [issue] = presentIssues(observed(LEDGER)).issues;
+    const [issue] = presentIssues(observed(listing(LEDGER))).issues;
     expect(
       JSON.stringify(issue?.github),
       '顔の URL をそのまま渡すと、画面が GitHub の CDN へ直に取りに行く。外へ出すのは同じ origin の URL を組む鍵だけである',
@@ -121,26 +129,28 @@ describe('一覧を外の形へ写す', () => {
 
   it('書かれていなかった欄を、書かれていたことにしない', () => {
     const presented = presentIssues(
-      observed({
-        issues: [
-          {
-            id: '#2',
-            title: null,
-            status: 'open',
-            issueType: null,
-            labels: null,
-            assignee: null,
-            createdAt: null,
-            updatedAt: null,
-            closedAt: null,
-            deps: [{ on: null, type: 'parent-child' }],
-            depsComplete: false,
-            github: EMPTY_GITHUB,
-          },
-        ],
-        counts: { open: 1 },
-        truncated: false,
-      }),
+      observed(
+        listing({
+          issues: [
+            {
+              id: '#2',
+              title: null,
+              status: 'open',
+              issueType: null,
+              labels: null,
+              assignee: null,
+              createdAt: null,
+              updatedAt: null,
+              closedAt: null,
+              deps: [{ on: null, type: 'parent-child' }],
+              depsComplete: false,
+              github: EMPTY_GITHUB,
+            },
+          ],
+          counts: { open: 1 },
+          truncated: false,
+        }),
+      ),
     );
 
     expect(
@@ -182,7 +192,7 @@ describe('一覧を外の形へ写す', () => {
       ['constructor', 2],
     ]);
 
-    const presented = presentIssues(observed({ issues: [], counts, truncated: false }));
+    const presented = presentIssues(observed(listing({ issues: [], counts, truncated: false })));
     /* コピーは `Object.assign` ではなく展開で作る。`assign` は setter を起こすので、
        `__proto__` の欄が黙って消え、件数が 1 つ足りない一覧が外へ出る。 */
     expect(
@@ -201,6 +211,8 @@ describe('一覧を外の形へ写す', () => {
       issues: [],
       counts: {},
       truncated: false,
+      repository: null,
+      other_repositories: 0,
     });
   });
 
@@ -214,14 +226,25 @@ describe('一覧を外の形へ写す', () => {
       reason: 'tracker.not_installed',
       issues: [],
       counts: {},
+      repository: null,
+      other_repositories: 0,
     });
   });
 
   it('上限に当たって切れたことは、切れたと言う', () => {
     expect(
-      presentIssues(observed({ ...LEDGER, truncated: true })).truncated,
+      presentIssues(observed(listing({ ...LEDGER, truncated: true }))).truncated,
       '黙って切ると、上限より後ろの課題が「無かった」ことになる',
     ).toBe(true);
+  });
+
+  /* remote を 2 つ以上持つプロジェクトでは glasshive が 1 つ選んでいる。
+     選んだことを黙ると、選ばれなかったリポジトリの課題が「無い」ものとして読まれる。 */
+  it('どこから取った一覧かを言う', () => {
+    const presented = presentIssues(observed(listing(LEDGER, 1)));
+
+    expect(presented.repository).toBe('hiroiku/glasshive');
+    expect(presented.other_repositories, '尋ねなかった先が在ることを黙らせない').toBe(1);
   });
 });
 

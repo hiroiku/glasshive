@@ -6,7 +6,10 @@ import { TrackerResponseUnreadableError } from '~/application/errors/issues/trac
 import type { GitCommandIntegration } from '~/application/ports/integrations/git/git-command.integration.ts';
 import type { IssueTrackerIntegration } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
 import type { AvatarCacheService } from '~/application/services/issues/avatar-cache.service.ts';
-import { locateGithubRepository } from '~/application/services/issues/github-repository.service.ts';
+import {
+  type GithubSource,
+  locateGithubRepository,
+} from '~/application/services/issues/github-repository.service.ts';
 import type {
   GithubActor,
   GithubIssueExtra,
@@ -39,8 +42,18 @@ export interface ListGithubIssuesInput {
   readonly includeClosed: boolean;
 }
 
+/* 一覧と、その一覧をどこから取ったか。
+
+   **尋ね先を答えに添える。** remote を 2 つ以上持つプロジェクトでは glasshive が 1 つ選んで
+   いるので、どちらを見ているのかを画面が言えないと、選ばれなかった側の課題が
+   「無い」ものとして読まれる。 */
+export interface IssueListing {
+  readonly ledger: IssueLedger;
+  readonly source: GithubSource;
+}
+
 export interface ListGithubIssuesUseCase {
-  execute(input: ListGithubIssuesInput): Promise<Result<Observation<IssueLedger>, never>>;
+  execute(input: ListGithubIssuesInput): Promise<Result<Observation<IssueListing>, never>>;
 }
 
 export function createListGithubIssues(deps: {
@@ -53,8 +66,9 @@ export function createListGithubIssues(deps: {
 }): ListGithubIssuesUseCase {
   return {
     async execute({ projectPath, includeClosed }) {
-      const repository = await locateGithubRepository(deps.git, projectPath);
-      if (repository.kind !== 'observed') return ok(repository);
+      const source = await locateGithubRepository(deps.git, projectPath);
+      if (source.kind !== 'observed') return ok(source);
+      const { repository } = source.value;
 
       const nodes: JsonRecord[] = [];
       let cursor: string | null = null;
@@ -62,8 +76,8 @@ export function createListGithubIssues(deps: {
 
       for (let page = 0; page < MAX_PAGES; page++) {
         const answer = await deps.tracker.fetchIssuePage({
-          owner: repository.value.owner,
-          name: repository.value.name,
+          owner: repository.owner,
+          name: repository.name,
           cursor,
           pageSize: PAGE_SIZE,
         });
@@ -112,7 +126,7 @@ export function createListGithubIssues(deps: {
       /* 顔は待たずに先へ読んでおく。ブラウザーが求める頃にはメモリに在る。
        **取れなくても一覧は出る** — 顔は誰なのかを言うだけで、状態を言わない。 */
       deps.avatars.warm(ledger);
-      return ok(observed(ledger));
+      return ok(observed({ ledger, source: source.value }));
     },
   };
 }
