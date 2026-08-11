@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AppError } from '~/app-kernel/error.ts';
 import { type Observation, observed, unobservable } from '~/app-kernel/observation.ts';
 import {
+  GIT_DENIED,
   GIT_EXIT_NONZERO,
   GIT_NOT_INSTALLED,
   type GitCommandIntegration,
@@ -234,6 +235,25 @@ describe('起こせなかったとき', () => {
     expect(result.value.kind, '`git` が無いことを「記録が無い」と言うと、ユーザーは嘘を読む').toBe(
       'unobservable',
     );
+  });
+
+  /* 断られたのと、その `ref` に記録が無いのは、どちらも `git` が非ゼロで終わる。
+     断りを「記録が無い」に潰すと、読めるはずのブランチが消えたものとして出る。 */
+  it('リポジトリを断られたのを「記録が無い」と言わない', async () => {
+    const result = await observeRef(
+      { rev: 'topic', base: 'main' },
+      {
+        [UNIQUE_LOG]: unobservable(new GitFailure(GIT_DENIED)),
+        [RECENT_LOG]: unobservable(new GitFailure(GIT_DENIED)),
+      },
+    );
+    expect(result.ok, '断る呼び出しではない。呼び出しの形は正しかった').toBe(true);
+    if (!result.ok) throw new Error('断られた');
+    expect(result.value.kind, '読めなかったのであって、そこに記録が無いのではない').toBe(
+      'unobservable',
+    );
+    if (result.value.kind !== 'unobservable') return;
+    expect(result.value.error.code, '案内は断られたときのものになる').toBe(GIT_DENIED);
   });
 
   it('相手を尋ねる途中で `git` が居なくなっても、観測できなかったと言う', async () => {

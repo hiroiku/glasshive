@@ -70,6 +70,8 @@ const STATUS_BY_CODE: Record<string, ApiStatus> = {
   'tracker.denied': 503,
   'tracker.timeout': 503,
   'tracker.exit_nonzero': 503,
+  // `gh` は答えたが、その答えから課題へ辿れなかった
+  'tracker.unreadable_response': 503,
 };
 
 /** リクエストの側の落ち度として返す HTTP ステータス。ここに無いステータスは、こちらの側の事情である */

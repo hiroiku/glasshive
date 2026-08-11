@@ -26,10 +26,17 @@ const GITHUB_CODES = [
   'tracker.denied',
   'tracker.timeout',
   'tracker.exit_nonzero',
+  'tracker.unreadable_response',
   null,
 ] as const;
 
-const GIT_CODES = ['git.not_installed', 'git.denied', 'git.timeout', null] as const;
+const GIT_CODES = [
+  'git.not_installed',
+  'git.denied',
+  'git.timeout',
+  'git.exit_nonzero',
+  null,
+] as const;
 
 describe('GitHub を尋ねに行けなかったとき', () => {
   /* 入れる話と、入り直す話は、ユーザーのすべきことが違う。 */
@@ -66,6 +73,23 @@ describe('GitHub を尋ねに行けなかったとき', () => {
     expect(props.code).toBe('tracker.timeout');
   });
 
+  /* `gh` は答えている。「GitHub へ届かなかった」と言うと、繋がりを疑わせて、
+     入り直せば済む人を遠回りさせる。 */
+  it('読めない答えが返ったのを、届かなかったのと同じ案内にしない', () => {
+    const props = githubTrouble('tracker.unreadable_response');
+
+    expect(props.title, '`gh` は答えているのに、届かなかったことにしている').not.toBe(
+      githubTrouble(null).title,
+    );
+    expect(
+      commandsOf(props),
+      'いちばん多い引き金は認証切れで、手立てが 1 つも出ないと調べる先が無い',
+    ).toContain('gh auth login');
+    expect(props.detail, '答えが読めなかったことを、課題が無いことにしている').toContain(
+      'not an empty backlog',
+    );
+  });
+
   it('知らないコードでも落ちず、そのコードをそのまま見せる', () => {
     const props = githubTrouble('tracker.rate_limited');
 
@@ -93,6 +117,33 @@ describe('`git` を見に行けなかったとき', () => {
 
   it('断られたときは、`git` に理由を尋ねさせる', () => {
     expect(commandsOf(gitTrouble('git.denied'))).toContain('git status');
+  });
+
+  /* `git` は、そこがリポジトリでないときも、所有者が違って断るときも 128 で終わる。
+     案内まで同じにすると、既に在るリポジトリへ `git init` を勧めることになる。 */
+  it('断られたのと、リポジトリが無いのを、別の案内にする', () => {
+    const denied = gitTrouble('git.denied');
+
+    expect(denied.title, '断ったのは `git` で、リポジトリはそこに在る').toBe(
+      'git refused to read this repository',
+    );
+    expect(
+      commandsOf(denied).some((command) => command.startsWith('git init')),
+      '既に在るリポジトリを作らせる案内は、直す先を間違えさせる',
+    ).toBe(false);
+    expect(
+      commandsOf(denied).some((command) => command.includes('safe.directory')),
+      '所有者の違うリポジトリを読ませるのは、この設定だけである',
+    ).toBe(true);
+  });
+
+  it('理由の読めない非ゼロは、自分で起こして確かめさせる', () => {
+    const props = gitTrouble('git.exit_nonzero');
+
+    expect(props.title, '断られたのと同じ案内にすると、当たらない手立てで時間を使わせる').not.toBe(
+      gitTrouble('git.denied').title,
+    );
+    expect(commandsOf(props), '理由は `git` だけが知っている').toContain('git status');
   });
 
   it('知らないコードでも落ちず、そのコードをそのまま見せる', () => {

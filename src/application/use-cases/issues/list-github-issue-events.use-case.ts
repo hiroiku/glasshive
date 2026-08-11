@@ -49,8 +49,9 @@ export function createListGithubIssueEvents(deps: {
 }): ListGithubIssueEventsUseCase {
   return {
     async execute({ projectPath }) {
-      const repository = await locateGithubRepository(deps.git, projectPath);
-      if (repository.kind !== 'observed') return ok(repository);
+      const source = await locateGithubRepository(deps.git, projectPath);
+      if (source.kind !== 'observed') return ok(source);
+      const { repository } = source.value;
 
       const issues: GithubIssueEvents[] = [];
       let cursor: string | null = null;
@@ -58,8 +59,8 @@ export function createListGithubIssueEvents(deps: {
 
       for (let page = 0; page < MAX_PAGES; page++) {
         const answer = await deps.tracker.fetchIssueEvents({
-          owner: repository.value.owner,
-          name: repository.value.name,
+          owner: repository.owner,
+          name: repository.name,
           cursor,
           pageSize: PAGE_SIZE,
         });

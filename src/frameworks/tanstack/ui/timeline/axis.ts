@@ -1,3 +1,4 @@
+import type { ObservationState } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { DAY_MS, type TimeWindow } from '../derive/timeWindow.ts';
 
 /* 時間の軸。**純関数だけ。**
@@ -12,6 +13,8 @@ export interface TimelineNode {
   readonly started: string | null;
   readonly last_activity: string;
   readonly intervals: readonly (readonly [string, string])[];
+  /** 稼働区間が空のとき、静かだったのか観測できなかったのかを分ける */
+  readonly intervals_state: ObservationState;
 }
 
 /* 見る幅は Tokens と同じ語彙を使う。**同じ時間軸の上に在るものを、別の刻みで選ばせない** */
@@ -35,8 +38,11 @@ const parse = (iso: string | null): number => {
 
 /* 稼働区間を数値の組にする。稼働中の最後の区間は現在まで伸ばす。
 
-   区間が 1 つも読めなかったときは、開始時刻と最後の動きで 1 本引く。**空にはしない** —
-   空にすると、区間を拾えなかったエージェントが画面から消える。 */
+   区間が 1 つも書かれていないときは、開始時刻と最後の動きで 1 本引く。空にすると、
+   区間の無いエージェントが画面から消える。
+
+   **観測できなかったときだけは 1 本も作らない。** 走査に失敗したことを 1 本の続いた稼働に
+   すると、何も観測していない時間について所要時間を主張することになる。 */
 export function intervalsOf(node: TimelineNode, nowMs: number): [number, number][] {
   const parsed: [number, number][] = [];
   for (const [from, to] of node.intervals) {
@@ -45,6 +51,7 @@ export function intervalsOf(node: TimelineNode, nowMs: number): [number, number]
     if (Number.isFinite(a) && Number.isFinite(b)) parsed.push([a, b]);
   }
   if (parsed.length === 0) {
+    if (node.intervals_state === 'unobservable') return [];
     const started = parse(node.started) || parse(node.last_activity);
     if (!Number.isFinite(started)) return [];
     const ended = node.state === 'active' ? nowMs : parse(node.last_activity) || started;

@@ -8,7 +8,7 @@ import type { GithubIssueEventLog } from '~/application/use-cases/issues/list-gi
 import type {
   GithubActor,
   GithubIssueExtra,
-  IssueLedger,
+  IssueListing,
   IssueSummary,
 } from '~/application/use-cases/issues/list-github-issues.use-case.ts';
 import type { ObservationState } from '~/interface/presenters/sessions/tree.presenter.ts';
@@ -126,6 +126,10 @@ export interface IssuesJson {
   counts: Record<string, number>;
   /** 上限に当たって、その先を読んでいないか。読めなかったときは、切れた先が在るとは言えないので `false` */
   truncated: boolean;
+  /** 課題を尋ねた先。`owner/name` の形。尋ねられなかったときは `null` */
+  repository: string | null;
+  /** 尋ねなかった GitHub のリポジトリの数。glasshive が選んでいなければ `0` */
+  other_repositories: number;
 }
 
 /* GitHub の課題 1 件の本文。**空の本文と、読めなかったことを分けて運ぶ。**
@@ -269,13 +273,19 @@ const presentSummary = (issue: IssueSummary): IssueSummaryJson => ({
    ふつうここへは `observed` と `absent` しか来ない。それでも三つとも写せるようにしてあるのは、
    `gh` が答えなかったプロジェクトを、うっかり「課題が 1 件も無いプロジェクト」として
    出さないためである。 */
-export function presentIssues(observation: Observation<IssueLedger>): IssuesJson {
+export function presentIssues(observation: Observation<IssueListing>): IssuesJson {
+  const listing = observation.kind === 'observed' ? observation.value : null;
   return {
     state: observation.kind,
     reason: reasonOf(observation),
-    issues: observation.kind === 'observed' ? observation.value.issues.map(presentSummary) : [],
-    counts: observation.kind === 'observed' ? { ...observation.value.counts } : {},
-    truncated: observation.kind === 'observed' && observation.value.truncated,
+    issues: listing === null ? [] : listing.ledger.issues.map(presentSummary),
+    counts: listing === null ? {} : { ...listing.ledger.counts },
+    truncated: listing?.ledger.truncated ?? false,
+    repository:
+      listing === null
+        ? null
+        : `${listing.source.repository.owner}/${listing.source.repository.name}`,
+    other_repositories: listing?.source.others ?? 0,
   };
 }
 

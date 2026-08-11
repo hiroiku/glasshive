@@ -10,6 +10,7 @@ import {
   blockingFailure,
   type GitCommandIntegration,
   outputOrEmpty,
+  unreadFailure,
 } from '~/application/ports/integrations/git/git-command.integration.ts';
 import {
   type ConflictCacheService,
@@ -47,7 +48,14 @@ import { Revision, RevisionRange } from '~/domain/value-objects/git/revision.val
 
    そこがリポジトリでないことは、`worktree` もブランチも 1 つも無ければリポジトリではない、という
    当てで決める。**それは観測できなかったのではないので、`absent` で返す。**
-   `git` がインストールされていないだけのときは、その前に諦めている。 */
+   `git` がインストールされていないだけのときは、その前に諦めている。ただし、その 2 つが
+   空なのは `git` が答えなかったからでもありうる。**理由を読めていない失敗が 1 つでも在れば、
+   「リポジトリではない」とは言わない** — 断られたリポジトリにそう言うと、画面は既に在る
+   リポジトリへ `git init` を勧める。
+
+   本流を遡る数には上限がある。上限に当たったことは `mainlineTruncated` で持ち回る —
+   黙って切ると、遡る数より前で分かれたブランチが、いちばん古い見えているコミットで
+   分かれたように描かれる。 */
 
 /** この呼び出しの出力。外へ写す側はこの名前だけを見る */
 export type { GitOverview };
@@ -164,8 +172,12 @@ export function createObserveRepository(deps: {
 
       const worktrees = parseWorktreeList(outputOrEmpty(worktreeOutput));
       const branches = parseBranchRefs(outputOrEmpty(branchOutput));
-      // `worktree` もブランチも 1 つも無い。そこはリポジトリではない
-      if (worktrees.length === 0 && branches.length === 0) return ok(absent('no-source'));
+      if (worktrees.length === 0 && branches.length === 0) {
+        /* `worktree` もブランチも 1 つも無い。`git` がどちらにも答えたのなら、そこは
+           リポジトリではない。答えなかった呼び出しが在るなら、無いのではなく観測できなかった。 */
+        const unread = unreadFailure([worktreeOutput, branchOutput]);
+        return ok(unread === null ? absent('no-source') : unobservable(unread));
+      }
 
       // 統合ブランチ = 主たる `worktree` が出しているブランチ。決められなければ、いま出ているものを縦軸にする
       const base = worktrees[0]?.branch || 'HEAD';
@@ -175,13 +187,16 @@ export function createObserveRepository(deps: {
         branches.find((branch) => branch.name === base)?.sha ?? worktrees[0]?.sha ?? '';
 
       const [mainlineOutput, unmergedOutput] = await Promise.all([
+        /* 並べる上限より 1 つ多く尋ねる。**その 1 つが返ってきたかどうかが、上限より古い
+           コミットが在るかの観測になる。** 尋ねる数を上限と揃えると、履歴がちょうど上限の
+           リポジトリと、その先が在るリポジトリを見分けられない。 */
         git.run({
           cwd,
           args: [
             'log',
             '--first-parent',
             '-n',
-            String(MAINLINE_LIMIT),
+            String(MAINLINE_LIMIT + 1),
             `--format=${MAINLINE_FORMAT}`,
           ],
           revisions: [baseRev],
@@ -197,7 +212,10 @@ export function createObserveRepository(deps: {
       const blockedDerived = blockingFailure([mainlineOutput, unmergedOutput]);
       if (blockedDerived !== null) return ok(unobservable(blockedDerived));
 
-      const mainline = parseMainline(outputOrEmpty(mainlineOutput));
+      const parsedMainline = parseMainline(outputOrEmpty(mainlineOutput));
+      // 上限より多く返ってきた分は、その先が在ることを言うためだけのものなので並べない
+      const mainlineTruncated = parsedMainline.length > MAINLINE_LIMIT;
+      const mainline = parsedMainline.slice(0, MAINLINE_LIMIT);
       const unmerged = parseBranchNames(outputOrEmpty(unmergedOutput));
       const candidates = selectTips({ base, branches, worktrees, unmerged });
 
@@ -216,6 +234,7 @@ export function createObserveRepository(deps: {
           worktrees,
           branches,
           mainline,
+          mainlineTruncated,
           tips,
           conflicts: forecasts.value,
         }),

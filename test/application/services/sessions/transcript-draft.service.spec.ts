@@ -94,6 +94,7 @@ function sessionSource(overrides: Partial<SessionSource> = {}): SessionSource {
     mtimeMs: NOW,
     sizeBytes: 120,
     subagents: [],
+    subagentsWalked: observed(0),
     ...overrides,
   };
 }

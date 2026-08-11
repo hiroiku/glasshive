@@ -40,6 +40,15 @@ export function TlBar({
   const unknownEnd = intervalsComplete || intervals.length === 0 ? null : firstStart;
   const startedMs = Date.parse(node.started ?? node.last_activity) || axis.t0;
 
+  /* 稼働を観測できなかった行。**棒では描かない。** 読めなかったことを続いた 1 本の稼働に
+     すると、観測ゼロから所要時間を主張することになる。起点から最後の動きまでを細線で示して、
+     その間に `transcript` が在ったことだけを言う。 */
+  const unreadable = node.intervals_state === 'unobservable' && intervals.length === 0;
+  const endedMs = Date.parse(node.last_activity) || startedMs;
+  /** 起点を表示範囲の左端で切ったところ。細線はどちらもここから始まる */
+  const startEdge = Math.max(startedMs, axis.t0);
+  const unreadTo = Math.min(Math.max(endedMs, startedMs), axis.t1);
+
   const last = intervals.length - 1;
   const bars = intervals
     .map(([from, to], index) => ({
@@ -52,24 +61,36 @@ export function TlBar({
     }))
     .filter((bar) => bar.to >= bar.from && bar.to >= axis.t0 && bar.from <= axis.t1);
 
-  const unknownFrom = Math.max(startedMs, axis.t0);
   const unknownTo = unknownEnd === null ? 0 : Math.min(unknownEnd, axis.t1);
 
   return (
-    /* バーを掴んで表示範囲を横へ送るのはショートカットで、同じことはスライダーと期間のチップでもできる */
-    // biome-ignore lint/a11y/noStaticElementInteractions: 掴んで動かすためだけの面
+    /* バーを掴んで表示範囲を横へ送るのはショートカットで、同じことはスライダーと期間のチップでもできる。
+       この面は表の 11 番目のセルでもある — ラッパーを挟めないので、役はここが持つ */
+    // biome-ignore lint/a11y/useSemanticElements: subgrid で列を揃えるので td を置けない
+    // biome-ignore lint/a11y/useFocusableInteractive: セルは行ごと辿る。1 つずつのタブ順は作らない
     <span
       className="tl"
+      role="gridcell"
       title={`${node.started ?? ''} → ${node.last_activity}`}
       onMouseDown={onPanStart}
     >
-      {unknownEnd !== null && unknownFrom < unknownTo && (
+      {unreadable && startEdge <= unreadTo && (
+        <i
+          className="bar unknown"
+          title={`${mdhms(startedMs)} → ${mdhms(endedMs)} · activity could not be read`}
+          style={{
+            left: `${pct(startEdge)}%`,
+            width: `${Math.max(0.3, pct(unreadTo) - pct(startEdge))}%`,
+          }}
+        />
+      )}
+      {unknownEnd !== null && startEdge < unknownTo && (
         <i
           className="bar unknown"
           title={`${mdhms(startedMs)} → ${mdhms(unknownEnd)} · earlier activity (density unknown — beyond bounded scan)`}
           style={{
-            left: `${pct(unknownFrom)}%`,
-            width: `${Math.max(0.3, pct(unknownTo) - pct(unknownFrom))}%`,
+            left: `${pct(startEdge)}%`,
+            width: `${Math.max(0.3, pct(unknownTo) - pct(startEdge))}%`,
           }}
         />
       )}

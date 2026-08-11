@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { treeQueryKey } from '../../queries/tree.query.ts';
 
 /* `transcript` が動いた変更通知を受けて、覚えている観測を捨てる。
@@ -25,10 +25,23 @@ export function subscribeToFile(listener: FileListener): () => void {
   };
 }
 
-/** 変更通知の SSE が繋がっているか。繋がっていないことはユーザーに見せる */
-export function useChangeStream(): boolean {
+/* 変更通知がユーザーへ届く条件は 2 つあり、**どちらが欠けても更新は来ない**。
+   SSE が開いていること(`connected`)と、サーバーがウォッチャーを張れていること
+   (`watching`)である。片方だけを見せると、繋がっている限り健全に見えてしまう。 */
+export interface ChangeStreamState {
+  /** 変更通知の SSE が繋がっているか */
+  readonly connected: boolean;
+  /** サーバーがウォッチャーを張れているか。`false` なら、繋がっていても更新は届かない */
+  readonly watching: boolean;
+}
+
+/** 変更通知の届き方。届いていないことはユーザーに見せる */
+export function useChangeStream(): ChangeStreamState {
   const client = useQueryClient();
   const [connected, setConnected] = useState(false);
+  /* サーバーが張れていないと言ってくるまでは、張れているものとして扱う。繋がる前から
+     「更新は届かない」と出すと、画面を開いた一瞬だけ必ずそう見える */
+  const [watching, setWatching] = useState(true);
 
   useEffect(() => {
     const source = new EventSource('/api/stream');
@@ -56,10 +69,15 @@ export function useChangeStream(): boolean {
       if (kind === 'file') {
         const path = (change as { path?: unknown }).path;
         if (typeof path === 'string') for (const listener of fileListeners) listener(path);
+        return;
+      }
+      if (kind === 'watch') {
+        const alive = (change as { watching?: unknown }).watching;
+        if (typeof alive === 'boolean') setWatching(alive);
       }
     };
     return () => source.close();
   }, [client]);
 
-  return connected;
+  return useMemo(() => ({ connected, watching }), [connected, watching]);
 }

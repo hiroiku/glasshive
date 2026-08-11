@@ -63,6 +63,7 @@ const session = (over: Partial<SessionJson> = {}): SessionJson => ({
   intervals_complete: true,
   intervals_state: 'observed',
   size: 0,
+  sources: { state: 'observed', reason: null },
   subagents: [],
   ...over,
 });
@@ -77,6 +78,7 @@ const project = (sessions: SessionJson[]): ProjectJson => ({
   tokens_24h: null,
   tokens_24h_state: 'observed',
   read: true,
+  sources: { state: 'observed', reason: null },
   sessions,
 });
 

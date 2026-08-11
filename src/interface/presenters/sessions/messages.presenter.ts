@@ -19,6 +19,26 @@ export interface HopJson {
   tool_use: string;
 }
 
+/* この画面に居ないセッションとのやり取り 1 通。
+
+   **相手はこちら側の同一性で言えない。** 名乗る名前はセッションの id でも `slug` でも
+   ないので、`peer` は書かれていた文字列そのままである。`msg_id` は相手の `transcript`
+   にも同じものが書かれている —— 辿れる鍵であって、辿った結果ではない。 */
+export interface PeerExchangeJson {
+  at: string;
+  /** `sent` はこちらから出ていったもの、`received` は届いたもの */
+  direction: 'sent' | 'received';
+  /** こちら側の相手。木の中での同一性 */
+  agent: string;
+  /** 向こう側が自己申告した名前。自己申告した名前が無ければ空 */
+  peer: string;
+  /** 両端を結ぶ鍵 */
+  msg_id: string;
+  summary: string;
+  /** 届き方。送った側では書かれないので `null` */
+  mode: string | null;
+}
+
 export interface MessagesJson {
   state: ObservationState;
   /** 観測できなかった理由。観測できたときは無い */
@@ -26,9 +46,11 @@ export interface MessagesJson {
   /* 読み取り範囲が `transcript` の先頭まで届いたか。**読めたかどうかの話ではない** —
      届かなかった `transcript` は、それより前のメッセージが見えていないというだけである。 */
   complete: boolean;
-  /** 宛先を置けなかったメッセージの数。読み取り範囲の外の相手へ出ていったもの */
+  /* 宛先も相手が自己申告した名前も決まらなかったメッセージの数。**別のセッションへ渡ったものは
+     ここに入らない** —— そちらは `peers` に、相手の自己申告した名前ごと在る。 */
   unplaced: number;
   hops: HopJson[];
+  peers: PeerExchangeJson[];
 }
 
 export function presentMessages(messages: Observation<SessionMessages>): MessagesJson {
@@ -39,6 +61,7 @@ export function presentMessages(messages: Observation<SessionMessages>): Message
       complete: false,
       unplaced: 0,
       hops: [],
+      peers: [],
     };
   }
   return {
@@ -52,6 +75,15 @@ export function presentMessages(messages: Observation<SessionMessages>): Message
       to: placed.toId,
       summary: placed.hop.summary,
       tool_use: placed.hop.toolUseId,
+    })),
+    peers: messages.value.peers.map((exchange) => ({
+      at: iso(exchange.atMs),
+      direction: exchange.direction,
+      agent: exchange.agentId,
+      peer: exchange.peer,
+      msg_id: exchange.msgId,
+      summary: exchange.summary,
+      mode: exchange.mode,
     })),
   };
 }

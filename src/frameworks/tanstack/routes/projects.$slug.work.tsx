@@ -88,6 +88,11 @@ function WorkView() {
 
   const project = tree.data?.projects.find((candidate) => candidate.id === slug);
   const workers = useMemo(() => workerIndex(project), [project]);
+  /* エージェントの欄が空なのは、誰も触っていないからとは限らない。`~/.claude/projects` を
+     走査できていなければ、この画面はそもそも誰も観ていない。**課題そのものは GitHub から
+     読めている**ので画面は出るが、その空欄だけは観測ではない。 */
+  const workersUnobservable =
+    tree.data?.sources.state === 'unobservable' || project?.sources.state === 'unobservable';
 
   const patch = (next: Partial<ProjectSearch>) => {
     void navigate({ to: '.', search: (prev: ProjectSearch) => ({ ...prev, ...next }) });
@@ -136,9 +141,20 @@ function WorkView() {
     />
   );
 
+  /* エージェントの欄が空であることを、誰も触っていないことにしない。**課題もブランチも
+     読めていて、読めていないのは `transcript` のほうである** —— 画面はほとんど埋まるので、
+     言わないと空欄だけが観測の顔で残る。 */
+  const workersNote = workersUnobservable ? (
+    <p className="empty truncated">
+      The agent columns are blank because the transcripts could not be read — not because nobody is
+      working on these.
+    </p>
+  ) : null;
+
   if (search.unit === 'branches') {
     return (
       <div id="git-view">
+        {workersNote}
         <Branches
           answer={git.data}
           failed={git.error !== null}
@@ -183,23 +199,26 @@ function WorkView() {
   };
 
   const toolbar = (chips?: React.ReactNode) => (
-    <WorkToolbar
-      unit={search.unit ?? null}
-      onUnit={onUnit}
-      issueCount={issueCount}
-      branchCount={branchCount}
-      milestoneCount={milestoneCount}
-      graph={search.view === 'graph'}
-      onGraph={(on) => patch({ view: on ? 'graph' : undefined })}
-      gantt={ganttWindow}
-      onGantt={onGantt}
-      group={search.group ?? null}
-      onGroup={(next) => patch({ group: next ?? undefined })}
-      query={search.q ?? ''}
-      onQuery={onQuery}
-    >
-      {chips}
-    </WorkToolbar>
+    <>
+      <WorkToolbar
+        unit={search.unit ?? null}
+        onUnit={onUnit}
+        issueCount={issueCount}
+        branchCount={branchCount}
+        milestoneCount={milestoneCount}
+        graph={search.view === 'graph'}
+        onGraph={(on) => patch({ view: on ? 'graph' : undefined })}
+        gantt={ganttWindow}
+        onGantt={onGantt}
+        group={search.group ?? null}
+        onGroup={(next) => patch({ group: next ?? undefined })}
+        query={search.q ?? ''}
+        onQuery={onQuery}
+      >
+        {chips}
+      </WorkToolbar>
+      {workersNote}
+    </>
   );
 
   /* 取りに行けなかったのと、まだ取りに行っている最中は別の事実である。**分けないと、
@@ -332,6 +351,15 @@ function WorkView() {
   return (
     <>
       {toolbar(chips)}
+      {/* GitHub を指す remote が 2 つ以上あって、どれを尋ねるかを glasshive が選んだ。
+       **選んだことを黙らない** —— 黙ると、選ばなかったほうの課題が「無い」ことになる */}
+      {body.other_repositories > 0 && body.repository !== null && (
+        <p className="empty truncated">
+          Reading issues from <code>{body.repository}</code>. This project&rsquo;s remotes point at{' '}
+          {body.other_repositories + 1} GitHub repositories — run <code>gh repo set-default</code>{' '}
+          to change which one glasshive reads.
+        </p>
+      )}
       {/* 上限に当たったなら黙らない。黙ると、その先の課題が「無かった」ことになる */}
       {body.truncated && (
         <p className="empty truncated">

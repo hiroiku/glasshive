@@ -3,34 +3,60 @@ import { area as areaOf, curveStepAfter, line as lineOf } from 'd3-shape';
 import { mdhm } from '../../format.ts';
 import { useChartHover } from '../../hooks/useChartHover.ts';
 import { TimeTicks } from '../primitives/TimeTicks.tsx';
+import {
+  isObserved,
+  observationMark,
+  observationTitle,
+  StatsNote,
+  type StatsObservation,
+} from './StatsObservation.tsx';
 
 /* 同時に動いていたエージェントの数。
 
    階段状の面で描くのは、**この数が整数だから**である。滑らかに繋ぐと、
    3 と 4 の間に「3.5 エージェント」の時間が在ったように見える。`d3-shape` の
-   `curveStepAfter` がその階段そのもので、高さの物差しは `d3-scale` が持つ。 */
+   `curveStepAfter` がその階段そのもので、高さの物差しは `d3-scale` が持つ。
+
+   稼働を観測できなかったエージェントは、読めた階段の上に別の面として積む。
+   **同じ高さに足さない。** 足せば読めなかったことが動いていたことになり、落とせば
+   静かだったことになる。積み分けて初めて、読めた数と分からない数が同時に読める。 */
 
 export interface ConcurrencyPanelProps {
   readonly counts: readonly number[];
+  /** 稼働を観測できなかったエージェントの数。足ごとに `counts` とは別に数えたもの */
+  readonly unknown: readonly number[];
   readonly fromMs: number;
   readonly footMs: number;
   readonly bars: number;
   readonly nowMs: number;
   /** いま動いているエージェントの数。グラフとは別に、今この瞬間を出す */
   readonly liveNow: number;
+  /* 数え上げられなかったエージェントが居るか。子のディレクトリを走査できなかったセッションが
+     在ると、そこに何人居たのかは分からないので、数えられた高さは下限でしかない。 */
+  readonly uncounted: boolean;
+  /* 稼働区間の素材そのものをどこまで受け取れたか。読み終える前は階段を描かない。
+     読めなかったエージェントは `unknown` が運ぶので、ここは全体の話だけを持つ。 */
+  readonly observation: StatsObservation;
 }
 
 export function ConcurrencyPanel({
   counts,
+  unknown,
   fromMs,
   footMs,
   bars,
   nowMs,
   liveNow,
+  uncounted,
+  observation,
 }: ConcurrencyPanelProps) {
   const hover = useChartHover(bars);
+  const read = isObserved(observation);
   const peak = Math.max(0, ...counts);
-  const ceiling = Math.max(1, peak);
+  const unknownPeak = Math.max(0, ...unknown);
+  // 面は階段の上に積むので、天井は両方を足した高さで取る
+  const stacked = counts.map((value, index) => value + (unknown[index] ?? 0));
+  const ceiling = Math.max(1, ...stacked);
 
   const y = scaleLinear().domain([0, ceiling]).range([55, 5]);
   const x = scaleLinear()
@@ -45,37 +71,89 @@ export function ConcurrencyPanel({
     .x((_, index) => x(index))
     .y((value) => y(value))
     .curve(curveStepAfter);
+  // 分からない数の面は、読めた数の上端から積んだ高さまで
+  const unknownArea = areaOf<number>()
+    .x((_, index) => x(index))
+    .y0((_, index) => y(counts[index] ?? 0))
+    .y1((value) => y(value))
+    .curve(curveStepAfter);
   const area = stepArea([...counts]) ?? '';
   const top = stepLine([...counts]) ?? '';
+  const band = unknownPeak > 0 ? (unknownArea(stacked) ?? '') : '';
+  /* 数え上げられなかったエージェントが居るときの一言。**`now` と `peak` で同じ文にする** ——
+     2 つは同じ `session.subagents` を回して数えているので、足りない分も同じである。 */
+  const shortTitle = 'At least this many — some agents could not be counted';
+  const peakTitle = uncounted ? shortTitle : 'Peak agents concurrent in range';
+  const reading = observation.kind === 'pending';
+  const nowTitle = reading ? observationTitle(observation) : uncounted ? shortTitle : undefined;
+  /* グラフそのものの説明。ホバーできない人にも、積んだ面が何かと、数が下限でしかないことを届ける */
+  const chartTitle = [
+    'Agents concurrent over time',
+    ...(unknownPeak > 0
+      ? ['the dashed band on top is agents whose activity could not be read']
+      : []),
+    ...(uncounted ? ['some agents could not be counted, so the counts are a lower bound'] : []),
+  ].join(' — ');
 
   const at = hover.at;
 
   return (
     <div className="sf-panel sf-conc">
+      {/* `peak` が数えるのは、稼働区間を読めたエージェントだけである。**読めなかった数を
+          その中に混ぜない** —— 混ぜれば読めなかったことが動いていたことになり、落とせば
+          静かだったことになる。読めなかった数は隣に別の数として並べるので、0 がひとりで
+          「誰も動いていなかった」と名乗ることは無い。
+
+          `now` は稼働区間ではなくセッションの状態から来るので、稼働区間を読めなくても言える。
+          読み終える前だけ伏せる。
+
+          数え上げられなかったエージェントが居るときは、`+` を添えて下限だと言う。
+          **`now` と `peak` の両方に添える** —— 2 つは同じ `session.subagents` を回して
+          数えているので、片方だけ言い切れば、`+` を足した当のものと同じ数え落としが、
+          もう片方では数そのものとして出る。何人居たのかは分からないので、数そのものは動かさない。 */}
       <div className="sf-h">
         <span className="sf-title">Agents</span>
-        <span className="sf-dim">now {liveNow}</span>
-        <span className="sf-big" title="Peak agents concurrent in range">
-          peak {peak}
+        <span className="sf-dim" title={nowTitle}>
+          now {reading ? observationMark(observation) : `${liveNow}${uncounted ? '+' : ''}`}
         </span>
+        <span className="sf-big" title={read ? peakTitle : observationTitle(observation)}>
+          peak {read ? `${peak}${uncounted ? '+' : ''}` : observationMark(observation)}
+        </span>
+        {/* 山の高さの脇に、読めなかったエージェントの数を添える。数を足して 1 つにすると、
+            読めなかった分まで動いていたと言うことになる */}
+        {read && unknownPeak > 0 && (
+          <span className="sf-unk" title="Agents whose activity could not be read">
+            +{unknownPeak} unknown
+          </span>
+        )}
       </div>
 
       {/* ホバーすると、そのバー 1 本ぶんの同時数をツールチップに出す。グラフ自体の要旨は
-          svg の `title` が持っているので、ホバーできない人にも届く */}
+          svg の `title` が持っているので、ホバーできない人にも届く。
+          観測できていないときはホバーする対象そのものが無いので、受け取りもしない */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: ホバーして読むためだけの面 */}
-      <div className="sf-plot" onMouseMove={hover.onMouseMove} onMouseLeave={hover.onMouseLeave}>
-        <svg
-          className="sf-svg"
-          viewBox={`0 0 ${bars * 10} 56`}
-          preserveAspectRatio="none"
-          role="img"
-        >
-          <title>Agents concurrent over time</title>
-          <path d={area} className="sf-carea" />
-          <path d={top} className="sf-cline" />
-        </svg>
+      <div
+        className="sf-plot"
+        onMouseMove={read ? hover.onMouseMove : undefined}
+        onMouseLeave={read ? hover.onMouseLeave : undefined}
+      >
+        {read ? (
+          <svg
+            className="sf-svg"
+            viewBox={`0 0 ${bars * 10} 56`}
+            preserveAspectRatio="none"
+            role="img"
+          >
+            <title>{chartTitle}</title>
+            <path d={area} className="sf-carea" />
+            <path d={top} className="sf-cline" />
+            {unknownPeak > 0 && <path d={band} className="sf-uarea" />}
+          </svg>
+        ) : (
+          <StatsNote observation={observation} className="sf-blank" />
+        )}
 
-        {at !== null && (
+        {read && at !== null && (
           <>
             <i className="sf-cursor" style={{ left: `${((at.bar + 0.5) / bars) * 100}%` }} />
             <div
@@ -88,9 +166,14 @@ export function ConcurrencyPanel({
                 {mdhm(fromMs + at.bar * footMs)} –{' '}
                 {mdhm(Math.min(fromMs + (at.bar + 1) * footMs, nowMs))}
               </div>
+              {/* 1 本ぶんの数も、数え上げられなかった子が居るなら下限でしかない */}
               <div>
-                <b>{counts[at.bar] ?? 0}</b> <span className="sf-dim">agents concurrent</span>
+                <b>{`${counts[at.bar] ?? 0}${uncounted ? '+' : ''}`}</b>{' '}
+                <span className="sf-dim">agents concurrent</span>
               </div>
+              {(unknown[at.bar] ?? 0) > 0 && (
+                <div className="sf-dim">+{unknown[at.bar]} could not be read</div>
+              )}
             </div>
           </>
         )}

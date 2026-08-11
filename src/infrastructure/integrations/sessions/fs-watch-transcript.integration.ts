@@ -13,7 +13,7 @@ import { TranscriptWatchError } from '~/infrastructure/errors/sessions/transcrip
 
 export function createFsWatchTranscript(root: string): TranscriptWatchIntegration {
   return {
-    watch(onChange): Observation<() => void> {
+    watch({ onChange, onFail }): Observation<() => void> {
       try {
         const watcher = fs.watch(root, { recursive: true }, (_event, filename) => {
           // ファイル名の分からないイベントが来ることがある。どれが動いたか言えないので配らない
@@ -22,8 +22,17 @@ export function createFsWatchTranscript(root: string): TranscriptWatchIntegratio
           if (!filename.endsWith('.jsonl')) return;
           onChange(path.join(root, filename));
         });
-        // 張った後に壊れることもある。そのときは黙る以外にできることが無い
-        watcher.on('error', () => watcher.close());
+        /* 張った後に壊れることもある。そのときは閉じたうえで、**閉じたことを伝える** —
+           黙って閉じると、そこから更新が来ないことをユーザーは知りようがない */
+        watcher.on('error', (e) => {
+          watcher.close();
+          onFail(
+            new TranscriptWatchError(`Stopped watching the transcript tree: ${root}`, {
+              cause: asAppError(e),
+              details: { root },
+            }),
+          );
+        });
         return observed(() => watcher.close());
       } catch (e) {
         return unobservable(

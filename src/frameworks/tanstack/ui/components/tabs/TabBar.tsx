@@ -2,10 +2,9 @@ import { mdiHomeOutline } from '@mdi/js';
 import { Link } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
-import {
-  projectDotState,
-  visibleSessions,
-} from '~/interface/presenters/sessions/visibility.presenter.ts';
+import { visibleSessions } from '~/interface/presenters/sessions/visibility.presenter.ts';
+import { dotFactsOf, dotStateOf, type RowDotState } from '../../derive/overview.ts';
+import { counted } from '../../derive/sources.ts';
 import { useCommandMark } from '../../hooks/useCommandMark.ts';
 import { useHydrated } from '../../hooks/useHydrated.ts';
 import { MAX_SLOTS } from '../../hooks/useTabShortcuts.ts';
@@ -23,6 +22,46 @@ import { Icon } from '../primitives/Icon.tsx';
 
 /** 掴んだと見なすまでの横の移動。これより小さい動きは、押しただけとして扱う */
 const DRAG_SLOP = 4;
+
+/** 数え上げられなかったプロジェクトの件数。見えたぶんは本当に在るが、それで全部とは言えない */
+const SHORT = 'Some of this project could not be read — the count may be short';
+
+/** まだ読んでいないプロジェクトの件数。数はまだどこにも無い */
+const NOT_READ = 'Not read yet';
+
+/* タブの点。**一覧と同じ 1 つの関数から出す。**
+
+   木は `streamedQuery` で届くので、最初のチャンクでは全プロジェクトが `read: false` の
+   スタブである。節を写して先頭の 1 つを落とすと、その間ずっとタブは塗られた `ended` を
+   出す —— 同じ画面の Overview が `unknown` と描いている、まさにその行についてである。 */
+const dotOf = (project: ProjectJson | undefined): RowDotState =>
+  project === undefined ? 'unknown' : dotStateOf(dotFactsOf(project));
+
+/** タブに出す件数と、それに添える一言 */
+interface TabCount {
+  readonly text: string;
+  readonly note: string | undefined;
+  /** `+?` は 1 文字ぶんの枠に収まらない。枠を広げないと、隣の名前と × に重なる */
+  readonly wide: boolean;
+}
+
+/* タブの件数。**そのプロジェクトを開くかどうかを決める最初の手掛かりなので、断定して
+   出してはいけない。**
+
+   読む前は数そのものをまだ持っていないので `?` だけを出す。空欄にすると、届いたばかりの
+   スタブが「ここでは何も動いていない」と言うことになる。数え上げられなかったときは、
+   見えた数が下限でしかないことを `+?` で言う。 */
+function countOf(project: ProjectJson | undefined, nowMs: number): TabCount {
+  // 木そのものがまだ届いていない。プロジェクトが在るかどうかも観測していない
+  if (project === undefined) return { text: '', note: undefined, wide: false };
+  if (!project.read) return { text: '?', note: NOT_READ, wide: false };
+  /* 終わったものは数えない。**タブの数は「ここで何が動いているか」である。**
+     Agents の絞り込みに追随させると、そちらを押した人のタブ行が全部書き換わり、
+     どのプロジェクトを開くかを決める手掛かりが、絞り込みの都合で動く。 */
+  const shown = visibleSessions(project, false, nowMs).length;
+  if (!counted(project)) return { text: `${shown}+?`, note: SHORT, wide: true };
+  return { text: shown === 0 ? '' : String(shown), note: undefined, wide: false };
+}
 
 /** 掴んだ後の押下を飲む。置いた場所のタブが開いてしまうのを止める */
 const swallow = (event: Event) => {
@@ -46,8 +85,6 @@ export interface TabBarProps {
      出さないと、ピン留めしていないプロジェクトを見ているあいだ、自分がどこに居るかが
      タブ行から消える。 */
   readonly current: string | null;
-  /** 終わったものも数に入れるか。表に出ている件数とタブの件数を揃える */
-  readonly showAll: boolean;
 }
 
 export function TabBar({
@@ -58,7 +95,6 @@ export function TabBar({
   onPin,
   onMove,
   current,
-  showAll,
 }: TabBarProps) {
   const byId = new Map((projects ?? []).map((project) => [project.id, project]));
   /* 木が届いているか。**届く前と、届いた上で見つからないのは別である。**
@@ -158,7 +194,8 @@ export function TabBar({
            ここでタブごと落とすと、ピン留めしたプロジェクトを直に開いたユーザーには、
            いまどこに居るかがどこにも出ない画面になる(アドレスバーを読むしか手が無くなる)。 */
         const name = project?.name ?? id;
-        const shown = project === undefined ? 0 : visibleSessions(project, showAll, nowMs).length;
+        const count = countOf(project, nowMs);
+        const dot = dotOf(project);
         return (
           // biome-ignore lint/a11y/noStaticElementInteractions: 掴むのは並べ替えの手立てで、開くのは中の `Link` が受ける
           <span
@@ -177,12 +214,18 @@ export function TabBar({
                  そちらが始まって `mousemove` も `mouseup` も来なくなる */
               draggable={false}
             >
-              <Dot state={project === undefined ? 'unknown' : projectDotState(project)} />
+              <Dot state={dot} />
               <span>{name}</span>
             </Link>
-            {/* 件数と × を同じ枠に重ねる。ホバーで入れ替わるだけで、枠の幅は変わらない */}
-            <span className="tab-slot">
-              <span className="n">{shown === 0 ? '' : shown}</span>
+            {/* 件数と × を同じ枠に重ねる。ホバーで入れ替わるだけで、枠の幅は変わらない。
+
+                断定できない件数には `?` を添える。**0 も空欄も「1 つも動いていない」という
+                断定になる。** 一言は枠そのものに付ける —— 件数に付けても、上に重なる ×
+                がホバーを受け取る。 */}
+            <span className={count.wide ? 'tab-slot short' : 'tab-slot'} title={count.note}>
+              {/* 人の入力を待っているプロジェクトは、件数の色でもそう言う。タブは畳まれていて
+                  中が見えないので、点 1 つだけだと隣のタブの点に紛れる */}
+              <span className={dot === 'input' ? 'n input' : 'n'}>{count.text}</span>
               <button
                 type="button"
                 className="tab-close"
@@ -209,10 +252,7 @@ export function TabBar({
             className="tab-link on"
             title={`${byId.get(provisional)?.path ?? provisional} — double-click to pin`}
           >
-            {(() => {
-              const project = byId.get(provisional);
-              return <Dot state={project === undefined ? 'unknown' : projectDotState(project)} />;
-            })()}
+            <Dot state={dotOf(byId.get(provisional))} />
             <span>{byId.get(provisional)?.name ?? provisional}</span>
           </Link>
         </span>

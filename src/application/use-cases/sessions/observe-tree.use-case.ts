@@ -114,7 +114,13 @@ export function createObserveTree(deps: {
       for (const slug of stub.slugs) {
         const group = bySlug.get(slug);
         if (group === undefined) continue;
-        for (const source of group.sessions) sessions.push(await drafts.readSession(source, nowMs));
+        for (const source of group.sessions) {
+          /* 子を走査できたかは、走査した側にしか分からない。下書きは `transcript` の中身しか
+             読まないので、ここで添える。**添えないと、子を呼ばなかったセッションと、子を
+             数えられなかったセッションが同じ形で木に並ぶ。** */
+          const draft = await drafts.readSession(source, nowMs);
+          sessions.push({ ...draft, subagentsWalked: source.subagentsWalked });
+        }
       }
 
       /* 束ねる作業は索引が済ませてある。ここで組み直さないのは、組み直せば同じ問いに
@@ -127,6 +133,7 @@ export function createObserveTree(deps: {
         name: stub.name,
         liveProcessCount: stub.liveProcessCount,
         latestActivityMs: stub.latestActivityMs,
+        walked: stub.walked,
         sessions,
       };
       const project = buildObservedProject(merged, nowMs, activeThresholdMs);

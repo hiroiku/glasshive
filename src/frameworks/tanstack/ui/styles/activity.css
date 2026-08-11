@@ -1,0 +1,13 @@
+/* 詳細パネルの稼働レーンのうち、稼働を観測できなかった行。
+
+   稼働の棒(`.bar.active` / `.bar.done`)と同じ塗りにしない。**同じ塗りにすると、
+   読めなかった時間が動いていた時間として読める。** 細く沈めた線にして、その間に
+   `transcript` が在ったことだけを言う。太さと色は Agents の表の `.tl .bar.unknown` に揃える —
+   同じ事実が 2 つの画面で別の見た目になると、どちらかが別の意味に読める。 */
+.alane-tl .bar.unknown {
+  top: 5px;
+  bottom: 5px;
+  background: rgba(125, 138, 153, 0.35);
+  min-width: 0;
+  border-radius: 1px;
+}

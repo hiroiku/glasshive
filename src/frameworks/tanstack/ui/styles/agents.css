@@ -84,6 +84,16 @@
 .head .sortable {
   cursor: pointer;
 }
+/* 並べ替えられる列は `columnheader` の中に `button` を入れた形である。押しどころを列の幅
+   いっぱいに広げる —— 文字の幅しか無いと、見出しの空いている所を押しても並べ替えが起きない。
+
+   `block` にするのは、`inline-block` のままだと行送りの分だけ列が高くなるからである
+   (中身が絶対配置しかないタイムラインの見出しでは、`button` の底が親のベースラインに座る)。
+   `button` が連れてくる残りの見た目は `base.css` の `.sortable` が落としている。 */
+.head [role="columnheader"] > .sortable {
+  display: block;
+  width: 100%;
+}
 .head .dep-sort {
   white-space: nowrap;
 }
@@ -115,8 +125,11 @@
 .head .tl-head.sorted .tick {
   color: var(--accent);
 }
+/* 並べ替えを示す ▲ は left: 0 に 8px で描かれる。左端の目盛りは `transform: none` で
+   `--tick-x` の位置から右へ伸びるので、幅が最小のときはそこへ重なる。**底上げだけをする** —
+   12px に決め打つと、真ん中まで離れている目盛りまで左へ引き戻す。 */
 .head .tl-head.sorted .tick.first {
-  left: 12px;
+  left: max(var(--tick-x), 12px);
 }
 
 /* 変わった行だけの一瞬のハイライト。
@@ -189,6 +202,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* 数え上げられなかった子を言う `+?`。名前の脇に並ぶ薄い文字と同じ大きさに揃える —
+   地の文の大きさのまま置くと、名前より目立って読む順が逆になる */
+.row .name .dimtxt {
+  font-size: 10.5px;
 }
 .row .col-model,
 .row .col-eff {
@@ -275,6 +293,26 @@
   gap: 6px;
   overflow: hidden;
 }
+
+/* 何に取り組んでいるかは `.worktrees/<名前>` から拾った名前で、GitHub の課題の id では
+   ない。**押しどころの見た目にしない** — チップに見せると、開く先が無いことが押すまで
+   分からない。読める形は保ったまま、押せることを表す cursor と枠の色だけを落とす。 */
+.row .col-work .wtname {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(125, 138, 153, 0.09);
+  border: 1px solid rgba(125, 138, 153, 0.26);
+  border-radius: 4px;
+  color: #8b9aab;
+  padding: 0 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 15px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .row .col-upd {
   color: var(--dim);
   font-size: 11px;
@@ -344,7 +382,7 @@
   height: 14px;
 }
 .grid-row > .tl,
-.grid-row > .tl-head {
+.grid-row .tl-head {
   overflow: visible;
 }
 /* ウォーターフォール内はドラッグでパンできる(素のクリックは行選択のまま)。
@@ -431,16 +469,23 @@ body.tl-panning .row .tl {
   fill: #d9a441;
   opacity: 0.6;
 }
-.tl-msg .msg:hover .msg-line,
-.tl-msg .msg:focus-visible .msg-line {
+.tl-msg .msg:hover .msg-line {
   stroke: #f0c060;
   stroke-width: 1.5;
   opacity: 1;
 }
-.tl-msg .msg:hover .msg-arrow,
-.tl-msg .msg:focus-visible .msg-arrow {
+.tl-msg .msg:hover .msg-arrow {
   fill: #f0c060;
   opacity: 1;
+}
+/* 片端しか置けていないやり取り。**破線にする** —— 実線の矢と同じ顔で描くと、
+   置いていない相手が置いた相手として読まれる。押しても開く先が無いので、指もささない */
+.tl-msg .msg.peer {
+  pointer-events: auto;
+  cursor: default;
+}
+.msg-line.peer {
+  stroke-dasharray: 2 2;
 }
 .tl .bar.unknown {
   top: 6px;
@@ -491,9 +536,12 @@ body.tl-panning .row .tl {
   opacity: 0.5;
   animation: none;
 }
+/* 目盛りの位置は `--tick-x` で受ける。**`left` を直に渡させない** — インラインの宣言は
+   `!important` の無い規則に必ず勝つので、渡させると並べ替えの ▲ を避ける底上げが効かない。 */
 .tl-head .tick {
   position: absolute;
   top: 0;
+  left: var(--tick-x);
   color: var(--dim);
   font-size: 10px;
   transform: translateX(-50%);

@@ -56,9 +56,13 @@ export function OverviewToolbar({
   total,
   progress,
 }: OverviewToolbarProps) {
-  const partialTitle = totals.partial
-    ? 'Counted from the projects read so far'
-    : 'Some transcripts could not be read';
+  /* 欠けている理由で文を分ける。**読んでいる途中なら待てば揃うが、読めなかったものは
+     待っても揃わない。** 同じ文で伝えると、ユーザーはいつまでも揃うのを待つ。 */
+  const partialTitle = totals.unreadable
+    ? 'Some projects could not be read — the counts may be short'
+    : totals.partial
+      ? 'Counted from the projects read so far'
+      : 'Some transcripts could not be read';
   /* まだ数え終えていない合計にはその旨を添える。**付けないと、途中の数が最終の数に見える。** */
   const partialMark = totals.partial ? (
     <span className="dimtxt" title={partialTitle}>
@@ -118,7 +122,7 @@ export function OverviewToolbar({
           </span>
         )}
         active <b className="active">{totals.active}</b>
-        {partialMark}· waiting <b className="waiting">{totals.waiting}</b>
+        {partialMark} · waiting <b className="waiting">{totals.waiting}</b>
         {partialMark}
         {totals.input > 0 && (
           <>

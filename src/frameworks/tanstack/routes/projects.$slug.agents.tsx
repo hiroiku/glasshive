@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import type { SortingState } from '@tanstack/react-table';
 import { useRef } from 'react';
 import { treeQuery } from '../queries/tree.query.ts';
-import { AgentsTable } from '../ui/components/agents/AgentsTable.tsx';
+import { AGENT_COLUMN_IDS, AgentsTable } from '../ui/components/agents/AgentsTable.tsx';
 import { NotObserved } from '../ui/components/primitives/NotObserved.tsx';
 import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
 import { StatsFooter } from '../ui/components/stats/StatsFooter.tsx';
@@ -62,10 +62,13 @@ function AgentsView() {
     });
   };
 
+  /* **URL から来た名前は、表が持つ列だけを通す。** 検索パラメータは画面を移っても
+     持ち越されるので、Work の列の名前がそのまま届く。渡すと TanStack が知らない列を黙って
+     捨て、既定の並びごと落ちる。どの見出しも並べ替えを示さないのに、URL には
+     `sort` が載ったまま残る。 */
+  const sortKey = AGENT_COLUMN_IDS.find((key) => key === search.sort);
   const sorting: SortingState =
-    search.sort === undefined
-      ? DEFAULT_SORTING
-      : [{ id: search.sort, desc: search.dir === 'desc' }];
+    sortKey === undefined ? DEFAULT_SORTING : [{ id: sortKey, desc: search.dir === 'desc' }];
 
   const panel = openPanelOf(search);
   const selectedFile = panel?.kind === 'conv' ? panel.file : null;
@@ -75,6 +78,12 @@ function AgentsView() {
        読めなかったほうを「無かった」と言うと、観測できなかったことが消える。 */
     if (tree.error !== null) return <NotObserved {...treeTrouble()} />;
     if (tree.data === undefined) return <ReadProgress label="Reading transcripts" />;
+    /* `~/.claude/projects` を走査できていない。木そのものは返るので行は空で並ぶが、
+       **空なのは無かったからではない。** ここで「そんな名前は無い」と言うと、
+       観測できなかったことの上に「無かった」という判定を建てることになる。 */
+    if (tree.data.sources.state === 'unobservable') return <NotObserved {...treeTrouble()} />;
+    // 読み終えるまでは、まだ届いていない行の中に居るかもしれない
+    if (!tree.data.complete) return <ReadProgress label="Reading transcripts" />;
     return <NotObserved {...projectTrouble(slug)} />;
   }
 
@@ -83,6 +92,7 @@ function AgentsView() {
       <AgentsTable
         project={project}
         showAll={prefs.showAll}
+        onShowAll={(showAll) => prefs.set({ showAll })}
         nowMs={nowMs}
         selectedFile={selectedFile}
         firstPaint={firstPaint}

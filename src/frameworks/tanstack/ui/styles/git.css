@@ -52,7 +52,8 @@
 .git-row.head .right {
   text-align: right;
 }
-.git-row:not(.head):not(.fold) {
+/* 押せる行だけが指の形になる。折り畳んだ行と、読んでいないことを言う行(`cut`)は開けない */
+.git-row:not(.head):not(.fold):not(.cut) {
   cursor: pointer;
 }
 .git-row:not(.head):hover {
@@ -147,8 +148,11 @@
 .git-row.dim > span:not(:first-child) {
   opacity: 0.28;
 }
-/* コンフリクト予測: 同じファイルを触っている生きている線の組 */
+/* コンフリクト予測: 同じファイルを触っている生きている線の組。
+   `#git-view` の縦並びに、表と並べて置く。**縮ませない** —— 行の側が伸びるだけ伸びるので、
+   `flex: none` を落とすと、触っているファイルの本数から先が潰れて読めなくなる */
 .git-conflicts {
+  flex: none;
   padding: 8px 14px 4px;
   border-bottom: 1px solid var(--border);
 }
@@ -171,9 +175,17 @@
   color: var(--waiting);
 }
 
+/* 読んでいないところ。折り畳んだ行(`g-fold`)と色を分ける —— 折り畳んだのは
+   ここに在るものを縮めた行で、こちらは読んでいないので描けないところである */
+.g-cut {
+  color: var(--waiting);
+  font-size: 11px;
+}
+
 /* ブランチの行に並べる、その PR とその PR が閉じる課題。**題名の列は flex ではない** ——
    ブランチ名の省略を効かせるために素の行の流れのままにしてあるので、間隔は margin で取る */
 .git-row .g-title .prchip,
+.git-row .g-title .g-cut,
 .git-row .g-title .g-more {
   margin-left: 6px;
 }

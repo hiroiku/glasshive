@@ -76,6 +76,12 @@ function Overview() {
   }, [rows, filter, span, nowMs, query, order, tabs.pinned, complete]);
 
   const totals = useMemo(() => totalsOf(rows), [rows]);
+  /* 数え上げられなかった行の数。**絞り込む前の一覧で数える** — 絞り込みで隠れただけの行を
+     「読めた」ことにすると、警告が絞り込みのたびに出たり消えたりする。 */
+  const unreadableRows = useMemo(
+    () => rows.filter((row) => row.sourcesState === 'unobservable').length,
+    [rows],
+  );
 
   /* 触っている間は並びを止める。**順位付けは変えない** —— 覚えた並びで出し直すだけである。
 
@@ -87,6 +93,13 @@ function Overview() {
   const ordered = held === null ? shown : holdOrder(shown, held);
   const hold = () => setHeld((current) => current ?? shown.map((row) => row.id));
   const thaw = () => setHeld(null);
+  /* 止める入口と解く出口を対にする。**focus で止めたものは focus が出たときに解く** —
+     マウスの出口しか無いと、キーボードだけで表に入ったユーザーの並びは二度と直らない。
+     行から行へ送っているあいだは止めたままにする。 */
+  const thawOnLeave = (event: React.FocusEvent<HTMLDivElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    thaw();
+  };
 
   const onSort = (key: SortKey) => {
     thaw();
@@ -144,11 +157,26 @@ function Overview() {
       />
 
       {/* biome-ignore lint/a11y/noStaticElementInteractions: 並びを止めるだけで、押せる場所ではない */}
-      <div id="dash" onMouseMove={hold} onMouseLeave={thaw} onFocusCapture={hold}>
+      <div
+        id="dash"
+        onMouseMove={hold}
+        onMouseLeave={thaw}
+        onFocusCapture={hold}
+        onBlurCapture={thawOnLeave}
+      >
         {/* 観測できなかったことは、見えた振りをせずにそのまま言う */}
         {sources.state === 'unobservable' && (
           <p className="warn">
             Could not read the transcript roots — projects are not missing, we could not look
+          </p>
+        )}
+        {/* 走査できなかったプロジェクトは行として残るが、数はどれも欠けている。
+            行の欄だけで言うと、一覧を上から眺めている人には届かない */}
+        {unreadableRows > 0 && (
+          <p className="warn">
+            {unreadableRows === 1
+              ? '1 project could not be read — its row shows what we could see, not what is there'
+              : `${unreadableRows} projects could not be read — their rows show what we could see, not what is there`}
           </p>
         )}
         {processes.state === 'unobservable' && (
@@ -216,7 +244,7 @@ function Overview() {
           <Dot state="ended" /> nothing running
         </span>
         <span>
-          <Dot state="unknown" /> not read yet
+          <Dot state="unknown" /> not read yet, or could not be read
         </span>
         <span>
           <i className="lg-bar" /> share of the tokens spent in the last 24h by the projects shown

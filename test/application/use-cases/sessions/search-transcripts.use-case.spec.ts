@@ -51,6 +51,7 @@ function sessionOf(file: string): ProjectTree['projects'][number]['sessions'][nu
     activity: absent('empty'),
     sizeBytes: 0,
     subagents: [],
+    subagentsWalked: observed(0),
   };
 }
 
@@ -92,6 +93,7 @@ function createUseCase(files: Readonly<Record<string, Fake>>) {
           liveProcessCount: 0,
           latestActivityMs: NOW,
           recentTokens: absent('empty'),
+          walked: observed(Object.keys(files).length),
           sessions: Object.keys(files).map(sessionOf),
         },
       ],

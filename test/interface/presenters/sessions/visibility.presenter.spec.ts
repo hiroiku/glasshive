@@ -6,7 +6,6 @@ import type {
 } from '~/interface/presenters/sessions/tree.presenter.ts';
 import {
   MAX_VISIBLE_SUBAGENTS,
-  projectDotState,
   visibleSessions,
   visibleSubagents,
 } from '~/interface/presenters/sessions/visibility.presenter.ts';
@@ -65,6 +64,7 @@ const session = (over: Partial<SessionJson> = {}): SessionJson => ({
   intervals_complete: true,
   intervals_state: 'observed',
   size: 0,
+  sources: { state: 'observed', reason: null },
   subagents: [],
   ...over,
 });
@@ -79,6 +79,7 @@ const project = (sessions: SessionJson[]): ProjectJson => ({
   tokens_24h: null,
   tokens_24h_state: 'observed',
   read: true,
+  sources: { state: 'observed', reason: null },
   sessions,
 });
 
@@ -173,27 +174,5 @@ describe('見せる子を選ぶ', () => {
 
     expect(visibleSubagents(session({ subagents }), false, NOW)).toEqual([]);
     expect(visibleSubagents(session({ subagents }), true, NOW)).toHaveLength(1);
-  });
-});
-
-describe('プロジェクト 1 つを 1 点で言い表す', () => {
-  it('返事待ちが 1 つでもあれば、それを最優先で見せる', () => {
-    const dot = projectDotState(
-      project([session({ state: 'active' }), session({ state: 'waiting', awaiting: 'user' })]),
-    );
-
-    expect(dot).toBe('input');
-  });
-
-  it('動いているものがあれば、動いていると言う', () => {
-    expect(projectDotState(project([session({ state: 'active' })]))).toBe('active');
-  });
-
-  it('プロセスが生きていれば、待っていると言う', () => {
-    expect(projectDotState({ ...project([session()]), live_process: true })).toBe('waiting');
-  });
-
-  it('どれでもなければ、終わっていると言う', () => {
-    expect(projectDotState(project([session()]))).toBe('ended');
   });
 });

@@ -30,11 +30,19 @@ interface RecentTokens {
 export type DraftSubagent = Omit<SubagentSession, 'state'> & RecentTokens;
 
 /** 状態と待ちがまだ付いていないセッション */
-export type DraftSession = Omit<TranscriptSession, 'state' | 'awaiting' | 'subagents'> &
+export type DraftSession = Omit<
+  TranscriptSession,
+  'state' | 'awaiting' | 'subagents' | 'subagentsWalked'
+> &
   RecentTokens & {
     /** 末尾の形が「自分の番が終わっている」ものか */
     readonly awaitingCandidate: boolean;
     readonly subagents: readonly DraftSubagent[];
+    /* 子のディレクトリを走査できたか。省くと、見えた子のぶんだけ走査できたものとして扱う。
+
+       走査したのは `transcript` をパースするより前なので、下書きを組む側はこれを知らない
+       ことがある。知っている側が添える。 */
+    readonly subagentsWalked?: Observation<number>;
   };
 
 /** slug 1 つぶんの読み取り結果 */
@@ -46,6 +54,8 @@ export interface DraftProject {
      区切り文字とそうでない文字が同じ形になっているので、元へは戻せない。 */
   readonly canonicalPath: string | null;
   readonly sessions: readonly DraftSession[];
+  /** この slug のディレクトリを走査できたか。省くと、見えたセッションのぶんだけ走査できたものとして扱う */
+  readonly walked?: Observation<number>;
 }
 
 /* プロジェクトのパスは、`transcript` に書かれた作業ディレクトリから導く。
@@ -54,12 +64,24 @@ export interface DraftProject {
    言うパスが違えば、行の識別が途中で入れ替わる。 */
 export const deriveProjectPath = deriveGroupPath;
 
+/* 走査の結果を、消費の合計に混ぜられる形にする。**数としては 0 を足し、読めなかったことだけを運ぶ。**
+
+   歩けなかったディレクトリの中に何本の `transcript` が居たかは分からない。そこを
+   `observed(0)` のまま合計へ通すと、見に行けなかったことが「消費が無かった」と言い切られる。 */
+const asZero = (walked: Observation<number>): Observation<number> => mapObserved(walked, () => 0);
+
 /** セッションとサブエージェント、`transcript` ひとつひとつの数を並べる。まとめ方は `combineTokens` が知っている */
-const recentPartsOf = (sessions: readonly DraftSession[]): Observation<number>[] =>
-  sessions.flatMap((session) => [
+const recentPartsOf = (
+  walked: Observation<number>,
+  sessions: readonly DraftSession[],
+): Observation<number>[] => [
+  asZero(walked),
+  ...sessions.flatMap((session) => [
+    ...(session.subagentsWalked === undefined ? [] : [asZero(session.subagentsWalked)]),
     session.recentTokens,
     ...session.subagents.map((subagent) => subagent.recentTokens),
-  ]);
+  ]),
+];
 
 export function buildProjectTree(input: {
   readonly drafts: readonly DraftProject[];
@@ -121,11 +143,13 @@ export function buildObservedProject(
     name: project.name,
     liveProcessCount: project.liveProcessCount,
     latestActivityMs: project.latestActivityMs,
-    recentTokens: combineTokens(recentPartsOf(sessions)),
+    recentTokens: combineTokens(recentPartsOf(project.walked, sessions)),
+    walked: project.walked,
     sessions: sessions.map((session, at) => {
-      const { awaitingCandidate, recentTokens, ...rest } = session;
+      const { awaitingCandidate, recentTokens, subagentsWalked, ...rest } = session;
       return {
         ...rest,
+        subagentsWalked: subagentsWalked ?? observed(session.subagents.length),
         state: assignments[at]?.state ?? 'ended',
         awaiting: assignments[at]?.awaiting ?? null,
         /* 新しい順に並べてから、呼んだ親の下へ入れ直す。**順序が先で、木が後である。**

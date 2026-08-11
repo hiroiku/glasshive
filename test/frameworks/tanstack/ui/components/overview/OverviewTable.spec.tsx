@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   OverviewTable,
@@ -39,6 +39,7 @@ const readRow = (overrides: Partial<Row> = {}): Row => ({
   tokens24hState: 'observed',
   lastActivityMs: NOW,
   liveProcess: false,
+  sourcesState: 'observed',
   spans: [],
   spansComplete: true,
   ...overrides,
@@ -58,12 +59,13 @@ const unreadRow = (overrides: Partial<Row> = {}): Row => ({
   tokens24hState: 'absent',
   lastActivityMs: null,
   liveProcess: false,
+  sourcesState: 'observed',
   spans: [],
   spansComplete: false,
   ...overrides,
 });
 
-const draw = (rows: readonly Row[]) =>
+const draw = (rows: readonly Row[], over: Partial<OverviewTableProps> = {}) =>
   render(
     <OverviewTable
       rows={rows}
@@ -73,6 +75,7 @@ const draw = (rows: readonly Row[]) =>
       onTogglePin={() => undefined}
       nowMs={NOW}
       spanMs={DAY_MS}
+      {...over}
     />,
   );
 
@@ -145,6 +148,70 @@ describe('読み終えた行', () => {
   });
 });
 
+/* 走査できないディレクトリを 1 つ抱えた行は、読み終えた後も数が揃わない。
+ **そこで 0 と空欄を並べると、見に行けなかったことが「静かだった」として読まれる。** */
+describe('数え上げられなかった行', () => {
+  const shortRow = (overrides: Partial<Row> = {}): Row =>
+    readRow({
+      id: 'short',
+      name: 'short',
+      sourcesState: 'unobservable',
+      lastActivityMs: null,
+      spansComplete: false,
+      tokens24h: null,
+      tokens24hState: 'unobservable',
+      ...overrides,
+    });
+
+  it('数の欄に、数え終えた顔をさせない', () => {
+    const { container } = draw([shortRow()]);
+
+    const marked = container.querySelectorAll(
+      '[title="Some of this project could not be read — the count may be short"]',
+    );
+    expect(marked.length, '0 のままでは「1 つも動いていない」という断定になる').toBeGreaterThan(0);
+    expect(container.textContent).toContain('+?');
+  });
+
+  it('状態の点を塗らない', () => {
+    const { container } = draw([shortRow({ liveProcess: true })]);
+
+    expect(
+      container.querySelector('.dot.unknown'),
+      '見えなかった側で動いているセッションが居ないとは言えない',
+    ).not.toBeNull();
+    expect(container.querySelector('.dot.ended')).toBeNull();
+    expect(container.querySelector('.dot.waiting')).toBeNull();
+  });
+
+  it('稼働のトラックを、静かだったトラックとして出さない', () => {
+    const { container } = draw([shortRow()]);
+
+    const strip = container.querySelector('.dash-act');
+    expect(strip?.className, '空のトラックに「0 runs in view」と書かない').toContain('cut');
+    expect(strip?.getAttribute('title')).toContain('could not be read');
+  });
+
+  it('消費を空欄にしない', () => {
+    const { container } = draw([shortRow()]);
+
+    expect(
+      container.querySelector('.dash-tok')?.textContent,
+      '空欄は「使っていない」と並んで見えてしまう',
+    ).toContain('?');
+  });
+
+  it('最終活動を空欄にしない', () => {
+    const { container } = draw([shortRow()]);
+
+    const cells = [...container.querySelectorAll('.dash-row:not(.head) > span.right.dimtxt')];
+    expect(
+      cells.at(-1)?.textContent,
+      '空欄は「ずっと静かだった」と読める。時刻が見えていないことは、そう言う',
+    ).toBe('?');
+  });
+});
+
 describe('読み終えた行と読み終えていない行が混じるとき', () => {
   it('読んだ行だけが数を出す', () => {
     const { container } = draw([readRow({ active: 2, liveProcess: true }), unreadRow()]);
@@ -156,6 +223,98 @@ describe('読み終えた行と読み終えていない行が混じるとき', (
     expect(rows).toHaveLength(2);
     expect(rows[0]?.textContent, '読んだ行は数を出す').toContain('2');
     expect(rows[1]?.textContent, '読んでいない行は数を出さない').toContain('—');
+  });
+});
+
+/* 一覧は表である。**`aria-sort` は `columnheader` にしか置けず、`columnheader` は `row` の
+   中、`row` は `grid` の中にしか居られない。** 見出しを `button` にしただけでは、その並びが
+   どの列の話なのかがどこにも結び付かない。 */
+describe('表として、支援技術に渡す', () => {
+  /** 列の見出しを、そこに出ている名前で引く */
+  const headOf = (container: HTMLElement, label: string): HTMLElement => {
+    const found = [...container.querySelectorAll('.dash-row.head > [role="columnheader"]')].find(
+      (header) => header.textContent === label,
+    );
+    if (found === null || found === undefined) throw new Error(`no column header for ${label}`);
+    return found as HTMLElement;
+  };
+
+  it('表として並ぶ', () => {
+    const { container } = draw([readRow()]);
+    const grid = container.querySelector('.dash-grid');
+
+    expect(grid?.getAttribute('role')).toBe('grid');
+    expect(grid?.getAttribute('aria-label'), '名前の無い表は、何の表か言えない').not.toBeNull();
+  });
+
+  /* `grid` が持てるのは `row` と `rowgroup` だけである。列を持たないものを中に置くと、
+     読み上げは表として辿れなくなる。 */
+  it('表の直の子は、行だけにする', () => {
+    const { container } = draw([readRow(), unreadRow()]);
+    const grid = container.querySelector('.dash-grid');
+
+    expect([...(grid?.children ?? [])].map((child) => child.getAttribute('role'))).toEqual([
+      'row',
+      'row',
+      'row',
+    ]);
+  });
+
+  it('見出しの数と、行のセルの数が揃う', () => {
+    const { container } = draw([readRow()]);
+    const headers = container.querySelectorAll('.dash-row.head > [role="columnheader"]');
+
+    expect(headers.length).toBeGreaterThan(0);
+    expect(
+      container.querySelectorAll('.dash-row:not(.head) > [role="gridcell"]'),
+      '数が食い違う行は、どの列を読んでいるのか分からなくなる',
+    ).toHaveLength(headers.length);
+  });
+
+  it('見出しは、いまどう並んでいるかを名乗る', () => {
+    const { container } = draw([readRow()], { order: { key: 'active', direction: 'desc' } });
+
+    expect(headOf(container, 'Active').getAttribute('aria-sort')).toBe('descending');
+    expect(headOf(container, 'Waiting').getAttribute('aria-sort')).toBe('none');
+  });
+
+  /* 並びの向きは `columnheader` にしか置けず、その `columnheader` を押しどころにすると
+     今度は「押せる」ことが読み上げから消える。入れ子にすれば、どちらも失わない。 */
+  it('並べ替えられる見出しは、押しどころを中に持つ', () => {
+    const { container } = draw([readRow()], { order: { key: 'active', direction: 'asc' } });
+    const press = headOf(container, 'Active').querySelector('button');
+
+    expect(press, '見出しそのものを押しどころにすると、押せることが読まれない').not.toBeNull();
+    expect(press?.getAttribute('type')).toBe('button');
+    expect(press?.getAttribute('aria-sort'), '並びの向きを言うのはセルの側である').toBeNull();
+  });
+
+  it('見出しを押すと並べ替わる', () => {
+    const onSort = vi.fn();
+    const { container } = draw([readRow()], { onSort });
+
+    fireEvent.click(headOf(container, 'Active').querySelector('button') as HTMLElement);
+
+    expect(onSort).toHaveBeenCalledWith('active');
+  });
+
+  it('ピン留めは、セルの中の button のままである', () => {
+    const { container } = draw([readRow()]);
+    const pin = container.querySelector('.pin');
+
+    expect(pin?.tagName, 'セルそのものを押しどころにすると、留めたかどうかが読めない').toBe(
+      'BUTTON',
+    );
+    expect(pin?.getAttribute('aria-pressed')).toBe('false');
+    expect(pin?.closest('[role="gridcell"]')).not.toBeNull();
+  });
+
+  it('プロジェクトの名前は、セルの中のリンクのままである', () => {
+    const { container } = draw([readRow()]);
+    const link = container.querySelector('.dash-name');
+
+    expect(link?.tagName).toBe('A');
+    expect(link?.closest('[role="gridcell"]')).not.toBeNull();
   });
 });
 

@@ -21,8 +21,6 @@ export interface Nav {
   gotoIssues(token: string): void;
   /** Work の画面の課題へ移り、そのマイルストーンだけに絞る */
   gotoMilestone(title: string): void;
-  /** Work の画面のマイルストーンの一覧へ移る */
-  gotoMilestones(): void;
   closePanel(): void;
 }
 
@@ -66,16 +64,6 @@ export function NavProvider({ slug, children }: { slug: string; children: React.
             ...prev,
             unit: undefined,
             ms: title,
-            q: undefined,
-          }),
-        }),
-      gotoMilestones: () =>
-        void navigate({
-          to: '/projects/$slug/work',
-          params: { slug },
-          search: (prev: ProjectSearch): ProjectSearch => ({
-            ...prev,
-            unit: 'milestones',
             q: undefined,
           }),
         }),

@@ -15,7 +15,7 @@ import { treeQuery } from '../queries/tree.query.ts';
 import { Icon } from '../ui/components/primitives/Icon.tsx';
 import { TabBar } from '../ui/components/tabs/TabBar.tsx';
 import { requestNoticePermission, useAwaitingNotice } from '../ui/hooks/useAwaitingNotice.ts';
-import { useChangeStream } from '../ui/hooks/useChangeStream.ts';
+import { type ChangeStreamState, useChangeStream } from '../ui/hooks/useChangeStream.ts';
 import { useHydrated } from '../ui/hooks/useHydrated.ts';
 import { useTabSelection } from '../ui/hooks/useTabSelection.ts';
 import { useTabShortcuts } from '../ui/hooks/useTabShortcuts.ts';
@@ -64,16 +64,64 @@ function Root() {
   );
 }
 
+export interface TopCounts {
+  readonly active: number;
+  readonly waiting: number;
+  readonly ended: number;
+  readonly input: number;
+  /* 数え落としたプロジェクトが在るか。**在るなら、この数はまだ最終ではない** —
+     読み終える前の 0 を数え終えた 0 と同じ顔で出すと、待っている人が居ないことになる。 */
+  readonly partial: boolean;
+  /* 数え上げられなかったプロジェクトが在るか。**`partial` の理由がどちらなのかを言うために持つ。**
+
+     読んでいる途中なら待てば揃う。数え上げられなかったのなら、待っても揃わない。
+     同じ文で伝えると、ユーザーはいつまでも揃うのを待つことになる。 */
+  readonly unreadable: boolean;
+}
+
 /** 全部のセッションを数えて 1 行にする。**待っている数を落とさない** */
-function countsOf(tree: TreeJson | undefined) {
+export function countsOf(tree: TreeJson | undefined): TopCounts {
   const counts = { active: 0, waiting: 0, ended: 0, input: 0 };
+  /* `~/.claude/projects` を走査できなかったときは、数えた相手が 1 つも無い。
+     観測できなかったことを 0 として断定させない。
+     ディレクトリが無かった(`absent`)ときの 0 は、断定してよい観測である。 */
+  let unreadable = tree !== undefined && tree.sources.state === 'unobservable';
+  // 木がまだ届いていないあいだも、数えた相手が 1 つも無い
+  let partial = tree === undefined;
   for (const project of tree?.projects ?? []) {
+    /* 走査できなかったプロジェクトの行は一覧に残り、`sessions` が空のまま読み終える。
+     **その 0 を数え終えた 0 と同じ顔で出すのが、この数のいちばん静かな嘘である。** */
+    if (project.sources.state === 'unobservable') unreadable = true;
+    // 読んでいないプロジェクトは `sessions` が空である。足さずに、足さなかったことを言う
+    if (!project.read) {
+      partial = true;
+      continue;
+    }
     for (const session of project.sessions) {
       counts[session.state] += 1;
       if (session.awaiting === 'user') counts.input += 1;
     }
   }
-  return counts;
+  return { ...counts, partial: partial || unreadable, unreadable };
+}
+
+/* 変更通知の届き方を 1 つの点で言う。**繋がっていることと、更新が届くことは別である** —
+   サーバーがウォッチャーを張れていなければ、SSE が開いたまま画面は二度と変わらない。
+
+   点の色だけでは読み上げに「●」しか届かないので、`role="status"` と読める文を持たせる。 */
+export function ConnStatus({ connected, watching }: ChangeStreamState) {
+  const tone = !connected ? 'off' : watching ? 'on' : 'stale';
+  const label = !connected
+    ? 'Realtime connection: disconnected'
+    : watching
+      ? 'Realtime connection: connected'
+      : 'Realtime connection: connected, but the watcher is down — updates will not arrive';
+  return (
+    <span id="conn" className={tone} role="status" title={label}>
+      <span aria-hidden="true">●</span>
+      <span className="vhidden">{label}</span>
+    </span>
+  );
 }
 
 /* 上部バーとタブ行。どの画面に居ても同じものが出るので、`__root` に置く。
@@ -92,7 +140,7 @@ function Chrome() {
   const tree = useQuery(treeQuery);
   const tabs = useTabSelection();
   const prefs = usePrefs();
-  const connected = useChangeStream();
+  const stream = useChangeStream();
   const hydrated = useHydrated();
   const matchRoute = useMatchRoute();
   const match = matchRoute({ to: '/projects/$slug', fuzzy: true });
@@ -113,6 +161,21 @@ function Chrome() {
     prefs.set({ notify: !prefs.notify });
   };
 
+  /* まだ数え終えていない合計にはその旨を添える。**付けないと、途中の数が最終の数に見える。**
+     走査できなかったのか、読んでいる途中なのかで、添える文が違う。 */
+  const partialMark = counts.partial ? (
+    <span
+      className="dimtxt"
+      title={
+        counts.unreadable
+          ? 'Some projects could not be read — the count may be short'
+          : 'Counted from the projects read so far'
+      }
+    >
+      +?
+    </span>
+  ) : null;
+
   return (
     <>
       <header id="topbar">
@@ -129,28 +192,27 @@ function Chrome() {
           </a>
         )}
         <span id="counts">
-          active <b className="active">{counts.active}</b> / waiting{' '}
-          <b className="waiting">{counts.waiting}</b>
+          active <b className="active">{counts.active}</b>
+          {partialMark} / waiting <b className="waiting">{counts.waiting}</b>
+          {partialMark}
           {counts.input > 0 && (
             <>
               {' '}
               / input <b className="input">{counts.input}</b>
+              {partialMark}
             </>
           )}{' '}
           / ended <b className="ended">{counts.ended}</b>
+          {partialMark}
         </span>
-        <label id="filter-toggle">
-          <input
-            type="checkbox"
-            checked={prefs.showAll}
-            onChange={(event) => prefs.set({ showAll: event.target.checked })}
-          />{' '}
-          Show all ended
-        </label>
         <button
           type="button"
           id="notify-toggle"
           className={prefs.notify ? 'on' : ''}
+          /* 名前は状態で変えない。切り替わるのは `aria-pressed` のほうで、
+             名前まで変わると、押した後に別のボタンになったように読まれる */
+          aria-label="Notify when a session starts awaiting input"
+          aria-pressed={prefs.notify}
           title={
             prefs.notify
               ? 'Notifications on: alerts you when a session starts awaiting input (only while the window is unfocused)'
@@ -160,15 +222,9 @@ function Chrome() {
         >
           <Icon path={prefs.notify ? mdiBellOutline : mdiBellOffOutline} size={14} />
         </button>
-        {/* 繋がっていないことは隠さない。変更通知が届いていないのに静かなだけに見えると、
+        {/* 更新が届いていないことは隠さない。届いていないのに静かなだけに見えると、
             ユーザーは「何も起きていない」と読む */}
-        <span
-          id="conn"
-          className={connected ? 'on' : ''}
-          title={connected ? 'Realtime connection: connected' : 'Realtime connection: disconnected'}
-        >
-          ●
-        </span>
+        <ConnStatus connected={stream.connected} watching={stream.watching} />
       </header>
 
       <TabBar
@@ -179,7 +235,6 @@ function Chrome() {
         onPin={tabs.togglePin}
         onMove={tabs.movePin}
         current={current}
-        showAll={prefs.showAll}
       />
 
       <Outlet />

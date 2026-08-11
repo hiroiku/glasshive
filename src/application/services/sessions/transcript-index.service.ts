@@ -100,6 +100,9 @@ export function createTranscriptIndex(deps: {
         slug: group.slug,
         canonicalPath: canonical !== null && canonical.kind === 'observed' ? canonical.value : null,
         sessions,
+        /* 走査できたかどうかを、そのまま渡す。ここで潰すと、読めなかったディレクトリが
+           「セッションを 1 つも持たない slug」として一覧から落ちる。 */
+        walked: group.walked,
       });
     }
 
@@ -107,7 +110,7 @@ export function createTranscriptIndex(deps: {
       index: buildProjectIndex({
         groups: located,
         processes: live,
-        sources: mapObserved(groups, (walked) => walked.length),
+        sources: mapObserved(groups, (dirs) => dirs.length),
         nowMs,
         activeThresholdMs: deps.activeThresholdMs,
         transcriptsOf: (session) => session.transcriptCount,

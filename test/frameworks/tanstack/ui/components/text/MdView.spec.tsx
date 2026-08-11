@@ -44,6 +44,7 @@ vi.mock('~/frameworks/tanstack/ui/hooks/useTokenIndex.ts', async () => {
           subject: '辞書で引く',
         },
       ],
+      mainline_truncated: false,
       tips: [],
       conflicts: [],
     }),

@@ -2,26 +2,47 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { usageQuery } from '../../../queries/sessions.query.ts';
-import { type ConcurrencyNode, concurrency } from '../../derive/concurrency.ts';
+import {
+  type ConcurrencyNode,
+  concurrency,
+  unobservableConcurrency,
+} from '../../derive/concurrency.ts';
+import { counted } from '../../derive/sources.ts';
 import { autoWindow, type TimeWindow } from '../../derive/timeWindow.ts';
 import { binUsage, byModel, footFor, gridOf, quotaWindow, totalsOf } from '../../derive/usage.ts';
 import { ByModelPanel } from './ByModelPanel.tsx';
 import { ConcurrencyPanel } from './ConcurrencyPanel.tsx';
+import type { StatsObservation } from './StatsObservation.tsx';
 import { TokensPanel } from './TokensPanel.tsx';
 import { WindowsPanel } from './WindowsPanel.tsx';
 
 /* 表の下のバー。4 枚のパネルが同じ `footMs` を共有する。
 
-   分け合っているのはバー 1 本の長さと期間の始まりと本数の 3 つだけなので、4 枚を 1 つの
-   ファイルにする理由が無い。ここは 3 つを配るだけである。 */
+   分け合っているのはバー 1 本の長さと期間の始まりと本数、それに素材をどこまで観測できたかの
+   4 つだけなので、4 枚を 1 つのファイルにする理由が無い。ここはその 4 つを配るだけである。 */
 
 export function StatsFooter({ project, nowMs }: { project: ProjectJson; nowMs: number }) {
   const [window, setWindow] = useState<TimeWindow>('auto');
   const usage = useQuery(usageQuery(project.id));
 
+  /* 消費をどこまで観測できたか。**空のバケットで表さない** —— まだ答えが来ていないのと、
+     読んで何も無かったのと、`transcript` を開けなかったのは別の事実で、どれも同じ
+     平らな 0 のグラフになってはいけない。3 枚のパネルはこれを見て、数を出すかどうかを決める。 */
+  const spend = useMemo<StatsObservation>(() => {
+    const response = usage.data;
+    // 往復そのものが落ちたときはエラーコードを持てない。それでも観測できなかったことに変わりはない
+    if (response === undefined) {
+      return usage.isError ? { kind: 'unobservable', reason: null } : { kind: 'pending' };
+    }
+    if (!response.ok) return { kind: 'unobservable', reason: response.body.code };
+    const { state, reason } = response.body;
+    if (state === 'unobservable') return { kind: 'unobservable', reason };
+    return state === 'absent' ? { kind: 'absent' } : { kind: 'observed' };
+  }, [usage.data, usage.isError]);
+
+  // 描く素材。観測できたかは `spend` が運ぶので、ここは「描くものが 1 つも無い」だけを表す
   const buckets = useMemo(() => {
     const response = usage.data;
-    // 観測できなかったことを空のバケットで表さない。空にすると「静かだった」に見える
     if (response === undefined || !response.ok || response.body.state !== 'observed') return [];
     return response.body.buckets;
   }, [usage.data]);
@@ -66,6 +87,35 @@ export function StatsFooter({ project, nowMs }: { project: ProjectJson; nowMs: n
     [nodes, fromMs, footMs, bars, nowMs],
   );
 
+  /* 稼働を観測できなかったエージェントは、`counts` とは別の数として数える。**同じ数に
+     足さない。** 足せば読めなかったことが動いていたことになり、落とせば静かだったことになる。 */
+  const unknownRuns = useMemo(
+    () => unobservableConcurrency(nodes, fromMs, footMs, bars, nowMs),
+    [nodes, fromMs, footMs, bars, nowMs],
+  );
+
+  /* 稼働区間の素材をどこまで受け取れたか。**`read` だけでは決まらない** —— `read` は中身を
+     読み終えたかを言うだけで、読む相手を数え上げられたかは `sources` にしか残らない。走査に
+     失敗したプロジェクトは読み終えた後も `sessions` が空のままなので、`read` だけで決めると
+     「誰も動いていなかった」という平らな階段になる。
+
+     **読めなかったエージェントを理由に階段を消さない** —— 消すと、20 本中 1 本読めなかった
+     プロジェクトが 1 本も読めていないプロジェクトと同じ絵になる。読めなかった分は
+     `unknownRuns` が別の面として運ぶ。 */
+  const runs = useMemo<StatsObservation>(() => {
+    if (!project.read) return { kind: 'pending' };
+    const { state, reason } = project.sources;
+    if (state === 'unobservable') return { kind: 'unobservable', reason };
+    return state === 'absent' ? { kind: 'absent' } : { kind: 'observed' };
+  }, [project.read, project.sources]);
+
+  /* 数え上げられなかったエージェントが居るか。数え上げられていなければ、`counts` も `liveNow` も
+     同じだけ足りない —— どちらも `project.sessions` と `session.subagents` を回して数えている。
+
+     **数え損ねた分を黙って落とさない** —— 落とせば、数えられた高さが全部だったことになる。
+     何人居たのかは分からないので、数には足さず、その数が下限であることだけを言う。 */
+  const uncounted = !counted(project);
+
   const liveNow = useMemo(() => {
     let live = 0;
     for (const session of project.sessions) {
@@ -85,17 +135,27 @@ export function StatsFooter({ project, nowMs }: { project: ProjectJson; nowMs: n
         window={window}
         nowMs={nowMs}
         onWindow={setWindow}
+        observation={spend}
       />
       <ConcurrencyPanel
         counts={counts}
+        unknown={unknownRuns}
         fromMs={fromMs}
         footMs={footMs}
         bars={bars}
         nowMs={nowMs}
         liveNow={liveNow}
+        uncounted={uncounted}
+        observation={runs}
       />
-      <ByModelPanel models={models} total={totals.total} />
-      <WindowsPanel quota={quota} weekTokens={weekTokens} totals={totals} nowMs={nowMs} />
+      <ByModelPanel models={models} total={totals.total} observation={spend} />
+      <WindowsPanel
+        quota={quota}
+        weekTokens={weekTokens}
+        totals={totals}
+        nowMs={nowMs}
+        observation={spend}
+      />
     </div>
   );
 }

@@ -21,12 +21,15 @@ const hop = {
     to: 'team-lead',
     summary: 'できた',
     toolUseId: 'toolu_01A',
+    msgId: null,
   },
 };
 
 describe('エージェント間のメッセージの変換', () => {
   it('メッセージ 1 通は時刻と相手と要約を持って出る', () => {
-    const presented = presentMessages(observed({ hops: [hop], complete: true, unplaced: 0 }));
+    const presented = presentMessages(
+      observed({ hops: [hop], peers: [], complete: true, unplaced: 0 }),
+    );
 
     expect(presented.hops).toEqual([
       {
@@ -40,14 +43,25 @@ describe('エージェント間のメッセージの変換', () => {
   });
 
   it('欄はこれで全部', () => {
-    const presented = presentMessages(observed({ hops: [], complete: true, unplaced: 0 }));
+    const presented = presentMessages(
+      observed({ hops: [], peers: [], complete: true, unplaced: 0 }),
+    );
 
-    expect(Object.keys(presented)).toEqual(['state', 'reason', 'complete', 'unplaced', 'hops']);
+    expect(Object.keys(presented)).toEqual([
+      'state',
+      'reason',
+      'complete',
+      'unplaced',
+      'hops',
+      'peers',
+    ]);
   });
 
   /* 読み取り範囲が先頭まで届かなかったことは、観測できなかったことと別である。 */
   it('読み取り範囲が届かなかったことを、そのまま伝える', () => {
-    const presented = presentMessages(observed({ hops: [], complete: false, unplaced: 3 }));
+    const presented = presentMessages(
+      observed({ hops: [], peers: [], complete: false, unplaced: 3 }),
+    );
 
     expect(presented.state).toBe('observed');
     expect(presented.complete).toBe(false);
@@ -67,5 +81,51 @@ describe('エージェント間のメッセージの変換', () => {
 
     expect(presented.state).toBe('absent');
     expect(presented.reason).toBe('no-source');
+  });
+});
+
+/* 別のセッションとのやり取りは、こちら側の同一性で相手を言えない。
+ **言えないことを、無かったことにしない。** */
+describe('この画面に居ないセッションとのやり取り', () => {
+  const exchange = {
+    atMs: Date.parse('2026-08-09T12:00:01.000Z'),
+    direction: 'received' as const,
+    agentId: 'sess-1',
+    peer: 'glasshive-clean-arch-port',
+    msgId: 'be3ecd13',
+    summary: '',
+    mode: 'prompting',
+  };
+
+  it('相手が自己申告した名前と、両端を結ぶ鍵ごと出る', () => {
+    const presented = presentMessages(
+      observed({ hops: [], peers: [exchange], complete: true, unplaced: 0 }),
+    );
+
+    expect(presented.peers).toEqual([
+      {
+        at: '2026-08-09T12:00:01Z',
+        direction: 'received',
+        agent: 'sess-1',
+        peer: 'glasshive-clean-arch-port',
+        msg_id: 'be3ecd13',
+        summary: '',
+        mode: 'prompting',
+      },
+    ]);
+  });
+
+  /* 届き方が別なら別のことである。「届いた」に潰すと、区別が写す途中で消える。 */
+  it('届き方はそのまま運ぶ', () => {
+    const presented = presentMessages(
+      observed({
+        hops: [],
+        peers: [{ ...exchange, mode: 'notify' }],
+        complete: true,
+        unplaced: 0,
+      }),
+    );
+
+    expect(presented.peers[0]?.mode).toBe('notify');
   });
 });

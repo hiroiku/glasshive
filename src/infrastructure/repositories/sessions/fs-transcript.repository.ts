@@ -63,20 +63,17 @@ function listDirEntries(dir: string): Observation<fs.Dirent[]> {
   }
 }
 
-/* 木の内側のディレクトリは、読めなくても空として先へ進む。
+/* 走査 1 回ぶんの結果。
 
-   `~/.claude/projects` そのものが読めないなら観測は成り立たないが、内側の 1 つが読めない
-   だけなら他のディレクトリは見えている。そこで止めると、見えているものまで隠れる。
+   **見えたものと、そもそも見に行けたかを一緒に持つ。** 内側のディレクトリが読めないときに
+   空の一覧だけを返すと、何も無かったディレクトリと区別が付かなくなり、その先の層では
+   もう分けられない — errno が見えるのはここだけだからである。
 
-   **ここは「無かった」と「観測できなかった」をわざと潰している、glasshive で唯一の場所
-   である。** 潰してよいと言えるのは、戻り値が `Observation` を持てないからではなく、
-   内側 1 つの読めなさが木の形を変えないからである(セッションを持たないディレクトリは
-   プロジェクトとして数えない)。走査できたディレクトリの数は `listTranscripts` の
-   `Observation` に残るので、`~/.claude/projects` ごと読めなかったのか、内側が 1 つ
-   読めなかったのかは、上の層で区別が付く。 */
-function entriesOrEmpty(dir: string): fs.Dirent[] {
-  const listed = listDirEntries(dir);
-  return listed.kind === 'observed' ? listed.value : [];
+   `walked` の数は `found` の長さとは限らない。stat を採れなかった `transcript` は
+   載せようがないので、見えた数のほうが多くなることがある。 */
+interface Walk<T> {
+  readonly found: readonly T[];
+  readonly walked: Observation<number>;
 }
 
 /** `transcript` 1 つを、ファイル名と stat だけで写す */
@@ -127,14 +124,18 @@ function readAgentMeta(file: string): AgentMeta | null {
 }
 
 /** ディレクトリに在る `transcript` を集める。ファイル名と stat だけで、中身は開かない */
-function collectSources(dir: string): TranscriptSource[] {
-  const sources: TranscriptSource[] = [];
-  for (const entry of entriesOrEmpty(dir)) {
+function collectSources(dir: string): Walk<TranscriptSource> {
+  const listed = listDirEntries(dir);
+  if (listed.kind !== 'observed') return { found: [], walked: listed };
+  const found: TranscriptSource[] = [];
+  let seen = 0;
+  for (const entry of listed.value) {
     if (!entry.isFile() || !entry.name.endsWith(TRANSCRIPT_SUFFIX)) continue;
+    seen += 1;
     const source = describeSource(dir, entry.name);
-    if (source !== null) sources.push(source);
+    if (source !== null) found.push(source);
   }
-  return sources;
+  return { found, walked: observed(seen) };
 }
 
 /* サブエージェントを、内側のディレクトリまで降りて集める。実行ごとに切られたディレクトリの
@@ -144,14 +145,30 @@ function collectSources(dir: string): TranscriptSource[] {
    降りながら、いまどの実行の中に居るかを持ち回る。`runId` はディレクトリの形にしか無いので、
    ここで拾わなければ二度と拾えない — サブエージェントの `transcript` にも `*.meta.json` にも
    書かれていない。 */
-function collectSubagents(dir: string, runId: string | null): SubagentSource[] {
-  const sources: SubagentSource[] = [];
+function collectSubagents(dir: string, runId: string | null): Walk<SubagentSource> {
+  const listed = listDirEntries(dir);
+  if (listed.kind !== 'observed') return { found: [], walked: listed };
+
+  const found: SubagentSource[] = [];
+  let seen = 0;
+  /* 読めなかった内側のディレクトリ。**1 つでも在れば、ここの子の数は言えない。**
+     見えたところまでの数を返すと、数え落としたぶんが「居なかった」に化ける。 */
+  let unreadable: Observation<number> | null = null;
   const holdsRuns = path.basename(dir) === RUN_DIR;
-  for (const entry of entriesOrEmpty(dir)) {
+
+  for (const entry of listed.value) {
     if (entry.isDirectory()) {
       // `workflows` の直下だけが `runId` を決める。その先はどれだけ深くても同じ実行の中である
       const inner = holdsRuns ? entry.name : runId;
-      sources.push(...collectSubagents(path.join(dir, entry.name), inner));
+      const below = collectSubagents(path.join(dir, entry.name), inner);
+      found.push(...below.found);
+      /* 走査している間に消えたディレクトリは、子を 0 として数える。いま子は居ないからである。
+         読めなかったディレクトリは数に混ぜず、数えられなかったこととして持ち上げる。 */
+      if (below.walked.kind === 'observed') {
+        seen += below.walked.value;
+      } else if (below.walked.kind === 'unobservable' && unreadable === null) {
+        unreadable = below.walked;
+      }
       continue;
     }
     const isSubagent =
@@ -159,24 +176,27 @@ function collectSubagents(dir: string, runId: string | null): SubagentSource[] {
       entry.name.startsWith(SUBAGENT_PREFIX) &&
       entry.name.endsWith(TRANSCRIPT_SUFFIX);
     if (!isSubagent) continue;
+    seen += 1;
     const source = describeSource(dir, entry.name);
     if (source === null) continue;
-    sources.push({
+    found.push({
       ...source,
       runId,
       meta: readAgentMeta(path.join(dir, `${source.id}${META_SUFFIX}`)),
     });
   }
-  return sources;
+  return { found, walked: unreadable ?? observed(seen) };
 }
 
 /* プロジェクト 1 つぶんのディレクトリから、セッションの `transcript` とそのサブエージェントを
    集める。セッションはディレクトリの直下だけを見る — セッションは入れ子にならない。 */
-function collectSessions(groupDir: string): SessionSource[] {
-  return collectSources(groupDir).map((source) => ({
-    ...source,
-    subagents: collectSubagents(path.join(groupDir, source.id, SUBAGENT_DIR), null),
-  }));
+function collectSessions(groupDir: string): Walk<SessionSource> {
+  const walk = collectSources(groupDir);
+  const found = walk.found.map((source) => {
+    const below = collectSubagents(path.join(groupDir, source.id, SUBAGENT_DIR), null);
+    return { ...source, subagents: below.found, subagentsWalked: below.walked };
+  });
+  return { found, walked: walk.walked };
 }
 
 export function createFsTranscriptRepository(options: {
@@ -192,10 +212,8 @@ export function createFsTranscriptRepository(options: {
       for (const entry of listed.value) {
         // `~/.claude/projects` には `transcript` でないものも混ざる。プロジェクト 1 つぶんは、必ずディレクトリである
         if (!entry.isDirectory()) continue;
-        groups.push({
-          slug: entry.name,
-          sessions: collectSessions(path.join(root, entry.name)),
-        });
+        const walk = collectSessions(path.join(root, entry.name));
+        groups.push({ slug: entry.name, sessions: walk.found, walked: walk.walked });
       }
       return observed(groups);
     },

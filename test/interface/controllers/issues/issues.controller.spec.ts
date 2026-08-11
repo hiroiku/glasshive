@@ -36,6 +36,7 @@ const index: Deps['index'] = {
             liveProcessCount: 0,
             latestActivityMs: 0,
             transcriptCount: 0,
+            walked: observed(0),
           },
         ],
       },

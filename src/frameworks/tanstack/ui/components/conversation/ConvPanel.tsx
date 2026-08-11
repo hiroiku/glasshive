@@ -6,7 +6,7 @@ import type {
 import { conversationTrouble } from '../../derive/trouble.ts';
 import { cut, worktreeName } from '../../format.ts';
 import { useTranscriptWindow } from '../../hooks/useTranscriptWindow.ts';
-import { AgentChip, IssueChip, RefChip } from '../chips/Chips.tsx';
+import { AgentChip, RefChip } from '../chips/Chips.tsx';
 import { NotObserved } from '../primitives/NotObserved.tsx';
 import { EventView } from './EventView.tsx';
 
@@ -19,7 +19,7 @@ import { EventView } from './EventView.tsx';
 /** ヘッダーに並べるサブエージェントの数の上限。それ以上は件数だけ添える */
 const MAX_LISTED_SUBAGENTS = 6;
 
-/** ヘッダーに並べる課題の数の上限 */
+/** ヘッダーの `working on` に並べる名前の数の上限 */
 const MAX_LISTED_ISSUES = 3;
 
 export interface Selected {
@@ -77,8 +77,12 @@ function AgentContext({
       groups.push(
         <span key="work" className="ctx-g">
           <span className="mk">working on</span>
+          {/* `.worktrees/<名前>` から拾った名前である。**チップにしない** — GitHub の課題の
+              id ではないので、押しどころに見せると開く先が無いことが押すまで分からない */}
           {session.issues.slice(0, MAX_LISTED_ISSUES).map((id) => (
-            <IssueChip key={id} id={id} />
+            <span key={id} className="wtname">
+              {id}
+            </span>
           ))}
         </span>,
       );
@@ -104,7 +108,7 @@ function AgentContext({
       groups.push(
         <span key="work" className="ctx-g">
           <span className="mk">working on</span>
-          <IssueChip id={subagent.issue} />
+          <span className="wtname">{subagent.issue}</span>
         </span>,
       );
     }
@@ -172,10 +176,14 @@ function Conversation({
     );
   }
 
+  const failed = window.failed;
+
   return (
     <div id="conversation" ref={window.boxRef}>
-      {/* 読み込みに失敗したことを、空の会話で表さない */}
-      {window.failed && <NotObserved {...conversationTrouble()} />}
+      {/* 読み込みに失敗したことを、空の会話で表さない。遡りの失敗は「もっと前」の側で言う */}
+      {(failed.initial || failed.older) && (
+        <NotObserved {...conversationTrouble()} partial={failed.older} />
+      )}
       {window.hasOlder && (
         <button type="button" id="older" onClick={window.loadOlder}>
           Load older
@@ -184,6 +192,12 @@ function Conversation({
       {window.events.map((entry) => (
         <EventView key={entry.key} event={entry.event} project={project} />
       ))}
+      {/* 末尾の追いかけが返らなくなったことは、末尾に貼り付けて言う。**先頭に置くと誰も見ない** ——
+          会話は末尾へ吸い付くので、伸びなくなったことに気付く人はそこを見ている。
+          箱そのものは中身が無くても置く。読み上げる場所は、中身が入る前から在る必要がある。 */}
+      <div className="conv-tail" role="status">
+        {failed.follow && <NotObserved {...conversationTrouble()} partial />}
+      </div>
     </div>
   );
 }

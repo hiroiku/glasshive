@@ -43,6 +43,10 @@ export interface GitOverview {
   readonly worktrees: readonly Worktree[];
   readonly branches: readonly BranchRef[];
   readonly mainline: readonly MainlineCommit[];
+  /* 遡る数の上限で本流が切れているか。**切れているなら、ここに無いコミットが在る。**
+     切れたことを言わないと、上限より前で分かれたブランチが、いちばん古いコミットで
+     分かれたものとして読まれる。 */
+  readonly mainlineTruncated: boolean;
   readonly tips: readonly Tip[];
   readonly conflicts: readonly ConflictForecast[];
 }

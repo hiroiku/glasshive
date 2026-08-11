@@ -35,19 +35,52 @@ describe('応答 1 ページを読む', () => {
       nodes: [node({ number: 7 }), node({ number: 8 })],
     });
     const parsed = parseIssuePage(text);
-    expect(parsed.nodes).toHaveLength(2);
-    expect(parsed.hasNextPage).toBe(true);
-    expect(parsed.endCursor).toBe('Y3Vyc29y');
+    expect(parsed?.nodes).toHaveLength(2);
+    expect(parsed?.hasNextPage).toBe(true);
+    expect(parsed?.endCursor).toBe('Y3Vyc29y');
+  });
+
+  it('課題が 1 件も無いページは、歩けたものとして返す', () => {
+    const parsed = parseIssuePage(
+      page({ pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] }),
+    );
+    expect(parsed, '歩けて 0 件だったのは、応答を歩けなかったのとは別のことである').not.toBe(null);
+    expect(parsed?.nodes).toEqual([]);
   });
 
   it.each([
     ['読めない JSON', 'not json at all'],
     ['repository が null', JSON.stringify({ data: { repository: null } })],
     ['data が無い', JSON.stringify({ errors: [{ message: 'Could not resolve to a Repository' }] })],
-  ])('%s は空のページとして返す', (_name, text) => {
-    const parsed = parseIssuePage(text);
-    expect(parsed.nodes).toEqual([]);
-    expect(parsed.hasNextPage, '読めなかったページの先を読みに行かない').toBe(false);
+  ])('%s は、歩けなかったこととして返す', (_name, text) => {
+    expect(
+      parseIssuePage(text),
+      '空のページとして返すと、歩けなかった応答が「課題は 1 件も無い」になる',
+    ).toBe(null);
+  });
+
+  /* `issues` まで辿れていても、課題の並びが無ければ 1 件も観ていない。
+     `?? []` で空の並びに倒すと、歩けなかった応答が「課題は 1 件も無い」として通る。 */
+  it.each([
+    ['`nodes` が無い', { pageInfo: { hasNextPage: false, endCursor: null } }],
+    ['`nodes` が null', { pageInfo: { hasNextPage: false, endCursor: null }, nodes: null }],
+    ['`nodes` が並びでない', { nodes: { edges: [] } }],
+  ])('%s ページも、歩けなかったこととして返す', (_name, issues) => {
+    expect(
+      parseIssuePage(page(issues)),
+      '課題の並びを辿れなかったことを、0 件だったことにしない',
+    ).toBe(null);
+  });
+
+  it('`pageInfo` の無いページは、次が無いページとして歩けたことにする', () => {
+    const parsed = parseIssuePage(page({ nodes: [node({ number: 7 })] }));
+
+    expect(
+      parsed?.nodes,
+      '尋ねなかった `pageInfo` は、課題を辿れないこととは別である',
+    ).toHaveLength(1);
+    expect(parsed?.hasNextPage).toBe(false);
+    expect(parsed?.endCursor).toBe(null);
   });
 });
 

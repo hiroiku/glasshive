@@ -187,13 +187,9 @@ function assemble(): Kernel {
   };
 }
 
+/* 組み立てるのは 1 度だけである。作り直す関数は置かない —— テストは自分で依存を組んで
+   ポートを差し込むのでここを通らず、ウォッチャーはプロセスが終わるときに一緒に外れる。 */
 export function getKernel(): Kernel {
   if (instance === undefined) instance = assemble();
   return instance;
-}
-
-/** テストのために作り直す。本番のコードからは呼ばない */
-export function resetKernel(): void {
-  instance?.changes.close();
-  instance = undefined;
 }

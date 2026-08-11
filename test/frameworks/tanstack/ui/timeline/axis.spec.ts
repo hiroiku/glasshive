@@ -22,6 +22,7 @@ const node = (over: Partial<TimelineNode> = {}): TimelineNode => ({
   started: at(3_600_000),
   last_activity: at(0),
   intervals: [],
+  intervals_state: 'observed',
   ...over,
 });
 
@@ -37,6 +38,29 @@ describe('稼働区間を数の組にする', () => {
     const intervals = intervalsOf(node({ started: at(600_000), last_activity: at(60_000) }), NOW);
 
     expect(intervals).toEqual([[NOW - 600_000, NOW - 60_000]]);
+  });
+
+  /* 走査に失敗したことを 1 本の続いた稼働にすると、観測ゼロから所要時間を主張することになる。
+     静かだった(無かった)のとは別の話なので、こちらだけを空にする。 */
+  it('稼働を観測できなかったときは、1 本も作らない', () => {
+    const intervals = intervalsOf(node({ intervals_state: 'unobservable' }), NOW);
+
+    expect(intervals, '観測できなかったことが、1 本の稼働として描かれている').toEqual([]);
+  });
+
+  it('稼働が無かったと分かっているときは、起点と最後の動きで 1 本引く', () => {
+    const intervals = intervalsOf(
+      node({ intervals_state: 'absent', started: at(600_000), last_activity: at(60_000) }),
+      NOW,
+    );
+
+    expect(intervals).toEqual([[NOW - 600_000, NOW - 60_000]]);
+  });
+
+  it('観測できなかった稼働は、動いていても現在まで伸ばさない', () => {
+    const intervals = intervalsOf(node({ state: 'active', intervals_state: 'unobservable' }), NOW);
+
+    expect(intervals).toEqual([]);
   });
 
   it('動いている最後の稼働区間は現在まで伸ばす', () => {

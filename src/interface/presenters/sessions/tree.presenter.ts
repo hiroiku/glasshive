@@ -87,6 +87,11 @@ export interface SessionJson {
   /** 稼働区間が空のとき、静かだったのか観測できなかったのかを分ける */
   intervals_state: ObservationState;
   size: number;
+  /* 子のディレクトリを走査できたか。
+
+     **`subagents` が空になる理由は 2 つある。** 子を呼ばなかったのと、子を数えられなかった
+     のである。一覧の長さだけでは、その 2 つが同じ形になる。 */
+  sources: ObservationStatusJson;
   subagents: SubagentJson[];
 }
 
@@ -110,6 +115,12 @@ export interface ProjectJson {
      数値は `null` である。この欄が無いと、画面はそれを「静かなプロジェクト」として描く —
      まだ観測していないことを、何も動いていないことと言い換えてしまう。 */
   read: boolean;
+  /* このプロジェクトのディレクトリを走査できたか。**`read` とは別の問いである。**
+
+     `read` は中身を読み終えたかを言う。こちらは、読む相手を数え上げられたかを言う。
+     走査できなかったプロジェクトは読み終えた後でも `sessions` が空のままなので、
+     この欄が無いと「セッションを 1 つも持たないプロジェクト」と同じ形になる。 */
+  sources: ObservationStatusJson;
   sessions: SessionJson[];
 }
 
@@ -248,6 +259,7 @@ const presentSession = (session: TranscriptSession): SessionJson => ({
   current: session.current,
   ...intervalsOf(session.activity),
   size: session.sizeBytes,
+  sources: statusOf(session.subagentsWalked),
   subagents: session.subagents.map(presentSubagent),
 });
 
@@ -261,6 +273,7 @@ export const presentProject = (project: ObservedProject): ProjectJson => ({
   tokens_24h: tokensOf(project.recentTokens),
   tokens_24h_state: project.recentTokens.kind,
   read: true,
+  sources: statusOf(project.walked),
   sessions: project.sessions.map(presentSession),
 });
 
@@ -278,6 +291,9 @@ const presentStub = (stub: ProjectStub): ProjectJson => ({
   tokens_24h: null,
   tokens_24h_state: 'absent',
   read: false,
+  /* 走査そのものは索引を作った時点で済んでいる。読む前でも、走れなかったディレクトリは
+     走れなかったと言える。 */
+  sources: statusOf(stub.walked),
   sessions: [],
 });
 

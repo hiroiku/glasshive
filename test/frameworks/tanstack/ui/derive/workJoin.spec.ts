@@ -40,6 +40,7 @@ const git = (over: Partial<GitOverview> = {}): GitOverview => ({
   worktrees: [],
   branches: [],
   mainline: [],
+  mainline_truncated: false,
   tips: [],
   conflicts: [],
   ...over,

@@ -88,11 +88,9 @@
 #counts b.ended {
   color: var(--ended);
 }
-#filter-toggle {
+/* 数の右に余白を作って、ここから右のボタンと変更通知の点を右端へ寄せる */
+#notify-toggle {
   margin-left: auto;
-  color: var(--dim);
-  cursor: pointer;
-  user-select: none;
 }
 
 /* 検索欄(部分一致) */
@@ -114,7 +112,7 @@
   border-color: var(--accent);
 }
 
-/* 3 ビュー共通のツールバー */
+/* 3 ビュー共通のツールバー。どのビューでも `#view-pane` の縦並びに、表と並べて置く */
 .view-toolbar {
   flex: none;
   display: flex;
@@ -126,9 +124,6 @@
   background: var(--panel);
   color: var(--dim);
   font-size: 11.5px;
-}
-#tree-pane > .view-toolbar {
-  grid-column: 1 / -1;
 }
 /* 絞り込みは続けて押す操作で、押すたびにチップの文字が選択されるのでは使えない。
 
@@ -168,11 +163,29 @@
   color: var(--accent);
   text-decoration-color: var(--accent);
 }
+/* 読み上げにだけ残す文字。色と点だけで言っている状態は、読み上げには何も届かない */
+.vhidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 変更通知の 3 つの状態。**繋がっていることと、更新が届くことを同じ色にしない** —
+   同じにすると、ウォッチャーが張れずに二度と変わらない画面が健全に見える。 */
 #conn {
   color: var(--ended);
 }
 #conn.on {
   color: var(--active);
+}
+#conn.stale {
+  color: var(--waiting);
 }
 
 /* ---------- プロジェクトタブ ---------- */
@@ -207,7 +220,6 @@
 .tab:hover {
   color: var(--fg);
 }
-.tab.current,
 .tab:has(.tab-link.on) {
   background: var(--bg);
   border-color: var(--border);
@@ -260,6 +272,12 @@ body.dragging #tabs {
   height: 14px;
   flex: none;
 }
+/* 数え上げられなかったプロジェクトの件数は `0+?` の形になる。枠を広げないと、
+   中で絶対配置された件数が名前と × にはみ出して重なる。**ホバーでは動かない** —
+   広さはそのタブの観測で決まるので、× が現れても枠の幅はそのままである。 */
+.tab-slot.short {
+  width: 28px;
+}
 /* 選ばせないのは × だけにする。**枠ごと止めない。**
    重なっている件数はプロジェクト 1 つぶんの見えているセッションの数で、上部バーの
    #counts は全部のプロジェクトを状態別に割った数なので、同じ数はどこにも出ていない。
@@ -287,6 +305,14 @@ body.dragging #tabs {
 }
 .tab:hover .tab-close {
   opacity: 1;
+}
+/* focus が来た × は、ホバーしていなくても見せる。**`opacity: 0` は focus ring も消す** —
+   消したまま順番が回ってくると、キーボードのユーザーには自分がどこに居るかが出ない。 */
+.tab-close:focus-visible {
+  opacity: 1;
+}
+.tab:has(.tab-close:focus-visible) .tab-slot .n {
+  opacity: 0;
 }
 .tab-close:hover {
   color: var(--fg);

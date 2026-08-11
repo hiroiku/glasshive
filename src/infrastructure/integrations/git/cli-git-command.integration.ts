@@ -61,10 +61,16 @@ const REPOSITORY_SELECTING_VARS = [
   'GIT_NAMESPACE',
 ] as const;
 
-/** 子プロセスに渡す環境変数。インデックスの書き直しを止め、リポジトリを選ぶ変数を落とす */
+/* 子プロセスに渡す環境変数。インデックスの書き直しを止め、リポジトリを選ぶ変数を落とし、
+   `git` の文言を英語のままにする。
+
+   **文言が訳されていると、断りとリポジトリの不在を分けられない。** 非ゼロで終わった理由は
+   `stderr` の文言にしか出ていない。`LC_ALL` は `LANG` も `LC_MESSAGES` も上書きするが、
+   `LANGUAGE` は gettext がそれとは別に見るので落とす。 */
 export function childEnv(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...source, GIT_OPTIONAL_LOCKS: '0' };
+  const env: NodeJS.ProcessEnv = { ...source, GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' };
   for (const name of REPOSITORY_SELECTING_VARS) delete env[name];
+  delete env.LANGUAGE;
   return env;
 }
 
@@ -99,6 +105,24 @@ const textOf = (value: unknown): string =>
 
 const isDirectory = (candidate: string): boolean =>
   fs.statSync(candidate, { throwIfNoEntry: false })?.isDirectory() ?? false;
+
+/* `git` が読むのを断ったときの文言。所有者の違うリポジトリを断るときは、文言と一緒に
+   それを解く設定(`safe.directory`)の名前が出る。ファイルを開けなかったときは
+   `Permission denied` が付く。 */
+const REFUSAL_MARKERS = [
+  'dubious ownership',
+  'unsafe repository',
+  'safe.directory',
+  'permission denied',
+] as const;
+
+/** そこがリポジトリでないと `git` 自身が言ったときの文言 */
+const NOT_A_REPOSITORY = 'not a git repository';
+
+const says = (stderr: string, markers: readonly string[]): boolean => {
+  const text = stderr.toLowerCase();
+  return markers.some((marker) => text.includes(marker));
+};
 
 /* 落ちた理由を分ける。
 
@@ -136,17 +160,28 @@ function classifyFailure(error: unknown, request: GitCommandRequest): Observatio
     );
   }
 
+  /* 非ゼロで終わった理由は `stderr` にしか出ない。**そこがリポジトリでないことも、
+     所有者が違って断られることも、同じ 128 で終わる。** 読まずに 1 つのエラーコードへ
+     潰すと、画面は既に在るリポジトリへ `git init` を勧める。 */
   const status = exitCodeOf(error);
   if (status !== undefined) {
+    // `stderr` を捨てない。なぜ非ゼロだったのかは、ここにしか残らない
+    const exited = { ...details, status, stderr: textOf(propOf(error, 'stderr')) };
+    if (says(exited.stderr, REFUSAL_MARKERS)) {
+      return unobservable(
+        new GitCommandError('git refused to read this repository', GIT_DENIED, {
+          cause: error,
+          details: exited,
+        }),
+      );
+    }
+    /* そこがリポジトリでないのは失敗ではない。観測はできたうえで無かったのだから、
+       `absent` で返す。 */
+    if (says(exited.stderr, [NOT_A_REPOSITORY])) return absent('no-source');
     return unobservable(
       new GitCommandError('git exited non-zero', GIT_EXIT_NONZERO, {
         cause: error,
-        // `stderr` を捨てない。なぜ非ゼロだったのかは、ここにしか残らない
-        details: {
-          ...details,
-          status,
-          stderr: textOf(propOf(error, 'stderr')),
-        },
+        details: exited,
       }),
     );
   }

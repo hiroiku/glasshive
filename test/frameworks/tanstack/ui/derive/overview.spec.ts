@@ -3,6 +3,7 @@ import {
   DEFAULT_SORT,
   DEFAULT_SPAN,
   deriveRows,
+  dotFactsOf,
   dotStateOf,
   filterRows,
   holdOrder,
@@ -71,6 +72,7 @@ function session(overrides: Partial<SessionJson> = {}): SessionJson {
     intervals_complete: true,
     intervals_state: 'observed',
     size: 0,
+    sources: { state: 'observed', reason: null },
     subagents: [],
     ...overrides,
   };
@@ -87,6 +89,7 @@ function project(overrides: Partial<ProjectJson> = {}): ProjectJson {
     tokens_24h: 0,
     tokens_24h_state: 'observed',
     read: true,
+    sources: { state: 'observed', reason: null },
     sessions: [session()],
     ...overrides,
   };
@@ -106,6 +109,7 @@ function row(overrides: Partial<OverviewRow> = {}): OverviewRow {
     tokens24hState: 'observed',
     lastActivityMs: T,
     liveProcess: false,
+    sourcesState: 'observed',
     spans: [],
     spansComplete: true,
     ...overrides,
@@ -171,6 +175,51 @@ describe('一覧の行を起こす', () => {
   });
 });
 
+/* `~/.claude/projects` の下に、走査できないディレクトリが 1 つ在るだけで起きることである。
+   行は一覧に残るが、`sessions` が空なので数はどれも 0 になる。**その 0 は観測ではない。** */
+describe('数え上げられなかったプロジェクト', () => {
+  it('プロジェクトのディレクトリを走査できなければ、行もそう言う', () => {
+    const rows = deriveRows([
+      project({ sources: { state: 'unobservable', reason: 'eacces' }, sessions: [] }),
+    ]);
+
+    expect(rows[0]?.sourcesState).toBe('unobservable');
+  });
+
+  it('セッションの子を走査できなかったときも、行はそう言う', () => {
+    const rows = deriveRows([
+      project({
+        sessions: [session({ sources: { state: 'unobservable', reason: 'eacces' } })],
+      }),
+    ]);
+
+    expect(
+      rows[0]?.sourcesState,
+      '子は行の数に足されるので、子を数えられなければ行の数も揃っていない',
+    ).toBe('unobservable');
+  });
+
+  it('稼働のトラックを「全部見られた」としない', () => {
+    const rows = deriveRows([
+      project({ sources: { state: 'unobservable', reason: 'eacces' }, sessions: [] }),
+    ]);
+
+    expect(
+      rows[0]?.spansComplete,
+      '空のトラックを全部見たものとして出すと、見に行けなかった時間が静かだった時間になる',
+    ).toBe(false);
+  });
+
+  it('ディレクトリが無かっただけの行は、断定してよい', () => {
+    const rows = deriveRows([
+      project({ sources: { state: 'absent', reason: 'no-source' }, sessions: [] }),
+    ]);
+
+    expect(rows[0]?.sourcesState, '無かったことは分かっている観測である').toBe('absent');
+    expect(rows[0]?.spansComplete).toBe(true);
+  });
+});
+
 describe('同じ名前のプロジェクトを見分ける', () => {
   it('ぶつかったときだけ一つ上の名前を添える', () => {
     const rows = deriveRows([
@@ -210,6 +259,76 @@ describe('行の頭の点', () => {
 
   it('プロセスも居なければ終了', () => {
     expect(dotStateOf(row())).toBe('ended');
+  });
+
+  it('数え上げられなかった行に、終了の点を置かない', () => {
+    expect(
+      dotStateOf(row({ sourcesState: 'unobservable' })),
+      '`ended` は「このプロジェクトでは何も動いていない」という断定である',
+    ).toBe('unknown');
+  });
+
+  it('数え上げられなかった行に、待機の点も置かない', () => {
+    expect(
+      dotStateOf(row({ sourcesState: 'unobservable', liveProcess: true })),
+      '見えなかった側で動いているセッションが居ないとは言えない',
+    ).toBe('unknown');
+  });
+
+  it('見えた稼働は、数え上げられなかった行でも言ってよい', () => {
+    expect(
+      dotStateOf(row({ sourcesState: 'unobservable', active: 1 })),
+      '見えた 1 本が動いていることは、何本見落としていても変わらない',
+    ).toBe('active');
+  });
+});
+
+/* 行を起こさない画面 —— タブ行 —— も、同じ点を同じ関数から出す。
+   **節を写すと、写した先が 1 つ落とすだけで、1 つの画面が同じプロジェクトについて
+   2 つの答えを出す。** */
+describe('プロジェクトから、そのまま点の材料を作る', () => {
+  it('まだ読んでいないプロジェクトは `unknown`', () => {
+    expect(dotStateOf(dotFactsOf(project({ read: false, sessions: [] })))).toBe('unknown');
+  });
+
+  it('子だけが動いていても、動いていると言う', () => {
+    const facts = dotFactsOf(
+      project({
+        sessions: [session({ state: 'waiting', subagents: [subagent({ state: 'active' })] })],
+      }),
+    );
+
+    expect(dotStateOf(facts), '子はプロジェクトごとの行には現れない').toBe('active');
+  });
+
+  it('人待ちを最優先に見せる', () => {
+    const facts = dotFactsOf(
+      project({ sessions: [session({ state: 'active', awaiting: 'user' })] }),
+    );
+
+    expect(dotStateOf(facts)).toBe('input');
+  });
+
+  it('子のディレクトリを歩けなかったプロジェクトに、終了の点を置かない', () => {
+    const facts = dotFactsOf(
+      project({
+        sessions: [session({ sources: { state: 'unobservable', reason: 'EACCES' } })],
+      }),
+    );
+
+    expect(dotStateOf(facts), 'プロジェクトの側だけを見ると、断定になる').toBe('unknown');
+  });
+
+  it('全部歩けて何も動いていなければ、終了と言ってよい', () => {
+    expect(dotStateOf(dotFactsOf(project()))).toBe('ended');
+  });
+
+  it('一覧の行と同じ答えを出す', () => {
+    const one = project({ sessions: [session({ state: 'waiting' })], live_process: true });
+    const first = deriveRows([one])[0];
+    if (first === undefined) throw new Error('行が無い');
+
+    expect(dotStateOf(dotFactsOf(one))).toBe(dotStateOf(first));
   });
 });
 
@@ -399,6 +518,7 @@ describe('バーと合計', () => {
       tokens: 150,
       tokensPartial: false,
       partial: false,
+      unreadable: false,
     });
   });
 
@@ -421,6 +541,27 @@ describe('バーと合計', () => {
 
     expect(totals.tokens).toBe(100);
     expect(totals.tokensPartial, '足りない合計を「これで全部だ」という顔で出さない').toBe(true);
+  });
+
+  it('数え上げられなかった行が混ざったら、合計が全部でないことを示す', () => {
+    const totals = totalsOf([
+      row({ active: 1, tokens24h: 100 }),
+      row({ sourcesState: 'unobservable', active: 0, tokens24h: null }),
+    ]);
+
+    expect(totals.active, '見えたぶんは本当に在るので足す').toBe(1);
+    expect(totals.partial, '足りないことを黙ると、途中の数が最終の数に見える').toBe(true);
+    expect(
+      totals.unreadable,
+      '読んでいる途中なら待てば揃うが、こちらは待っても揃わない。同じ文で伝えない',
+    ).toBe(true);
+  });
+
+  it('読み終えていないだけの行は、読めなかったことにしない', () => {
+    const totals = totalsOf([row({ read: false, active: null, tokens24h: null })]);
+
+    expect(totals.partial).toBe(true);
+    expect(totals.unreadable, 'まだ読んでいないだけで、読めなかったわけではない').toBe(false);
   });
 
   it('対象期間の外だっただけのプロジェクトは、合計を欠けさせない', () => {

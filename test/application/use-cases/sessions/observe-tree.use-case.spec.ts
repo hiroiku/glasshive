@@ -3,6 +3,7 @@ import { UnexpectedError } from '~/app-kernel/error.ts';
 import { absent, type Observation, observed, unobservable } from '~/app-kernel/observation.ts';
 import type { AgentProcessIntegration } from '~/application/ports/integrations/sessions/agent-process.integration.ts';
 import type {
+  SessionSource,
   TranscriptGroup,
   TranscriptRepository,
 } from '~/application/ports/repositories/sessions/transcript.repository.ts';
@@ -23,18 +24,20 @@ const head = `${JSON.stringify({
   message: { content: 'はじめの一言' },
 })}\n`;
 
+const SESSION: SessionSource = {
+  id: 'sess',
+  fileName: 'sess.jsonl',
+  file: '/root/-w-proj/sess.jsonl',
+  mtimeMs: NOW,
+  sizeBytes: head.length,
+  subagents: [],
+  subagentsWalked: absent('no-source'),
+};
+
 const GROUP: TranscriptGroup = {
   slug: '-w-proj',
-  sessions: [
-    {
-      id: 'sess',
-      fileName: 'sess.jsonl',
-      file: '/root/-w-proj/sess.jsonl',
-      mtimeMs: NOW,
-      sizeBytes: head.length,
-      subagents: [],
-    },
-  ],
+  sessions: [SESSION],
+  walked: observed(1),
 };
 
 function createStub(overrides: {
@@ -118,6 +121,99 @@ describe('木をひと目ぶん観測する', () => {
     );
   });
 
+  it('読めなかったプロジェクトのディレクトリは、木から消さない', async () => {
+    const closed: TranscriptGroup = {
+      slug: '-w-closed',
+      sessions: [],
+      walked: unobservable(new UnexpectedError('開けない')),
+    };
+
+    const tree = await treeOf(createStub({ groups: observed([GROUP, closed]) }));
+
+    expect(
+      tree.projects.map((project) => project.id),
+      '読めなかったことを「セッションが無かった」に倒すと、プロジェクトが黙って消える',
+    ).toEqual(['-w-proj', '-w-closed']);
+  });
+
+  it('読めなかったプロジェクトのディレクトリは、木の欄でも読めなかったことにする', async () => {
+    const closed: TranscriptGroup = {
+      slug: '-w-closed',
+      sessions: [],
+      walked: unobservable(new UnexpectedError('開けない')),
+    };
+
+    const tree = await treeOf(createStub({ groups: observed([GROUP, closed]) }));
+    const blind = tree.projects.find((project) => project.id === '-w-closed');
+
+    expect(blind?.walked.kind, 'セッションが空な理由は、この欄にしか残らない').toBe('unobservable');
+    expect(
+      blind?.recentTokens.kind,
+      '見に行けなかったことを「消費が無かった」と書くと、静かなプロジェクトとして並ぶ',
+    ).toBe('unobservable');
+  });
+
+  it('走査できたプロジェクトの欄は、走査できたままにする', async () => {
+    const tree = await treeOf(createStub({}));
+
+    expect(tree.projects[0]?.walked).toEqual(observed(1));
+    expect(tree.projects[0]?.recentTokens.kind, '走査できたなら、数はそのまま出せる').toBe(
+      'observed',
+    );
+  });
+
+  /* ディレクトリが mode 444 のとき、一覧は返るが 1 本ずつを見に行くところで落ちる。
+     走査そのものは通っているので、「走査できたか」だけを見ていると、ここが黙って消える。 */
+  it('走査は通っても、見えた `transcript` を載せられなかったプロジェクトは木に残す', async () => {
+    const short: TranscriptGroup = {
+      ...GROUP,
+      slug: '-w-short',
+      sessions: [],
+      walked: observed(1),
+    };
+
+    const tree = await treeOf(createStub({ groups: observed([GROUP, short]) }));
+    const blind = tree.projects.find((project) => project.id === '-w-short');
+
+    expect(
+      tree.projects.map((project) => project.id),
+      '見えているのに載せられなかったことを「無かった」に倒すと、プロジェクトが消える',
+    ).toEqual(['-w-proj', '-w-short']);
+    expect(
+      blind?.walked.kind,
+      '`observed` のまま通すと、載せられなかった `transcript` が「無かった」に化ける',
+    ).toBe('unobservable');
+    expect(
+      blind?.recentTokens.kind,
+      '見に行けなかったことを「消費が無かった」と書くと、静かなプロジェクトとして並ぶ',
+    ).toBe('unobservable');
+  });
+
+  it('子のディレクトリを走査できなかったことも、セッションの欄まで運ぶ', async () => {
+    const blindChildren: TranscriptGroup = {
+      ...GROUP,
+      sessions: [{ ...SESSION, subagentsWalked: unobservable(new UnexpectedError('開けない')) }],
+    };
+
+    const tree = await treeOf(createStub({ groups: observed([blindChildren]) }));
+    const session = tree.projects[0]?.sessions[0];
+
+    expect(
+      session?.subagentsWalked.kind,
+      '子を呼ばなかったセッションと、子を数えられなかったセッションが同じ形になる',
+    ).toBe('unobservable');
+    expect(session?.subagents, '数えられなくてもセッションそのものは見えている').toEqual([]);
+  });
+
+  it('子を呼んでいないセッションは、子のディレクトリが無かったことにする', async () => {
+    const tree = await treeOf(createStub({}));
+
+    expect(
+      tree.projects[0]?.sessions[0]?.subagentsWalked,
+      '`subagents` のディレクトリが無いのは、読めなかったのではなく無かったのである',
+    ).toEqual(absent('no-source'));
+  });
+
   it('プロセスを数えられなかったことも、0 件と分けて持つ', async () => {
     const tree = await treeOf(
       createStub({
@@ -168,6 +264,7 @@ describe('木をひと目ぶん観測する', () => {
         return observed([
           GROUP,
           {
+            ...GROUP,
             slug: '-w-other',
             sessions: [{ ...GROUP.sessions[0], file: '/root/-w-other/s.jsonl' }],
           },
@@ -200,7 +297,9 @@ describe('木をひと目ぶん観測する', () => {
   });
 
   it('パスを 1 つも書いていないプロジェクトには、正規化する相手が無い', async () => {
-    const stub = createStub({ groups: observed([{ ...GROUP, sessions: [] }]) });
+    const stub = createStub({
+      groups: observed([{ ...GROUP, sessions: [], walked: observed(0) }]),
+    });
 
     const tree = await treeOf(stub);
     expect(stub.asked, '尋ねる相手が無いのに問い合わせない').toEqual([]);
@@ -243,12 +342,13 @@ describe('木をひと目ぶん観測する', () => {
         child('agent-b-0123456789abcdef'),
         child('agent-c-0123456789abcdef'),
       ],
+      subagentsWalked: observed(3),
     });
     const transcripts: TranscriptRepository = {
       async listTranscripts() {
         return observed([
-          { slug: '-w-a', sessions: [session('s1'), session('s2')] },
-          { slug: '-w-b', sessions: [session('s3'), session('s4')] },
+          { slug: '-w-a', sessions: [session('s1'), session('s2')], walked: observed(2) },
+          { slug: '-w-b', sessions: [session('s3'), session('s4')], walked: observed(2) },
         ]);
       },
       async statTranscript() {

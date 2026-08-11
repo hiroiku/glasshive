@@ -9,7 +9,7 @@ export const SHORT_SHA_CHARS = 10;
 /** 前後の空白を落として短くする。`git` の出力は行末の改行を伴う */
 export const shortSha = (raw: string): string => raw.trim().slice(0, SHORT_SHA_CHARS);
 
-/** 本流を何コミットまで遡るか */
+/** 本流を何コミットまで並べるか */
 export const MAINLINE_LIMIT = 120;
 
 /** 本流に入っていないコミットを何件まで並べるか */

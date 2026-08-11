@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { AppError } from '~/app-kernel/error.ts';
-import { type Observation, observed, unobservable } from '~/app-kernel/observation.ts';
+import { absent, type Observation, observed, unobservable } from '~/app-kernel/observation.ts';
 import {
+  GIT_DENIED,
   GIT_EXIT_NONZERO,
   GIT_NOT_INSTALLED,
   type GitCommandIntegration,
@@ -25,6 +26,8 @@ const BRANCH_REF_FORMAT =
 const BRANCH_NAME_FORMAT = '%(refname:short)';
 const MAINLINE_FORMAT = '%H%x00%P%x00%cI%x00%s';
 const MAINLINE_LIMIT = 120;
+/** 尋ねる件数は並べる上限より 1 つ多い。その 1 つが、上限より古いコミットが在るかの答えになる */
+const MAINLINE_ASKED = MAINLINE_LIMIT + 1;
 
 class GitFailure extends AppError {
   readonly code: string;
@@ -68,7 +71,7 @@ const MAINLINE = [
 const ANSWERS: Record<string, string> = {
   'worktree list --porcelain': WORKTREE_LIST,
   [`for-each-ref refs/heads --sort=-committerdate --format=${BRANCH_REF_FORMAT}`]: BRANCH_REFS,
-  [`log --first-parent -n ${MAINLINE_LIMIT} --format=${MAINLINE_FORMAT} main`]: MAINLINE,
+  [`log --first-parent -n ${MAINLINE_ASKED} --format=${MAINLINE_FORMAT} main`]: MAINLINE,
   [`branch --format=${BRANCH_NAME_FORMAT} --no-merged=main`]: 'topic\n',
   'merge-base main topic': '9f8e7d6c5b4a39281706f5e4d3c2b1a098765432\n',
   'rev-list --count main..topic': '3\n',
@@ -180,6 +183,73 @@ describe('リポジトリをひと目ぶん観る', () => {
   });
 });
 
+/* 上限で切れた本流を、切れていない本流として渡すと、上限より前で分かれたブランチが
+   いちばん古い見えているコミットで分かれたように描かれる。 */
+describe('本流が上限で切れたこと', () => {
+  /** 指定の件数だけ詰まった本流。sha だけが違えばよい */
+  const filledMainline = (count: number): string =>
+    `${Array.from({ length: count }, (_, index) =>
+      [
+        `${index}`.padStart(40, '0'),
+        `${index + 1}`.padStart(40, '0'),
+        '2026-08-04T10:00:00+09:00',
+        `記録 ${index}`,
+      ].join(NUL),
+    ).join('\n')}\n`;
+
+  const withMainline = (count: number) =>
+    observeOverview({
+      [`log --first-parent -n ${MAINLINE_ASKED} --format=${MAINLINE_FORMAT} main`]: observed(
+        filledMainline(count),
+      ),
+    });
+
+  it('尋ねる件数は、並べる上限より 1 つ多い', async () => {
+    const { git, requests } = fakeGit();
+    await createObserveRepository({ git }).execute(CWD);
+    const log = requests.find((request) => request.args[0] === 'log');
+    expect(
+      log?.args,
+      '上限ちょうどしか尋ねないと、その先が在るかを言えるだけの材料が返ってこない',
+    ).toEqual([
+      'log',
+      '--first-parent',
+      '-n',
+      String(MAINLINE_ASKED),
+      `--format=${MAINLINE_FORMAT}`,
+    ]);
+  });
+
+  it('上限より 1 つ多く返ってきたら、切れていると言う', async () => {
+    const overview = observedOverview(await withMainline(MAINLINE_ASKED));
+    expect(overview.mainlineTruncated, '黙って切ると、これで全部の履歴として読まれる').toBe(true);
+  });
+
+  it('切れていても、並べるのは上限までである', async () => {
+    const overview = observedOverview(await withMainline(MAINLINE_ASKED));
+    expect(
+      overview.mainline.length,
+      '多く尋ねた 1 つは、その先が在るかを言うためのもので、縦軸に並べるものではない',
+    ).toBe(MAINLINE_LIMIT);
+  });
+
+  it('上限ちょうどで尽きていれば、切れていない', async () => {
+    const overview = observedOverview(await withMainline(MAINLINE_LIMIT));
+    expect(
+      overview.mainlineTruncated,
+      '全部読めているのに切れたと言うと、画面は在りもしない古いコミットが在ると出す',
+    ).toBe(false);
+    expect(overview.mainline.length, '読めた分はそのまま並べる').toBe(MAINLINE_LIMIT);
+  });
+
+  it('上限に届いていなければ、切れていない', async () => {
+    const overview = observedOverview(await withMainline(MAINLINE_LIMIT - 1));
+    expect(overview.mainlineTruncated, '切れてもいないのに言うと、次からは誰も読まなくなる').toBe(
+      false,
+    );
+  });
+});
+
 describe('尋ね方', () => {
   it('revision は語に混ぜず、revision として渡す', async () => {
     const { git, requests } = fakeGit();
@@ -208,7 +278,7 @@ describe('尋ね方', () => {
       'branch --format= --no-merged=',
       'diff --name-only',
       'for-each-ref refs/heads --sort= --format=',
-      `log --first-parent -n ${MAINLINE_LIMIT} --format=`,
+      `log --first-parent -n ${MAINLINE_ASKED} --format=`,
       'merge-base',
       'rev-list --count',
       'worktree list --porcelain',
@@ -243,15 +313,43 @@ describe('起こせなかったとき', () => {
 
   it('`worktree` もブランチも無ければ、そこはリポジトリではない', async () => {
     const { git } = fakeGit({
-      'worktree list --porcelain': unobservable(new GitFailure(GIT_EXIT_NONZERO)),
-      [`for-each-ref refs/heads --sort=-committerdate --format=${BRANCH_REF_FORMAT}`]: unobservable(
-        new GitFailure(GIT_EXIT_NONZERO),
-      ),
+      'worktree list --porcelain': absent('no-source'),
+      [`for-each-ref refs/heads --sort=-committerdate --format=${BRANCH_REF_FORMAT}`]:
+        absent('no-source'),
     });
     expect(
       observationOf(await createObserveRepository({ git }).execute(CWD)),
       '観測できたうえで無かったのだから、誤りではなく「無い」である',
     ).toEqual({ kind: 'absent', reason: 'no-source' });
+  });
+
+  /* `git` は「そこはリポジトリではない」も「このリポジトリは読まない」も非ゼロで終わる。
+     読めなかったほうを「無い」に潰すと、画面は既に在るリポジトリへ `git init` を勧める。 */
+  it('断られたのを「リポジトリではない」と言わない', async () => {
+    const observation = observationOf(
+      await observeOverview({
+        'worktree list --porcelain': unobservable(new GitFailure(GIT_DENIED)),
+        [`for-each-ref refs/heads --sort=-committerdate --format=${BRANCH_REF_FORMAT}`]:
+          unobservable(new GitFailure(GIT_DENIED)),
+      }),
+    );
+    expect(observation.kind, '断りはエラーコードのまま外へ出す').toBe('unobservable');
+    if (observation.kind !== 'unobservable') return;
+    expect(observation.error.code, '案内は断られたときのものになる').toBe(GIT_DENIED);
+  });
+
+  it('理由の読めない非ゼロも「リポジトリではない」と言わない', async () => {
+    const observation = observationOf(
+      await observeOverview({
+        'worktree list --porcelain': unobservable(new GitFailure(GIT_EXIT_NONZERO)),
+        [`for-each-ref refs/heads --sort=-committerdate --format=${BRANCH_REF_FORMAT}`]:
+          unobservable(new GitFailure(GIT_EXIT_NONZERO)),
+      }),
+    );
+    expect(
+      observation.kind,
+      'なぜ答えなかったのか読めていない。読めなかったものを「無かった」と言うのが、glasshive がついてはいけない唯一の嘘である',
+    ).toBe('unobservable');
   });
 
   it('ブランチが 1 本も無くても、`worktree` が在ればリポジトリである', async () => {

@@ -3,6 +3,7 @@ import type {
   SessionJson,
   SubagentJson,
 } from '~/interface/presenters/sessions/tree.presenter.ts';
+import { unreadSpanOf } from '../../derive/concurrency.ts';
 import { absTime } from '../../format.ts';
 import { intervalsOf, type TimelineNode } from '../../timeline/axis.ts';
 import { AgentChip } from '../chips/Chips.tsx';
@@ -47,16 +48,31 @@ export function resolveActivityRows(
 
 export function ActivityLanes({ rows, nowMs }: { rows: readonly ActivityRow[]; nowMs: number }) {
   const lanes = rows
-    .map((row) => ({ ...row, intervals: intervalsOf(row.node as TimelineNode, nowMs) }))
-    .filter((row) => row.intervals.length > 0)
+    .map((row) => {
+      const node: TimelineNode = row.node;
+      const intervals = intervalsOf(node, nowMs);
+      /* 稼働区間が空でも、読めなかった行は落とさない。**落とすと、そのエージェントが
+         一覧から黙って消えて「関わっていなかった」ように読める。** 呼ぶ側は絞り込む前の
+         行数で見出しを出すので、1 人しか居ない課題では見出しだけが残る。 */
+      const unread =
+        intervals.length === 0 && node.intervals_state === 'unobservable'
+          ? unreadSpanOf(node)
+          : null;
+      return { ...row, intervals, unread };
+    })
+    .filter((row) => row.intervals.length > 0 || row.unread !== null)
     // 関わり始めた順 = 話の順
-    .sort((a, b) => (a.intervals[0]?.[0] ?? 0) - (b.intervals[0]?.[0] ?? 0));
+    .sort(
+      (a, b) =>
+        (a.intervals[0]?.[0] ?? a.unread?.[0] ?? 0) - (b.intervals[0]?.[0] ?? b.unread?.[0] ?? 0),
+    );
   if (lanes.length === 0) return null;
 
   let t0 = Number.POSITIVE_INFINITY;
   let t1 = 0;
   for (const lane of lanes) {
-    for (const [from, to] of lane.intervals) {
+    // 軸は並ぶ行だけで決める。読めなかった行の幅を数えないと、その細線が軸からはみ出す
+    for (const [from, to] of lane.unread === null ? lane.intervals : [lane.unread]) {
       if (from < t0) t0 = from;
       if (to > t1) t1 = to;
     }
@@ -71,14 +87,27 @@ export function ActivityLanes({ rows, nowMs }: { rows: readonly ActivityRow[]; n
         <div key={lane.file} className="alane">
           <AgentChip file={lane.file} state={lane.state} label={lane.label} where={lane.where} />
           <span className="alane-tl">
-            {lane.intervals.map(([from, to], index) => (
+            {/* 読めなかった行は細線 1 本にする。**棒では描かない** —— 棒は「この間ずっと
+                動いていた」と言うので、観測ゼロから所要時間まで主張することになる */}
+            {lane.unread !== null ? (
               <i
-                key={`${from}:${to}`}
-                className={`bar ${lane.state === 'active' && index === lane.intervals.length - 1 ? 'active' : 'done'}`}
-                title={`${absTime(from)} → ${absTime(to)}`}
-                style={{ left: `${pct(from)}%`, width: `${Math.max(0.8, pct(to) - pct(from))}%` }}
+                className="bar unknown"
+                title={`${absTime(lane.unread[0])} → ${absTime(lane.unread[1])} · activity could not be read`}
+                style={{
+                  left: `${pct(lane.unread[0])}%`,
+                  width: `${Math.max(0.8, pct(lane.unread[1]) - pct(lane.unread[0]))}%`,
+                }}
               />
-            ))}
+            ) : (
+              lane.intervals.map(([from, to], index) => (
+                <i
+                  key={`${from}:${to}`}
+                  className={`bar ${lane.state === 'active' && index === lane.intervals.length - 1 ? 'active' : 'done'}`}
+                  title={`${absTime(from)} → ${absTime(to)}`}
+                  style={{ left: `${pct(from)}%`, width: `${Math.max(0.8, pct(to) - pct(from))}%` }}
+                />
+              ))
+            )}
           </span>
         </div>
       ))}
