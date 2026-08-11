@@ -4,6 +4,7 @@ import type {
   GithubIssueDiscussionEntry,
   GithubIssueReference,
 } from '~/application/use-cases/issues/get-github-issue-discussion.use-case.ts';
+import type { GithubIssueEventLog } from '~/application/use-cases/issues/list-github-issue-events.use-case.ts';
 import type {
   GithubActor,
   GithubIssueExtra,
@@ -78,11 +79,42 @@ export interface IssueSummaryJson {
   assignee: string | null;
   created_at: string | null;
   updated_at: string | null;
+  /** 閉じた時刻。開いている課題には無い。`updated_at` とは別のものである */
+  closed_at: string | null;
   deps: IssueDependencyJson[];
   /** 掛かっている先を全部見られたか。欠けたまま「これが全部だ」と描かせないための欄 */
   deps_complete: boolean;
   /** `IssueSummaryJson` の欄に写す先が無かった、GitHub にしか無いものをまとめたもの */
   github: GithubIssueJson;
+}
+
+/** 課題 1 件に起きたこと 1 つ。時刻と種類だけを運ぶ */
+export interface GithubIssueEventJson {
+  at: string;
+  /** `comment` / `closed` / `labeled` など。やり取りの `kind` と同じ言葉 */
+  kind: string;
+}
+
+/** 課題 1 件ぶん */
+export interface GithubIssueEventsJson {
+  /** `#<番号>` の形。一覧の行と突き合わせる鍵 */
+  id: string;
+  events: GithubIssueEventJson[];
+  /** 1 件あたりの上限に当たって、その先を読んでいないか */
+  truncated: boolean;
+}
+
+/* 一覧ぶんのイベント。
+
+   `issues` を空にするのは `observed` でなかったときだけで、そのときは `state` と `reason` が
+   なぜ空なのかを言う。**空の並びだけを返してはいけない** —— 何も起きていない一覧と、
+   `gh` が答えなかった一覧が同じ画面になる。 */
+export interface GithubIssueEventLogJson {
+  state: ObservationState;
+  reason: string | null;
+  issues: GithubIssueEventsJson[];
+  /** 一覧の課題を全部辿れたか。読めなかったときは `false` */
+  complete: boolean;
 }
 
 export interface IssuesJson {
@@ -222,6 +254,7 @@ const presentSummary = (issue: IssueSummary): IssueSummaryJson => ({
   assignee: issue.assignee,
   created_at: issue.createdAt,
   updated_at: issue.updatedAt,
+  closed_at: issue.closedAt,
   deps: issue.deps.map((dependency) => ({
     on: dependency.on,
     type: dependency.type,
@@ -313,6 +346,25 @@ function presentDiscussionEntry(entry: GithubIssueDiscussionEntry): GithubIssueD
         will_close_target: entry.willCloseTarget,
       };
   }
+}
+
+/* 一覧ぶんのイベントを外の形にする。中身は写すだけで、順序も切られたことも触らない */
+export function presentGithubIssueEvents(
+  log: Observation<GithubIssueEventLog>,
+): GithubIssueEventLogJson {
+  return {
+    state: log.kind,
+    reason: reasonOf(log),
+    issues:
+      log.kind === 'observed'
+        ? log.value.issues.map((issue) => ({
+            id: issue.id,
+            events: issue.events.map((event) => ({ at: event.at, kind: event.kind })),
+            truncated: issue.truncated,
+          }))
+        : [],
+    complete: log.kind === 'observed' && log.value.complete,
+  };
 }
 
 /* 観測できなかったときも、この形で言える。

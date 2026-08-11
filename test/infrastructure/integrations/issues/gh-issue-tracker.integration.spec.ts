@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createGhIssueTrackerIntegration } from '~/infrastructure/integrations/issues/gh-issue-tracker.integration.ts';
 
+/* 尋ね方の形は、尋ねる実装そのものから引く。ここはポートを宣言した層を `import` できない */
+type EventsRequest = Parameters<
+  ReturnType<typeof createGhIssueTrackerIntegration>['fetchIssueEvents']
+>[0];
+
 /** `execFile` が投げるエラーの形を真似る。起動できなかったときは `code` が errno の文字列 */
 const errnoError = (code: string): Error => Object.assign(new Error('spawn failed'), { code });
 
@@ -28,6 +33,23 @@ describe('gh に課題を尋ねる', () => {
       '値を問い合わせの文字列に埋めると、名前に引用符が混ざったときに GraphQL の構文が壊れる',
     ).toContain('owner=hiroiku');
     expect(seen).toContain('name=glasshive');
+  });
+
+  it('閉じた時刻を求める', async () => {
+    let query = '';
+    const tracker = createGhIssueTrackerIntegration({
+      run: async (args) => {
+        query = args.find((arg) => arg.startsWith('query=')) ?? '';
+        return '{}';
+      },
+    });
+
+    await tracker.fetchIssuePage(request);
+
+    expect(
+      query,
+      '尋ねないと画面は `updatedAt` を閉じた時刻の代わりにする。閉じた後に触られた課題が長く出る',
+    ).toContain('closedAt');
   });
 
   it('最初のページでは続きの位置を渡さない', async () => {
@@ -306,5 +328,104 @@ describe('gh に課題 1 件のやり取りを尋ねる', () => {
     expect(answer.kind === 'unobservable' && answer.error.details?.repository).toBe(
       'hiroiku/glasshive',
     );
+  });
+});
+
+describe('gh に一覧ぶんのイベントを尋ねる', () => {
+  const request: EventsRequest = {
+    owner: 'hiroiku',
+    name: 'glasshive',
+    cursor: null,
+    pageSize: 100,
+  };
+
+  const queryOf = async (
+    over: Partial<EventsRequest> = {},
+  ): Promise<{ query: string; args: readonly string[] }> => {
+    let seen: readonly string[] = [];
+    const tracker = createGhIssueTrackerIntegration({
+      run: async (args) => {
+        seen = args;
+        return '{}';
+      },
+    });
+    await tracker.fetchIssueEvents({ ...request, ...over });
+    return { query: seen.find((arg) => arg.startsWith('query=')) ?? '', args: seen };
+  };
+
+  it('値を問い合わせの文字列に埋めずに渡す', async () => {
+    const { args } = await queryOf();
+
+    expect(args).toContain('owner=hiroiku');
+    expect(args).toContain('name=glasshive');
+    expect(args).toContain('pageSize=100');
+    expect(args.some((arg) => arg.startsWith('cursor='))).toBe(false);
+  });
+
+  it('2 ページ目からは続きの位置を渡す', async () => {
+    const { args } = await queryOf({ cursor: 'Y3Vyc29y' });
+
+    expect(args).toContain('cursor=Y3Vyc29y');
+  });
+
+  it('一覧と同じ並びで、同じ状態の課題を求める', async () => {
+    const { query } = await queryOf();
+
+    expect(
+      query,
+      '並びが一覧と違うと、100 件を超えるリポジトリで返る課題そのものがずれる',
+    ).toContain('orderBy:{field:UPDATED_AT,direction:DESC}');
+    expect(query).toContain('states:[OPEN,CLOSED]');
+  });
+
+  it('読む種類は、やり取りの問い合わせと同じものにする', async () => {
+    const { query } = await queryOf();
+
+    for (const type of ['ISSUE_COMMENT', 'CLOSED_EVENT', 'RENAMED_TITLE_EVENT']) {
+      expect(query).toContain(type);
+    }
+    expect(
+      query,
+      '絞らないと購読やラベルの色替えまで並び、1 件あたりの枠が画面に何も足さない項目で埋まる',
+    ).not.toContain('SUBSCRIBED_EVENT');
+  });
+
+  it('求めるのは時刻と種類、そして総数だけにする', async () => {
+    const { query } = await queryOf();
+
+    expect(query).toContain('createdAt');
+    expect(query, '切られたかどうかは総数で決める').toContain('totalCount');
+    expect(query, '100 件ぶんの本文を運ぶと、これが一覧より重くなる').not.toContain('body');
+    expect(query).not.toContain('author');
+    expect(query).not.toContain('label{');
+  });
+
+  it('新しいほうから採る', async () => {
+    const { query } = await queryOf();
+
+    expect(
+      query,
+      '両端(作られた時刻と閉じた時刻)は課題そのものの欄として別に届くので、要るのは新しいほう',
+    ).toContain('last:30');
+  });
+
+  it('応答をそのまま持ち帰る', async () => {
+    const tracker = createGhIssueTrackerIntegration({ run: async () => '{"data":{}}' });
+
+    const answer = await tracker.fetchIssueEvents(request);
+
+    expect(answer.kind === 'observed' && answer.value).toBe('{"data":{}}');
+  });
+
+  it('落ちた理由は一覧のときと同じに分ける', async () => {
+    const tracker = createGhIssueTrackerIntegration({
+      run: async () => {
+        throw Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' });
+      },
+    });
+
+    const answer = await tracker.fetchIssueEvents(request);
+
+    expect(answer.kind === 'unobservable' && answer.error.code).toBe('tracker.not_installed');
   });
 });

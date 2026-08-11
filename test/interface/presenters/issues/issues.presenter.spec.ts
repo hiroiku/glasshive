@@ -3,6 +3,7 @@ import { AppError } from '~/app-kernel/error.ts';
 import { absent, observed, unobservable } from '~/app-kernel/observation.ts';
 import {
   presentGithubIssueDiscussion,
+  presentGithubIssueEvents,
   presentIssues,
 } from '~/interface/presenters/issues/issues.presenter.ts';
 
@@ -36,6 +37,7 @@ const LEDGER = {
       assignee: 'hiroiku',
       createdAt: '2026-08-01T00:00:00Z',
       updatedAt: '2026-08-02T00:00:00Z',
+      closedAt: null,
       deps: [{ on: '#0', type: 'blocks' }],
       depsComplete: true,
       github: {
@@ -79,6 +81,7 @@ describe('一覧を外の形へ写す', () => {
           assignee: 'hiroiku',
           created_at: '2026-08-01T00:00:00Z',
           updated_at: '2026-08-02T00:00:00Z',
+          closed_at: null,
           deps: [{ on: '#0', type: 'blocks' }],
           deps_complete: true,
           github: {
@@ -129,6 +132,7 @@ describe('一覧を外の形へ写す', () => {
             assignee: null,
             createdAt: null,
             updatedAt: null,
+            closedAt: null,
             deps: [{ on: null, type: 'parent-child' }],
             depsComplete: false,
             github: EMPTY_GITHUB,
@@ -151,6 +155,7 @@ describe('一覧を外の形へ写す', () => {
       assignee: null,
       created_at: null,
       updated_at: null,
+      closed_at: null,
       deps: [{ on: null, type: 'parent-child' }],
       // 掛かっている先を全部は見られなかった。埋めると、辺の欠けた依存グラフが完全な絵に見える
       deps_complete: false,
@@ -438,5 +443,60 @@ describe('やり取りを外の形へ写す', () => {
       presentGithubIssueDiscussion(observed({ entries: [], truncated: true })).truncated,
       '黙って切ると、上限より後ろの発言が「無かった」ことになる',
     ).toBe(true);
+  });
+});
+
+describe('一覧ぶんのイベントを外の形へ写す', () => {
+  const log = {
+    issues: [
+      {
+        id: '#101',
+        events: [
+          { at: '2026-08-01T00:00:00Z', kind: 'labeled' as const },
+          { at: '2026-08-02T00:00:00Z', kind: 'closed' as const },
+        ],
+        truncated: false,
+      },
+      { id: '#102', events: [], truncated: true },
+    ],
+    complete: true,
+  };
+
+  it('課題ごとに、順序も切られたことも触らずに写す', () => {
+    const presented = presentGithubIssueEvents(observed(log));
+
+    expect(presented).toEqual({
+      state: 'observed',
+      reason: null,
+      issues: [
+        {
+          id: '#101',
+          events: [
+            { at: '2026-08-01T00:00:00Z', kind: 'labeled' },
+            { at: '2026-08-02T00:00:00Z', kind: 'closed' },
+          ],
+          truncated: false,
+        },
+        { id: '#102', events: [], truncated: true },
+      ],
+      complete: true,
+    });
+  });
+
+  it('何も起きていない一覧と、読めなかった一覧を別の答えにする', () => {
+    const quiet = presentGithubIssueEvents(observed({ issues: [], complete: true }));
+    const gone = presentGithubIssueEvents(absent('no-source'));
+    const blind = presentGithubIssueEvents(unobservable(new TrackerUnavailable('gh が答えない')));
+
+    expect(quiet.state).toBe('observed');
+    expect(quiet.complete).toBe(true);
+    expect(gone.state).toBe('absent');
+    expect(gone.reason).toBe('no-source');
+    expect(blind.state).toBe('unobservable');
+    expect(blind.reason).toBe('tracker.not_installed');
+    expect(
+      blind.complete,
+      '読めなかった一覧を「全部辿れた」と言うと、点の無い行が静かな課題に見える',
+    ).toBe(false);
   });
 });

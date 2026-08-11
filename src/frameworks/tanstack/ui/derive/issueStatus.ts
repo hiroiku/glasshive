@@ -16,3 +16,17 @@ export const isClosedStatus = (status: string): boolean => CLOSED_STATUSES.has(s
 /** 閉じたものを含めない一覧。含めるなら渡されたまま返す */
 export const withoutClosed = (issues: readonly IssueSummaryJson[]): readonly IssueSummaryJson[] =>
   issues.filter((issue) => !isClosedStatus(issue.status));
+
+/* 閉じた時刻。閉じていない課題と、いつ閉じたか読めなかった課題は `null` になる。
+
+   **`closed_at` が本物で、`updated_at` は代用である。** 閉じた後に誰かが書き込めば
+   `updated_at` は先へ進むので、代用へ落ちた課題は実際より後ろの時刻を指す。それでも
+   落とす先を持つのは、閉じたことが分かっているのに時刻だけ無い課題を、閉じていない課題と
+   同じ扱いにしないためである。 */
+export function closedAtMs(issue: IssueSummaryJson): number | null {
+  if (!isClosedStatus(issue.status)) return null;
+  const closed = Date.parse(issue.closed_at ?? '');
+  if (Number.isFinite(closed)) return closed;
+  const touched = Date.parse(issue.updated_at ?? '');
+  return Number.isFinite(touched) ? touched : null;
+}

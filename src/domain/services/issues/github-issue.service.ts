@@ -10,6 +10,10 @@ import type {
   GithubIssueReference,
 } from '~/domain/entities/issues/github-issue-discussion.entity.ts';
 import type {
+  GithubIssueEvent,
+  GithubIssueEvents,
+} from '~/domain/entities/issues/github-issue-events.entity.ts';
+import type {
   IssueDependency,
   IssueLedger,
   IssueSummary,
@@ -220,6 +224,7 @@ function toSummary(node: JsonRecord): IssueSummary | null {
     assignee: assigneeOf(node),
     createdAt: asString(node, 'createdAt') ?? null,
     updatedAt: asString(node, 'updatedAt') ?? null,
+    closedAt: asString(node, 'closedAt') ?? null,
     deps,
     depsComplete: depsCompleteOf(node, blockedBy),
     github: extraOf(node),
@@ -435,6 +440,96 @@ export function parseIssueDiscussion(text: string): GithubIssueDiscussionPage | 
 
   return {
     entries,
+    endCursor: asString(pageInfo ?? {}, 'endCursor') ?? null,
+    hasNextPage: pageInfo?.hasNextPage === true,
+  };
+}
+
+/* 一覧ぶんのイベント 1 ページ。次のページを求めるのに要るものと、課題ごとのイベント */
+export interface GithubIssueEventsPage {
+  readonly issues: readonly GithubIssueEvents[];
+  readonly endCursor: string | null;
+  readonly hasNextPage: boolean;
+}
+
+/* `__typename` からイベントの名前へ。**`entryOf` と同じ言葉を返す。**
+
+   値の型を `GithubIssueDiscussionEntry['kind']` に縛ってあるので、パネルの側が名前を変えれば
+   ここもコンパイルで落ちる。同じイベントをパネルと点で違う名前で呼ぶことがなくなる。 */
+const EVENT_KINDS: Readonly<Record<string, GithubIssueDiscussionEntry['kind']>> = {
+  IssueComment: 'comment',
+  ClosedEvent: 'closed',
+  ReopenedEvent: 'reopened',
+  LabeledEvent: 'labeled',
+  UnlabeledEvent: 'unlabeled',
+  AssignedEvent: 'assigned',
+  UnassignedEvent: 'unassigned',
+  MilestonedEvent: 'milestoned',
+  DemilestonedEvent: 'demilestoned',
+  RenamedTitleEvent: 'renamed',
+  ParentIssueAddedEvent: 'parent-added',
+  BlockedByAddedEvent: 'blocked-by-added',
+  MarkedAsDuplicateEvent: 'marked-as-duplicate',
+  CrossReferencedEvent: 'cross-referenced',
+};
+
+/* 課題 1 件ぶんのイベント。`createdAt` を読めない項目と、知らない `__typename` は落とす。
+
+   切られたかどうかは GitHub の `totalCount` と、**返ってきた項目の数**で決める。読めたイベントの
+   数と比べてはいけない —— こちらが落とした項目まで切られたことにしてしまう。 */
+function eventsOf(node: JsonRecord): GithubIssueEvents | null {
+  const number = numberAt(node, 'number');
+  if (number === null) return null;
+
+  const timeline = asRecord(node, 'timelineItems');
+  const nodes = asArray(timeline ?? {}, 'nodes') ?? [];
+  const events: GithubIssueEvent[] = [];
+  for (const item of nodes) {
+    if (typeof item !== 'object' || item === null) continue;
+    const record = item as JsonRecord;
+    const at = asString(record, 'createdAt');
+    const kind = EVENT_KINDS[asString(record, '__typename') ?? ''];
+    if (at === undefined || kind === undefined) continue;
+    events.push({ at, kind });
+  }
+
+  const total = numberAt(timeline ?? {}, 'totalCount');
+  return {
+    id: idOf(number),
+    events,
+    truncated: total !== null && total > nodes.length,
+  };
+}
+
+/* 一覧ぶんのイベント 1 ページを読む。
+
+   `parseIssuePage` と同じく、`errors` が付いた応答をここで見分けない。失敗として扱うかを
+   決めるのは、起こした側である。 */
+export function parseIssueEventsPage(text: string): GithubIssueEventsPage | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+
+  const data = asRecord(parsed as JsonRecord, 'data');
+  const repository = asRecord(data ?? {}, 'repository');
+  const issues = asRecord(repository ?? {}, 'issues');
+  if (issues === undefined) return null;
+
+  const pageInfo = asRecord(issues, 'pageInfo');
+  const nodes = asArray(issues, 'nodes') ?? [];
+  const found: GithubIssueEvents[] = [];
+  for (const node of nodes) {
+    if (typeof node !== 'object' || node === null) continue;
+    const events = eventsOf(node as JsonRecord);
+    if (events !== null) found.push(events);
+  }
+
+  return {
+    issues: found,
     endCursor: asString(pageInfo ?? {}, 'endCursor') ?? null,
     hasNextPage: pageInfo?.hasNextPage === true,
   };

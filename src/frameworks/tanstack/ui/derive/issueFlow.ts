@@ -1,12 +1,15 @@
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
+import { closedAtMs, isClosedStatus } from './issueStatus.ts';
 
 /* 課題の増減の移り変わり。
 
-   **取ってきた課題に遷移の履歴は無い。** 在るのは作られた時刻と、最後に触られた時刻だけである。
-   だから閉じたものの `updated_at` を閉じた時刻と見なして数える — 閉じた後にも触れば
-   ずれるが、閉じた課題が再び触られることは稀で、目で追う形としては足りる。
+   **取ってきた課題に遷移の履歴は無い。** 在るのは作られた時刻と閉じた時刻だけなので、
+   ここが描けるのは「その時点で開いていた数」と「そこまでに閉じた数」の 2 本である。
+   開いた課題がいつ堰き止められたか、いつ担当が付いたかは、この素材からは出せない。
 
-   近似であることを画面の側で言い落とさないこと。 */
+   閉じた時刻の読み方は `closedAtMs` に任せる —— `issueGantt.ts` と同じ規則で読む。
+   **閉じたものは `closed` だけではない。** `not_planned` も閉じている。片方だけを数えると、
+   やらないと決めた課題が開いたまま積み上がる。 */
 
 /** バーの本数 */
 export const FLOW_BARS = 60;
@@ -21,18 +24,22 @@ export interface FlowSeries {
   readonly closed: readonly number[];
 }
 
-const sortedTimes = (values: readonly (string | null)[]): number[] =>
+const sorted = (values: readonly (number | null)[]): number[] =>
   values
-    .map((value) => Date.parse(value ?? ''))
-    .filter(Number.isFinite)
+    .filter((value): value is number => value !== null && Number.isFinite(value))
     .sort((a, b) => a - b);
+
+const parsed = (iso: string | null): number | null => {
+  const atMs = Date.parse(iso ?? '');
+  return Number.isFinite(atMs) ? atMs : null;
+};
 
 export function flowSeries(issues: readonly IssueSummaryJson[], nowMs: number): FlowSeries {
   const from = nowMs - FLOW_SPAN_MS;
   const step = FLOW_SPAN_MS / FLOW_BARS;
-  const created = sortedTimes(issues.map((issue) => issue.created_at));
-  const closedAt = sortedTimes(
-    issues.filter((issue) => issue.status === 'closed').map((issue) => issue.updated_at),
+  const created = sorted(issues.map((issue) => parsed(issue.created_at)));
+  const closedAt = sorted(
+    issues.filter((issue) => isClosedStatus(issue.status)).map((issue) => closedAtMs(issue)),
   );
 
   const open: number[] = [];

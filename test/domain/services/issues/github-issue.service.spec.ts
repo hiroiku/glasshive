@@ -4,6 +4,7 @@ import {
   buildLedger,
   parseIssueBody,
   parseIssueDiscussion,
+  parseIssueEventsPage,
   parseIssuePage,
 } from '~/domain/services/issues/github-issue.service.ts';
 
@@ -115,6 +116,34 @@ describe('GitHub の課題を台帳の形へ写す', () => {
     expect(counts, '片付いた課題を blocked として並べると、残りの仕事が実際より多く見える').toEqual(
       { closed: 1 },
     );
+  });
+
+  it('閉じた時刻を `updatedAt` で代用せずに運ぶ', () => {
+    const { issues } = buildLedger(
+      [
+        node({
+          state: 'CLOSED',
+          stateReason: 'COMPLETED',
+          closedAt: '2026-08-01T12:00:00Z',
+          updatedAt: '2026-08-05T00:00:00Z',
+        }),
+      ],
+      { includeClosed: true, truncated: false },
+    );
+
+    expect(issues[0]?.closedAt, '閉じた後に触られても、閉じた時刻は動かない').toBe(
+      '2026-08-01T12:00:00Z',
+    );
+    expect(issues[0]?.updatedAt).toBe('2026-08-05T00:00:00Z');
+  });
+
+  it('閉じた時刻を返さなかった応答では、閉じた時刻を持たない', () => {
+    const { issues } = buildLedger([node({ state: 'CLOSED' })], {
+      includeClosed: true,
+      truncated: false,
+    });
+
+    expect(issues[0]?.closedAt, '無いものを `updatedAt` で埋めない').toBeNull();
   });
 
   it('やらないことにした課題を、やり終えた課題と混ぜない', () => {
@@ -623,5 +652,142 @@ describe('課題 1 件のやり取りを読む', () => {
     ['data が無い', JSON.stringify({ errors: [{ message: 'Could not resolve to a Repository' }] })],
   ])('%s は辿れなかったと言う', (_name, text) => {
     expect(parseIssueDiscussion(text)).toBe(null);
+  });
+});
+
+/** 一覧ぶんのイベントの応答。`timelineItems` を持つ課題の並び */
+const eventsPage = (issues: Record<string, unknown>) =>
+  JSON.stringify({ data: { repository: { issues } } });
+
+const timeline = (
+  nodes: readonly Record<string, unknown>[],
+  totalCount = nodes.length,
+): Record<string, unknown> => ({ totalCount, nodes });
+
+describe('一覧ぶんのイベントを読む', () => {
+  it('課題ごとに、起きた時刻と種類だけを取り出す', () => {
+    const page = parseIssueEventsPage(
+      eventsPage({
+        pageInfo: { hasNextPage: false, endCursor: null },
+        nodes: [
+          {
+            number: 101,
+            timelineItems: timeline([
+              { __typename: 'LabeledEvent', createdAt: '2026-08-01T00:00:00Z' },
+              { __typename: 'IssueComment', createdAt: '2026-08-02T00:00:00Z' },
+              { __typename: 'ClosedEvent', createdAt: '2026-08-03T00:00:00Z' },
+            ]),
+          },
+        ],
+      }),
+    );
+
+    expect(page?.issues[0]?.id, '一覧の行と突き合わせる鍵は `#<番号>` である').toBe('#101');
+    expect(page?.issues[0]?.events).toEqual([
+      { at: '2026-08-01T00:00:00Z', kind: 'labeled' },
+      { at: '2026-08-02T00:00:00Z', kind: 'comment' },
+      { at: '2026-08-03T00:00:00Z', kind: 'closed' },
+    ]);
+  });
+
+  it('種類の言葉は、やり取りのパネルと同じものにする', () => {
+    const page = parseIssueEventsPage(
+      eventsPage({
+        nodes: [
+          {
+            number: 1,
+            timelineItems: timeline([
+              { __typename: 'CrossReferencedEvent', createdAt: '2026-08-01T00:00:00Z' },
+              { __typename: 'BlockedByAddedEvent', createdAt: '2026-08-01T01:00:00Z' },
+              { __typename: 'MarkedAsDuplicateEvent', createdAt: '2026-08-01T02:00:00Z' },
+              { __typename: 'ParentIssueAddedEvent', createdAt: '2026-08-01T03:00:00Z' },
+            ]),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      page?.issues[0]?.events.map((event) => event.kind),
+      '同じ課題に起きたことを、パネルと点で違う名前で呼ばない',
+    ).toEqual(['cross-referenced', 'blocked-by-added', 'marked-as-duplicate', 'parent-added']);
+  });
+
+  it('時刻の無い項目と、知らない種類は落とす', () => {
+    const page = parseIssueEventsPage(
+      eventsPage({
+        nodes: [
+          {
+            number: 1,
+            timelineItems: timeline([
+              { __typename: 'LabeledEvent' },
+              { __typename: 'SubscribedEvent', createdAt: '2026-08-01T00:00:00Z' },
+              { __typename: 'ClosedEvent', createdAt: '2026-08-02T00:00:00Z' },
+            ]),
+          },
+        ],
+      }),
+    );
+
+    expect(page?.issues[0]?.events).toEqual([{ at: '2026-08-02T00:00:00Z', kind: 'closed' }]);
+  });
+
+  it('切られたかどうかは、返ってきた項目の数で決める', () => {
+    const page = parseIssueEventsPage(
+      eventsPage({
+        nodes: [
+          {
+            number: 1,
+            /* 3 件返ってきて総数が 141。上限に当たっている */
+            timelineItems: timeline(
+              [
+                { __typename: 'ClosedEvent', createdAt: '2026-08-01T00:00:00Z' },
+                { __typename: 'LabeledEvent' },
+                { __typename: 'SubscribedEvent', createdAt: '2026-08-01T01:00:00Z' },
+              ],
+              141,
+            ),
+          },
+          {
+            number: 2,
+            timelineItems: timeline([
+              { __typename: 'LabeledEvent' },
+              { __typename: 'SubscribedEvent', createdAt: '2026-08-01T00:00:00Z' },
+            ]),
+          },
+        ],
+      }),
+    );
+
+    expect(page?.issues[0]?.truncated).toBe(true);
+    expect(page?.issues[1]?.truncated, 'こちらが落とした項目を、GitHub が切ったことにしない').toBe(
+      false,
+    );
+  });
+
+  it('番号を持たない記録は課題にしない', () => {
+    const page = parseIssueEventsPage(
+      eventsPage({
+        nodes: [{ timelineItems: timeline([]) }, { number: 2, timelineItems: timeline([]) }],
+      }),
+    );
+
+    expect(page?.issues.map((issue) => issue.id)).toEqual(['#2']);
+  });
+
+  it('続きの位置を持ち回る', () => {
+    const page = parseIssueEventsPage(
+      eventsPage({ pageInfo: { hasNextPage: true, endCursor: 'Y3Vyc29y' }, nodes: [] }),
+    );
+
+    expect(page).toEqual({ issues: [], endCursor: 'Y3Vyc29y', hasNextPage: true });
+  });
+
+  it('読めない応答は `null` で返す', () => {
+    expect(parseIssueEventsPage('{')).toBeNull();
+    expect(
+      parseIssueEventsPage(JSON.stringify({ data: { repository: null } })),
+      '空の一覧として返すと、読めなかったことが「何も起きていない」に化ける',
+    ).toBeNull();
   });
 });

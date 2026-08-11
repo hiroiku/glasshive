@@ -69,10 +69,17 @@ function spyDiscussion(): DiscussionUseCase & { readonly seen: DiscussionInput[]
   };
 }
 
+const unusedEvents: Deps['events'] = {
+  async execute() {
+    throw new Error('not called');
+  },
+};
+
 const depsWith = (discussion: DiscussionUseCase): Deps => ({
   list: unusedList,
   body: unusedBody,
   discussion,
+  events: unusedEvents,
   index,
 });
 

@@ -1594,6 +1594,10 @@ function buildIssues(repoName, nowMs) {
       stateReason: notPlanned ? 'NOT_PLANNED' : closed ? 'COMPLETED' : null,
       createdAt: iso(nowMs - (60 - i) * DAY),
       updatedAt: iso(updatedAt),
+      /* 閉じた時刻は、最後に触られた時刻より前に置く。**同じにしない** —— 同じにすると
+         `updated_at` を閉じた時刻の代用にしても同じ絵が出てしまい、代用が代用であることを
+         この世界で確かめられなくなる。閉じた後に誰かが書き込む課題は普通に在る。 */
+      closedAt: closed || notPlanned ? iso(updatedAt - between(2, 40) * HOUR) : null,
       url: `https://github.com/${OWNER}/${repoName}/issues/${number}`,
       /* アバターの URL は載せない。**載せれば画面が GitHub の CDN へ取りに行く。**
          架空の login に本物の顔が付くこともない。 */
@@ -1723,6 +1727,10 @@ if (fields.has('number')) {
   process.exit(0);
 }
 
+/* The list of issues, and the events of that same list, are two queries over the same page.
+   Which one this is can only be read from the query itself. */
+const wantsEvents = (fields.get('query') ?? '').includes('timelineItems');
+
 // GitHub's cursor is opaque base64; this one carries the offset it stands for.
 const pageSize = Number(fields.get('pageSize')) || 100;
 const cursor = fields.get('cursor');
@@ -1738,8 +1746,25 @@ process.stdout.write(
       repository: {
         issues: {
           pageInfo: { hasNextPage: next < nodes.length, endCursor },
-          // The page query asks for neither the body nor the discussion, so neither is here.
-          nodes: page.map(({ body, discussion, ...rest }) => rest),
+          nodes: page.map(({ body, discussion, ...rest }) =>
+            /* The events query asks the same page of issues for nothing but its timeline, so
+               it is answered from the same canned discussion, stripped down to what it asks
+               for. Answering it with the whole issue would let the page render a column the
+               real gh never fills. */
+            wantsEvents
+              ? {
+                  number: rest.number,
+                  timelineItems: {
+                    totalCount: discussion.length,
+                    nodes: discussion.map(({ __typename, createdAt }) => ({
+                      __typename,
+                      createdAt,
+                    })),
+                  },
+                }
+              : // The page query asks for neither the body nor the discussion, so neither is here.
+                rest,
+          ),
         },
       },
     },

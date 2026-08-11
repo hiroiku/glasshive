@@ -45,6 +45,11 @@ export interface ProjectSearch {
   /* 一覧の右のタイムラインが一度に見せる幅。`GANTT_WINDOWS` のラベルをそのまま載せる。
      無ければ `DEFAULT_GANTT_WINDOW` である。 */
   gw?: string | undefined;
+  /* 課題の一覧を何で束ねるか。無ければ束ねない(親子の入れ子のまま)。
+
+     **`ms` とは別のことである。** あちらは 1 つのマイルストーンだけを残す絞り込みで、
+     こちらは全部を出したまま並べ方を変える。 */
+  group?: IssueGroup | undefined;
 }
 
 /** Work の画面の行が指すもの。無ければ課題 */
@@ -52,6 +57,9 @@ export type WorkUnit = 'branches' | 'milestones';
 
 /** 課題の見方。一覧か、依存グラフか */
 export type IssueView = 'graph';
+
+/** 課題の一覧の束ね方。無ければ束ねない */
+export type IssueGroup = 'milestone';
 
 const asString = (value: unknown): string | undefined =>
   typeof value === 'string' && value !== '' ? value : undefined;
@@ -65,6 +73,7 @@ export function parseProjectSearch(raw: Record<string, unknown>): ProjectSearch 
   const dir = raw.dir;
   const view = raw.view;
   const unit = raw.unit;
+  const group = raw.group;
   /* 選べる幅は `GANTT_WINDOWS` が持っている。ここで書き写すと、片方だけが増えたときに
      URL からは選べない幅ができる */
   const gw = asString(raw.gw);
@@ -83,6 +92,7 @@ export function parseProjectSearch(raw: Record<string, unknown>): ProjectSearch 
     ms: asString(raw.ms),
     view: view === 'graph' ? view : undefined,
     gw: GANTT_WINDOWS.some((preset) => preset.label === gw) ? gw : undefined,
+    group: group === 'milestone' ? group : undefined,
   };
 }
 

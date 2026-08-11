@@ -4,6 +4,7 @@ import {
   type GithubIssuesDeps,
   getGithubIssueBody as readGithubIssueBody,
   getGithubIssueDiscussion as readGithubIssueDiscussion,
+  getGithubIssueEvents as readGithubIssueEvents,
   listGithubIssues as readGithubIssues,
 } from '~/interface/controllers/issues/issues.controller.ts';
 
@@ -18,6 +19,7 @@ const githubDeps = (): GithubIssuesDeps => {
     list: kernel.listGithubIssues,
     body: kernel.githubIssueBody,
     discussion: kernel.githubIssueDiscussion,
+    events: kernel.githubIssueEvents,
     index: kernel.index,
   };
 };
@@ -36,3 +38,9 @@ export const getGithubIssueBody = createServerFn({ method: 'GET' })
 export const getGithubIssueDiscussion = createServerFn({ method: 'GET' })
   .validator((value: unknown) => value)
   .handler(({ data }) => readGithubIssueDiscussion(githubDeps(), data));
+
+/* 一覧に出ている課題に起きたこと。**一覧とも別に叩く。** 同じ問い合わせに混ぜると、
+   Work の画面が開くまでが倍になる —— 一覧は一覧の速さで開き、点は返ってきたときに埋まる。 */
+export const getGithubIssueEvents = createServerFn({ method: 'GET' })
+  .validator((value: unknown) => value)
+  .handler(({ data }) => readGithubIssueEvents(githubDeps(), data));

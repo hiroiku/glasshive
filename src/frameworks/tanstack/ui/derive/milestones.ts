@@ -112,6 +112,63 @@ export function buildMilestones(
   });
 }
 
+/** 一覧をマイルストーンで束ねた 1 束 */
+export interface MilestoneBand {
+  /** マイルストーンの名前。`null` は付いていない課題の束 */
+  readonly title: string | null;
+  readonly dueOn: string | null;
+  readonly total: number;
+  readonly open: number;
+  /** 渡された並びをそのまま保った課題 */
+  readonly issues: readonly IssueSummaryJson[];
+}
+
+/* 一覧を、マイルストーンで束ねる。
+
+   **`buildMilestones` とは別のものである。** あちらは「区切りに間に合うのか」を読む
+   マイルストーンの一覧で、ブランチもエージェントも数える。こちらは課題の一覧を並べ替える
+   だけなので、束の中の並びは渡されたまま —— 検索と並べ替えを済ませた順のまま —— に保つ。
+   ここで並べ直すと、着手順を選んでいる人の待ち行列が束の中で崩れる。
+
+   束ねるのは渡された課題だけである。絞り込みで 1 件も残らなかったマイルストーンの束は
+   出さない —— 出ていない課題の見出しだけが並ぶことになる。 */
+export function milestoneBands(issues: readonly IssueSummaryJson[]): readonly MilestoneBand[] {
+  const buckets = new Map<
+    string,
+    { title: string | null; dueOn: string | null; issues: IssueSummaryJson[] }
+  >();
+
+  for (const issue of issues) {
+    const milestone = issue.github?.milestone ?? null;
+    const title = milestone?.title ?? NO_MILESTONE;
+    const key = title ?? '';
+    const found = buckets.get(key);
+    if (found === undefined) {
+      buckets.set(key, { title, dueOn: milestone?.due_on ?? null, issues: [issue] });
+      continue;
+    }
+    found.issues.push(issue);
+    // 期日は課題ごとに付いてくるので、空で上書きしない
+    if (found.dueOn === null) found.dueOn = milestone?.due_on ?? null;
+  }
+
+  return [...buckets.values()]
+    .map((bucket) => ({
+      title: bucket.title,
+      dueOn: bucket.dueOn,
+      total: bucket.issues.length,
+      open: bucket.issues.filter((issue) => !CLOSED.has(issue.status)).length,
+      issues: bucket.issues,
+    }))
+    .sort((a, b) => {
+      const byNone = Number(a.title === null) - Number(b.title === null);
+      if (byNone !== 0) return byNone;
+      const byDue = dueRank(a.dueOn) - dueRank(b.dueOn);
+      if (byDue !== 0) return byDue;
+      return (a.title ?? '').localeCompare(b.title ?? '');
+    });
+}
+
 /** その課題が属するマイルストーンの名前。付いていなければ `null` */
 export const milestoneOf = (issue: IssueSummaryJson): string | null =>
   issue.github?.milestone?.title ?? null;

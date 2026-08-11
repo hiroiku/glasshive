@@ -29,6 +29,7 @@ const issue = (
   assignee: null,
   created_at: null,
   updated_at: null,
+  closed_at: null,
   deps: blockedBy.map((on) => ({ on, type: 'blocks' })),
   deps_complete: true,
   github: {

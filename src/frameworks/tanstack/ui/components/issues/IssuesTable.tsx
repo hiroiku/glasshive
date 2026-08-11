@@ -30,6 +30,7 @@ import {
   relatedIndex,
   startRanker,
 } from '../../derive/issueTree.ts';
+import { milestoneBands } from '../../derive/milestones.ts';
 import { DAY_MS } from '../../derive/timeWindow.ts';
 import {
   liveCount,
@@ -39,8 +40,9 @@ import {
   workersOn,
 } from '../../derive/workers.ts';
 import { type BranchState, branchStateOf, type WorkJoin } from '../../derive/workJoin.ts';
-import { absTime, cut, formatSinceIso } from '../../format.ts';
+import { absTime, cut, formatDue, formatSinceIso } from '../../format.ts';
 import { useNav } from '../../nav/NavContext.tsx';
+import type { IssueGroup } from '../../nav/search.ts';
 import { popStyleOf, prunePops, touchFingerprint } from '../../phase.ts';
 import { pressable } from '../../pressable.ts';
 import { AgentChip } from '../chips/Chips.tsx';
@@ -160,6 +162,8 @@ export interface IssuesTableProps {
   readonly onSort: (key: IssueSortKey) => void;
   /** 右のタイムラインが一度に見せる幅 */
   readonly ganttWindow: GanttWindow;
+  /** 一覧の束ね方。無ければ束ねず、親子の入れ子のまま並べる */
+  readonly group: IssueGroup | undefined;
   readonly nowMs: number;
   /** このプロジェクトを初めて描くか。初回は変化のハイライトを出さない */
   readonly firstPaint: boolean;
@@ -177,6 +181,7 @@ export function IssuesTable({
   order,
   onSort,
   ganttWindow,
+  group,
   nowMs,
   firstPaint,
 }: IssuesTableProps) {
@@ -239,9 +244,12 @@ export function IssuesTable({
      親の下へ散って読めなくなる。
 
      **束に分ける。** 空ける数だけで 1 列に並べると、いま手を付けられない課題が上位に来て、
-     着手順の一覧が着手できないものから始まる。 */
+     着手順の一覧が着手できないものから始まる。
+
+     マイルストーンで束ねているときは、そちらが束を決める。**並べ替えは束の中で効く** ——
+     着手順を選んだままマイルストーンで束ねれば、「この区切りで次に取るのはどれか」が読める。 */
   const banded = useMemo(() => {
-    if (order.key !== 'start') return null;
+    if (group === 'milestone' || order.key !== 'start') return null;
     const live = shown.filter((issue) => issue.status !== 'closed');
     const graph = buildDependencyGraph(live);
     const queue = startOrder(graph);
@@ -271,27 +279,41 @@ export function IssuesTable({
       { title: 'Closed', note: `${closed.length} done`, tone: 'done', issues: closed },
     ].filter((band) => band.issues.length > 0);
     return { bands, unlocks, complete: graph.complete };
-  }, [order.key, shown]);
+  }, [group, order.key, shown]);
+
+  /* マイルストーンの束。見出しに出す件数は、**出ている課題だけで数える** ——
+     絞り込んだ一覧の見出しに絞る前の件数を出すと、見出しと行が食い違う。 */
+  const grouped = useMemo(() => {
+    if (group !== 'milestone') return null;
+    return milestoneBands(shown).map((band) => ({
+      title: band.title ?? 'No milestone',
+      note:
+        band.dueOn === null
+          ? `${band.open} of ${band.total} open`
+          : `${formatDue(band.dueOn, nowMs)} · ${band.open} of ${band.total} open`,
+      tone: band.title === null ? 'done' : '',
+      issues: band.issues,
+    }));
+  }, [group, shown, nowMs]);
+
+  const bands = banded?.bands ?? grouped;
 
   const rows: HierarchyRow[] = useMemo(
     () =>
-      banded === null
+      bands === null
         ? buildHierarchy(shown)
-        : banded.bands.flatMap((band) =>
+        : bands.flatMap((band) =>
             band.issues.map((issue) => ({ issue, depth: 0, guides: [], last: true })),
           ),
-    [banded, shown],
+    [bands, shown],
   );
 
   /* 束の見出しを差し込む位置。**行の並びの外に持つ** — 弧は行の添字で描いてあるので、
      見出しを行として数に入れると線が 1 行ぶんずれる。 */
-  const bandAt = new Map<
-    number,
-    typeof banded extends null ? never : NonNullable<typeof banded>['bands'][number]
-  >();
-  if (banded !== null) {
+  const bandAt = new Map<number, { title: string; note: string; tone: string }>();
+  if (bands !== null) {
     let at = 0;
-    for (const band of banded.bands) {
+    for (const band of bands) {
       bandAt.set(at, band);
       at += band.issues.length;
     }
@@ -448,6 +470,7 @@ export function IssuesTable({
                 axis={axis}
                 guides={guides}
                 gantt={bars.get(id) ?? null}
+                showMilestone={group !== 'milestone'}
                 nowMs={nowMs}
                 onHot={light}
                 onLabel={onQuery}
@@ -487,6 +510,9 @@ interface IssueRowProps {
   readonly guides: readonly GanttGuide[];
   /** この課題のバー。`created_at` を読めなければ `null` で、バーそのものが出ない */
   readonly gantt: RowGantt | null;
+  /* マイルストーンの名前を、行にも出すか。**束ねているときは出さない** ——
+     束の見出しが既に言っているので、行ごとに繰り返すと同じことが 2 度並ぶ。 */
+  readonly showMilestone: boolean;
   readonly nowMs: number;
   /** 触れた・離れたを伝える。沈めるのは DOM の側なので、行はここから何も受け取らない */
   readonly onHot: (id: string | null, index: number) => void;
@@ -509,6 +535,7 @@ const IssueRow = memo(function IssueRow({
   axis,
   guides,
   gantt,
+  showMilestone,
   nowMs,
   onHot,
   onLabel,
@@ -522,7 +549,7 @@ const IssueRow = memo(function IssueRow({
   const colors = labelColors(issue);
   const agg = subProgress(issue, issue.id === null ? undefined : progress.get(issue.id));
   const pull = leadPullRequest(issue);
-  const milestone = issue.github?.milestone ?? null;
+  const milestone = showMilestone ? (issue.github?.milestone ?? null) : null;
   const comments = issue.github?.comments ?? 0;
 
   /* バーの両端。軸からはみ出たぶんは切り落とし、丸ごと外に在るものは描かない。

@@ -69,14 +69,12 @@ export function IssuesLegend({ complete }: { readonly complete: boolean }) {
         </b>{' '}
         more than one agent is on it right now
       </span>
-      {/* 右のタイムラインの読み方。**閉じた時刻が近似であることは、ここでしか言えない** —
-          `updated_at` を閉じた時刻として使っているので、閉じた後に触れば長く出る */}
+      {/* 右のタイムラインの読み方 */}
       <span className="lg-gt">
         <i className="lg-gt-bar st-open" /> created until now
       </span>
       <span className="lg-gt">
-        <i className="lg-gt-bar st-closed done" /> until last touched, which is when it closed as
-        far as we can tell
+        <i className="lg-gt-bar st-closed done" /> created until closed
       </span>
       <span className="lg-gt">
         <i className="lg-gt-line guide" /> a milestone is due

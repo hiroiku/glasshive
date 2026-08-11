@@ -5,6 +5,7 @@ import { type Observation, observed, unobservable } from '~/app-kernel/observati
 import {
   type IssueBodyRequest,
   type IssueDiscussionRequest,
+  type IssueEventsRequest,
   type IssuePageRequest,
   type IssueTrackerIntegration,
   TRACKER_DENIED,
@@ -55,7 +56,7 @@ query($owner:String!,$name:String!,$pageSize:Int!,$cursor:String){
     issues(first:$pageSize, after:$cursor, states:[OPEN,CLOSED], orderBy:{field:UPDATED_AT,direction:DESC}){
       pageInfo{ hasNextPage endCursor }
       nodes{
-        number title state stateReason createdAt updatedAt url
+        number title state stateReason createdAt updatedAt closedAt url
         author{ login avatarUrl(size:48) }
         issueType{ name color }
         milestone{ title dueOn }
@@ -90,11 +91,31 @@ query($owner:String!,$name:String!,$number:Int!){
   }
 }`;
 
-/* 課題 1 件のやり取り 1 ページぶん。コメントと `timeline` のイベントを 1 本の並びで求める。
+/* 読むイベントの種類。**パネルと点で同じ一覧を使う。**
 
-   **`itemTypes` を名指しで絞る。** 絞らないと `timeline` には購読やラベルの色替えまで並び、
-   1 ページ 100 件の枠が、画面に何も足さない項目で埋まる。ここに挙げてあるのは、読む人が
-   「この課題に何が起きたか」を追うのに要る種類だけである。
+   ここが食い違うと、パネルが 8 件並べた課題の点が 5 つしか出ない。同じ課題に起きたことを
+   2 か所で数えているのだから、数える対象は 1 か所に置く。
+
+   絞らないと `timeline` には購読やラベルの色替えまで並び、1 ページの枠が画面に何も足さない
+   項目で埋まる。 */
+const ITEM_TYPES = [
+  'ISSUE_COMMENT',
+  'CLOSED_EVENT',
+  'REOPENED_EVENT',
+  'LABELED_EVENT',
+  'UNLABELED_EVENT',
+  'ASSIGNED_EVENT',
+  'UNASSIGNED_EVENT',
+  'MILESTONED_EVENT',
+  'DEMILESTONED_EVENT',
+  'CROSS_REFERENCED_EVENT',
+  'MARKED_AS_DUPLICATE_EVENT',
+  'PARENT_ISSUE_ADDED_EVENT',
+  'BLOCKED_BY_ADDED_EVENT',
+  'RENAMED_TITLE_EVENT',
+].join(',');
+
+/* 課題 1 件のやり取り 1 ページぶん。コメントと `timeline` のイベントを 1 本の並びで求める。
 
    欄の名前は introspection で確かめたものを使う。推測が当たらないものが幾つかある ——
    `BlockedByAddedEvent` は `blockingIssue`(`blockedByIssue` ではない)、
@@ -109,11 +130,7 @@ const ISSUE_DISCUSSION_QUERY = `
 query($owner:String!,$name:String!,$number:Int!,$cursor:String){
   repository(owner:$owner,name:$name){
     issue(number:$number){
-      timelineItems(first:100, after:$cursor, itemTypes:[
-        ISSUE_COMMENT,CLOSED_EVENT,REOPENED_EVENT,LABELED_EVENT,UNLABELED_EVENT,
-        ASSIGNED_EVENT,UNASSIGNED_EVENT,MILESTONED_EVENT,DEMILESTONED_EVENT,
-        CROSS_REFERENCED_EVENT,MARKED_AS_DUPLICATE_EVENT,PARENT_ISSUE_ADDED_EVENT,
-        BLOCKED_BY_ADDED_EVENT,RENAMED_TITLE_EVENT]){
+      timelineItems(first:100, after:$cursor, itemTypes:[${ITEM_TYPES}]){
         pageInfo{ hasNextPage endCursor }
         nodes{
           __typename
@@ -133,6 +150,48 @@ query($owner:String!,$name:String!,$number:Int!,$cursor:String){
           ... on CrossReferencedEvent {
             createdAt actor{login} willCloseTarget
             source{ ... on PullRequest { number title } ... on Issue { number title } }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+/* 一覧に出ている課題に起きたこと 1 ページぶん。求めるのは時刻と種類だけである。
+
+   **一覧の問い合わせと同じ並びで、同じ件数を求める。** `states` も `orderBy` も `first` も
+   揃えてあるから、返る 100 件は一覧の 100 件と同じものになる。片方だけ変えると、一覧に出て
+   いない課題の点を運ぶことになる。
+
+   1 件あたり `last:30` にしてある。新しいほうから採るのは、両端 —— 作られた時刻と閉じた時刻
+   —— が課題そのものの欄として別に届くからである。`cli/cli` の 100 件で測ると 2.3 秒・80 KB・
+   rate limit の cost は 1 で、そのうち 6 件が 30 件を超えていた。超えたことは `totalCount` で
+   分かるので、切ったことを画面まで持ち回る。 */
+const ISSUE_EVENTS_QUERY = `
+query($owner:String!,$name:String!,$pageSize:Int!,$cursor:String){
+  repository(owner:$owner,name:$name){
+    issues(first:$pageSize, after:$cursor, states:[OPEN,CLOSED], orderBy:{field:UPDATED_AT,direction:DESC}){
+      pageInfo{ hasNextPage endCursor }
+      nodes{
+        number
+        timelineItems(last:30, itemTypes:[${ITEM_TYPES}]){
+          totalCount
+          nodes{
+            __typename
+            ... on IssueComment { createdAt }
+            ... on ClosedEvent { createdAt }
+            ... on ReopenedEvent { createdAt }
+            ... on LabeledEvent { createdAt }
+            ... on UnlabeledEvent { createdAt }
+            ... on AssignedEvent { createdAt }
+            ... on UnassignedEvent { createdAt }
+            ... on MilestonedEvent { createdAt }
+            ... on DemilestonedEvent { createdAt }
+            ... on RenamedTitleEvent { createdAt }
+            ... on ParentIssueAddedEvent { createdAt }
+            ... on BlockedByAddedEvent { createdAt }
+            ... on MarkedAsDuplicateEvent { createdAt }
+            ... on CrossReferencedEvent { createdAt }
           }
         }
       }
@@ -187,7 +246,7 @@ const textOf = (value: unknown): string =>
    1 つしかない — 入っていない。 */
 function classifyFailure(
   error: unknown,
-  request: IssuePageRequest | IssueBodyRequest | IssueDiscussionRequest,
+  request: IssuePageRequest | IssueBodyRequest | IssueDiscussionRequest | IssueEventsRequest,
 ): Observation<never> {
   const details = { repository: `${request.owner}/${request.name}` };
   const errno = errnoOf(error);
@@ -259,6 +318,28 @@ export function createGhIssueTrackerIntegration(
       ];
       /* 最初のページには続きの位置が無い。`cursor=` と空で渡すと `gh` は空文字列を送り、
          GitHub は「そこから先」を 0 件と答える。 */
+      if (request.cursor !== null) args.push('-F', `cursor=${request.cursor}`);
+
+      try {
+        return observed(await run(args, { timeoutMs }));
+      } catch (error) {
+        return classifyFailure(error, request);
+      }
+    },
+
+    async fetchIssueEvents(request) {
+      const args = [
+        'api',
+        'graphql',
+        '-f',
+        `query=${ISSUE_EVENTS_QUERY}`,
+        '-F',
+        `owner=${request.owner}`,
+        '-F',
+        `name=${request.name}`,
+        '-F',
+        `pageSize=${request.pageSize}`,
+      ];
       if (request.cursor !== null) args.push('-F', `cursor=${request.cursor}`);
 
       try {

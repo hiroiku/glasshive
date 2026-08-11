@@ -33,6 +33,10 @@ import {
   type GetGithubIssueDiscussionUseCase,
 } from '~/application/use-cases/issues/get-github-issue-discussion.use-case.ts';
 import {
+  createListGithubIssueEvents,
+  type ListGithubIssueEventsUseCase,
+} from '~/application/use-cases/issues/list-github-issue-events.use-case.ts';
+import {
   createListGithubIssues,
   type ListGithubIssuesUseCase,
 } from '~/application/use-cases/issues/list-github-issues.use-case.ts';
@@ -94,6 +98,7 @@ export interface Kernel {
   githubIssueBody: GetGithubIssueBodyUseCase;
   /** 開いた 1 件のやり取り。本文とは別の呼び出しで、ページを辿るぶんだけ時間が違う */
   githubIssueDiscussion: GetGithubIssueDiscussionUseCase;
+  githubIssueEvents: ListGithubIssueEventsUseCase;
   /** 顔を、こちらで読んで、こちらから返す。画面は GitHub に触らない */
   avatars: AvatarCacheService;
   gitOverview: ObserveRepositoryUseCase;
@@ -173,6 +178,7 @@ function assemble(): Kernel {
     listGithubIssues: createListGithubIssues({ git, tracker, avatars }),
     githubIssueBody: createGetGithubIssueBody({ git, tracker }),
     githubIssueDiscussion: createGetGithubIssueDiscussion({ git, tracker }),
+    githubIssueEvents: createListGithubIssueEvents({ git, tracker }),
     avatars,
     gitOverview: createObserveRepository({ git, conflicts: createConflictCache() }),
     gitRef: createObserveRef({ git }),

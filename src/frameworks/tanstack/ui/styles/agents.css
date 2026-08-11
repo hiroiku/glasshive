@@ -511,6 +511,13 @@ body.tl-panning .row .tl {
   gap: 4px;
   margin-left: 10px;
 }
+/* チップの並びが何を選ぶものかを言う見出し。**幅と時間軸で 2 組並ぶので、名前が要る** */
+.scale-chips .chip-label {
+  align-self: center;
+  color: var(--dim);
+  font-size: 10.5px;
+  margin-right: 2px;
+}
 
 /* 範囲選択スライダー */
 .rslider {

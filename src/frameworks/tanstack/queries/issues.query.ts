@@ -2,6 +2,7 @@ import { queryOptions } from '@tanstack/react-query';
 import {
   getGithubIssueBody,
   getGithubIssueDiscussion,
+  getGithubIssueEvents,
   getGithubIssues,
 } from '../functions/issues.ts';
 
@@ -42,4 +43,15 @@ export const githubIssueDiscussionQuery = (projectId: string, number: number) =>
     queryKey: ['github-issue-discussion', projectId, number] as const,
     queryFn: () => getGithubIssueDiscussion({ data: { projectId, number } }),
     staleTime: 120_000,
+  });
+
+/* 一覧に出ている課題に起きたこと。**一覧とも別に求める。**
+
+   置く時間は一覧(5 分)と揃えてある。同じ 100 件を別の呼び出しで見ているので、片方だけが
+   新しくなると、一覧に在る行の点が消えたり、消えた行の点が残ったりする。 */
+export const githubIssueEventsQuery = (projectId: string) =>
+  queryOptions({
+    queryKey: ['github-issue-events', projectId] as const,
+    queryFn: () => getGithubIssueEvents({ data: { projectId } }),
+    staleTime: 300_000,
   });

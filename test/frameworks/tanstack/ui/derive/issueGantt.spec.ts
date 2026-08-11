@@ -36,6 +36,7 @@ const issue = (over: Partial<IssueSummaryJson> = {}): IssueSummaryJson =>
     assignee: null,
     created_at: null,
     updated_at: null,
+    closed_at: null,
     deps: [],
     deps_complete: true,
     github: {
@@ -95,21 +96,38 @@ describe('バーの両端', () => {
     expect(span).toEqual({ from: NOW - 3 * DAY_MS, to: NOW, closed: false });
   });
 
-  it('閉じた課題は `updated_at` で終わる', () => {
+  it('閉じた課題は `closed_at` で終わる', () => {
+    const span = ganttSpan(
+      issue({
+        status: 'closed',
+        created_at: iso(NOW - 10 * DAY_MS),
+        updated_at: iso(NOW - 1 * DAY_MS),
+        closed_at: iso(NOW - 4 * DAY_MS),
+      }),
+      NOW,
+    );
+
+    expect(span, '閉じた後に触られても、バーは閉じた時刻で終わる').toEqual({
+      from: NOW - 10 * DAY_MS,
+      to: NOW - 4 * DAY_MS,
+      closed: true,
+    });
+  });
+
+  it('`closed_at` を読めなければ `updated_at` へ落ちる', () => {
     const span = ganttSpan(
       issue({
         status: 'closed',
         created_at: iso(NOW - 10 * DAY_MS),
         updated_at: iso(NOW - 4 * DAY_MS),
+        closed_at: null,
       }),
       NOW,
     );
 
-    expect(span, '閉じた時刻に `updated_at` を当てる近似である').toEqual({
-      from: NOW - 10 * DAY_MS,
-      to: NOW - 4 * DAY_MS,
-      closed: true,
-    });
+    expect(span?.to, '閉じたことは分かっているので、時刻だけ無い課題を開いたままにしない').toBe(
+      NOW - 4 * DAY_MS,
+    );
   });
 
   it('`not_planned` も閉じたものとして扱う', () => {
@@ -117,7 +135,8 @@ describe('バーの両端', () => {
       issue({
         status: 'not_planned',
         created_at: iso(NOW - 10 * DAY_MS),
-        updated_at: iso(NOW - 9 * DAY_MS),
+        updated_at: iso(NOW - 8 * DAY_MS),
+        closed_at: iso(NOW - 9 * DAY_MS),
       }),
       NOW,
     );
@@ -134,9 +153,14 @@ describe('バーの両端', () => {
     ).toBeNull();
   });
 
-  it('閉じているのに `updated_at` を読めなければ、幅の無いバーにする', () => {
+  it('閉じているのに閉じた時刻をどちらも読めなければ、幅の無いバーにする', () => {
     const span = ganttSpan(
-      issue({ status: 'closed', created_at: iso(NOW - 5 * DAY_MS), updated_at: null }),
+      issue({
+        status: 'closed',
+        created_at: iso(NOW - 5 * DAY_MS),
+        updated_at: null,
+        closed_at: null,
+      }),
       NOW,
     );
 
@@ -149,6 +173,7 @@ describe('バーの両端', () => {
         status: 'closed',
         created_at: iso(NOW - 2 * DAY_MS),
         updated_at: iso(NOW - 9 * DAY_MS),
+        closed_at: iso(NOW - 9 * DAY_MS),
       }),
       NOW,
     );

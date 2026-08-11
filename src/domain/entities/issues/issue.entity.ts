@@ -30,6 +30,11 @@ export interface IssueSummary {
   readonly assignee: string | null;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
+  /* 閉じた時刻。開いている課題には無い。
+
+     **`updatedAt` で代用しない。** 閉じた後に誰かが書き込めば `updatedAt` は先へ進むので、
+     代用すると閉じた課題ほど長く掛かったように見える。 */
+  readonly closedAt: string | null;
   readonly deps: readonly IssueDependency[];
   /* 掛かっている先を全部見られたか。
 

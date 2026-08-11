@@ -36,6 +36,7 @@ const issue = (assignees: readonly { login: string; avatarUrl: string | null }[]
     assignee: null,
     createdAt: null,
     updatedAt: null,
+    closedAt: null,
     deps: [],
     depsComplete: true,
     github: {

@@ -62,6 +62,9 @@ function fakeTracker(pages: readonly string[]) {
     async fetchIssueDiscussion() {
       throw new Error('一覧はやり取りを尋ねない');
     },
+    async fetchIssueEvents() {
+      throw new Error('ここはイベントを尋ねない');
+    },
   };
   return { tracker, asked };
 }
@@ -232,6 +235,9 @@ describe('GitHub の課題を一覧にする', () => {
       async fetchIssueDiscussion() {
         throw new Error('一覧はやり取りを尋ねない');
       },
+      async fetchIssueEvents() {
+        throw new Error('ここはイベントを尋ねない');
+      },
     };
     const useCase = createListGithubIssues({
       avatars: fakeAvatars().avatars,
@@ -262,6 +268,9 @@ describe('GitHub の課題を一覧にする', () => {
       },
       async fetchIssueDiscussion() {
         throw new Error('一覧はやり取りを尋ねない');
+      },
+      async fetchIssueEvents() {
+        throw new Error('ここはイベントを尋ねない');
       },
     };
     const useCase = createListGithubIssues({

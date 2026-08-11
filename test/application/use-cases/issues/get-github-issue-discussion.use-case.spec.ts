@@ -70,6 +70,9 @@ function fakeTracker(pages: readonly string[]) {
         ? unobservable(new TrackerUnreachable('尋ねられていないページ'))
         : observed(text);
     },
+    async fetchIssueEvents() {
+      throw new Error('ここはイベントを尋ねない');
+    },
   };
   return { tracker, asked };
 }

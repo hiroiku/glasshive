@@ -1,14 +1,14 @@
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import { niceTicks } from '../timeline/axis.ts';
-import { isClosedStatus } from './issueStatus.ts';
+import { closedAtMs, isClosedStatus } from './issueStatus.ts';
 import { DAY_MS } from './timeWindow.ts';
 
 /* 課題の一覧の右に引く時間軸。**観測した時刻しか描かない。**
 
    GitHub は着手予定日も見積もりも返さないので、計画された日程はどこにも無い。ここで引ける
-   のは `created_at` から始まり、閉じたものは `updated_at`、開いているものは現在で終わる 1 本
-   だけである。閉じた時刻に `updated_at` を当てるのは `issueFlow.ts` と同じ近似で、閉じた後に
-   触られた課題は長く出る。近似であることを画面の側で言い落とさないこと。
+   のは `created_at` から始まり、閉じたものは `closed_at`、開いているものは現在で終わる 1 本
+   だけである。閉じた時刻は `closedAtMs` に任せる —— どこで代用へ落ちるかを 1 か所に置いて、
+   `issueFlow.ts` と同じ規則で読む。
 
    `created_at` を読めなかった課題にはバーが無い。現在で代用すると「いま作られた」という、
    持っていない事実を描くことになる。 */
@@ -57,15 +57,15 @@ const parse = (iso: string | null): number => {
 
 /* 課題 1 件のバー。読める `created_at` が無ければバーそのものが無い。
 
-   閉じているのに `updated_at` を読めなかったときは、右端を `created_at` に揃えて幅の無い
+   閉じているのに閉じた時刻を読めなかったときは、右端を `created_at` に揃えて幅の無い
    バーにする。作られたことは観測できていて、閉じた時刻は観測できていない、という形である。 */
 export function ganttSpan(issue: IssueSummaryJson, nowMs: number): GanttSpan | null {
   const from = parse(issue.created_at);
   if (!Number.isFinite(from)) return null;
 
   const closed = isClosedStatus(issue.status);
-  const touched = parse(issue.updated_at);
-  const end = closed ? (Number.isFinite(touched) ? touched : from) : nowMs;
+  const at = closedAtMs(issue);
+  const end = closed ? (at ?? from) : nowMs;
   return { from, to: Math.max(end, from), closed };
 }
 

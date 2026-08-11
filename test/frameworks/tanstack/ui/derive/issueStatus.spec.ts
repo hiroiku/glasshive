@@ -19,6 +19,7 @@ const issue = (id: string, status: string): IssueSummaryJson => ({
   assignee: null,
   created_at: null,
   updated_at: null,
+  closed_at: null,
   deps: [],
   deps_complete: true,
   github: {

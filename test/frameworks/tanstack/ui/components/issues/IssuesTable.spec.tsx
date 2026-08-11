@@ -43,6 +43,7 @@ const issue = (id: string, over: Partial<Issue> = {}): Issue => ({
   assignee: null,
   created_at: null,
   updated_at: '2026-08-09T11:00:00Z',
+  closed_at: null,
   deps: [],
   deps_complete: true,
   github: {
@@ -75,6 +76,7 @@ function draw(issues: readonly Issue[], over: Partial<IssuesTableProps> = {}) {
       order={{ key: 'updated', direction: 'desc' }}
       onSort={vi.fn()}
       ganttWindow={DEFAULT_GANTT_WINDOW}
+      group={undefined}
       nowMs={NOW}
       firstPaint
       {...over}
@@ -216,6 +218,7 @@ describe('右のタイムライン', () => {
         status: 'closed',
         created_at: iso(15),
         updated_at: iso(5),
+        closed_at: iso(5),
       }),
     ]);
     const bar = rowOf(container, '#1').querySelector('.gt-bar');
@@ -371,5 +374,87 @@ describe('行に触れると、関わりの無い弧が沈む', () => {
     expect(found.all).toBeGreaterThan(0);
     expect(found.dim, '触れていないときに沈める弧が在ると、既定の表が読めない').toBe(0);
     expect(found.lit).toBe(0);
+  });
+});
+
+describe('マイルストーンで束ねる', () => {
+  const iso = (daysAgo: number) => new Date(NOW - daysAgo * 86_400_000).toISOString();
+
+  const withMs = (id: string, title: string | null, dueOn: string | null, over = {}) =>
+    issue(id, {
+      ...over,
+      github: {
+        url: null,
+        labels: [],
+        assignees: [],
+        author: null,
+        milestone: title === null ? null : { title, due_on: dueOn },
+        issue_type_color: null,
+        sub_issues: null,
+        pull_requests: [],
+        comments: 0,
+        reactions: 0,
+      },
+    });
+
+  const bandsOf = (container: HTMLElement) =>
+    [...container.querySelectorAll('.iband')].map((band) => ({
+      title: band.querySelector('span')?.textContent ?? '',
+      note: band.querySelector('em')?.textContent ?? '',
+    }));
+
+  it('束ねないときは見出しを出さない', () => {
+    const { container } = draw([withMs('#1', '1.4', null)], { group: undefined });
+
+    expect(bandsOf(container)).toEqual([]);
+  });
+
+  it('期日の近い順に束ね、付いていない課題を最後に置く', () => {
+    const { container } = draw(
+      [withMs('#1', null, null), withMs('#2', '1.5', iso(-30)), withMs('#3', '1.4', iso(-10))],
+      { group: 'milestone' },
+    );
+
+    expect(bandsOf(container).map((band) => band.title)).toEqual(['1.4', '1.5', 'No milestone']);
+  });
+
+  it('見出しの件数は、出ている課題だけで数える', () => {
+    const { container } = draw(
+      [
+        withMs('#1', '1.4', null),
+        withMs('#2', '1.4', null, { status: 'closed' }),
+        withMs('#3', '1.4', null),
+      ],
+      { group: 'milestone' },
+    );
+
+    expect(bandsOf(container)[0]?.note, '絞る前の件数を出すと、見出しと行が食い違う').toContain(
+      '2 of 3 open',
+    );
+  });
+
+  it('期日を持つ束は、期日も見出しに出す', () => {
+    const { container } = draw([withMs('#1', '1.4', iso(-10))], { group: 'milestone' });
+
+    expect(bandsOf(container)[0]?.note).toContain('in 10d');
+  });
+
+  it('束ねても行そのものは全部出る', () => {
+    const { container } = draw([withMs('#1', '1.4', null), withMs('#2', null, null)], {
+      group: 'milestone',
+    });
+
+    expect(rowsOf(container).map(idOf)).toEqual(['#1', '#2']);
+  });
+
+  it('束ねているときは、行にマイルストーンの名前を繰り返さない', () => {
+    const grouped = draw([withMs('#1', '1.4', null)], { group: 'milestone' });
+    const flat = draw([withMs('#2', '1.4', null)], { group: undefined });
+
+    expect(
+      grouped.container.querySelector('.mschip'),
+      '束の見出しが既に言っているので、行ごとに繰り返すと同じことが 2 度並ぶ',
+    ).toBeNull();
+    expect(flat.container.querySelector('.mschip')).not.toBeNull();
   });
 });

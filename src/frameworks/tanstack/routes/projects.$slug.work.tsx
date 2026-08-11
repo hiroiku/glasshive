@@ -184,6 +184,8 @@ function WorkView() {
       onGraph={(on) => patch({ view: on ? 'graph' : undefined })}
       gantt={ganttWindow}
       onGantt={onGantt}
+      group={search.group ?? null}
+      onGroup={(next) => patch({ group: next ?? undefined })}
       query={search.q ?? ''}
       onQuery={onQuery}
     >
@@ -336,6 +338,7 @@ function WorkView() {
           order={order}
           onSort={onSort}
           ganttWindow={ganttWindow}
+          group={search.group}
           nowMs={nowMs}
           firstPaint={false}
         />

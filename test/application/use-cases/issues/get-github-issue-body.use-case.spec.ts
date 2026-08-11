@@ -46,6 +46,9 @@ function fakeTracker(text: string | (() => never)) {
     async fetchIssueDiscussion() {
       throw new Error('本文の呼び出しはやり取りを尋ねない');
     },
+    async fetchIssueEvents() {
+      throw new Error('ここはイベントを尋ねない');
+    },
   };
   return { tracker, asked };
 }

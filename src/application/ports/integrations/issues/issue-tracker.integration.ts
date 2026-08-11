@@ -40,6 +40,17 @@ export interface IssuePageRequest {
   readonly pageSize: number;
 }
 
+/* 一覧ぶんのイベントを求める。**`IssuePageRequest` と同じ値で尋ねる。**
+
+   同じ `pageSize`・同じ続きの位置で尋ねるから、一覧と同じ 100 件が返る。片方だけ値を変えると、
+   一覧に出ていない課題のイベントを運ぶことになる。 */
+export interface IssueEventsRequest {
+  readonly owner: string;
+  readonly name: string;
+  readonly cursor: string | null;
+  readonly pageSize: number;
+}
+
 export interface IssueBodyRequest {
   readonly owner: string;
   readonly name: string;
@@ -80,4 +91,14 @@ export interface IssueTrackerIntegration {
 
      持ち帰るのは応答のテキストだけである。どの項目をどう読むかは domain の純関数に在る。 */
   fetchIssueDiscussion(request: IssueDiscussionRequest): Promise<Observation<string>>;
+
+  /* 一覧に出ている課題に起きたこと 1 ページぶんの応答テキスト。
+
+     **一覧とは別の呼び出しである。** 同じ問い合わせに混ぜると、一覧が開くまでの待ち時間が
+     倍になる。一覧は一覧の速さで開き、点は返ってきたときに埋まればよい —— 点が読めなくても
+     行そのものは読める。
+
+     求めるのは時刻と種類だけで、本文も相手の課題も名前も運ばない。1 件ぶんの重さがそのまま
+     100 倍になる呼び出しだからである。 */
+  fetchIssueEvents(request: IssueEventsRequest): Promise<Observation<string>>;
 }

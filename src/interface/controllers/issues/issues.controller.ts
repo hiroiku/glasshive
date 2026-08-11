@@ -6,6 +6,7 @@ import {
 } from '~/application/services/workspace/readable-scope.service.ts';
 import type { GetGithubIssueBodyUseCase } from '~/application/use-cases/issues/get-github-issue-body.use-case.ts';
 import type { GetGithubIssueDiscussionUseCase } from '~/application/use-cases/issues/get-github-issue-discussion.use-case.ts';
+import type { ListGithubIssueEventsUseCase } from '~/application/use-cases/issues/list-github-issue-events.use-case.ts';
 import type { ListGithubIssuesUseCase } from '~/application/use-cases/issues/list-github-issues.use-case.ts';
 import { own, projectIdOf } from '~/interface/controllers/sessions/project-query.controller.ts';
 import { InvalidSessionsRequestError } from '~/interface/errors/sessions/request.error.ts';
@@ -13,9 +14,11 @@ import { type ApiResponse, presentError } from '~/interface/presenters/api-error
 import {
   type GithubIssueBodyJson,
   type GithubIssueDiscussionJson,
+  type GithubIssueEventLogJson,
   type IssuesJson,
   presentGithubIssueBody,
   presentGithubIssueDiscussion,
+  presentGithubIssueEvents,
   presentIssues,
 } from '~/interface/presenters/issues/issues.presenter.ts';
 
@@ -28,12 +31,15 @@ import {
 export type IssuesResponse = ApiResponse<IssuesJson>;
 export type GithubIssueBodyResponse = ApiResponse<GithubIssueBodyJson>;
 export type GithubIssueDiscussionResponse = ApiResponse<GithubIssueDiscussionJson>;
+export type GithubIssueEventsResponse = ApiResponse<GithubIssueEventLogJson>;
 
 export interface GithubIssuesDeps {
   readonly list: ListGithubIssuesUseCase;
   readonly body: GetGithubIssueBodyUseCase;
   /** 開いた 1 件のやり取り。本文とは別の呼び出しで、開いたときにだけ尋ねる */
   readonly discussion: GetGithubIssueDiscussionUseCase;
+  /** 一覧に出ている課題に起きたこと。一覧とは別の呼び出しで、右の時間軸に点を置くためだけに使う */
+  readonly events: ListGithubIssueEventsUseCase;
   readonly index: TranscriptIndexService;
 }
 
@@ -121,4 +127,20 @@ export async function getGithubIssueDiscussion(
   });
   if (!discussion.ok) return { ok: false, ...presentError(discussion.error) };
   return { ok: true, body: presentGithubIssueDiscussion(discussion.value) };
+}
+
+/* 一覧に出ている課題に起きたこと。
+
+   **一覧とは別の呼び出しである。** 一緒に運ぶと Work の画面が開くまでが倍になる。番号は
+   受け取らない —— 尋ねるのは一覧そのものであって、その中の 1 件ではない。 */
+export async function getGithubIssueEvents(
+  deps: GithubIssuesDeps,
+  input: unknown,
+): Promise<GithubIssueEventsResponse> {
+  const path = await locate(deps.index, input);
+  if (!path.ok) return { ok: false, ...presentError(path.error) };
+
+  const events = await deps.events.execute({ projectPath: path.value });
+  if (!events.ok) return { ok: false, ...presentError(events.error) };
+  return { ok: true, body: presentGithubIssueEvents(events.value) };
 }
