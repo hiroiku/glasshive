@@ -17,6 +17,33 @@ export function labelColors(issue: IssueSummaryJson): ReadonlyMap<string, string
   return colors;
 }
 
+/* 課題の型に GitHub が割り当てた色。
+
+   ラベルの色は 16 進数で返るのでそのまま渡せるが、型の色は `IssueTypeColor` の enum 名
+   (`RED` など)で返るので、ここで引き当てる。**引き当てるのは画面の側の仕事である** ——
+   GitHub が言っているのは「この型を赤に置いている」までで、その赤をこの画面の背景と
+   どの濃さで混ぜるかは表示の判断になる。
+
+   知らない名前が来たら色を決めない。手近な色を当てると、GitHub が別の色で見せている型を
+   こちらが勝手に塗り替えることになる。 */
+const TYPE_COLORS: Readonly<Record<string, string>> = {
+  GRAY: '#94a3b8',
+  BLUE: '#60a5fa',
+  GREEN: '#34d399',
+  YELLOW: '#fbbf24',
+  ORANGE: '#fb923c',
+  RED: '#f87171',
+  PINK: '#f472b6',
+  PURPLE: '#c084fc',
+};
+
+/** 引けなければ `null`。呼ぶ側は色を付けずに描く */
+export function issueTypeColor(issue: IssueSummaryJson): string | null {
+  const name = issue.github?.issue_type_color;
+  if (name == null) return null;
+  return TYPE_COLORS[name] ?? null;
+}
+
 /* 出す PR を 1 つ選ぶ。
 
    **開いているものを先に採る。** 課題を閉じた PR は既に済んだ話で、いま読みたいのは

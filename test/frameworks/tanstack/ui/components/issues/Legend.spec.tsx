@@ -36,9 +36,10 @@ describe('一覧の凡例', () => {
     const { container } = render(<IssuesLegend complete events={WHOLE} />);
     const grounds = [...container.querySelectorAll('.lg-gt > i')].map((node) => node.className);
 
-    expect(grounds.filter((cls) => cls === 'gt-rule').length, '読めた行の見本は 1 つである').toBe(
-      1,
-    );
+    expect(
+      grounds.filter((cls) => cls === 'gt-line').length,
+      '観測した時刻を結ぶ線の見本は 1 つである',
+    ).toBe(1);
     expect(
       grounds,
       '読めなかった行の見本を罫線にすると、読めた行と同じ絵で別のことを説明することになる',

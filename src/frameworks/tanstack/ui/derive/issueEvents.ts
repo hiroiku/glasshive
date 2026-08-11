@@ -107,6 +107,9 @@ export type RowTrack =
       readonly count: number;
       /** 時刻を読めずに落としたイベントの数。**0 件として数えない** */
       readonly dropped: number;
+      /** 時刻を読めたイベントのうち、いちばん古いものと新しいもの。**軸で切らない** ——
+          軸の外のイベントも観測した時刻なので、切ると幅を変えるたびに両端が動く */
+      readonly firstAt: number | null;
       readonly lastAt: number | null;
       readonly cut: EventCut | null;
       readonly before: OffAxis | null;
@@ -189,6 +192,102 @@ export function closeFlagOf(close: CloseInstant | null, axis: GanttAxis): CloseF
   return { at: close.at, pct: atPct(close.at, axis), approx: close.approx };
 }
 
+/** 軸の上に置いた、作られた時刻の輪 */
+export interface OpenMark {
+  readonly at: number;
+  readonly pct: number;
+  /** 端に寄せて置いたか。**この位置は観測した時刻ではない** —— 描く側がそう見せる */
+  readonly clamped: 'before' | 'after' | null;
+}
+
+/* 作られた時刻を軸の上に置く。**軸の外でも置く** —— どの課題にも始まりは在るので、置くのを
+   やめると「まだ無かった課題」と同じ絵になる。ここがフラグと違うのはそこだけで、閉じたかどうかは
+   その課題が答えないことが在るが、開いたかどうかはどの課題も答える。
+
+   軸の外に在るときは端に寄せ、`clamped` を立てて渡す。寄せた位置は誰も観測していない時刻
+   なので、そのまま硬く描けば、そこで開いたことになる。
+
+   数には入らない。軸の外のイベントを数える `‹N` は起きたことだけを数えていて、始まりは
+   そこに含まれない。 */
+export function openMarkOf(createdMs: number | null, axis: GanttAxis): OpenMark | null {
+  if (createdMs === null || !Number.isFinite(createdMs)) return null;
+  if (createdMs < axis.t0) return { at: createdMs, pct: 0, clamped: 'before' };
+  if (createdMs > axis.t1) return { at: createdMs, pct: 100, clamped: 'after' };
+  return { at: createdMs, pct: atPct(createdMs, axis), clamped: null };
+}
+
+/** トラックの線が結ぶ両端。**軸を持たない** —— 幅を変えても、この 2 つの時刻は動かない */
+export interface TrackEnds {
+  readonly fromMs: number;
+  readonly toMs: number;
+  /** 始まりが `created_at` か。読めなかったときは、いちばん古いイベントが始まりになる */
+  readonly opened: boolean;
+  /** 終わりが閉じた時刻か。そうでなければ、いちばん新しいイベントである */
+  readonly closed: boolean;
+  /** 終わりが `updated_at` で代用した時刻か */
+  readonly approxTo: boolean;
+}
+
+/* トラックの線の両端。**どちらも観測した時刻である。**
+
+   `created_at` も観測した時刻の 1 つなので、線は開いた時刻から始まり、最後に観測した時刻で
+   止まる。**いまの時刻までは引かない** —— そこは誰も観測していないので、引けば開いている
+   限り伸び続けるバーになる。観測した時刻が 1 つしか無い行は線を持たない。輪 1 つが
+   「観測した時刻は 1 つだった」という答えそのものである。 */
+export function trackEndsOf(
+  createdMs: number | null,
+  track: RowTrack,
+  close: CloseInstant | null,
+): TrackEnds | null {
+  if (track.kind !== 'read') return null;
+  const opening = createdMs !== null && Number.isFinite(createdMs) ? createdMs : null;
+  const first = opening === null ? track.firstAt : Math.min(opening, track.firstAt ?? opening);
+  if (first === null) return null;
+
+  const last = Math.max(first, track.lastAt ?? first, close === null ? first : close.at);
+  if (last === first) return null;
+
+  // 終わりが閉じた時刻そのものなら、代用かどうかもその 1 つの答えから採る
+  const closing = close !== null && close.at === last ? close : null;
+  return {
+    fromMs: first,
+    toMs: last,
+    opened: opening !== null && opening === first,
+    closed: closing !== null,
+    approxTo: closing?.approx ?? false,
+  };
+}
+
+/** 軸の上に置いた線。両端が軸の外なら、そこに置くところは無い */
+export interface TrackLine {
+  readonly left: number;
+  readonly width: number;
+  /** 端が観測した時刻ではないとき。軸の端で止めているか、代用の時刻である */
+  readonly softFrom: boolean;
+  readonly softTo: boolean;
+}
+
+/* 両端を軸の上に置く。**置けるかどうかだけを判じる** —— どの時刻とどの時刻を結ぶのかは
+   `trackEndsOf` が既に決めているので、ここで測り直さない。
+
+   端が軸の外に在るなら軸の端で止めて、**その端をぼかす** —— 止めた位置は誰も観測して
+   いない時刻なので、硬い端で描けばそこで始まった(終わった)ことになる。代用の時刻の端も
+   同じくぼかす。 */
+export function trackLineOf(ends: TrackEnds | null, axis: GanttAxis): TrackLine | null {
+  if (ends === null) return null;
+  const left = clampPct(atPct(ends.fromMs, axis));
+  const right = clampPct(atPct(ends.toMs, axis));
+  /* 両端が軸の端で同じところへ潰れた。線として引くものは残っていない ——
+     丸ごと軸の外に在る行も、片端が軸の端ちょうどの行も、ここで落ちる */
+  if (right <= left) return null;
+  return {
+    left,
+    width: right - left,
+    softFrom: ends.fromMs < axis.t0,
+    softTo: ends.approxTo || ends.toMs > axis.t1,
+  };
+}
+
 /* 記録の並びにこの課題が居ないときのトラック。**「読んで、居なかった」を「まだ読んでいる」に
    落とさない** —— 落とすと、読み終えた記録の下でその行だけが永久に読み込み中の顔で残る。 */
 export function unlistedTrack(log: EventLog): RowTrack {
@@ -252,7 +351,7 @@ function readTrack(
   const dropped = entry.events.length - count;
 
   /* 置けるイベントが 1 つも無いのに、記録が切れていたか時刻を読めなかったのなら、この行に
-     ついては何も読めていない。**罫線を引かない** —— 罫線と空のトラックは「読んで、何も
+     ついては何も読めていない。**ハッチを掛ける** —— 何も置かないトラックは「読んで、何も
      起きていなかった」という別の答えであり、そこへ落とすと読めなかったぶんが消える。 */
   if (count === 0 && (dropped > 0 || entry.truncated)) {
     return {
@@ -325,6 +424,7 @@ function readTrack(
     })),
     count,
     dropped,
+    firstAt: Number.isFinite(oldestHeldMs) ? oldestHeldMs : null,
     lastAt: Number.isFinite(lastAt) ? lastAt : null,
     cut: cutOf(issue, entry, axis, count === 0 ? null : oldestHeldMs, before !== null),
     before,

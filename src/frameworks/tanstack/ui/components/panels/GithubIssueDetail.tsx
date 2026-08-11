@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { githubIssueBodyQuery, githubIssueDiscussionQuery } from '../../../queries/issues.query.ts';
-import { labelColors, subProgress } from '../../derive/githubIssue.ts';
+import { issueTypeColor, labelColors, subProgress } from '../../derive/githubIssue.ts';
 import { viaLabel, workerIndex, workersOn } from '../../derive/workers.ts';
 import { absTime, formatSinceIso } from '../../format.ts';
 import { useNav } from '../../nav/NavContext.tsx';
@@ -80,6 +80,7 @@ export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDet
   const lanes = resolveActivityRows(project, found.slice(0, MAX_ACTIVITY_ROWS));
 
   const colors = labelColors(issue);
+  const typeColor = issueTypeColor(issue);
   const labels = issue.labels ?? [];
   const progress = subProgress(issue, undefined);
   const milestone = github?.milestone ?? null;
@@ -124,12 +125,8 @@ export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDet
               <span className="dimtxt">—</span>
             ) : (
               <span
-                className={`tchip t-${issue.issue_type}${github?.issue_type_color == null ? '' : ' tinted'}`}
-                style={
-                  github?.issue_type_color == null
-                    ? undefined
-                    : { ['--lc' as string]: `#${github.issue_type_color}` }
-                }
+                className={`tchip${typeColor === null ? '' : ' tinted'}`}
+                style={typeColor === null ? undefined : { ['--lc' as string]: typeColor }}
               >
                 {issue.issue_type}
               </span>
