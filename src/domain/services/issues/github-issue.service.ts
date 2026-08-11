@@ -238,11 +238,15 @@ export interface GithubIssuePage {
   readonly hasNextPage: boolean;
 }
 
-/* 応答 1 ページを読む。応答から `issues` を辿れなければ `null`。
+/* 応答 1 ページを読む。応答から `issues` と、その `nodes` を辿れなければ `null`。
 
    **歩けなかったことを、空のページに潰さない。** 空のページで返すと、認証の切れた応答も
    壊れた応答も「このリポジトリに課題は 1 件も無い」と同じ形になる。歩けて 0 件だったのとは
    別のこととして返し、失敗として扱うかは呼んだ側が決める。
+
+   `nodes` が並びでない応答も同じである。`issues` まで辿れていても、課題の並びが無ければ
+   1 件も観ていない。`pageInfo` が欠けているのとは別で、そちらは「次のページは無い」と
+   読めるので、歩けたページとして返す。
 
    **`errors` が付いた応答をここで見分けない。** GraphQL は一部だけ失敗した応答にも
    `data` を載せてくるが、それが何件の取りこぼしなのかはここでは分からない。失敗として
@@ -262,7 +266,8 @@ export function parseIssuePage(text: string): GithubIssuePage | null {
   if (issues === undefined) return null;
 
   const pageInfo = asRecord(issues, 'pageInfo');
-  const nodes = asArray(issues, 'nodes') ?? [];
+  const nodes = asArray(issues, 'nodes');
+  if (nodes === undefined) return null;
 
   return {
     nodes: nodes.filter((node): node is JsonRecord => typeof node === 'object' && node !== null),

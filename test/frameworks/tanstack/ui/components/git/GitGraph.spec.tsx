@@ -243,3 +243,56 @@ describe('行の中身を、支援技術に渡す', () => {
     expect(cellsOf(rowOf('older commits are not read'))).toHaveLength(5);
   });
 });
+
+/* 本流は遡る数の上限で切られる。切られた向こうで分かれたブランチは、分かれ目を本流の中に
+   持たないので、線は絵のいちばん下まで引かれる。**その引き先を黙ると、300 コミット前に
+   分かれたブランチが、いちばん古い見えているコミットで分かれたように読まれる。** */
+describe('分かれ目が見えていないことを、ブランチの行で言う', () => {
+  /* 本流は `base0123456789` までしか読めていない。`left-long-ago` はその向こうで分かれた */
+  const truncated = () =>
+    overview({
+      mainline: [node('head0123456789'), node('base0123456789')],
+      mainline_truncated: true,
+      tips: [
+        tip('left-long-ago', { merge_base: 'gone0123456789' }),
+        tip('recent', { merge_base: 'base0123456789' }),
+      ],
+    });
+
+  it('分かれ目を本流に持たないブランチの行に、そう出す', () => {
+    draw({ overview: truncated() });
+
+    expect(rowOf('left-long-ago').textContent).toContain('fork not shown');
+  });
+
+  it('引いた線の先が分かれ目ではないことを、チップそのものが言う', () => {
+    draw({ overview: truncated() });
+    const chip = rowOf('left-long-ago').querySelector('.g-title .g-cut');
+
+    expect(
+      chip?.getAttribute('title'),
+      'チップの意味を言わないと、読んだ人はその行を分かれ目として読む',
+    ).toContain('did not fork there');
+  });
+
+  it('分かれ目が見えているブランチには出さない', () => {
+    draw({ overview: truncated() });
+
+    expect(
+      rowOf('recent').textContent,
+      '同じ絵の中で見えている分かれ目にまで出すと、このチップは誰にも読まれなくなる',
+    ).not.toContain('fork not shown');
+  });
+
+  it('本流が切られていなければ、どのブランチにも出さない', () => {
+    draw({
+      overview: overview({
+        mainline: [node('head0123456789'), node('base0123456789')],
+        mainline_truncated: false,
+        tips: [tip('feature', { merge_base: 'base0123456789' })],
+      }),
+    });
+
+    expect(document.querySelector('#git-rows')?.textContent).not.toContain('fork not shown');
+  });
+});

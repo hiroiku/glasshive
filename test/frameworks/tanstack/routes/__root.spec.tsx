@@ -1,6 +1,53 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
-import { ConnStatus, countsOf } from '~/frameworks/tanstack/routes/__root.tsx';
+import { describe, expect, it, vi } from 'vitest';
+
+/* 上端バーそのものを描くための下ごしらえ。ルーターも SSE も好みの保存先も、ここで見たい
+   ものには関わらない。**木だけを本物のまま渡す** —— 数えるのも、数え終えていないことを
+   言うのも、木から決まる。 */
+vi.mock('@tanstack/react-router', () => ({
+  createRootRouteWithContext: () => (options: unknown) => ({ options }),
+  HeadContent: () => null,
+  Scripts: () => null,
+  Outlet: () => null,
+  Link: ({ children, ...rest }: { children: React.ReactNode }) => (
+    <a href="/" {...rest}>
+      {children}
+    </a>
+  ),
+  useMatchRoute: () => () => false,
+  useNavigate: () => () => undefined,
+}));
+
+vi.mock('~/frameworks/tanstack/queries/tree.query.ts', () => ({
+  treeQueryKey: ['tree'],
+  treeQuery: {
+    queryKey: ['tree'],
+    // 木は問い合わせずに置く。取りに行き始めたら、それはここで見たいものが変わっている
+    queryFn: () => {
+      throw new Error('木は取りに行かない');
+    },
+  },
+}));
+
+vi.mock('~/frameworks/tanstack/ui/hooks/useChangeStream.ts', () => ({
+  useChangeStream: () => ({ connected: true, watching: true }),
+  subscribeToFile: () => () => undefined,
+}));
+
+vi.mock('~/frameworks/tanstack/ui/hooks/useTabSelection.ts', () => ({
+  useTabSelection: () => ({
+    selection: { version: 1, mode: 'all', pinned: [], hidden: [] },
+    visibleTabs: [],
+    pinned: new Set<string>(),
+    storedState: 'observed',
+    togglePin: () => undefined,
+    movePin: () => undefined,
+    error: null,
+  }),
+}));
+
+import { ConnStatus, countsOf, Route } from '~/frameworks/tanstack/routes/__root.tsx';
 
 /* 材料の形は、数える実装そのものから引く。ここは外部 API の形を宣言した層を `import` できない。 */
 type TreeJson = NonNullable<Parameters<typeof countsOf>[0]>;
@@ -153,6 +200,109 @@ describe('上端バーの数', () => {
 
   it('木が届く前は断定しない', () => {
     expect(countsOf(undefined).partial).toBe(true);
+  });
+});
+
+/* 数え終えていないことは、数の隣に出て初めてユーザーに届く。`countsOf` が `partial` を
+   返していても、上端バーがそれを黙れば、途中の 0 が数え終えた 0 として読まれる。 */
+describe('数え終えていないことを、上端バーが言う', () => {
+  const Chrome = (Route as unknown as { options: { component: () => React.ReactNode } }).options
+    .component;
+
+  /** まだ読んでいるプロジェクトが残っている木。1 つは読み終えていて、1 つはまだである */
+  const stillReading = (): TreeJson =>
+    tree({
+      complete: false,
+      projects: [
+        project({ sessions: [session({ state: 'active' })] }),
+        project({ id: '-w-beta', read: false, sessions: [] }),
+      ],
+    });
+
+  /** 走査できなかったプロジェクトが混ざった木。行は残るが、そこの数はどこにも無い */
+  const withUnreadable = (): TreeJson =>
+    tree({
+      projects: [
+        project({ sessions: [session({ state: 'active' })] }),
+        project({
+          id: '-w-closed',
+          sources: { state: 'unobservable', reason: 'eacces' },
+          sessions: [],
+        }),
+      ],
+    });
+
+  const draw = (data: TreeJson) => {
+    const client = new QueryClient({
+      // 問い合わせは走らせない。ここで見るのは、届いた木を上端バーがどう出すかだけである
+      defaultOptions: { queries: { enabled: false, retry: false } },
+    });
+    client.setQueryData(['tree'], data);
+    const { container } = render(
+      <QueryClientProvider client={client}>
+        <Chrome />
+      </QueryClientProvider>,
+    );
+    const counts = container.querySelector('#counts');
+    if (counts === null) throw new Error('#counts が無い');
+    const marks = [...counts.querySelectorAll('.dimtxt')];
+    return {
+      text: (counts.textContent ?? '').replace(/\s+/g, ' ').trim(),
+      marks,
+      titles: marks.map((mark) => mark.getAttribute('title')),
+    };
+  };
+
+  it('読み終えていないプロジェクトが残っているあいだは、どの数にも `+?` を添える', () => {
+    const { text, titles } = draw(stillReading());
+
+    expect(text, '途中の数を数え終えた数と同じ顔で出すと、待っている人が居ないことになる').toBe(
+      'active 1+? / waiting 0+? / ended 0+?',
+    );
+    expect(titles, 'どれか 1 つに添えても、残りは数え終えた数として読まれる').toEqual([
+      'Counted from the projects read so far',
+      'Counted from the projects read so far',
+      'Counted from the projects read so far',
+    ]);
+  });
+
+  it('走査できなかったプロジェクトが在るときも、どの数にも `+?` を添える', () => {
+    const { text, titles } = draw(withUnreadable());
+
+    expect(text).toBe('active 1+? / waiting 0+? / ended 0+?');
+    expect(titles).toEqual([
+      'Some projects could not be read — the count may be short',
+      'Some projects could not be read — the count may be short',
+      'Some projects could not be read — the count may be short',
+    ]);
+  });
+
+  it('待てば揃うのと、待っても揃わないのを、別の文で言う', () => {
+    const reading = draw(stillReading()).titles[0] ?? '';
+    const unreadable = draw(withUnreadable()).titles[0] ?? '';
+
+    expect(
+      unreadable,
+      '同じ文で伝えると、走査できなかったプロジェクトを、ユーザーはいつまでも待つことになる',
+    ).not.toBe(reading);
+  });
+
+  it('読み終えた木の数には、何も添えない', () => {
+    const { text, marks } = draw(
+      tree({
+        projects: [
+          project({
+            sessions: [
+              session({ state: 'active' }),
+              session({ state: 'waiting', awaiting: 'user' }),
+            ],
+          }),
+        ],
+      }),
+    );
+
+    expect(text).toBe('active 1 / waiting 1 / input 1 / ended 0');
+    expect(marks, '断定してよい数にまで添えると、`+?` は誰にも読まれなくなる').toHaveLength(0);
   });
 });
 

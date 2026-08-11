@@ -58,6 +58,30 @@ describe('応答 1 ページを読む', () => {
       '空のページとして返すと、歩けなかった応答が「課題は 1 件も無い」になる',
     ).toBe(null);
   });
+
+  /* `issues` まで辿れていても、課題の並びが無ければ 1 件も観ていない。
+     `?? []` で空の並びに倒すと、歩けなかった応答が「課題は 1 件も無い」として通る。 */
+  it.each([
+    ['`nodes` が無い', { pageInfo: { hasNextPage: false, endCursor: null } }],
+    ['`nodes` が null', { pageInfo: { hasNextPage: false, endCursor: null }, nodes: null }],
+    ['`nodes` が並びでない', { nodes: { edges: [] } }],
+  ])('%s ページも、歩けなかったこととして返す', (_name, issues) => {
+    expect(
+      parseIssuePage(page(issues)),
+      '課題の並びを辿れなかったことを、0 件だったことにしない',
+    ).toBe(null);
+  });
+
+  it('`pageInfo` の無いページは、次が無いページとして歩けたことにする', () => {
+    const parsed = parseIssuePage(page({ nodes: [node({ number: 7 })] }));
+
+    expect(
+      parsed?.nodes,
+      '尋ねなかった `pageInfo` は、課題を辿れないこととは別である',
+    ).toHaveLength(1);
+    expect(parsed?.hasNextPage).toBe(false);
+    expect(parsed?.endCursor).toBe(null);
+  });
 });
 
 describe('GitHub の課題を台帳の形へ写す', () => {

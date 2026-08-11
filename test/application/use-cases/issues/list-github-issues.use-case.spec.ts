@@ -279,6 +279,58 @@ describe('GitHub の課題を一覧にする', () => {
     }
   });
 
+  /* `gh` が 0 で終わり、`data.repository.issues` までは在るのに、課題の並びだけが無い。
+     ここを空の一覧に倒すと、認証や権限で欄ごと落ちた応答が「課題が 1 件も無い」に化ける。 */
+  it('課題の並びの無い 1 ページ目を、課題が 1 件も無いことにしない', async () => {
+    const withoutNodes = JSON.stringify({
+      data: { repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null } } } },
+    });
+    const { tracker } = fakeTracker([withoutNodes]);
+    const useCase = createListGithubIssues({
+      avatars: fakeAvatars().avatars,
+      git: gitWithRemote('git@github.com:hiroiku/glasshive.git'),
+      tracker,
+    });
+
+    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+
+    expect(
+      result.ok && result.value.kind,
+      '課題の並びを辿れなかったのだから、1 件も観ていない',
+    ).toBe('unobservable');
+    if (result.ok && result.value.kind === 'unobservable') {
+      expect(result.value.error).toBeInstanceOf(TrackerResponseUnreadableError);
+    }
+  });
+
+  it('課題の並びの無いページに当たったら、その先は読んでいないと言って止まる', async () => {
+    const withoutNodes = JSON.stringify({
+      data: { repository: { issues: { pageInfo: { hasNextPage: true, endCursor: 'cur2' } } } },
+    });
+    const { tracker, asked } = fakeTracker([
+      pageOf([1, 2], 'cur1'),
+      withoutNodes,
+      pageOf([3], null),
+    ]);
+    const useCase = createListGithubIssues({
+      avatars: fakeAvatars().avatars,
+      git: gitWithRemote('git@github.com:hiroiku/glasshive.git'),
+      tracker,
+    });
+
+    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+
+    expect(asked, '辿れなかったページの続きを、読めたページとして辿り続けない').toHaveLength(2);
+    expect(result.ok && result.value.kind).toBe('observed');
+    if (result.ok && result.value.kind === 'observed') {
+      expect(result.value.value.issues, '観えた 2 件を捨てると、一覧が空になる').toHaveLength(2);
+      expect(
+        result.value.value.truncated,
+        '黙って切ると、辿れなかったページより後ろの課題が「無かった」ことになる',
+      ).toBe(true);
+    }
+  });
+
   it('途中のページを歩けなくなっても、観えたぶんは捨てず、その先は読んでいないと言う', async () => {
     const { tracker } = fakeTracker([pageOf([1, 2], 'cur1'), 'not json at all']);
     const useCase = createListGithubIssues({
