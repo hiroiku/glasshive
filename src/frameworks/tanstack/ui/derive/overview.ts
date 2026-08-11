@@ -29,6 +29,12 @@ export interface OverviewRow {
   readonly tokens24hState: ObservationState;
   readonly lastActivityMs: number | null;
   readonly liveProcess: boolean;
+  /* このプロジェクトの `transcript` を数え上げられたか。**`read` とは別の問いである。**
+
+     `read` は中身を読み終えたかを言う。こちらは、読む相手を数え上げられたかを言う。
+     数え上げられなかったプロジェクトは読み終えた後も `sessions` が短いままなので、
+     この欄が無いと、この行の数は「静かなプロジェクト」と同じ形になる。 */
+  readonly sourcesState: ObservationState;
   /** プロジェクトの中で何かが動いていた時間の和集合。読む前は空 */
   readonly spans: readonly Span[];
   /** 稼働区間を全部見られたか。読む前は「見ていない」ので偽 */
@@ -38,14 +44,19 @@ export interface OverviewRow {
 /** 行の頭に置く点の色。人待ちを最優先に見せる */
 export type RowDotState = 'input' | 'active' | 'waiting' | 'ended' | 'unknown';
 
-/* まだ読んでいない行は `unknown` に倒す。**`ended` に落としてはいけない。**
+/* 数を断定できない行は `unknown` に倒す。**`ended` に落としてはいけない。**
 
    `ended` の点は「このプロジェクトでは何も動いていない」という断定である。読む前の行は
-   数を 1 つも持っていないので、その断定はできない。塗らずに輪郭だけを出す。 */
+   数を 1 つも持っていないので、その断定はできない。数え上げられなかった行も同じで、
+   見えなかった側に動いているセッションが居ないとは言えない。塗らずに輪郭だけを出す。
+
+   人待ちと稼働だけは、数え上げられなかった行でも言ってよい。見えた 1 本が動いている
+   ことは、他に何本見落としていても変わらない。 */
 export const dotStateOf = (row: OverviewRow): RowDotState => {
   if (!row.read) return 'unknown';
   if ((row.input ?? 0) > 0) return 'input';
   if ((row.active ?? 0) > 0) return 'active';
+  if (row.sourcesState === 'unobservable') return 'unknown';
   return row.liveProcess ? 'waiting' : 'ended';
 };
 
@@ -86,6 +97,17 @@ export function unionSpans(project: ProjectJson): readonly Span[] {
   }
   return merged;
 }
+
+/* このプロジェクトの `transcript` を数え上げられたか。**プロジェクトのディレクトリと、
+   セッションごとの子のディレクトリの両方を見る。**
+
+   どちらか一方でも歩けていなければ、この行の数は「これで全部」ではない。木の中では
+   別々の欄に入っているが、行の数え方から見れば同じ 1 つの事実である。 */
+const sourcesStateOf = (project: ProjectJson): ObservationState =>
+  project.sources.state === 'unobservable' ||
+  project.sessions.some((session) => session.sources.state === 'unobservable')
+    ? 'unobservable'
+    : project.sources.state;
 
 /* 稼働区間を全部見られたか。**1 つでも欠けていれば、欠けていると言う** —
    途切れた絵を「静かだった」として出すと、観測できなかったことが無かったことになる。 */
@@ -150,10 +172,14 @@ export function deriveRows(projects: readonly ProjectJson[]): readonly OverviewR
         tokens24hState: project.tokens_24h_state,
         lastActivityMs: null,
         liveProcess: project.live_process,
+        /* 走査は索引を作った時点で済んでいる。読む前でも、数え上げられなかったことは言える */
+        sourcesState: project.sources.state,
         spans: [],
         spansComplete: false,
       };
     }
+
+    const sourcesState = sourcesStateOf(project);
 
     let active = 0;
     let waiting = 0;
@@ -182,8 +208,11 @@ export function deriveRows(projects: readonly ProjectJson[]): readonly OverviewR
       tokens24hState: project.tokens_24h_state,
       lastActivityMs: latestMsOf(project),
       liveProcess: project.live_process,
+      sourcesState,
       spans: unionSpans(project),
-      spansComplete: spansCompleteOf(project),
+      /* 歩けなかったディレクトリが在るなら、トラックは全部を見ていない。空のトラックを
+         「静かだった」として出すと、見に行けなかった時間が静かだった時間として並ぶ。 */
+      spansComplete: sourcesState !== 'unobservable' && spansCompleteOf(project),
     };
   });
 }
@@ -336,6 +365,11 @@ export interface OverviewTotals {
   readonly tokensPartial: boolean;
   /** 数え落とした行が在るか。**在るなら、この合計はまだ最終ではない** */
   readonly partial: boolean;
+  /* 数え上げられなかった行が在るか。**`partial` の理由がどちらなのかを言うために持つ。**
+
+     読んでいる途中なら待てば揃う。数え上げられなかったのなら、待っても揃わない。
+     同じ文で伝えると、ユーザーはいつまでも揃うのを待つことになる。 */
+  readonly unreadable: boolean;
 }
 
 export function totalsOf(rows: readonly OverviewRow[]): OverviewTotals {
@@ -346,6 +380,7 @@ export function totalsOf(rows: readonly OverviewRow[]): OverviewTotals {
   let tokensPartial = false;
   /* まだ読み終えていない行が混じっているか。合計そのものは出すが、断定はさせない */
   let partial = false;
+  let unreadable = false;
   for (const row of rows) {
     /* 読んでいない行は、どの合計にも足さない。**足さないことを黙らない** —
        まだ全部を数えていない合計を、数え終えた合計と同じ顔で出すと、
@@ -354,11 +389,25 @@ export function totalsOf(rows: readonly OverviewRow[]): OverviewTotals {
       partial = true;
       continue;
     }
+    /* 数え上げられなかった行の数は足す。**足りないことは黙らない** — 見えたぶんは本当に
+       在るが、見えなかった側に何が居るかは分からない。 */
+    if (row.sourcesState === 'unobservable') {
+      partial = true;
+      unreadable = true;
+    }
     active += row.active ?? 0;
     waiting += row.waiting ?? 0;
     input += row.input ?? 0;
     if (row.tokens24h === null) tokensPartial = tokensPartial || row.tokens24hState !== 'absent';
     else tokens += row.tokens24h;
   }
-  return { active, waiting, input, tokens, tokensPartial: tokensPartial || partial, partial };
+  return {
+    active,
+    waiting,
+    input,
+    tokens,
+    tokensPartial: tokensPartial || partial,
+    partial,
+    unreadable,
+  };
 }

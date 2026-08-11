@@ -30,6 +30,9 @@ export interface DeepSearch {
   /** 候補の総数 */
   readonly total: number;
   readonly running: boolean;
+  /* 観測できずに止まったか。**`scanned` と `total` では言えない。** 1 回目で止まると
+     どちらも 0 のままなので、読めなかったことがどこにも残らない。 */
+  readonly unreadable: boolean;
 }
 
 const IDLE: DeepSearch = {
@@ -37,6 +40,7 @@ const IDLE: DeepSearch = {
   scanned: 0,
   total: 0,
   running: false,
+  unreadable: false,
 };
 
 export function useDeepSearch(projectId: string, query: string): DeepSearch {
@@ -56,7 +60,13 @@ export function useDeepSearch(projectId: string, query: string): DeepSearch {
       void (async () => {
         // 貯める側と描く側で同じ `Set` を持ち回らない。持ち回ると、描き直さないまま中身が増える
         const found = new Set<string>();
-        setState({ files: new Set<string>(), scanned: 0, total: 0, running: true });
+        setState({
+          files: new Set<string>(),
+          scanned: 0,
+          total: 0,
+          running: true,
+          unreadable: false,
+        });
 
         let offset = 0;
         for (;;) {
@@ -74,12 +84,16 @@ export function useDeepSearch(projectId: string, query: string): DeepSearch {
             scanned: page.scanned,
             total: page.total,
             running: !page.done && advanced,
+            unreadable: false,
           });
           if (page.done || !advanced) return;
           offset = page.scanned;
         }
 
-        setState((previous) => ({ ...previous, running: false }));
+        /* ここへ来るのは読めずに止まったときだけである。当たりは `files` に貯まったまま
+           絞り込みに効き続けるので、**読めなかったことを持ち帰る** — 黙って止まると、
+           狭まった表が「その語はどこにも無い」と読める。 */
+        setState((previous) => ({ ...previous, running: false, unreadable: true }));
       })();
     }, SETTLE_MS);
 

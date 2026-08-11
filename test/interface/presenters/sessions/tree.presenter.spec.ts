@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { AppError } from '~/app-kernel/error.ts';
 import { absent, type Observation, observed, unobservable } from '~/app-kernel/observation.ts';
-import { iso, presentTree } from '~/interface/presenters/sessions/tree.presenter.ts';
+import {
+  iso,
+  presentIndexTree,
+  presentTree,
+} from '~/interface/presenters/sessions/tree.presenter.ts';
 
 /* 変換元の形は、プレゼンター自身から引く。ここは内側の名前を `import` できないし、
    書き写して持てば、出力が変わったときに片方だけ古いまま残る。 */
@@ -67,6 +71,7 @@ function session(overrides: Partial<TranscriptSession> = {}): TranscriptSession 
     activity: observed(EMPTY_ACTIVITY),
     sizeBytes: 2048,
     subagents: [],
+    subagentsWalked: absent('no-source'),
     ...overrides,
   };
 }
@@ -82,6 +87,7 @@ function project(overrides: Partial<ObservedProject> = {}): ObservedProject {
     sessions: [session()],
     latestActivityMs: T,
     recentTokens: observed(0),
+    walked: observed(1),
     ...overrides,
   };
 }
@@ -356,6 +362,112 @@ describe('プロジェクトの欄', () => {
   });
 });
 
+describe('プロジェクトのディレクトリを走査できたか', () => {
+  it('走査できたときは observed', () => {
+    expect(
+      presentTree(tree()).projects[0]?.sources,
+      '走査できたのなら、空のセッションは本当に空である',
+    ).toEqual({ state: 'observed', reason: null });
+  });
+
+  it('走査できなかったときは unobservable とエラーコード', () => {
+    const presented = presentTree(
+      tree({
+        projects: [
+          project({
+            sessions: [],
+            walked: unobservable(new DeniedError('開けない')),
+            recentTokens: unobservable(new DeniedError('開けない')),
+          }),
+        ],
+      }),
+    ).projects[0];
+
+    expect(
+      presented?.sources,
+      '空のセッションだけを返せば、セッションを 1 つも持たないプロジェクトと同じ形になる',
+    ).toEqual({ state: 'unobservable', reason: 'test.denied' });
+    expect(presented?.read, '中身は読み終えている。読めなかったのは走査の側である').toBe(true);
+    expect(presented?.tokens_24h, '走査できなかったところに 0 を置かない').toBe(null);
+  });
+});
+
+/* まだ 1 行も読んでいない一覧。走査そのものは索引を作った時点で済んでいるので、
+   読む前でも「走れなかったディレクトリ」は走れなかったと言える。 */
+describe('読む前の一覧', () => {
+  type ProjectIndex = Parameters<typeof presentIndexTree>[0];
+  type ProjectStub = ProjectIndex['stubs'][number];
+
+  const stub = (overrides: Partial<ProjectStub> = {}): ProjectStub => ({
+    id: '-work-proj',
+    slugs: ['-work-proj'],
+    path: '/work/proj',
+    canonicalPath: '/Volumes/work/proj',
+    name: 'proj',
+    liveProcessCount: 0,
+    latestActivityMs: T,
+    transcriptCount: 2,
+    walked: observed(2),
+    ...overrides,
+  });
+
+  const index = (stubs: readonly ProjectStub[]): ProjectIndex => ({
+    generatedAtMs: T,
+    activeThresholdMs: 90_000,
+    sources: observed(stubs.length),
+    processes: observed(0),
+    stubs,
+  });
+
+  it('読む前の行でも、走査できたことは言える', () => {
+    const presented = presentIndexTree(index([stub()])).projects[0];
+    expect(presented?.read, '中身はまだ読んでいない').toBe(false);
+    expect(presented?.sources, '走査は索引を作った時点で済んでいる').toEqual({
+      state: 'observed',
+      reason: null,
+    });
+  });
+
+  it('走査できなかった行は、読む前から走査できなかったと言える', () => {
+    const presented = presentIndexTree(
+      index([stub({ transcriptCount: 0, walked: unobservable(new DeniedError('開けない')) })]),
+    ).projects[0];
+
+    expect(
+      presented?.sources,
+      '`read` が偽なだけでは、まだ読んでいないのか読む相手が数えられなかったのかが分からない',
+    ).toEqual({ state: 'unobservable', reason: 'test.denied' });
+  });
+});
+
+describe('子のディレクトリを走査できたか', () => {
+  it('子を呼んでいないセッションでは absent', () => {
+    expect(
+      firstSession({}).sources,
+      '`subagents` のディレクトリが無いのは、読めなかったのではなく無かったのである',
+    ).toEqual({ state: 'absent', reason: 'no-source' });
+  });
+
+  it('走査できたときは observed', () => {
+    expect(firstSession({ subagentsWalked: observed(2) }).sources).toEqual({
+      state: 'observed',
+      reason: null,
+    });
+  });
+
+  it('走査できなかったときは unobservable とエラーコード', () => {
+    const presented = firstSession({
+      subagentsWalked: unobservable(new DeniedError('開けない')),
+    });
+
+    expect(
+      presented.sources,
+      '空の一覧だけでは、子を呼ばなかったセッションと子を数えられなかったセッションが同じに見える',
+    ).toEqual({ state: 'unobservable', reason: 'test.denied' });
+    expect(presented.subagents, '数えられなくてもセッションそのものは出す').toEqual([]);
+  });
+});
+
 describe('「動いている」と見なす期間の長さ', () => {
   it('ミリ秒を秒に変換する', () => {
     expect(
@@ -438,6 +550,7 @@ describe('内側だけの欄', () => {
       'tokens_24h',
       'tokens_24h_state',
       'read',
+      'sources',
       'sessions',
     ]);
   });
@@ -489,6 +602,7 @@ describe('内側だけの欄', () => {
       'intervals_complete',
       'intervals_state',
       'size',
+      'sources',
       'subagents',
     ]);
   });

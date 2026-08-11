@@ -46,6 +46,7 @@ const project = (id: string, canonicalPath: string | null): Snapshot['projects']
   sessions: [],
   latestActivityMs: 0,
   recentTokens: observed(0),
+  walked: observed(0),
 });
 
 /* 木 1 枚から、本物と同じ順に配る索引のチャンクを起こす。

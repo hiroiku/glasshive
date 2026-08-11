@@ -59,12 +59,26 @@ export interface SubagentSource extends TranscriptSource {
 /** セッションの `transcript` と、その下のディレクトリに置かれた子の `transcript` */
 export interface SessionSource extends TranscriptSource {
   readonly subagents: readonly SubagentSource[];
+  /* 子のディレクトリを走査できたか。走査できたなら、そこに見えた子の `transcript` の数。
+
+     ディレクトリがそもそも無ければ「無かった」になる — 子を呼んでいないセッションはこうなる。
+     **読めなかったことを空の一覧に潰さない。** 潰すと、子を呼ばなかったセッションと、
+     子を数えられなかったセッションが同じ形になる。 */
+  readonly subagentsWalked: Observation<number>;
 }
 
 /** 名前ひとつぶんの走査結果 */
 export interface TranscriptGroup {
   readonly slug: string;
   readonly sessions: readonly SessionSource[];
+  /* このディレクトリを走査できたか。走査できたなら、そこに見えた `transcript` の数。
+
+     `sessions` の長さとは限らない。stat を採れなかった `transcript` は載せようがないので、
+     見えた数のほうが多くなることがある。
+
+     **読めなかったことを空の一覧に潰さない。** 潰すと、セッションを 1 つも持たない
+     ディレクトリと同じ形になり、プロジェクトが一覧から黙って消える。 */
+  readonly walked: Observation<number>;
 }
 
 /** `transcript` の大きさと、最後に書かれた時刻 */

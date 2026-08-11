@@ -39,6 +39,7 @@ const readRow = (overrides: Partial<Row> = {}): Row => ({
   tokens24hState: 'observed',
   lastActivityMs: NOW,
   liveProcess: false,
+  sourcesState: 'observed',
   spans: [],
   spansComplete: true,
   ...overrides,
@@ -58,6 +59,7 @@ const unreadRow = (overrides: Partial<Row> = {}): Row => ({
   tokens24hState: 'absent',
   lastActivityMs: null,
   liveProcess: false,
+  sourcesState: 'observed',
   spans: [],
   spansComplete: false,
   ...overrides,
@@ -142,6 +144,70 @@ describe('読み終えた行', () => {
 
     expect(container.textContent).toContain('3');
     expect(container.querySelector('.dot.active')).not.toBeNull();
+  });
+});
+
+/* 走査できないディレクトリを 1 つ抱えた行は、読み終えた後も数が揃わない。
+ **そこで 0 と空欄を並べると、見に行けなかったことが「静かだった」として読まれる。** */
+describe('数え上げられなかった行', () => {
+  const shortRow = (overrides: Partial<Row> = {}): Row =>
+    readRow({
+      id: 'short',
+      name: 'short',
+      sourcesState: 'unobservable',
+      lastActivityMs: null,
+      spansComplete: false,
+      tokens24h: null,
+      tokens24hState: 'unobservable',
+      ...overrides,
+    });
+
+  it('数の欄に、数え終えた顔をさせない', () => {
+    const { container } = draw([shortRow()]);
+
+    const marked = container.querySelectorAll(
+      '[title="Some of this project could not be read — the count may be short"]',
+    );
+    expect(marked.length, '0 のままでは「1 つも動いていない」という断定になる').toBeGreaterThan(0);
+    expect(container.textContent).toContain('+?');
+  });
+
+  it('状態の点を塗らない', () => {
+    const { container } = draw([shortRow({ liveProcess: true })]);
+
+    expect(
+      container.querySelector('.dot.unknown'),
+      '見えなかった側で動いているセッションが居ないとは言えない',
+    ).not.toBeNull();
+    expect(container.querySelector('.dot.ended')).toBeNull();
+    expect(container.querySelector('.dot.waiting')).toBeNull();
+  });
+
+  it('稼働のトラックを、静かだったトラックとして出さない', () => {
+    const { container } = draw([shortRow()]);
+
+    const strip = container.querySelector('.dash-act');
+    expect(strip?.className, '空のトラックに「0 runs in view」と書かない').toContain('cut');
+    expect(strip?.getAttribute('title')).toContain('could not be read');
+  });
+
+  it('消費を空欄にしない', () => {
+    const { container } = draw([shortRow()]);
+
+    expect(
+      container.querySelector('.dash-tok')?.textContent,
+      '空欄は「使っていない」と並んで見えてしまう',
+    ).toContain('?');
+  });
+
+  it('最終活動を空欄にしない', () => {
+    const { container } = draw([shortRow()]);
+
+    const cells = [...container.querySelectorAll('.dash-row:not(.head) > span.right.dimtxt')];
+    expect(
+      cells.at(-1)?.textContent,
+      '空欄は「ずっと静かだった」と読める。時刻が見えていないことは、そう言う',
+    ).toBe('?');
   });
 });
 

@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  containsPath,
-  isSafeAbsolutePath,
-  overlapsPath,
-  pathBasename,
-  pathDepth,
-} from '~/app-kernel/path.ts';
+import { containsPath, isSafeAbsolutePath, pathBasename, pathDepth } from '~/app-kernel/path.ts';
 
 describe('パスとして使える名前か', () => {
   it('絶対名だけを通す', () => {
@@ -60,11 +54,10 @@ describe('パスの重なり', () => {
     expect(containsPath('/a', '')).toBe(false);
   });
 
-  it('向きを問わない見方は、プロジェクトの一部から起動されたときのためにある', () => {
-    // エージェントは worktree の中で働くことがあるので、記録に残る作業ディレクトリがプロジェクトの一部になる
-    expect(overlapsPath('/a/b', '/a/b/.worktrees/x')).toBe(true);
-    expect(overlapsPath('/a/b/.worktrees/x', '/a/b')).toBe(true);
-    expect(overlapsPath('/a/b', '/a/bc')).toBe(false);
+  it('worktree は、元のリポジトリの中にあるものとして見る', () => {
+    // エージェントは worktree の中で働くことがある。その作業ディレクトリは、元のリポジトリの内側にある
+    expect(containsPath('/a/b', '/a/b/.worktrees/x')).toBe(true);
+    expect(containsPath('/a/b', '/a/b/.worktrees/x/src')).toBe(true);
   });
 });
 

@@ -21,10 +21,19 @@
   border-left: 1px solid var(--border);
   box-shadow: -10px 0 26px rgba(0, 0, 0, 0.4);
   transform: translateX(calc(100% + 48px));
-  transition: transform 0.22s ease;
+  /* 滑って画面の外へ出ただけの面は、タブ順に残る。**閉じている間は `visibility` で外す** ——
+     残すと、見えない切り替えボタンに focus が乗り、`#content` は `overflow: hidden` なので
+     ブラウザーはそれを見える位置へ運ぶこともできない。
+     `visibility` の切り替わりは `transition` の終わりに起きるので、滑って隠れていく間は
+     まだ見えている。 */
+  visibility: hidden;
+  transition:
+    transform 0.22s ease,
+    visibility 0.22s;
 }
 body.drawer-open #drawer {
   transform: none;
+  visibility: visible;
 }
 body.dragging {
   user-select: none;
@@ -169,6 +178,24 @@ body.dragging #drawer-grip {
 .agent-ctx .mk {
   flex: none;
 }
+/* `working on` に並ぶ worktree の名前。**押しどころの見た目にしない** —
+   GitHub の課題の id ではないので、チップに見せると開く先が無いことが押すまで分からない。 */
+.agent-ctx .wtname {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(125, 138, 153, 0.09);
+  border: 1px solid rgba(125, 138, 153, 0.26);
+  border-radius: 4px;
+  color: #8b9aab;
+  padding: 0 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 15px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* 会話ログも他のビューと同じく列で整列する:
    [時刻] [▸] [種別アイコン] [名前] [プレビュー 1fr]。subgrid で全イベント横断に揃える。
@@ -187,8 +214,24 @@ body.dragging #drawer-grip {
 }
 #conversation > #older,
 #conversation > #placeholder,
-#conversation > .not-observed {
+#conversation > .not-observed,
+#conversation > .conv-tail {
   grid-column: 1 / -1;
+}
+/* 末尾の追いかけが返らなくなったことを言う板。**流れの中に置かない** ——
+   会話は末尾へ吸い付くので、末尾に貼り付けていないと、見ている人の視界の下に落ちる。
+   中身が無いあいだは高さも余白も持たないので、会話の末尾を押し上げない。 */
+.conv-tail {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--bg);
+}
+.conv-tail:not(:empty) {
+  padding-top: 10px;
+}
+.conv-tail .not-observed {
+  margin: 0 auto;
 }
 
 /* ---------- 詳細パネル(issue / git ref) ---------- */

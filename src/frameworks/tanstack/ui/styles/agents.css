@@ -115,8 +115,11 @@
 .head .tl-head.sorted .tick {
   color: var(--accent);
 }
+/* 並べ替えを示す ▲ は left: 0 に 8px で描かれる。左端の目盛りは `transform: none` で
+   `--tick-x` の位置から右へ伸びるので、幅が最小のときはそこへ重なる。**底上げだけをする** —
+   12px に決め打つと、真ん中まで離れている目盛りまで左へ引き戻す。 */
 .head .tl-head.sorted .tick.first {
-  left: 12px;
+  left: max(var(--tick-x), 12px);
 }
 
 /* 変わった行だけの一瞬のハイライト。
@@ -274,6 +277,26 @@
   display: flex;
   gap: 6px;
   overflow: hidden;
+}
+
+/* 何に取り組んでいるかは `.worktrees/<名前>` から拾った名前で、GitHub の課題の id では
+   ない。**押しどころの見た目にしない** — チップに見せると、開く先が無いことが押すまで
+   分からない。読める形は保ったまま、押せることを表す cursor と枠の色だけを落とす。 */
+.row .col-work .wtname {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(125, 138, 153, 0.09);
+  border: 1px solid rgba(125, 138, 153, 0.26);
+  border-radius: 4px;
+  color: #8b9aab;
+  padding: 0 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 15px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .row .col-upd {
   color: var(--dim);
@@ -491,9 +514,12 @@ body.tl-panning .row .tl {
   opacity: 0.5;
   animation: none;
 }
+/* 目盛りの位置は `--tick-x` で受ける。**`left` を直に渡させない** — インラインの宣言は
+   `!important` の無い規則に必ず勝つので、渡させると並べ替えの ▲ を避ける底上げが効かない。 */
 .tl-head .tick {
   position: absolute;
   top: 0;
+  left: var(--tick-x);
   color: var(--dim);
   font-size: 10px;
   transform: translateX(-50%);

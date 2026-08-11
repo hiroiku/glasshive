@@ -37,6 +37,15 @@ export function openChangeStream(broadcast: ChangeBroadcastService, signal: Abor
       const unsubscribe = broadcast.subscribe((message: ChangeMessage) => {
         send(`data: ${JSON.stringify(message)}\n\n`);
       });
+
+      /* 繋がったことと更新が届くことは別である。ウォッチャーが張れていない機械では、
+         この接続は開いたまま何も運ばない — **その 1 つを繋いだ直後に言う**。
+         後から死んだ場合は、購読した先へ同じ `watch` が配られてくる */
+      const watch: ChangeMessage = {
+        kind: 'watch',
+        watching: broadcast.watchState().kind === 'observed',
+      };
+      send(`data: ${JSON.stringify(watch)}\n\n`);
       const beat = setInterval(() => send(': keep-alive\n\n'), KEEPALIVE_MS);
 
       release = () => {

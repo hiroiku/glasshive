@@ -1,7 +1,8 @@
 import type { JsonRecord } from '~/app-kernel/json.ts';
 import type { Observation } from '~/app-kernel/observation.ts';
-import { observed } from '~/app-kernel/observation.ts';
+import { observed, unobservable } from '~/app-kernel/observation.ts';
 import { ok, type Result } from '~/app-kernel/result.ts';
+import { TrackerResponseUnreadableError } from '~/application/errors/issues/tracker-response.error.ts';
 import type { GitCommandIntegration } from '~/application/ports/integrations/git/git-command.integration.ts';
 import type { IssueTrackerIntegration } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
 import type { AvatarCacheService } from '~/application/services/issues/avatar-cache.service.ts';
@@ -45,7 +46,7 @@ export interface ListGithubIssuesUseCase {
 export function createListGithubIssues(deps: {
   readonly git: GitCommandIntegration;
   readonly tracker: IssueTrackerIntegration;
-  /* 顔を覚えておくところ。**引ける顔をここで入れ替える** ——
+  /* 顔を覚えておくところ。**このプロジェクトで引ける顔をここで入れ替える** ——
      観測した一覧に出てこない login を引けるままにしておくと、この画面は
      「任意の宛先へ代わりに取りに行く踏み台」に近づく。 */
   readonly avatars: AvatarCacheService;
@@ -75,16 +76,39 @@ export function createListGithubIssues(deps: {
           break;
         }
 
+        /* 応答を歩けなかった。**歩けて 0 件だったのと同じに扱わない。** 1 ページ目なら
+           課題を 1 件も観ていないのだから、観測が成り立っていない。2 ページ目より後なら、
+           そこまでは観えている — 観えたぶんを捨てず、その先を読んでいないことだけを言う。 */
         const parsed = parseIssuePage(answer.value);
+        if (parsed === null) {
+          if (page === 0) {
+            return ok(
+              unobservable(
+                new TrackerResponseUnreadableError('gh answered, but the issues could not be read'),
+              ),
+            );
+          }
+          truncated = true;
+          break;
+        }
+
         nodes.push(...parsed.nodes);
-        if (!parsed.hasNextPage || parsed.endCursor === null) break;
+        if (!parsed.hasNextPage) break;
+        /* 続きが在ると言われたのに、次を尋ねる位置が答えられていない。ここで黙って止めると、
+           続きの課題が「無かった」ことになる。 */
+        if (parsed.endCursor === null) {
+          truncated = true;
+          break;
+        }
         cursor = parsed.endCursor;
         // 次の周回に入れないなら、その先は読んでいない
         if (page === MAX_PAGES - 1) truncated = true;
       }
 
       const ledger = buildLedger(nodes, { includeClosed, truncated });
-      deps.avatars.remember(ledger);
+      /* 顔のキャッシュは glasshive 全体で 1 つなので、どのプロジェクトの一覧かを添える。
+         添えないと、2 つのプロジェクトを開いた画面が互いの引ける顔を消し合う。 */
+      deps.avatars.remember(projectPath, ledger);
       /* 顔は待たずに先へ読んでおく。ブラウザーが求める頃にはメモリに在る。
        **取れなくても一覧は出る** — 顔は誰なのかを言うだけで、状態を言わない。 */
       deps.avatars.warm(ledger);

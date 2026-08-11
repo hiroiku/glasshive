@@ -160,6 +160,17 @@ describe('子プロセスに渡す環境', () => {
     expect(env.PATH, 'git を見つける PATH まで落としては、何も起こせない').toBe('/usr/bin');
   });
 
+  it('`git` の文言を英語のままにする', () => {
+    const env = childEnv({ PATH: '/usr/bin', LANG: 'ja_JP.UTF-8', LANGUAGE: 'ja' });
+    expect(
+      env.LC_ALL,
+      '断ったのか、そこがリポジトリでないのかは `stderr` の文言でしか分けられない。訳されていると読めない',
+    ).toBe('C');
+    expect(env.LANGUAGE, '`LANGUAGE` が残っていると、locale が C でも訳された文言が返る').toBe(
+      undefined,
+    );
+  });
+
   it('元の環境は書き換えない', () => {
     const source = { PATH: '/usr/bin', GIT_DIR: '/other/.git' };
     childEnv(source);
@@ -255,7 +266,7 @@ describe('落ち方を分ける', () => {
 
   it('非ゼロで終わったときは git の `stderr` を捨てない', async () => {
     const git = createCliGitCommandIntegration({
-      run: failing({ code: 128, stderr: 'fatal: not a git repository\n' }),
+      run: failing({ code: 128, stderr: "fatal: bad revision 'nope'\n" }),
     });
     const output = await git.run({
       cwd: existingDir,
@@ -271,8 +282,74 @@ describe('落ち方を分ける', () => {
     ).toEqual({
       command: 'git worktree list',
       status: 128,
-      stderr: 'fatal: not a git repository\n',
+      stderr: "fatal: bad revision 'nope'\n",
     });
+  });
+
+  /* `git` は「そこはリポジトリではない」も「このリポジトリは読まない」も 128 で終わる。
+     分ける手がかりは `stderr` にしかない。 */
+  it('そこがリポジトリでないと `git` が言ったのは、観測できたうえで無かったこと', async () => {
+    const git = createCliGitCommandIntegration({
+      run: failing({
+        code: 128,
+        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n',
+      }),
+    });
+    const output = await git.run({
+      cwd: existingDir,
+      args: ['worktree', 'list'],
+      revisions: [],
+    });
+    expect(output, '観測はできて、そこに無かった。誤りではない').toEqual({
+      kind: 'absent',
+      reason: 'no-source',
+    });
+  });
+
+  it('所有者が違うと断られたのは、リポジトリが無いことではない', async () => {
+    const git = createCliGitCommandIntegration({
+      run: failing({
+        code: 128,
+        stderr: [
+          "fatal: detected dubious ownership in repository at '/work/hive'",
+          'To add an exception for this directory, call:',
+          '',
+          '\tgit config --global --add safe.directory /work/hive',
+          '',
+        ].join('\n'),
+      }),
+    });
+    const output = await git.run({
+      cwd: existingDir,
+      args: ['worktree', 'list'],
+      revisions: [],
+    });
+    expect(output.kind, '断られたのを「無い」と読むと、画面は既に在るリポジトリを作らせる').toBe(
+      'unobservable',
+    );
+    if (output.kind !== 'unobservable') return;
+    expect(output.error.code, 'エラーコードで 503 と決まる').toBe('git.denied');
+    expect(
+      output.error.message,
+      'message は外へ返すレスポンスに載る。パスも errno も混ぜない',
+    ).toBe('git refused to read this repository');
+  });
+
+  it('リポジトリの中を開けなかったのも、断られたこと', async () => {
+    const git = createCliGitCommandIntegration({
+      run: failing({
+        code: 128,
+        stderr: "fatal: cannot open '/work/hive/.git/HEAD': Permission denied\n",
+      }),
+    });
+    const output = await git.run({
+      cwd: existingDir,
+      args: ['for-each-ref'],
+      revisions: [],
+    });
+    expect(output.kind).toBe('unobservable');
+    if (output.kind !== 'unobservable') return;
+    expect(output.error.code, '読めなかったのであって、そこに無いのではない').toBe('git.denied');
   });
 
   it('説明の付かない落ち方は、こちらの不具合として返す', async () => {

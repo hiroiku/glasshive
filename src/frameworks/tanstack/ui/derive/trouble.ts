@@ -47,6 +47,22 @@ export function githubTrouble(code: string | null): NotObservedProps {
           { text: 'Sign in again if the token expired', command: 'gh auth login' },
         ],
       };
+    /* `gh` は答えたが、その答えから課題へ辿れなかった。**「届かなかった」と言わない** ——
+       いちばん多い引き金は認証の切れた `{"errors":[{"message":"Bad credentials"}]}` で、
+       すべきことは断られたときと同じ入り直しである。 */
+    case 'tracker.unreadable_response':
+      return {
+        icon: mdiGithub,
+        title: 'GitHub answered with something that is not an issue list',
+        detail:
+          'gh ran and came back, but the answer holds no issues to read — an expired login and a GraphQL error both look like this. Nothing is known about the issues in this repository right now; this is not an empty backlog.',
+        code,
+        steps: [
+          { text: 'See who gh thinks you are', command: 'gh auth status' },
+          { text: 'Sign in again if the token expired', command: 'gh auth login' },
+          { text: 'Ask for the issues by hand to see what comes back', command: 'gh issue list' },
+        ],
+      };
     case 'tracker.timeout':
       return {
         icon: mdiLanConnect,
@@ -96,9 +112,15 @@ export function gitTrouble(code: string | null): NotObservedProps {
         icon: mdiSourceBranch,
         title: 'git refused to read this repository',
         detail:
-          'The directory exists and git ran, but it would not answer. On a shared or mounted checkout this is usually ownership: git declines repositories owned by another user.',
+          'The directory exists and git ran, but it would not answer. On a shared or mounted checkout this is usually ownership: git declines repositories owned by another user. The repository is there — this is not an empty or missing one.',
         code,
-        steps: [{ text: 'Ask git what it objects to', command: 'git status' }],
+        steps: [
+          { text: 'Ask git what it objects to', command: 'git status' },
+          {
+            text: 'If it is ownership, trust this checkout',
+            command: 'git config --global --add safe.directory <path>',
+          },
+        ],
       };
     case 'git.timeout':
       return {
@@ -107,6 +129,15 @@ export function gitTrouble(code: string | null): NotObservedProps {
         detail:
           'The command was started and never returned. A very large history or a stalled network remote can do this.',
         code,
+      };
+    case 'git.exit_nonzero':
+      return {
+        icon: mdiSourceBranch,
+        title: 'git exited with an error',
+        detail:
+          'git ran and stopped with a non-zero status, and what it printed is not a refusal or a missing repository. It knows why; glasshive only sees that it failed. Running the same command by hand prints the reason.',
+        code,
+        steps: [{ text: 'Run it yourself in this project', command: 'git status' }],
       };
     default:
       return {

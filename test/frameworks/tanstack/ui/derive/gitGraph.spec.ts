@@ -83,6 +83,23 @@ describe('線の合流先を決める', () => {
     expect(layout.baseIndex.get(0)).toBe(layout.rows.length - 1);
   });
 
+  /* 引いた先を分かれ目として読ませると、300 コミット前に分かれたブランチが
+     いちばん古い見えているコミットで分かれたように見える。 */
+  it('見当たらなかった行は、そこで分かれたのではないと残す', () => {
+    const layout = layoutOf([node('head')], [tip('x', { merge_base: 'どこにも無い' })]);
+
+    expect(layout.unseenBase.has(0), '描く側がこれを見て、当てで引いた線だと言える').toBe(true);
+  });
+
+  it('分かれ目が見えている行には残さない', () => {
+    const layout = layoutOf([node('head'), node('fork')], [tip('x', { merge_base: 'fork' })]);
+
+    expect(
+      layout.unseenBase.has(0),
+      '見えている分かれ目にまで目印を出すと、その目印は誰にも読まれなくなる',
+    ).toBe(false);
+  });
+
   it('トラックの数だけ幅を取る', () => {
     const narrow = layoutOf([node('head')], [tip('x')]);
     const wide = layoutOf([node('head')], [tip('x'), tip('y')]);

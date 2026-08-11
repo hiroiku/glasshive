@@ -85,6 +85,7 @@ function session(
     activity: NO_ACTIVITY,
     sizeBytes: 0,
     subagents,
+    subagentsWalked: observed(subagents.length),
   };
 }
 
@@ -103,6 +104,7 @@ function project(
     sessions,
     latestActivityMs: 0,
     recentTokens: absent('out-of-window'),
+    walked: observed(sessions.length),
   };
 }
 
@@ -126,6 +128,7 @@ function stub(id: string, canonicalPath: string | null): ProjectStub {
     liveProcessCount: 0,
     latestActivityMs: 0,
     transcriptCount: 0,
+    walked: observed(0),
   };
 }
 

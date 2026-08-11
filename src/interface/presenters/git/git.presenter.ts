@@ -80,6 +80,8 @@ export interface GitOverviewJson {
   worktrees: GitWorktreeJson[];
   branches: GitBranchJson[];
   mainline: GitMainNodeJson[];
+  /** 本流が遡る数の上限で切れているか。切れているなら `mainline` より古いコミットが在る */
+  mainline_truncated: boolean;
   tips: GitTipJson[];
   conflicts: GitConflictJson[];
 }
@@ -117,6 +119,7 @@ const emptyOverview = (reason: string): GitOverviewJson => ({
   worktrees: [],
   branches: [],
   mainline: [],
+  mainline_truncated: false,
   tips: [],
   conflicts: [],
 });
@@ -174,6 +177,8 @@ export function presentGitOverview(
         date: commit.date,
         subject: commit.subject,
       })),
+      // 切れたことを写し忘れると、画面は切れていない本流として描く
+      mainline_truncated: overview.mainlineTruncated,
       tips: overview.tips.map((tip) => ({
         kind: tip.kind,
         name: tip.name,

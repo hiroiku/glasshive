@@ -23,6 +23,12 @@ export interface ObservedProject {
 
      一覧はこれを列に出す。**プロジェクトごとに問い直さずに済むよう、木を組む一度の走査で数える。** */
   readonly recentTokens: Observation<number>;
+  /* このプロジェクトの `transcript` を数え上げられたか。数え上げられたなら、そこに見えた数。
+
+     **`sessions` が短くなる理由は 2 つある。** 本当にそれだけしか無いのと、ディレクトリを
+     走査できなかったか見えた `transcript` を全部は載せられなかったのである。
+     一覧の長さだけでは、その 2 つが同じ形になる。 */
+  readonly walked: Observation<number>;
 }
 
 /* 中身を読む前のプロジェクト 1 つ。**行の識別だけが決まっている。**
@@ -45,6 +51,11 @@ export interface ProjectStub {
      読み取り範囲の上限が掛かっているので、大きいファイルではごく一部しか読まず、小さい
      ファイルでは読み取り範囲どうしが重なって、大きさより多く読むことになる。 */
   readonly transcriptCount: number;
+  /* このプロジェクトの `transcript` を数え上げられたか。数え上げられたなら、そこに見えた数。
+
+     **数え上げられなかった行は `transcriptCount` が 0 になる。** 読むものが無いのではなく、
+     何本あるかを数えられなかったのであって、その区別はこの欄にしか残らない。 */
+  readonly walked: Observation<number>;
 }
 
 /* 中身を読む前の一覧。何が並ぶかだけが決まっていて、1 行ごとの数値はまだ無い。 */

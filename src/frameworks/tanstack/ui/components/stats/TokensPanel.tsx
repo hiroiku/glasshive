@@ -5,6 +5,13 @@ import { type Bin, footLabel, rangeLabel } from '../../derive/usage.ts';
 import { formatTokens, mdhm } from '../../format.ts';
 import { useChartHover } from '../../hooks/useChartHover.ts';
 import { TimeTicks } from '../primitives/TimeTicks.tsx';
+import {
+  isObserved,
+  observationMark,
+  observationTitle,
+  StatsNote,
+  type StatsObservation,
+} from './StatsObservation.tsx';
 
 /* 消費の推移と、その積み上がり。
 
@@ -25,6 +32,9 @@ export interface TokensPanelProps {
   readonly window: TimeWindow;
   readonly nowMs: number;
   readonly onWindow: (window: TimeWindow) => void;
+  /* 消費をどこまで観測できたか。**観測できていないときは 1 本も描かない** ——
+     平らな 0 のグラフは「使っていなかった」という断定であって、読めなかったことではない。 */
+  readonly observation: StatsObservation;
 }
 
 export function TokensPanel({
@@ -35,8 +45,10 @@ export function TokensPanel({
   window,
   nowMs,
   onWindow,
+  observation,
 }: TokensPanelProps) {
   const hover = useChartHover(bars);
+  const read = isObserved(observation);
   const heights = bins.map((bin) => bin.total);
   const total = heights.reduce((sum, value) => sum + value, 0);
   const ceiling = Math.max(1, ...heights);
@@ -71,6 +83,9 @@ export function TokensPanel({
             key={preset.label}
             type="button"
             className={window === preset.key ? 'fchip on' : 'fchip'}
+            /* 押されているかを色だけで言わない。読み上げにも、色の差を掴めない目にも、
+               どの幅が効いているのかが要る */
+            aria-pressed={window === preset.key}
             title={preset.title}
             onClick={() => onWindow(preset.key)}
           >
@@ -80,38 +95,51 @@ export function TokensPanel({
         <span className="sf-dim">
           {footLabel(footMs)} × {bars} = {rangeLabel(footMs * bars)}
         </span>
-        <span className="sf-big" title="input + output + cache write">
-          {formatTokens(total)}
+        {/* 観測できていない消費を 0 として出さない。0 は「使っていなかった」という断定である */}
+        <span
+          className="sf-big"
+          title={read ? 'input + output + cache write' : observationTitle(observation)}
+        >
+          {read ? formatTokens(total) : observationMark(observation)}
         </span>
       </div>
 
       {/* ホバーすると、そのバー 1 本ぶんの消費をツールチップに出す。グラフ自体の要旨は
-          svg の `title` が持っているので、ホバーできない人にも届く */}
+          svg の `title` が持っているので、ホバーできない人にも届く。
+          観測できていないときはホバーする対象そのものが無いので、受け取りもしない */}
       {/* biome-ignore lint/a11y/noStaticElementInteractions: ホバーして読むためだけの面 */}
-      <div className="sf-plot" onMouseMove={hover.onMouseMove} onMouseLeave={hover.onMouseLeave}>
-        <svg
-          className="sf-svg"
-          viewBox={`0 0 ${bars * 10} 56`}
-          preserveAspectRatio="none"
-          role="img"
-        >
-          <title>Tokens over time</title>
-          {columns.map((column) =>
-            column.total > 0 ? (
-              <rect
-                key={column.at}
-                x={column.x + 1}
-                width={8}
-                y={y(column.total)}
-                height={56 - y(column.total)}
-                className="sf-bar"
-              />
-            ) : null,
-          )}
-          {total > 0 && <path className="sf-line" d={stack([...cumulative]) ?? ''} />}
-        </svg>
+      <div
+        className="sf-plot"
+        onMouseMove={read ? hover.onMouseMove : undefined}
+        onMouseLeave={read ? hover.onMouseLeave : undefined}
+      >
+        {read ? (
+          <svg
+            className="sf-svg"
+            viewBox={`0 0 ${bars * 10} 56`}
+            preserveAspectRatio="none"
+            role="img"
+          >
+            <title>Tokens over time</title>
+            {columns.map((column) =>
+              column.total > 0 ? (
+                <rect
+                  key={column.at}
+                  x={column.x + 1}
+                  width={8}
+                  y={y(column.total)}
+                  height={56 - y(column.total)}
+                  className="sf-bar"
+                />
+              ) : null,
+            )}
+            {total > 0 && <path className="sf-line" d={stack([...cumulative]) ?? ''} />}
+          </svg>
+        ) : (
+          <StatsNote observation={observation} className="sf-blank" />
+        )}
 
-        {at !== null && bin !== undefined && (
+        {read && at !== null && bin !== undefined && (
           <>
             <i className="sf-cursor" style={{ left: `${((at.bar + 0.5) / bars) * 100}%` }} />
             <div

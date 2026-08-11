@@ -12,18 +12,41 @@ import { Dot } from '../primitives/Dot.tsx';
 /** まだ読んでいない欄。**空欄にしない** — 空欄は「0 だった」と読める */
 const DASH = '—';
 const NOT_READ = 'Not read yet';
+/** 数え上げられなかった行の欄。見えたぶんは本当に在るが、それで全部とは言えない */
+const SHORT = 'Some of this project could not be read — the count may be short';
 
 /** 期間を絞っていないときに稼働のトラックが覆う幅。稼働が 1 つも無いときの目盛りとして使う */
 const DEFAULT_STRIP_MS = 30 * 86_400_000;
 
+/* 数え上げられなかった行の数に `+?` を添える。**数のすぐ隣に置く** —
+   離すと、どの数が足りていないのか読めない。 */
+const Short = () => <span className="dimtxt">+?</span>;
+
 /* 数の欄ひとつ。読む前は `—`、読んだ後は 0 を空欄にする。
 
-   0 を空欄にしてよいのは、それが「読んで、0 だった」ときだけである。 */
-function Count({ value, read }: { value: number | null; read: boolean }) {
+   0 を空欄にしてよいのは、それが「読んで、0 だった」ときだけである。数え上げられなかった
+   行では、0 も空欄も「1 つも動いていない」という断定になるので、`+?` を添えて出す。 */
+function Count({
+  value,
+  read,
+  counted,
+}: {
+  value: number | null;
+  read: boolean;
+  counted: boolean;
+}) {
   if (!read) {
     return (
       <span className="right mono dimtxt" title={NOT_READ}>
         {DASH}
+      </span>
+    );
+  }
+  if (!counted) {
+    return (
+      <span className="right mono" title={SHORT}>
+        {value ?? 0}
+        <Short />
       </span>
     );
   }
@@ -149,6 +172,9 @@ export function OverviewTable({
 
       {rows.map((row) => {
         const isPinned = pinned.has(row.id);
+        /* この行の `transcript` を数え上げられたか。数え上げられていなければ、
+           どの欄も「これで全部だ」という顔をしてはいけない。 */
+        const counted = row.sourcesState !== 'unobservable';
         return (
           <div key={row.id} className="dash-row">
             {/* 行の属性としてのピン留め。行を開く操作とは別のクリック対象にしたいので、
@@ -176,13 +202,22 @@ export function OverviewTable({
 
             {/* 読む前の欄は空にしない。**空欄は「0 だった」と読める。**
                 読んでいないことは、`—` で「ここにはまだ何も無い」と言う。 */}
-            <Count value={row.active} read={row.read} />
-            <Count value={row.waiting} read={row.read} />
+            <Count value={row.active} read={row.read} counted={counted} />
+            <Count value={row.waiting} read={row.read} counted={counted} />
             <span
               className={`right mono${(row.input ?? 0) > 0 ? ' inputc' : ''}`}
-              title={row.read ? undefined : NOT_READ}
+              title={row.read ? (counted ? undefined : SHORT) : NOT_READ}
             >
-              {row.read ? row.input || '' : DASH}
+              {!row.read ? (
+                DASH
+              ) : counted ? (
+                row.input || ''
+              ) : (
+                <>
+                  {row.input ?? 0}
+                  <Short />
+                </>
+              )}
             </span>
 
             {/* 観測できなかった消費は空にせず、観測できなかったと言う。
@@ -220,12 +255,19 @@ export function OverviewTable({
 
             <ActivityStrip row={row} fromMs={fromMs} toMs={nowMs} />
 
-            <span className="right dimtxt" title={row.read ? undefined : NOT_READ}>
+            {/* 時刻の見えない行を空欄にしてよいのは、読めて何も無かったときだけである。
+                数え上げられなかった行の空欄は「ずっと静かだった」と読める。 */}
+            <span
+              className="right dimtxt"
+              title={row.read ? (counted ? undefined : SHORT) : NOT_READ}
+            >
               {!row.read
                 ? DASH
-                : row.lastActivityMs === null
-                  ? ''
-                  : formatSince(row.lastActivityMs, nowMs)}
+                : row.lastActivityMs !== null
+                  ? formatSince(row.lastActivityMs, nowMs)
+                  : counted
+                    ? ''
+                    : '?'}
             </span>
           </div>
         );

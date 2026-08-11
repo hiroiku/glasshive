@@ -17,4 +17,6 @@
 @import "./issues.css";
 @import "./work.css";
 @import "./panel.css";
+/* `panel.css` の `.alane-tl .bar` に足す規則なので、その後ろに置く */
+@import "./activity.css";
 @import "./progress.css";

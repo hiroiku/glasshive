@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AppError } from '~/app-kernel/error.ts';
 import { absent, observed, unobservable } from '~/app-kernel/observation.ts';
+import { TrackerResponseUnreadableError } from '~/application/errors/issues/tracker-response.error.ts';
 import type { GitCommandIntegration } from '~/application/ports/integrations/git/git-command.integration.ts';
 import type { IssueTrackerIntegration } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
 import type { AvatarCacheService } from '~/application/services/issues/avatar-cache.service.ts';
@@ -69,11 +70,12 @@ function fakeTracker(pages: readonly string[]) {
   return { tracker, asked };
 }
 
-/* 顔は課題の一覧そのものには関わらない。呼ばれたことだけ数える偽物を置く */
+/* 顔は課題の一覧そのものには関わらない。どのプロジェクトの一覧を覚えさせたかだけ控える偽物を置く */
 function fakeAvatars() {
-  const remembered: number[] = [];
+  const remembered: { projectPath: string; issues: number }[] = [];
   const avatars: AvatarCacheService = {
-    remember: (ledger) => remembered.push(ledger.issues.length),
+    remember: (projectPath, ledger) =>
+      remembered.push({ projectPath, issues: ledger.issues.length }),
     warm: () => undefined,
     read: async () => absent('no-source'),
   };
@@ -251,6 +253,94 @@ describe('GitHub の課題を一覧にする', () => {
       result.ok && result.value.kind,
       '空の一覧にすると、課題が 1 件も無いリポジトリに見える',
     ).toBe('unobservable');
+  });
+
+  it('1 ページ目の応答を歩けなければ、観測できなかったと言う', async () => {
+    // `gh` は 0 で終わったが、返ってきたテキストから課題へ辿れない
+    const { tracker } = fakeTracker(['{"errors":[{"message":"Bad credentials"}]}']);
+    const useCase = createListGithubIssues({
+      avatars: fakeAvatars().avatars,
+      git: gitWithRemote('git@github.com:hiroiku/glasshive.git'),
+      tracker,
+    });
+
+    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+
+    expect(
+      result.ok && result.value.kind,
+      '歩けなかった応答を空の一覧にすると、課題が 1 件も無いリポジトリに見える',
+    ).toBe('unobservable');
+    if (result.ok && result.value.kind === 'unobservable') {
+      expect(
+        result.value.error,
+        '`gh` に尋ねられなかったのではない。エラーコードを分けておかないと、画面は入り直しを勧められない',
+      ).toBeInstanceOf(TrackerResponseUnreadableError);
+      expect(result.value.error.code).toBe('tracker.unreadable_response');
+    }
+  });
+
+  it('途中のページを歩けなくなっても、観えたぶんは捨てず、その先は読んでいないと言う', async () => {
+    const { tracker } = fakeTracker([pageOf([1, 2], 'cur1'), 'not json at all']);
+    const useCase = createListGithubIssues({
+      avatars: fakeAvatars().avatars,
+      git: gitWithRemote('git@github.com:hiroiku/glasshive.git'),
+      tracker,
+    });
+
+    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+
+    expect(result.ok && result.value.kind).toBe('observed');
+    if (result.ok && result.value.kind === 'observed') {
+      expect(result.value.value.issues, '観えた 2 件を捨てると、一覧が空になる').toHaveLength(2);
+      expect(
+        result.value.value.truncated,
+        '黙って切ると、歩けなかったページより後ろの課題が「無かった」ことになる',
+      ).toBe(true);
+    }
+  });
+
+  it('続きが在ると言われたのに位置を答えないページで止まったら、そう言う', async () => {
+    const withoutCursor = JSON.stringify({
+      data: {
+        repository: {
+          issues: {
+            pageInfo: { hasNextPage: true, endCursor: null },
+            nodes: [{ number: 1, state: 'OPEN', blockedBy: { nodes: [] } }],
+          },
+        },
+      },
+    });
+    const { tracker, asked } = fakeTracker([withoutCursor]);
+    const useCase = createListGithubIssues({
+      avatars: fakeAvatars().avatars,
+      git: gitWithRemote('git@github.com:hiroiku/glasshive.git'),
+      tracker,
+    });
+
+    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+
+    expect(asked, '続きの位置が無ければ、次を尋ねようが無い').toHaveLength(1);
+    expect(
+      result.ok && result.value.kind === 'observed' && result.value.value.truncated,
+      '続きが在ると言われたまま止まったのだから、全部は読んでいない',
+    ).toBe(true);
+  });
+
+  it('どのプロジェクトの一覧かを添えて顔を覚えさせる', async () => {
+    const { tracker } = fakeTracker([pageOf([1], null)]);
+    const { avatars, remembered } = fakeAvatars();
+    const useCase = createListGithubIssues({
+      avatars,
+      git: gitWithRemote('git@github.com:hiroiku/glasshive.git'),
+      tracker,
+    });
+
+    await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+
+    expect(
+      remembered,
+      '顔のキャッシュは全部のプロジェクトで 1 つなので、どの一覧の顔かを言わないと互いに消し合う',
+    ).toEqual([{ projectPath: '/work/glasshive', issues: 1 }]);
   });
 
   it('途中で尋ねられなくなっても、観えたぶんは捨てない', async () => {

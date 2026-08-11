@@ -114,6 +114,30 @@ describe('観測できなかった回を、当たらなかったことにしな�
       '読んだ本数が総数に届かないことが、途中で止まったことを言う',
     ).toBe(2);
     expect(result.current.total).toBe(5);
+    expect(result.current.unreadable).toBe(true);
+  });
+
+  /* 1 回目で止まると `scanned` も `total` も 0 のままで、数では何も言えない。
+     それでも当たりの一覧は絞り込みに効き続けるので、読めなかったことは別に持たせる。 */
+  it('1 回目で読めなかったことを、数ではなく欄で言う', async () => {
+    fetchSearch.mockResolvedValue(page([], 0, 0, false, 'unobservable'));
+
+    const { result } = renderHook(() => useDeepSearch('hive', 'needle'));
+
+    await waitFor(() => expect(fetchSearch).toHaveBeenCalledTimes(1), SETTLED);
+    await waitFor(() => expect(result.current.running).toBe(false), SETTLED);
+    expect(result.current.unreadable, '読めずに止まったことが、どこにも残っていない').toBe(true);
+    expect(result.current.scanned).toBe(0);
+    expect(result.current.total).toBe(0);
+  });
+
+  it('読み切った回は、読めなかったとは言わない', async () => {
+    fetchSearch.mockResolvedValue(page(['/w/a.jsonl'], 3, 3, true));
+
+    const { result } = renderHook(() => useDeepSearch('hive', 'needle'));
+
+    await waitFor(() => expect(result.current.scanned).toBe(3), SETTLED);
+    expect(result.current.unreadable).toBe(false);
   });
 
   it('位置が進まない答えでは、同じところを頼み続けない', async () => {

@@ -35,19 +35,28 @@ describe('応答 1 ページを読む', () => {
       nodes: [node({ number: 7 }), node({ number: 8 })],
     });
     const parsed = parseIssuePage(text);
-    expect(parsed.nodes).toHaveLength(2);
-    expect(parsed.hasNextPage).toBe(true);
-    expect(parsed.endCursor).toBe('Y3Vyc29y');
+    expect(parsed?.nodes).toHaveLength(2);
+    expect(parsed?.hasNextPage).toBe(true);
+    expect(parsed?.endCursor).toBe('Y3Vyc29y');
+  });
+
+  it('課題が 1 件も無いページは、歩けたものとして返す', () => {
+    const parsed = parseIssuePage(
+      page({ pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] }),
+    );
+    expect(parsed, '歩けて 0 件だったのは、応答を歩けなかったのとは別のことである').not.toBe(null);
+    expect(parsed?.nodes).toEqual([]);
   });
 
   it.each([
     ['読めない JSON', 'not json at all'],
     ['repository が null', JSON.stringify({ data: { repository: null } })],
     ['data が無い', JSON.stringify({ errors: [{ message: 'Could not resolve to a Repository' }] })],
-  ])('%s は空のページとして返す', (_name, text) => {
-    const parsed = parseIssuePage(text);
-    expect(parsed.nodes).toEqual([]);
-    expect(parsed.hasNextPage, '読めなかったページの先を読みに行かない').toBe(false);
+  ])('%s は、歩けなかったこととして返す', (_name, text) => {
+    expect(
+      parseIssuePage(text),
+      '空のページとして返すと、歩けなかった応答が「課題は 1 件も無い」になる',
+    ).toBe(null);
   });
 });
 

@@ -159,6 +159,7 @@ export function TabBar({
            いまどこに居るかがどこにも出ない画面になる(アドレスバーを読むしか手が無くなる)。 */
         const name = project?.name ?? id;
         const shown = project === undefined ? 0 : visibleSessions(project, showAll, nowMs).length;
+        const dot = project === undefined ? 'unknown' : projectDotState(project);
         return (
           // biome-ignore lint/a11y/noStaticElementInteractions: 掴むのは並べ替えの手立てで、開くのは中の `Link` が受ける
           <span
@@ -177,12 +178,14 @@ export function TabBar({
                  そちらが始まって `mousemove` も `mouseup` も来なくなる */
               draggable={false}
             >
-              <Dot state={project === undefined ? 'unknown' : projectDotState(project)} />
+              <Dot state={dot} />
               <span>{name}</span>
             </Link>
             {/* 件数と × を同じ枠に重ねる。ホバーで入れ替わるだけで、枠の幅は変わらない */}
             <span className="tab-slot">
-              <span className="n">{shown === 0 ? '' : shown}</span>
+              {/* 人の入力を待っているプロジェクトは、件数の色でもそう言う。タブは畳まれていて
+                  中が見えないので、点 1 つだけだと隣のタブの点に紛れる */}
+              <span className={dot === 'input' ? 'n input' : 'n'}>{shown === 0 ? '' : shown}</span>
               <button
                 type="button"
                 className="tab-close"

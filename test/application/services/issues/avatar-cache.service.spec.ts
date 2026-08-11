@@ -8,16 +8,18 @@ import type {
 import {
   AVATAR_MAX_AGE_MS,
   createAvatarCache,
+  MAX_REMEMBERED_PROJECTS,
 } from '~/application/services/issues/avatar-cache.service.ts';
 
 /* 顔を、こちらで読んで、こちらから返す。
 
-   ここで見るのは 2 つ。**引ける先がいまの一覧に閉じていること**と、**同じ顔を何度も
-   取りに行かないこと**である。前者を緩めると、この画面は任意の宛先へ代わりに取りに行く
-   踏み台になる。後者を怠ると、30 枚のカードが 30 回上流を叩く。 */
+   ここで見るのは 3 つ。**引ける先が観測した一覧に閉じていること**と、**プロジェクトどうしが
+   互いの顔を消さないこと**と、**同じ顔を何度も取りに行かないこと**である。1 つめを緩めると、
+   この画面は任意の宛先へ代わりに取りに行く踏み台になる。2 つめを怠ると、2 つ開いた画面の
+   片方から顔が消える。3 つめを怠ると、30 枚のカードが 30 回上流を叩く。 */
 
 /** 偽物の形は、ポートから引く。写して持つと、形が変わっても古いまま残る */
-type Ledger = Parameters<ReturnType<typeof createAvatarCache>['remember']>[0];
+type Ledger = Parameters<ReturnType<typeof createAvatarCache>['remember']>[1];
 type Issue = Ledger['issues'][number];
 
 class Unreachable extends AppError {
@@ -84,10 +86,11 @@ function sceneOf(options?: Parameters<typeof spyAvatars>[0]) {
   return { ...spy, cache, advance: (ms: number) => (nowMs += ms) };
 }
 
-describe('引ける顔は、いまの一覧が観測したものだけ', () => {
+describe('引ける顔は、観測した一覧に出たものだけ', () => {
   it('観測した login は引ける', async () => {
     const scene = sceneOf();
     scene.cache.remember(
+      '/work/glasshive',
       ledgerOf([issue([{ login: 'hiroiku', avatarUrl: `${GITHUB}/u/1?s=48` }])]),
     );
 
@@ -99,7 +102,10 @@ describe('引ける顔は、いまの一覧が観測したものだけ', () => {
 
   it('観測していない login は、取りに行きもしない', async () => {
     const scene = sceneOf();
-    scene.cache.remember(ledgerOf([issue([{ login: 'hiroiku', avatarUrl: `${GITHUB}/u/1` }])]));
+    scene.cache.remember(
+      '/work/glasshive',
+      ledgerOf([issue([{ login: 'hiroiku', avatarUrl: `${GITHUB}/u/1` }])]),
+    );
 
     const answer = await scene.cache.read('octocat');
 
@@ -107,10 +113,16 @@ describe('引ける顔は、いまの一覧が観測したものだけ', () => {
     expect(scene.asked, '尋ねてしまえば、それは代わりに取りに行く踏み台である').toEqual([]);
   });
 
-  it('一覧を取り直すと、居なくなった login は引けなくなる', async () => {
+  it('同じプロジェクトの一覧を取り直すと、居なくなった login は引けなくなる', async () => {
     const scene = sceneOf();
-    scene.cache.remember(ledgerOf([issue([{ login: 'gone', avatarUrl: `${GITHUB}/u/9` }])]));
-    scene.cache.remember(ledgerOf([issue([{ login: 'hiroiku', avatarUrl: `${GITHUB}/u/1` }])]));
+    scene.cache.remember(
+      '/work/glasshive',
+      ledgerOf([issue([{ login: 'gone', avatarUrl: `${GITHUB}/u/9` }])]),
+    );
+    scene.cache.remember(
+      '/work/glasshive',
+      ledgerOf([issue([{ login: 'hiroiku', avatarUrl: `${GITHUB}/u/1` }])]),
+    );
 
     expect(
       (await scene.cache.read('gone')).kind,
@@ -121,6 +133,7 @@ describe('引ける顔は、いまの一覧が観測したものだけ', () => {
   it('GitHub 以外の宛先は、観測した URL でも覚えない', async () => {
     const scene = sceneOf();
     scene.cache.remember(
+      '/work/glasshive',
       ledgerOf([
         issue([
           { login: 'evil', avatarUrl: 'https://internal.test/secret' },
@@ -137,9 +150,57 @@ describe('引ける顔は、いまの一覧が観測したものだけ', () => {
   });
 });
 
+describe('プロジェクトどうしが、互いの顔を消さない', () => {
+  const face = (login: string, id: number) =>
+    ledgerOf([issue([{ login, avatarUrl: `${GITHUB}/u/${id}` }])]);
+
+  it('別のプロジェクトを一覧しても、先に観測したプロジェクトの顔は引ける', async () => {
+    const scene = sceneOf();
+    scene.cache.remember('/work/glasshive', face('hiroiku', 1));
+    scene.cache.remember('/work/kuden-drive', face('octocat', 2));
+
+    expect(
+      (await scene.cache.read('hiroiku')).kind,
+      'キャッシュは全部のプロジェクトで 1 つなので、丸ごと入れ替えると 2 つ開いた画面が取り合う',
+    ).toBe('observed');
+    expect((await scene.cache.read('octocat')).kind).toBe('observed');
+  });
+
+  it('取り直しが交互に来ても、どちらの顔も引けるままである', async () => {
+    const scene = sceneOf();
+    for (let round = 0; round < 3; round++) {
+      scene.cache.remember('/work/glasshive', face('hiroiku', 1));
+      scene.cache.remember('/work/kuden-drive', face('octocat', 2));
+    }
+
+    expect(
+      (await scene.cache.read('hiroiku')).kind,
+      '変更通知のたびに両方が取り直す。後から来た一覧で引ける顔が決まると、先の顔が消える',
+    ).toBe('observed');
+    expect((await scene.cache.read('octocat')).kind).toBe('observed');
+  });
+
+  it('覚えておくプロジェクトの数には上限がある', async () => {
+    const scene = sceneOf();
+    scene.cache.remember('/work/old', face('gone', 9));
+    for (let index = 0; index < MAX_REMEMBERED_PROJECTS; index++) {
+      scene.cache.remember(`/work/p${index}`, face(`user${index}`, index));
+    }
+
+    expect(
+      (await scene.cache.read('gone')).kind,
+      '際限なく足すと、もう開いていないプロジェクトの顔がいつまでも引ける',
+    ).toBe('absent');
+    expect((await scene.cache.read('user0')).kind, '直近のプロジェクトは引ける').toBe('observed');
+  });
+});
+
 describe('同じ顔を何度も取りに行かない', () => {
   const remember = (scene: ReturnType<typeof sceneOf>) =>
-    scene.cache.remember(ledgerOf([issue([{ login: 'hiroiku', avatarUrl: `${GITHUB}/u/1` }])]));
+    scene.cache.remember(
+      '/work/glasshive',
+      ledgerOf([issue([{ login: 'hiroiku', avatarUrl: `${GITHUB}/u/1` }])]),
+    );
 
   it('覚えている間は上流に尋ねない', async () => {
     const scene = sceneOf();
@@ -181,7 +242,10 @@ describe('同じ顔を何度も取りに行かない', () => {
 describe('顔が取れなかったとき', () => {
   it('覚えている顔が在れば、それを出す', async () => {
     const scene = sceneOf();
-    scene.cache.remember(ledgerOf([issue([{ login: 'hiroiku', avatarUrl: `${GITHUB}/u/1` }])]));
+    scene.cache.remember(
+      '/work/glasshive',
+      ledgerOf([issue([{ login: 'hiroiku', avatarUrl: `${GITHUB}/u/1` }])]),
+    );
     await scene.cache.read('hiroiku');
 
     /* 次は繋がらない。**顔は誰なのかを言うだけで、状態を言わない** ——
@@ -195,7 +259,10 @@ describe('顔が取れなかったとき', () => {
 
   it('一度も取れていなければ、取れなかったと言う', async () => {
     const scene = sceneOf({ fail: true });
-    scene.cache.remember(ledgerOf([issue([{ login: 'hiroiku', avatarUrl: `${GITHUB}/u/1` }])]));
+    scene.cache.remember(
+      '/work/glasshive',
+      ledgerOf([issue([{ login: 'hiroiku', avatarUrl: `${GITHUB}/u/1` }])]),
+    );
 
     expect(
       (await scene.cache.read('hiroiku')).kind,

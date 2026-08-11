@@ -1,3 +1,6 @@
+/* biome-ignore-all lint/a11y/useSemanticElements: subgrid で列を揃えるので table の要素を置けない */
+/* biome-ignore-all lint/a11y/useFocusableInteractive: セルは行ごと辿る。1 つずつのタブ順は作らない */
+
 import { useQuery } from '@tanstack/react-query';
 import {
   type ColumnDef,
@@ -42,7 +45,7 @@ import {
   type Scale,
   type TimelineNode,
 } from '../../timeline/axis.ts';
-import { IssueChip, RefChip } from '../chips/Chips.tsx';
+import { RefChip } from '../chips/Chips.tsx';
 import { Dot } from '../primitives/Dot.tsx';
 import { TlBar } from '../timeline/TlBar.tsx';
 import { AgentsToolbar } from './AgentsToolbar.tsx';
@@ -54,7 +57,10 @@ import { AgentsToolbar } from './AgentsToolbar.tsx';
    — その 3 つをコンポーネントの間で受け渡すことになり、どこで測ってどこで使うのかが読めなくなる。
 
    `#tree-pane` の直の子にラッパー要素を挟まない。列を決めているのは `#tree-pane` で、
-   ツールバーも行も `subgrid` で親の列に乗っている。1 枚挟むと列が揃わなくなる。 */
+   行は `subgrid` で親の列に乗っている。1 枚挟むと列が揃わなくなる。
+
+   `#tree-pane` は `role="grid"` なので、直の子は `row` か `rowgroup` だけにする。列を
+   持たないもの — ツールバーと、行を開く操作の説明 — は `#tree-pane` の外へ置く。 */
 
 type AgentNode = SessionJson | SubagentJson;
 
@@ -136,6 +142,64 @@ const labelOf = (row: AgentRow): string =>
 /* 何に取り組んでいるかの短い表示。チップにする前の、並べ替えのための素の文字列 */
 const workingOn = (row: AgentRow): string =>
   row.kind === 'subagent' ? (row.node.issue ?? '') : row.node.issues.slice(0, 2).join(' ');
+
+/** 稼働区間のバーの上に描く矢印 1 本。近すぎるやりとりは 1 本にまとめてある */
+interface TalkArrow {
+  readonly key: string;
+  /** 送り手の行 */
+  readonly from: number;
+  /** 受け手の行 */
+  readonly to: number;
+  readonly x: number;
+  readonly who: string;
+  readonly summary: string;
+  /** 送信側の `transcript`。押すと、そのメッセージが在る会話へ */
+  readonly file: string | null;
+  /** まとめた中身の数 */
+  readonly count: number;
+  readonly label: string;
+}
+
+/* 1 つのセッションのやりとり。**`readable` を最初に読む。** 観測できなかった回も
+   0 本で返るので、数だけを見ると「一度も話さなかった」と読める。 */
+interface TalkHops {
+  readonly drawn: readonly TalkArrow[];
+  /** 矢印が語っているメッセージの数 */
+  readonly shown: number;
+  /** 描けなかったメッセージの数 */
+  readonly dropped: number;
+  /** 読み取り範囲が `transcript` の先頭まで届いたか */
+  readonly complete: boolean;
+  readonly readable: boolean;
+}
+
+/** 行を開く操作の説明を指す id。全部の行が同じ 1 つを指す */
+const OPEN_HINT_ID = 'agents-open-hint';
+
+/* この表が持つ列の `id`。**並べ替えの名前はこの一覧の中にしか無い。**
+
+   URL の `sort` はここに在るものだけを通す。通さないと TanStack が知らない列を黙って捨て、
+   既定の並びごと落ちる。列の綴りをここへ結んでおけば、列の名前を変えたときに
+   型検査が落ちる。 */
+export const AGENT_COLUMN_IDS = [
+  'name',
+  'state',
+  'model',
+  'effort',
+  'tokens',
+  'work',
+  'worktree',
+  'branch',
+  'now',
+  'updated',
+  'timeline',
+] as const;
+
+/** 列の定義。`id` は `AGENT_COLUMN_IDS` に在る名前しか置けない */
+type AgentColumn = ColumnDef<AgentRow> & { readonly id: (typeof AGENT_COLUMN_IDS)[number] };
+
+/** 消費の列に添える、何を数えているかの断り */
+const TOKENS_NOTE = 'input + output + cache write (transcripts active in the last 7 days only)';
 
 /** 見えている欄への部分一致(大文字小文字を問わない) */
 const hits = (query: string, haystack: readonly (string | null | undefined)[]): boolean =>
@@ -299,7 +363,7 @@ export function AgentsTable({
     }
   }, [project, firstPaint, nowMs]);
 
-  const columns = useMemo<ColumnDef<AgentRow>[]>(
+  const columns = useMemo<AgentColumn[]>(
     () => [
       {
         id: 'name',
@@ -398,6 +462,20 @@ export function AgentsTable({
   const axis = picked ?? autoAxis;
   const span = axis.t1 - axis.t0;
   const ticks = useMemo(() => niceTicks(axis.t0, axis.t1), [axis.t0, axis.t1]);
+  /* 見出しに置く目盛り。端に貼りつくものは読めないので落とす。**残った両端の寄せ方を
+     変える。** 中央寄せのまま置くと、左端のラベルは列からはみ出して並べ替えの ▲ と
+     隣の列に被り、右端のラベルは列の外へ出る。
+
+     位置は `left` ではなく `--tick-x` で渡す。**インラインの宣言は `!important` の無い
+     規則に必ず勝つ**ので、`left` を直に置くと、並べ替えの ▲ を避ける CSS 側の底上げが
+     一度も効かない。 */
+  const shownTicks = useMemo(
+    () =>
+      ticks
+        .map((at) => ({ at, x: ((at - axis.t0) / span) * 100 }))
+        .filter((tick) => tick.x >= 3 && tick.x <= 97),
+    [ticks, axis.t0, span],
+  );
   const domain = useMemo(() => domainOf(nodes, axis, nowMs), [nodes, axis, nowMs]);
 
   /* 手で打ち込んだ端は最大限そのまま活かす。矛盾したら、もう一方を 1 分の幅を保って追わせる。 */
@@ -518,9 +596,15 @@ export function AgentsTable({
      **畳まれた相手へのメッセージは、見えている親へ束ねる。** 描かないと、木を畳んだ
      途端にやりとりが無かったことになる。表示範囲の外へ出たメッセージは稼働区間と同じく
      描かない — 端へ吸着させると、そこで起きたことのように見える。 */
-  const talkHops = useMemo(() => {
+  const talkHops = useMemo<TalkHops | null>(() => {
     const answer = talkQuery.data;
-    if (!talk || answer === undefined || answer === null || !answer.ok) return null;
+    if (!talk || answer === undefined || answer === null) return null;
+    /* 観測できなかった回を 0 本として返さない。**presenter は `absent` でも
+       `unobservable` でも `hops` を空で返す。** 空をそのまま数えると、走査に失敗した
+       セッションが「一度も話さなかった」ことになる。 */
+    if (!answer.ok || answer.body.state !== 'observed') {
+      return { drawn: [], shown: 0, dropped: 0, complete: false, readable: false };
+    }
 
     const visible = new Map<string, number>();
     const named = new Map<string, { readonly label: string; readonly file: string }>();
@@ -612,19 +696,27 @@ export function AgentsTable({
       shown: drawn.reduce((count, mark) => count + mark.count, 0),
       dropped: dropped + answer.body.unplaced,
       complete: answer.body.complete,
+      readable: true,
     };
   }, [talk, talkQuery.data, rows, data, axis, span, tlGeom.width]);
 
   return (
-    <div id="tree-pane">
+    <>
+      {/* 行を開く操作の説明。全部の行が指す 1 つで足りるので、行の中には置かない —
+          置くと 11 本の `subgrid` に 12 個目のセルが増える。`grid` の子は `row` か
+          `rowgroup` だけなので、`#tree-pane` の外に置く */}
+      <span id={OPEN_HINT_ID} className="vhidden">
+        Press Enter to open the conversation
+      </span>
       <AgentsToolbar
         query={query}
         onQuery={onQuery}
         /* 読み切ったら消す。読み切る前に止まったときは残す — 残っている数が、
-           まだ全部を見ていないことを言う */
+           まだ全部を見ていないことを言う。**読めずに止まった回も残す** —
+           1 回目で止まると `scanned` も `total` も 0 のままなので、数では言えない */
         deepNote={
-          deep.running || (deep.total > 0 && deep.scanned < deep.total)
-            ? { scanned: deep.scanned, total: deep.total }
+          deep.running || deep.unreadable || (deep.total > 0 && deep.scanned < deep.total)
+            ? { scanned: deep.scanned, total: deep.total, unreadable: deep.unreadable }
             : null
         }
         talk={talk}
@@ -633,9 +725,11 @@ export function AgentsTable({
           talkHops === null
             ? null
             : {
+                readable: talkHops.readable,
                 messages: talkHops.shown,
                 marks: talkHops.drawn.length,
                 dropped: talkHops.dropped,
+                complete: talkHops.complete,
               }
         }
         attention={attention}
@@ -652,180 +746,220 @@ export function AgentsTable({
         onCommitTime={commitTime}
       />
 
-      <div className="grid-row head">
-        {headers.map((header) => {
-          const sorted = header.column.getIsSorted();
-          const className = [
-            header.column.id === 'timeline' ? 'tl-head sortable' : 'sortable',
-            sorted === false ? '' : 'sorted',
-            sorted === 'desc' ? 'desc' : '',
-            header.column.id === 'updated' ? 'right' : '',
-          ]
-            .filter(Boolean)
-            .join(' ');
-          return (
-            <button
-              type="button"
-              key={header.id}
-              className={className}
-              onClick={header.column.getToggleSortingHandler()}
-            >
-              {header.column.id === 'timeline'
-                ? ticks.map((tick) => {
-                    const x = ((tick - axis.t0) / span) * 100;
-                    // 端に貼りつく目盛りは読めないので出さない
-                    if (x < 3 || x > 97) return null;
-                    return (
-                      <span key={tick} className="tick" style={{ left: `${x}%` }}>
-                        {formatTick(tick, span)}
-                      </span>
-                    );
-                  })
-                : flexRender(header.column.columnDef.header, header.getContext())}
-            </button>
-          );
-        })}
-      </div>
-
-      <div id="rows" ref={rowsRef}>
-        {/* 時間のグリッドは全行を貫く 1 枚で敷く。行ごとに描くと行間で点線が途切れる */}
-        {rows.length > 0 && tlGeom.width > 0 && (
-          <div className="tl-grid" style={{ left: tlGeom.left, width: tlGeom.width }}>
-            {ticks.map((tick) => (
-              <i key={tick} style={{ left: `${((tick - axis.t0) / span) * 100}%` }} />
-            ))}
-          </div>
-        )}
-
-        {/* 結ぶ線も同じく全行を貫く 1 枚で、親のバーから子のバーまで 1 本の連続した線として
-            描く(行ごとに継ぐと、継ぎ目が節のような点に見える)。
-            バーは行の中心の上下 ±4px を占め、矢印の先はその縁にちょうど触れる。
-            この線は木の入れ子をなぞるだけの飾りなので、読み上げからは外す */}
-        {rows.length > 0 && tlGeom.width > 0 && connections.length > 0 && (
-          <svg
-            className="tl-conn"
-            style={{ left: tlGeom.left, width: tlGeom.width }}
-            aria-hidden="true"
-          >
-            {connections.map((line) => (
-              <g key={`${line.parent}-${line.child}`}>
-                {line.xs !== null && (
-                  <>
-                    <line
-                      x1={`${line.xs}%`}
-                      x2={`${line.xs}%`}
-                      y1={midOf(line.parent) + 4}
-                      y2={midOf(line.child) - 4}
-                      className="net-line"
-                    />
-                    <svg x={`${line.xs}%`} overflow="visible" aria-hidden="true">
-                      <polygon
-                        points={`-2.8,${midOf(line.child) - 9} 2.8,${midOf(line.child) - 9} 0,${midOf(line.child) - 4}`}
-                        className="net-arrow"
-                      />
-                    </svg>
-                  </>
-                )}
-                {line.xe !== null && (
-                  <>
-                    <line
-                      x1={`${line.xe}%`}
-                      x2={`${line.xe}%`}
-                      y1={midOf(line.parent) + 4}
-                      y2={midOf(line.child)}
-                      className="net-line end"
-                    />
-                    <svg x={`${line.xe}%`} overflow="visible" aria-hidden="true">
-                      <polygon
-                        points={`-2.8,${midOf(line.parent) + 9} 2.8,${midOf(line.parent) + 9} 0,${midOf(line.parent) + 4}`}
-                        className="net-arrow end"
-                      />
-                    </svg>
-                  </>
-                )}
-              </g>
-            ))}
-          </svg>
-        )}
-
-        {/* エージェント間メッセージの矢印。**親子ではなく、実際にやりとりした相手どうしを結ぶ。**
-            親子の線と同じ座標に乗るので描き方も揃えるが、色を分けて別の意味だと分かるようにする。
-            細い線はクリックしにくいので、透明な太い線を重ねて当たり判定を広げる */}
-        {rows.length > 0 && tlGeom.width > 0 && talkHops !== null && talkHops.drawn.length > 0 && (
-          <svg className="tl-msg" style={{ left: tlGeom.left, width: tlGeom.width }}>
-            <title>Messages between agents</title>
-            {talkHops.drawn.map((arrow) => {
-              const down = arrow.to > arrow.from;
-              const y1 = midOf(arrow.from) + (down ? 4 : -4);
-              const y2 = midOf(arrow.to) + (down ? -5 : 5);
-              const tip = midOf(arrow.to) + (down ? -9 : 9);
-              return (
-                // biome-ignore lint/a11y/useSemanticElements: svg の中に button は置けない
-                <g
-                  key={arrow.key}
-                  className="msg"
-                  role="button"
-                  tabIndex={0}
-                  aria-label={arrow.label}
-                  {...pressable(() => {
-                    if (arrow.file !== null) nav.openConv(arrow.file);
-                  })}
-                >
-                  <title>{arrow.label}</title>
-                  <line x1={`${arrow.x}%`} x2={`${arrow.x}%`} y1={y1} y2={y2} className="msg-hit" />
-                  <line
-                    x1={`${arrow.x}%`}
-                    x2={`${arrow.x}%`}
-                    y1={y1}
-                    y2={y2}
-                    className="msg-line"
-                  />
-                  <svg x={`${arrow.x}%`} overflow="visible" aria-hidden="true">
-                    <polygon points={`-2.8,${tip} 2.8,${tip} 0,${y2}`} className="msg-arrow" />
-                  </svg>
-                </g>
-              );
-            })}
-          </svg>
-        )}
-
-        {rows.length === 0 ? (
-          <div className="empty">No sessions to show</div>
-        ) : (
-          rows.map((row, index) => (
-            <AgentRowView
-              key={row.id}
-              row={row}
-              /* 縦線を半分で止めるのは、同じ線を継ぐ行がもう下に無いときだけ。
-                 次の行が浅くなったら、そこから先は別の親から下りる別の線である */
-              last={
-                row.depth > 0 &&
-                (index === rows.length - 1 || (rows[index + 1]?.depth ?? 0) < row.depth)
-              }
-              selected={selectedFile !== null && selectedFile === row.original.node.file}
-              axis={axis}
-              nowMs={nowMs}
-              tokenTotal={tokenTotal}
-              onPanStart={onPanStart}
-              onOpen={() => {
-                // 掴んで動かした直後のマウスアップで会話が開かないようにする
-                if (didPanRef.current) {
-                  didPanRef.current = false;
-                  return;
+      {/* 表そのものが `grid` である。**行を `button` にすると中身が消える。** `button` は
+          中の要素を読み上げから外す役なので、状態もモデルも消費もブランチも、行の名前 1 つに
+          置き換わってしまう。 */}
+      <div id="tree-pane" role="grid" aria-label="Sessions and subagents">
+        <div className="grid-row head" role="row">
+          {headers.map((header) => {
+            const sorted = header.column.getIsSorted();
+            const className = [
+              header.column.id === 'timeline' ? 'tl-head sortable' : 'sortable',
+              sorted === false ? '' : 'sorted',
+              sorted === 'desc' ? 'desc' : '',
+              header.column.id === 'updated' ? 'right' : '',
+            ]
+              .filter(Boolean)
+              .join(' ');
+            return (
+              /* 見出しは `columnheader` である。**`button` には置き換えられない** —
+                 役が `button` だと、この列がいまどう並んでいるかを言う `aria-sort` を
+                 置く先が無くなる。押しどころとしての振る舞いは `pressable` が持つ。 */
+              <div
+                key={header.id}
+                className={className}
+                role="columnheader"
+                tabIndex={0}
+                aria-sort={
+                  sorted === false ? 'none' : sorted === 'desc' ? 'descending' : 'ascending'
                 }
-                nav.openConv(row.original.node.file);
-              }}
-              onToggle={() => row.toggleExpanded()}
-              canExpand={row.getCanExpand()}
-              isExpanded={row.getIsExpanded()}
-              /* 字下げはサブエージェント自身が持つ `depth` で取る。表の入れ子の深さだと、
-                 親が絞り込みで消えた孫が、直に呼ばれた子と同じ深さに見えてしまう */
-              depth={row.original.kind === 'session' ? 0 : row.original.node.depth}
-            />
-          ))
-        )}
+                {...pressable(() => header.column.toggleSorting())}
+              >
+                {header.column.id === 'timeline'
+                  ? shownTicks.map((tick, index) => (
+                      <span
+                        key={tick.at}
+                        /* 1 本しか残らないときは左端の寄せだけを当てる。両方当てると
+                           `.last` が後勝ちして、真ん中の目盛りが左へ引っ張られる */
+                        className={[
+                          'tick',
+                          index === 0 ? 'first' : '',
+                          index > 0 && index === shownTicks.length - 1 ? 'last' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        style={{ '--tick-x': `${tick.x}%` } as React.CSSProperties}
+                      >
+                        {formatTick(tick.at, span)}
+                      </span>
+                    ))
+                  : flexRender(header.column.columnDef.header, header.getContext())}
+              </div>
+            );
+          })}
+        </div>
+
+        <div id="rows" ref={rowsRef} role="rowgroup">
+          {/* 時間のグリッドは全行を貫く 1 枚で敷く。行ごとに描くと行間で点線が途切れる */}
+          {rows.length > 0 && tlGeom.width > 0 && (
+            <div
+              className="tl-grid"
+              style={{ left: tlGeom.left, width: tlGeom.width }}
+              aria-hidden="true"
+            >
+              {ticks.map((tick) => (
+                <i key={tick} style={{ left: `${((tick - axis.t0) / span) * 100}%` }} />
+              ))}
+            </div>
+          )}
+
+          {/* 結ぶ線も同じく全行を貫く 1 枚で、親のバーから子のバーまで 1 本の連続した線として
+              描く(行ごとに継ぐと、継ぎ目が節のような点に見える)。
+              バーは行の中心の上下 ±4px を占め、矢印の先はその縁にちょうど触れる。
+              この線は木の入れ子をなぞるだけの飾りなので、読み上げからは外す */}
+          {rows.length > 0 && tlGeom.width > 0 && connections.length > 0 && (
+            <svg
+              className="tl-conn"
+              style={{ left: tlGeom.left, width: tlGeom.width }}
+              aria-hidden="true"
+            >
+              {connections.map((line) => (
+                <g key={`${line.parent}-${line.child}`}>
+                  {line.xs !== null && (
+                    <>
+                      <line
+                        x1={`${line.xs}%`}
+                        x2={`${line.xs}%`}
+                        y1={midOf(line.parent) + 4}
+                        y2={midOf(line.child) - 4}
+                        className="net-line"
+                      />
+                      <svg x={`${line.xs}%`} overflow="visible" aria-hidden="true">
+                        <polygon
+                          points={`-2.8,${midOf(line.child) - 9} 2.8,${midOf(line.child) - 9} 0,${midOf(line.child) - 4}`}
+                          className="net-arrow"
+                        />
+                      </svg>
+                    </>
+                  )}
+                  {line.xe !== null && (
+                    <>
+                      <line
+                        x1={`${line.xe}%`}
+                        x2={`${line.xe}%`}
+                        y1={midOf(line.parent) + 4}
+                        y2={midOf(line.child)}
+                        className="net-line end"
+                      />
+                      <svg x={`${line.xe}%`} overflow="visible" aria-hidden="true">
+                        <polygon
+                          points={`-2.8,${midOf(line.parent) + 9} 2.8,${midOf(line.parent) + 9} 0,${midOf(line.parent) + 4}`}
+                          className="net-arrow end"
+                        />
+                      </svg>
+                    </>
+                  )}
+                </g>
+              ))}
+            </svg>
+          )}
+
+          {/* エージェント間メッセージの矢印。**親子ではなく、実際にやりとりした相手どうしを結ぶ。**
+              親子の線と同じ座標に乗るので描き方も揃えるが、色を分けて別の意味だと分かるようにする。
+              細い線はクリックしにくいので、透明な太い線を重ねて当たり判定を広げる */}
+          {rows.length > 0 &&
+            tlGeom.width > 0 &&
+            talkHops !== null &&
+            talkHops.drawn.length > 0 && (
+              /* 重ねる面そのものは役から外す。`#rows` は `rowgroup` で、持てるのは `row`
+                 だけである。矢 1 本 1 本は押しどころなので、そちらの役は残す */
+              <svg
+                className="tl-msg"
+                role="presentation"
+                style={{ left: tlGeom.left, width: tlGeom.width }}
+              >
+                <title>Messages between agents</title>
+                {talkHops.drawn.map((arrow) => {
+                  const down = arrow.to > arrow.from;
+                  const y1 = midOf(arrow.from) + (down ? 4 : -4);
+                  const y2 = midOf(arrow.to) + (down ? -5 : 5);
+                  const tip = midOf(arrow.to) + (down ? -9 : 9);
+                  return (
+                    /* svg の中に button は置けないので、押しどころの役だけをここで名乗る */
+                    <g
+                      key={arrow.key}
+                      className="msg"
+                      role="button"
+                      tabIndex={0}
+                      aria-label={arrow.label}
+                      {...pressable(() => {
+                        if (arrow.file !== null) nav.openConv(arrow.file);
+                      })}
+                    >
+                      <title>{arrow.label}</title>
+                      <line
+                        x1={`${arrow.x}%`}
+                        x2={`${arrow.x}%`}
+                        y1={y1}
+                        y2={y2}
+                        className="msg-hit"
+                      />
+                      <line
+                        x1={`${arrow.x}%`}
+                        x2={`${arrow.x}%`}
+                        y1={y1}
+                        y2={y2}
+                        className="msg-line"
+                      />
+                      <svg x={`${arrow.x}%`} overflow="visible" aria-hidden="true">
+                        <polygon points={`-2.8,${tip} 2.8,${tip} 0,${y2}`} className="msg-arrow" />
+                      </svg>
+                    </g>
+                  );
+                })}
+              </svg>
+            )}
+
+          {rows.length === 0 ? (
+            <div className="empty" role="row">
+              <span role="gridcell">No sessions to show</span>
+            </div>
+          ) : (
+            rows.map((row, index) => (
+              <AgentRowView
+                key={row.id}
+                row={row}
+                /* 縦線を半分で止めるのは、同じ線を継ぐ行がもう下に無いときだけ。
+                   次の行が浅くなったら、そこから先は別の親から下りる別の線である */
+                last={
+                  row.depth > 0 &&
+                  (index === rows.length - 1 || (rows[index + 1]?.depth ?? 0) < row.depth)
+                }
+                selected={selectedFile !== null && selectedFile === row.original.node.file}
+                axis={axis}
+                nowMs={nowMs}
+                tokenTotal={tokenTotal}
+                onPanStart={onPanStart}
+                onOpen={() => {
+                  // 掴んで動かした直後のマウスアップで会話が開かないようにする
+                  if (didPanRef.current) {
+                    didPanRef.current = false;
+                    return;
+                  }
+                  nav.openConv(row.original.node.file);
+                }}
+                onToggle={() => row.toggleExpanded()}
+                canExpand={row.getCanExpand()}
+                isExpanded={row.getIsExpanded()}
+                /* 字下げはサブエージェント自身が持つ `depth` で取る。表の入れ子の深さだと、
+                   親が絞り込みで消えた孫が、直に呼ばれた子と同じ深さに見えてしまう */
+                depth={row.original.kind === 'session' ? 0 : row.original.node.depth}
+              />
+            ))
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -887,22 +1021,29 @@ function AgentRowView({
         ? [entry.node.issue]
         : [];
 
+  /* 消費を読めなかった行。**0 と同じ空欄にしない。** 空欄は「使っていない」と読める */
+  const unreadTokens = node.tokens_state === 'unobservable';
+
   return (
-    // biome-ignore lint/a11y/useSemanticElements: 中にチップを持つ行は button にできない
+    /* 行は `row` である。**`button` にすると中身が全部消える。** `button` は中の要素を
+       読み上げから外す役なので、11 個のセルが「Open conversation for …」1 文に置き換わり、
+       中のチップも押しどころとして不正になる。開く操作は `aria-describedby` の指す説明で言う。 */
     <div
       className={`grid-row row kind-${entry.kind} state-${node.state}${last ? ' last' : ''}${selected ? ' selected' : ''}${pop === null ? '' : ' pop'}`}
       data-tok={[node.file, ...issueTokens, worktree, branch].filter(Boolean).join(' ')}
       /* 深さは罫線を引く CSS にも渡す。字下げだけを動かすと、線だけが深さ 0 の位置に残る */
       style={{ ...pop, '--depth': String(depth) } as React.CSSProperties}
-      role="button"
+      role="row"
       tabIndex={0}
-      aria-label={`Open conversation for ${labelOf(entry)}`}
+      aria-selected={selected}
+      aria-expanded={canExpand ? isExpanded : undefined}
+      aria-describedby={OPEN_HINT_ID}
       {...pressable(() => {
         if (canExpand && selected) onToggle();
         onOpen();
       })}
     >
-      <span className="name" style={{ paddingLeft: depth * 24 }}>
+      <span className="name" role="gridcell" style={{ paddingLeft: depth * 24 }}>
         <span className="chev">{canExpand ? (isExpanded ? '▾' : '▸') : ''}</span>
         <Dot state={awaiting === 'user' ? 'input' : node.state} />
         <span className="t">{cut(labelOf(entry), MAX_LABEL_CHARS)}</span>
@@ -916,53 +1057,69 @@ function AgentRowView({
         )}
       </span>
 
-      <span>
+      <span role="gridcell">
         <span className={`chip state-${awaiting === 'user' ? 'input' : node.state}`}>
           {awaiting === 'user' ? 'input' : node.state}
         </span>
       </span>
 
-      <span className="col-model" title={node.model ?? ''}>
+      <span className="col-model" role="gridcell" title={node.model ?? ''}>
         {modelShort(node.model)}
       </span>
-      <span className="col-eff">{node.effort ?? ''}</span>
-      {/* バーは、いま出ている行の合計に対する割合である。足すと 100% になる */}
+      <span className="col-eff" role="gridcell">
+        {node.effort ?? ''}
+      </span>
+      {/* バーは、いま出ている行の合計に対する割合である。足すと 100% になる。
+          **読めなかった消費を空欄にしない。** 空欄は 0 と並んで見えるので、
+          読めなかったほうは `?` で読めなかったと言う */}
       <span
         className="col-tok"
+        role="gridcell"
         title={
-          node.tokens === null
-            ? 'input + output + cache write (transcripts active in the last 7 days only)'
-            : `${formatTokens(node.tokens)} — ${Math.round((node.tokens / tokenTotal) * 100)}% of the ${formatTokens(tokenTotal)} shown. input + output + cache write (transcripts active in the last 7 days only)`
+          unreadTokens
+            ? `Could not be read. ${TOKENS_NOTE}`
+            : node.tokens === null
+              ? TOKENS_NOTE
+              : `${formatTokens(node.tokens)} — ${Math.round((node.tokens / tokenTotal) * 100)}% of the ${formatTokens(tokenTotal)} shown. ${TOKENS_NOTE}`
         }
       >
-        <span className="mono">{node.tokens === null ? '' : formatTokens(node.tokens)}</span>
+        <span className="mono">
+          {unreadTokens ? '?' : node.tokens === null ? '' : formatTokens(node.tokens)}
+        </span>
         <span className="tok-bar">
-          {node.tokens !== null && node.tokens > 0 && (
+          {!unreadTokens && node.tokens !== null && node.tokens > 0 && (
             <i style={{ width: `${(node.tokens / tokenTotal) * 100}%` }} />
           )}
         </span>
       </span>
 
-      <span className="col-work" title={working}>
+      {/* `.worktrees/<名前>` から拾った名前である。**課題のチップにしない** —
+          GitHub の課題の id は `#101` の形なので、押しても開く先が無い */}
+      <span className="col-work" role="gridcell" title={working}>
         {issueTokens.map((id) => (
-          <IssueChip key={id} id={id} />
+          <span key={id} className="wtname">
+            {id}
+          </span>
         ))}
       </span>
 
-      <span className="col-wt" title={worktree}>
+      <span className="col-wt" role="gridcell" title={worktree}>
         {worktree !== '' && <RefChip name={worktree} kind="worktree" />}
       </span>
-      <span className="col-br" title={branch}>
+      <span className="col-br" role="gridcell" title={branch}>
         {branch !== '' && <RefChip name={branch} kind="branch" />}
       </span>
 
       <span
         className={`col-now${awaiting === 'user' ? ' awaiting' : awaiting === 'agents' ? ' subwait' : ''}`}
+        role="gridcell"
         title={now}
       >
         {now}
       </span>
-      <span className="col-upd">{formatSinceIso(node.last_activity, nowMs)}</span>
+      <span className="col-upd" role="gridcell">
+        {formatSinceIso(node.last_activity, nowMs)}
+      </span>
 
       <TlBar
         node={node}

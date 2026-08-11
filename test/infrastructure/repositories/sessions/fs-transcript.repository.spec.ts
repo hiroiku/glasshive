@@ -152,6 +152,19 @@ describe('ディレクトリツリーを走査する', () => {
     },
   );
 
+  it('走査できたディレクトリは、そこに見えた `transcript` の数を持つ', async () => {
+    writeLines(path.join(root, '-w-proj', 'sess-a.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(root, '-w-proj', 'sess-b.jsonl'), [{ type: 'user' }]);
+    fs.writeFileSync(path.join(root, '-w-proj', 'notes.txt'), 'ただのメモ');
+
+    const listed = await repo().listTranscripts();
+    if (listed.kind !== 'observed') throw new Error('走査できなかった');
+    expect(listed.value[0]?.walked, '`transcript` でないものは数に入れない').toEqual({
+      kind: 'observed',
+      value: 2,
+    });
+  });
+
   it.skipIf(!DENIES_READ)('内側のディレクトリが読めなくても、他の名前は見えたまま', async () => {
     writeLines(path.join(root, '-w-open', 'sess.jsonl'), [{ type: 'user' }]);
     const closed = path.join(root, '-w-closed');
@@ -166,17 +179,30 @@ describe('ディレクトリツリーを走査する', () => {
       '-w-open',
     ]);
     const closedGroup = listed.value.find((group) => group.slug === '-w-closed');
-    expect(closedGroup?.sessions).toEqual([]);
+    expect(
+      closedGroup?.walked.kind,
+      '空の一覧だけを返すと、セッションを 1 つも持たないディレクトリと見分けが付かなくなる',
+    ).toBe('unobservable');
+    expect(
+      listed.value.find((group) => group.slug === '-w-open')?.walked,
+      '読めたディレクトリのほうは、数まで言える',
+    ).toEqual({ kind: 'observed', value: 1 });
   });
 });
 
 describe('子を集める', () => {
-  /** 名前ひとつぶんのディレクトリを走査して、そのセッションの子だけを取り出す */
-  async function subagentsOf(sessionId: string) {
+  /** 名前ひとつぶんのディレクトリを走査して、そのセッションを取り出す */
+  async function sessionOf(sessionId: string) {
     const listed = await repo().listTranscripts();
     if (listed.kind !== 'observed') throw new Error(`走査できなかった: ${listed.kind}`);
     const session = listed.value[0]?.sessions.find((candidate) => candidate.id === sessionId);
     if (session === undefined) throw new Error(`セッションが見えない: ${sessionId}`);
+    return session;
+  }
+
+  /** そのセッションの子だけを、id の順に並べて取り出す */
+  async function subagentsOf(sessionId: string) {
+    const session = await sessionOf(sessionId);
     return [...session.subagents].sort((a, b) => a.id.localeCompare(b.id));
   }
 
@@ -344,6 +370,42 @@ describe('子を集める', () => {
     ).toEqual(['agent-a2']);
   });
 
+  it('子のディレクトリが無いセッションは、子が無かったと言う', async () => {
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+
+    expect(
+      (await sessionOf('sess')).subagentsWalked,
+      '子を呼ばなかったセッションと、子を数えられなかったセッションを同じ形にしない',
+    ).toEqual({ kind: 'absent', reason: 'no-source' });
+  });
+
+  it('子のディレクトリを走査できたら、そこに見えた子の数を持つ', async () => {
+    const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'workflows', 'wf_x', 'agent-a2.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'workflows', 'wf_x', 'journal.jsonl'), [{ type: 'started' }]);
+
+    expect(
+      (await sessionOf('sess')).subagentsWalked,
+      '走りのログは子ではないので、数にも入れない',
+    ).toEqual({ kind: 'observed', value: 2 });
+  });
+
+  it.skipIf(!DENIES_READ)('子のディレクトリが読めなければ、数えられなかったと言う', async () => {
+    const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
+    writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
+    writeLines(path.join(subagents, 'agent-a1.jsonl'), [{ type: 'user' }]);
+    fs.chmodSync(subagents, 0o000);
+
+    const session = await sessionOf('sess');
+    expect(session.subagents, '開けなかったディレクトリから子は出てこない').toEqual([]);
+    expect(
+      session.subagentsWalked.kind,
+      '空の一覧だけを返すと、子を呼ばなかったセッションに見える',
+    ).toBe('unobservable');
+  });
+
   it.skipIf(!DENIES_READ)('内側のディレクトリが読めなくても、他の子は見えたまま', async () => {
     const subagents = path.join(root, '-w-proj', 'sess', 'subagents');
     writeLines(path.join(root, '-w-proj', 'sess.jsonl'), [{ type: 'user' }]);
@@ -352,11 +414,15 @@ describe('子を集める', () => {
     writeLines(path.join(closed, 'agent-a2.jsonl'), [{ type: 'user' }]);
     fs.chmodSync(closed, 0o000);
 
-    const collected = await subagentsOf('sess');
+    const session = await sessionOf('sess');
     expect(
-      collected.map((subagent) => subagent.id),
+      [...session.subagents].map((subagent) => subagent.id),
       '読めないディレクトリ 1 つで、他の子まで隠さない',
     ).toEqual(['agent-a1']);
+    expect(
+      session.subagentsWalked.kind,
+      '見えたところまでの数を返すと、数え落としたぶんが「居なかった」に化ける',
+    ).toBe('unobservable');
   });
 
   it.skipIf(!DENIES_READ)('`*.meta.json` を読む権限が無くても、子は残る', async () => {

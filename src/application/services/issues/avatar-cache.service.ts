@@ -10,7 +10,7 @@ import type { IssueLedger } from '~/domain/entities/issues/issue.entity.ts';
    **画面に GitHub の URL を渡さない。** 渡せば、課題を見ているだけでブラウザーが
    GitHub の CDN へつながる。渡すのは login だけで、そこから URL を引けるのはここである。
 
-   引ける URL は**いまの一覧が実際に観測したものだけ**にする。外から来た URL をそのまま
+   引ける URL は**観測した一覧に実際に出てきたものだけ**にする。外から来た URL をそのまま
    取りに行くと、この画面は「任意の宛先へ代わりに取りに行く踏み台」になる。`?project=` で
    既に塞いだ穴と同じものである。
 
@@ -23,6 +23,12 @@ const ALLOWED_HOST = 'avatars.githubusercontent.com';
 /** 覚えておく顔の数。1 枚 5KB 弱なので、これでも 1MB に届かない */
 const MAX_REMEMBERED = 200;
 
+/* 引ける宛先を覚えておくプロジェクトの数。
+   どのプロジェクトが**いま開かれているか**を、ここから知る手立ては無い。だから最後に一覧した
+   順で持ち、古いものから落とす。上限を置かないと、一度開いただけのプロジェクトの顔が
+   いつまでも引けることになる。 */
+export const MAX_REMEMBERED_PROJECTS = 8;
+
 /** 覚えた顔をもう一度確かめに行くまでの間。ブラウザーに言う `max-age` と同じにする */
 export const AVATAR_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -33,8 +39,11 @@ interface Remembered {
 }
 
 export interface AvatarCacheService {
-  /** 観測した一覧から、引ける顔を入れ替える。**観測していない顔は消える** */
-  remember(ledger: IssueLedger): void;
+  /* そのプロジェクトで引ける顔を、観測した一覧で入れ替える。**観測していない顔は消える。**
+
+     プロジェクトごとに入れ替える。このキャッシュは glasshive 全体で 1 つなので、1 枚の表を
+     一覧のたびに入れ替えると、2 つのプロジェクトを開いた画面が互いの顔を消し合う。 */
+  remember(projectPath: string, ledger: IssueLedger): void;
   /** login 1 つぶんの顔。引けない login は `absent` */
   read(login: string): Promise<Observation<AvatarImage>>;
   /** 一覧に出てきた顔を、待たずに先に読んでおく */
@@ -70,9 +79,10 @@ export function createAvatarCache(deps: {
   readonly avatars: AvatarIntegration;
   readonly clock: { now(): number };
 }): AvatarCacheService {
-  /* 引いてよい宛先。**一覧を取り直すたびに入れ替える。**
-     足し続けると、もう観測していない顔がいつまでも引けることになる。 */
-  let known: ReadonlyMap<string, string> = new Map();
+  /* 引いてよい宛先を、プロジェクトごとに持つ。**そのプロジェクトの一覧を取り直すたびに
+     入れ替える。** 足し続けると、もう観測していない顔がいつまでも引けることになる。
+     引くときは持っているプロジェクトの和を見るので、隣のプロジェクトの顔は消えない。 */
+  const knownByProject = new Map<string, ReadonlyMap<string, string>>();
   const remembered = new Map<string, Remembered>();
   /* 同じ顔への求めを 1 本にまとめる。まとめないと、30 枚のカードが 30 回上流を叩く */
   const inFlight = new Map<string, Promise<Observation<AvatarImage>>>();
@@ -113,8 +123,19 @@ export function createAvatarCache(deps: {
     return observed(image);
   };
 
+  /* 観測した宛先。**どのプロジェクトの一覧で観たものでも引ける。**
+     どのプロジェクトの画面から求められたのかは分からないので、持っているぶんの和を見る。
+     和を見ても、ここに在るのは自分で観測した URL だけである。 */
+  const urlOf = (login: string): string | undefined => {
+    for (const known of knownByProject.values()) {
+      const url = known.get(login);
+      if (url !== undefined) return url;
+    }
+    return undefined;
+  };
+
   const read = (login: string): Promise<Observation<AvatarImage>> => {
-    const url = known.get(login);
+    const url = urlOf(login);
     // 観測していない login。引ける先が無いので、取りに行きもしない
     if (url === undefined) return Promise.resolve(absent('no-source'));
 
@@ -132,8 +153,15 @@ export function createAvatarCache(deps: {
   };
 
   return {
-    remember(ledger) {
-      known = actorsOf(ledger);
+    remember(projectPath, ledger) {
+      // 触ったものを末尾へ寄せる。落とすときは先頭から
+      knownByProject.delete(projectPath);
+      knownByProject.set(projectPath, actorsOf(ledger));
+      while (knownByProject.size > MAX_REMEMBERED_PROJECTS) {
+        const oldest = knownByProject.keys().next();
+        if (oldest.done === true) break;
+        knownByProject.delete(oldest.value);
+      }
     },
     read,
     warm(ledger) {

@@ -36,6 +36,7 @@ const indexWith = (files: readonly string[]): TranscriptIndexService => ({
             liveProcessCount: 0,
             latestActivityMs: 0,
             transcriptCount: files.length,
+            walked: observed(files.length),
           },
         ],
       },

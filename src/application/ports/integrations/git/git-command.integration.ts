@@ -17,13 +17,18 @@ import type { Observation } from '~/app-kernel/observation.ts';
 /** `git` がインストールされていない。何を尋ねても同じなので、ここで諦める */
 export const GIT_NOT_INSTALLED = 'git.not_installed';
 
-/** 起こせたが、非ゼロで終わった。その `revision` が無い・そこがリポジトリでない、はどれもこれになる */
+/* 起こせたが、非ゼロで終わり、なぜ非ゼロだったのかを読めなかった。分かれ目の無い先端や、
+   まだコミットの無いブランチのように、尋ねた事柄がそこに無いだけのこともこれで終わる。
+
+   **そこがリポジトリでないことは、これにはならない。** `git` 自身がそう言った答えは
+   `absent` で返る。読めなかった失敗を「無かった」に寄せると、断られたリポジトリが
+   「リポジトリではない」として出る。 */
 export const GIT_EXIT_NONZERO = 'git.exit_nonzero';
 
 /** 時間内に答えなかった */
 export const GIT_TIMEOUT = 'git.timeout';
 
-/** 起こす権利が無い */
+/** 起こす権利が無い。`git` がそのリポジトリを読むのを断ったときもこれになる */
 export const GIT_DENIED = 'git.denied';
 
 export type GitFailureCode =
@@ -59,7 +64,11 @@ export interface GitCommandIntegration {
 
    非ゼロで終わったのは、出力が無かったものとして読む。分かれ目の無い先端や、まだコミットの
    無いブランチでは普通に起こることである。それ以外の失敗 — `git` がインストールされていない・
-   権利が無い・時間切れ — は何を尋ねても同じ結果になるので、そこで止める。 */
+   権利が無い・時間切れ — は何を尋ねても同じ結果になるので、そこで止める。
+
+   **空の出力を「そこには無かった」と読むときだけは、非ゼロで終わったかを見る。**
+   非ゼロで終わった理由は `git` を起こした側にしか読めず、読めなかった理由をそのまま
+   「無かった」に変えると、断られたリポジトリが「リポジトリではない」として出る。 */
 
 /** 起こせなかったときの出力は空文字列として読む */
 export const outputOrEmpty = (output: Observation<string>): string =>
@@ -71,6 +80,14 @@ export function blockingFailure(outputs: readonly Observation<string>[]): AppErr
     if (output.kind === 'unobservable' && output.error.code !== GIT_EXIT_NONZERO) {
       return output.error;
     }
+  }
+  return null;
+}
+
+/** 答えを受け取れなかった呼び出しがあれば、その失敗を返す。無ければ出力の空は「無かった」である */
+export function unreadFailure(outputs: readonly Observation<string>[]): AppError | null {
+  for (const output of outputs) {
+    if (output.kind === 'unobservable') return output.error;
   }
   return null;
 }

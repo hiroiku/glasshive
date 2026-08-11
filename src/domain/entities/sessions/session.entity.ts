@@ -35,4 +35,10 @@ export interface TranscriptSession {
   readonly activity: Observation<ActivityIntervalSet>;
   readonly sizeBytes: number;
   readonly subagents: readonly SubagentSession[];
+  /* 子のディレクトリを走査できたか。走査できたなら、そこに見えた `transcript` の数。
+
+     ディレクトリがそもそも無ければ「無かった」になる — 子を呼んでいないセッションはこうなる。
+     **`subagents` の長さだけでは、子を呼ばなかったセッションと、子を数えられなかった
+     セッションが同じ形になる。** */
+  readonly subagentsWalked: Observation<number>;
 }

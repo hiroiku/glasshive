@@ -35,6 +35,7 @@ const OVERVIEW = {
       subject: '土台を置く',
     },
   ],
+  mainlineTruncated: false,
   tips: [
     {
       kind: 'branch' as const,
@@ -111,6 +112,7 @@ describe('観測できたとき', () => {
           subject: '土台を置く',
         },
       ],
+      mainline_truncated: false,
       tips: [
         {
           kind: 'branch',
@@ -133,6 +135,14 @@ describe('観測できたとき', () => {
         },
       ],
     });
+  });
+
+  it('本流が上限で切れたことも写す', () => {
+    const presented = presentGitOverview(ok(observed({ ...OVERVIEW, mainlineTruncated: true })));
+    expect(
+      presented.ok && presented.body.mainline_truncated,
+      '写さないと、画面は切れていない本流として描き、上限より前で分かれたブランチが最後のコミットで分かれたことになる',
+    ).toBe(true);
   });
 
   it('`ref` の詳しい姿も写す', () => {
@@ -173,6 +183,7 @@ describe('観測はできたが、無かったとき', () => {
       worktrees: [],
       branches: [],
       mainline: [],
+      mainline_truncated: false,
       tips: [],
       conflicts: [],
     });

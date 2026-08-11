@@ -40,10 +40,19 @@ function sourceOf(slug: string, name: string, subagents: readonly string[] = [])
           meta: null,
           runId: null,
         })),
+        subagentsWalked: observed(subagents.length),
       },
     ],
+    walked: observed(1),
   };
 }
+
+/** ディレクトリが読めなかった slug。走査できていないので、セッションは 1 つも見えていない */
+const unreadableOf = (slug: string): TranscriptGroup => ({
+  slug,
+  sessions: [],
+  walked: unobservable(new UnexpectedError('開けない')),
+});
 
 /** 読みに行った範囲の大きさを控える偽のポート。**どこまで開いたかそのものが確かめたいこと** */
 function spyRepository(groups: readonly TranscriptGroup[]) {
@@ -153,6 +162,34 @@ describe('中身を読む前の索引', () => {
       snapshot.index.stubs[0]?.transcriptCount,
       '読み終えた数の分母である。子を数え落とすと、分子が分母を追い越す',
     ).toBe(3);
+  });
+
+  it('ディレクトリを読めなかった slug も、行として並ぶ', async () => {
+    const scene = sceneOf([sourceOf('a', 'session'), unreadableOf('-w-closed')]);
+
+    const snapshot = await indexOf(scene);
+
+    expect(
+      snapshot.index.stubs.map((stub) => stub.id),
+      '読めなかったことを「セッションが無かった」に倒すと、プロジェクトが一覧から黙って消える',
+    ).toEqual(['a', '-w-closed']);
+  });
+
+  it('ディレクトリを読めなかった行は、`transcript` の数を数えられなかったことにする', async () => {
+    const scene = sceneOf([sourceOf('a', 'session'), unreadableOf('-w-closed')]);
+
+    const snapshot = await indexOf(scene);
+    const closed = snapshot.index.stubs.find((stub) => stub.id === '-w-closed');
+
+    expect(closed?.transcriptCount, '読める `transcript` が 1 本も見えていない').toBe(0);
+    expect(
+      closed?.walked.kind,
+      '0 本という数だけでは、`transcript` が無い行と数えられなかった行が同じ形になる',
+    ).toBe('unobservable');
+    expect(
+      snapshot.index.stubs.find((stub) => stub.id === 'a')?.walked,
+      '走査できた行は、見えた `transcript` の数をそのまま持つ',
+    ).toEqual(observed(1));
   });
 
   it('走査できなかったことは、プロジェクトが無いことと分けて持つ', async () => {

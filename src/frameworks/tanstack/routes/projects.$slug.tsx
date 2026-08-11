@@ -11,7 +11,7 @@ import { treeQuery } from '../queries/tree.query.ts';
 import { Icon } from '../ui/components/primitives/Icon.tsx';
 import { NotObserved } from '../ui/components/primitives/NotObserved.tsx';
 import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
-import { projectTrouble } from '../ui/derive/trouble.ts';
+import { projectTrouble, treeTrouble } from '../ui/derive/trouble.ts';
 import { NavProvider, useNav } from '../ui/nav/NavContext.tsx';
 import { openPanelOf, type ProjectSearch, parseProjectSearch } from '../ui/nav/search.ts';
 import { usePrefs } from '../ui/prefs/PrefsContext.tsx';
@@ -55,6 +55,17 @@ const VIEWS = [
   { to: '/projects/$slug/work', label: 'Work' },
 ] as const;
 
+/* いま打ち込まれている要素か。**そこでの `Escape` は、その要素のものである。**
+
+   入力は `Escape` を編集の取り消しに使う。同じ打鍵をパネルの側でも受けると、
+   打っていた人には無関係な 2 つのことが一度に起きる。 */
+function isEditing(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
 function ProjectLayout() {
   const { slug } = Route.useParams();
   return (
@@ -81,14 +92,18 @@ function ProjectChrome({ slug }: { slug: string }) {
     document.body.classList.toggle('drawer-open', panel !== null);
   }, [panel]);
 
-  // 閉じるキーは、どのパネルでも `Escape` にそろえる
+  /* 閉じるキーは、どのパネルでも `Escape` にそろえる。**打ち込んでいる人から奪わない** ——
+     時刻の入力は `Escape` を編集の取り消しに使うので、開いたまま打っている最中に
+     ここまで効かせると、1 打鍵で読んでいたパネルまで閉じる。 */
   useEffect(() => {
+    if (panel === null) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') nav.closePanel();
+      if (event.key !== 'Escape' || isEditing(event.target)) return;
+      nav.closePanel();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [nav]);
+  }, [nav, panel]);
 
   /* 幅を掴んで動かす。**閉じている間も幅を保つ** — 閉じる瞬間に既定へ戻すと、
      滑って隠れる途中で幅が跳ねて見える。 */
@@ -117,6 +132,9 @@ function ProjectChrome({ slug }: { slug: string }) {
      在るが、そこに並んでいるのは行だけである。ここは `<Outlet/>` より前に return するので、
      `complete` で守らないと、どのプロジェクトの URL を直に開いても一瞬こう出る。 */
   if (tree.data?.complete === true && project === undefined) {
+    /* `~/.claude/projects` を走査できていないなら、並んでいる行が空でも「無かった」とは
+       言えない。**観測できなかったことの上に、無かったという判定を建てない。** */
+    if (tree.data.sources.state === 'unobservable') return <NotObserved {...treeTrouble()} />;
     return <NotObserved {...projectTrouble(slug)} />;
   }
 

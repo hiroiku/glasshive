@@ -31,6 +31,10 @@ export interface GitLayout {
   readonly firstMain: number;
   /** 生きている線の行 → 合流する行 */
   readonly baseIndex: ReadonlyMap<number, number>;
+  /* 分かれ目が本流に見当たらなかった線の行。**線は最後の行まで引くが、そこで分かれたのではない。**
+     引いた先をそのまま読ませると、300 コミット前に分かれたブランチが、いちばん古い見えている
+     コミットで分かれたように見える。 */
+  readonly unseenBase: ReadonlySet<number>;
   readonly width: number;
 }
 
@@ -70,16 +74,25 @@ export function layoutOf(
 ): GitLayout {
   const rows = buildRows(mainline, tips);
   const baseIndex = new Map<number, number>();
+  const unseenBase = new Set<number>();
   rows.forEach((row, index) => {
     if (row.type !== 'tip') return;
     const at = rows.findIndex(
       (other) => other.type === 'node' && other.node.sha === row.tip.merge_base,
     );
     /* 分かれ目が本流に見当たらないことがある(遡る数の上限より古い)。
-       そのときは最後の行まで線を引く — 途中で切ると、線が宙で終わる。 */
+       そのときは最後の行まで線を引く — 途中で切ると、線が宙で終わる。
+       引いた先が分かれ目ではないことは `unseenBase` に残し、描く側が言えるようにする。 */
+    if (at < 0) unseenBase.add(index);
     baseIndex.set(index, at >= 0 ? at : rows.length - 1);
   });
-  return { rows, firstMain: tips.length, baseIndex, width: 16 + LANE_GAP * (tips.length + 1) };
+  return {
+    rows,
+    firstMain: tips.length,
+    baseIndex,
+    unseenBase,
+    width: 16 + LANE_GAP * (tips.length + 1),
+  };
 }
 
 export type TipSortKey = 'name' | 'ahead' | 'date';

@@ -5,8 +5,8 @@ import { RangeSlider, TimeInput } from '../timeline/RangeSlider.tsx';
 
 /* 表のツールバー。検索と絞り込みと、いま見ている時間帯。
 
-   **`#tree-pane` の直の子であり続けること。** 列の定義は `#tree-pane` が持っており、
-   ツールバーは `grid-column: 1 / -1` で全列を跨いでいる。ラッパーを 1 枚挟むと跨げなくなる。 */
+   **表の列には乗らない。** `#tree-pane` は `role="grid"` で、直の子は `row` か `rowgroup`
+   だけである。ここは `#view-pane` の縦並びの中に、表と並べて置く。 */
 
 export interface AgentsToolbarProps {
   readonly query: string;
@@ -18,6 +18,9 @@ export interface AgentsToolbarProps {
   readonly deepNote: {
     readonly scanned: number;
     readonly total: number;
+    /* 観測できずに止まったか。**止まっても絞り込みは効いたままである。**
+       黙って止まると、狭まった表が「その語はどこにも無い」と読める。 */
+    readonly unreadable: boolean;
   } | null;
   /** エージェント間メッセージの矢印を、稼働区間のバーの上に重ねるか */
   readonly talk: boolean;
@@ -27,9 +30,15 @@ export interface AgentsToolbarProps {
      諦めたメッセージも、件数だけはここに出す。矢印は近いものをまとめるので、
      本数はメッセージの数より少ない。 */
   readonly talkNote: {
+    /* やりとりを観測できたか。**観測できなかった回を 0 と言わない。**
+       0 は「一度も話さなかった」と読める、いちばん強い主張である。 */
+    readonly readable: boolean;
     readonly messages: number;
     readonly marks: number;
     readonly dropped: number;
+    /* 読み取り範囲が `transcript` の先頭まで届いたか。届かなかったぶんの古いメッセージは
+       数に入っていない。 */
+    readonly complete: boolean;
   } | null;
   readonly attention: boolean;
   readonly onAttention: (attention: boolean) => void;
@@ -60,38 +69,69 @@ export function AgentsToolbar({
   onRange,
   onCommitTime,
 }: AgentsToolbarProps) {
+  /* メッセージのチップに添える説明。**観測できなかったことと、届かなかった古いぶんを、
+     どちらも言葉にする。** 数字だけでは、どちらも「そうだった」ようにしか読めない。 */
+  const talkTitle = (): string => {
+    if (talkNote === null) {
+      return "Draw arrows for messages agents sent each other (reads the open session's transcripts)";
+    }
+    if (!talkNote.readable) {
+      return 'Messages could not be read — this is not the same as no messages';
+    }
+    const parts = [`${talkNote.messages} messages in ${talkNote.marks} arrows`];
+    if (talkNote.dropped > 0) {
+      parts.push(`${talkNote.dropped} outside the window or over the limit`);
+    }
+    if (!talkNote.complete) {
+      parts.push('messages older than the scan window are not counted');
+    }
+    return parts.join(', ');
+  };
+
   return (
     <div className="view-toolbar">
       <SearchInput value={query} onChange={onQuery} placeholder="Search agents and transcripts…" />
-      {/* 読み終えるまで出し続ける。消えたときが、全部を見終えたときである */}
+      {/* 読み終えるまで出し続ける。消えたときが、全部を見終えたときである。
+          読みながら結果が増えるので、変わったことをその場で読み上げさせる */}
       {deepNote !== null && (
         <span
           className="deep-note"
-          title="Reading inside transcripts (last 1 MiB · last 7 days). Matches are added as they are read"
+          role="status"
+          aria-live="polite"
+          title={
+            deepNote.unreadable
+              ? 'Some transcripts could not be read. The rows stay narrowed to the matches found so far, so rows may be missing'
+              : 'Reading inside transcripts (last 1 MiB · last 7 days). Matches are added as they are read'
+          }
         >
-          {deepNote.total === 0
-            ? 'reading transcripts…'
-            : `${deepNote.scanned} / ${deepNote.total} transcripts`}
+          {deepNote.unreadable
+            ? 'transcripts could not be read'
+            : deepNote.total === 0
+              ? 'reading transcripts…'
+              : `${deepNote.scanned} / ${deepNote.total} transcripts`}
         </span>
       )}
       <button
         type="button"
         className={`fchip ${talk ? 'on' : ''}`}
-        title={
-          talkNote === null
-            ? "Draw arrows for messages agents sent each other (reads the open session's transcripts)"
-            : `${talkNote.messages} messages in ${talkNote.marks} arrows${talkNote.dropped > 0 ? `, ${talkNote.dropped} outside the window or over the limit` : ''}`
-        }
+        aria-pressed={talk}
+        title={talkTitle()}
         onClick={() => onTalk(!talk)}
       >
-        {talkNote === null ? '⇄ messages' : `⇄ ${talkNote.messages}`}
-        {talkNote !== null && talkNote.dropped > 0 && (
+        {/* 読めなかった回は `?`、先頭まで届かなかった回は `≥` を添えて、数の意味を変える */}
+        {talkNote === null
+          ? '⇄ messages'
+          : !talkNote.readable
+            ? '⇄ ?'
+            : `⇄ ${talkNote.complete ? '' : '≥'}${talkNote.messages}`}
+        {talkNote?.readable === true && talkNote.dropped > 0 && (
           <span className="n">+{talkNote.dropped}</span>
         )}
       </button>
       <button
         type="button"
         className={`fchip ${attention ? 'on' : ''}`}
+        aria-pressed={attention}
         title="Show only what needs attention: awaiting your input, or waiting 30 minutes with no activity"
         onClick={() => onAttention(!attention)}
       >
@@ -103,6 +143,7 @@ export function AgentsToolbar({
             key={preset.label}
             type="button"
             className={`fchip ${!picked && scale === preset.key ? 'on' : ''}`}
+            aria-pressed={!picked && scale === preset.key}
             title={preset.title}
             onClick={() => onScale(preset.key)}
           >
@@ -112,8 +153,8 @@ export function AgentsToolbar({
       </span>
       <RangeSlider min={domain.t0} max={domain.t1} a={axis.t0} b={axis.t1} onChange={onRange} />
       <span className="rs-label">
-        <TimeInput value={axis.t0} onCommit={onCommitTime('t0')} />–
-        <TimeInput value={axis.t1} onCommit={onCommitTime('t1')} />
+        <TimeInput value={axis.t0} label="Window start" onCommit={onCommitTime('t0')} />–
+        <TimeInput value={axis.t1} label="Window end" onCommit={onCommitTime('t1')} />
       </span>
     </div>
   );

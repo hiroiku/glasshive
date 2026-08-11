@@ -1,5 +1,6 @@
 import { formatTokens, modelShort } from '../../format.ts';
 import { laneColor } from '../../palette.ts';
+import { isObserved, StatsNote, type StatsObservation } from './StatsObservation.tsx';
 
 /* どのモデルがどれだけ使ったか。
 
@@ -12,9 +13,13 @@ const NAMED_ROWS = 4;
 export function ByModelPanel({
   models,
   total,
+  observation,
 }: {
   readonly models: readonly (readonly [string, number])[];
   readonly total: number;
+  /* 消費をどこまで観測できたか。**空の一覧を「no usage」と言い切らない** ——
+     読めなかったプロジェクトは、使っていないプロジェクトではない。 */
+  readonly observation: StatsObservation;
 }) {
   return (
     <div className="sf-panel sf-models">
@@ -22,7 +27,9 @@ export function ByModelPanel({
         <span className="sf-title">By model</span>
       </div>
 
-      {models.length === 0 ? (
+      {!isObserved(observation) ? (
+        <StatsNote observation={observation} />
+      ) : models.length === 0 ? (
         <div className="sf-dim">no usage in range</div>
       ) : (
         <>

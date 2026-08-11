@@ -27,11 +27,6 @@ export function containsPath(root: string, candidate: string): boolean {
   return c.startsWith(r.endsWith(path.sep) ? r : r + path.sep);
 }
 
-/** どちらかがどちらかを含むか。一部から起動されることがあるので、向きは問わない */
-export function overlapsPath(a: string, b: string): boolean {
-  return containsPath(a, b) || containsPath(b, a);
-}
-
 /* パスの深さ。区切り文字で割った、空でない要素の数。
 
    **`containsPath` と同じ読み方をしなければならない。** 含むかどうかを正規化したパスで

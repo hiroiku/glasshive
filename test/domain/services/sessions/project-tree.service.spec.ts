@@ -447,6 +447,86 @@ describe('直近の消費をプロジェクトごとにまとめる', () => {
   });
 });
 
+/* 走査できなかったところは、数として 0 を出さない。
+
+   歩けなかったディレクトリの中に何が居たかは分からない。そこを 0 で埋めると、見に行けなかった
+   ことが「消費が無かった」「セッションが 1 つも無かった」と言い切られる。 */
+describe('走査できたかを木まで運ぶ', () => {
+  it('ディレクトリを走査できなかったプロジェクトは、走査できなかったことを載せる', () => {
+    const closed = project({
+      slug: '-work-closed',
+      canonicalPath: null,
+      sessions: [],
+      walked: unobservable(new Denied('開けない')),
+    });
+
+    const tree = build([closed], T0);
+
+    expect(
+      tree.projects.map((p) => p.id),
+      '落とすとプロジェクトが黙って消える',
+    ).toEqual(['-work-closed']);
+    expect(tree.projects[0]?.walked.kind).toBe('unobservable');
+  });
+
+  it('ディレクトリを走査できなかったプロジェクトの消費を、0 と言い切らない', () => {
+    const closed = project({
+      slug: '-work-closed',
+      canonicalPath: null,
+      sessions: [],
+      walked: unobservable(new Denied('開けない')),
+    });
+
+    const tree = build([closed], T0);
+
+    expect(
+      tree.projects[0]?.recentTokens.kind,
+      '見に行けなかったことを「消費が無かった」と書くのは、観測できなかったことを無かったことにするのと同じである',
+    ).toBe('unobservable');
+  });
+
+  it('子のディレクトリを走査できなかったセッションは、プロジェクトの消費まで観測できなかったことにする', () => {
+    const tree = build(
+      [
+        project({
+          sessions: [
+            session(T0, {
+              recentTokens: observed(999),
+              subagentsWalked: unobservable(new Denied('開けない')),
+            }),
+          ],
+        }),
+      ],
+      T0,
+    );
+
+    expect(
+      tree.projects[0]?.recentTokens.kind,
+      '数え落とした子のぶんが、少ない数に化けて「静かだった」と読まれる',
+    ).toBe('unobservable');
+    expect(tree.projects[0]?.sessions[0]?.subagentsWalked.kind).toBe('unobservable');
+  });
+
+  it('子を走査できたセッションでは、消費の合計に何も足さない', () => {
+    const tree = build(
+      [
+        project({
+          sessions: [session(T0, { recentTokens: observed(10), subagentsWalked: observed(7) })],
+        }),
+      ],
+      T0,
+    );
+
+    expect(tree.projects[0]?.recentTokens, '走査で見えた本数は消費ではない').toEqual(observed(10));
+  });
+
+  it('走査できたと言われていないセッションは、見えた子のぶんだけ走査できたものとする', () => {
+    const tree = build([project({ sessions: [session(T0, { subagents: [subagent(T0)] })] })], T0);
+
+    expect(tree.projects[0]?.sessions[0]?.subagentsWalked).toEqual(observed(1));
+  });
+});
+
 /* 索引が言う行と、木が言う行。
 
    一覧はまず索引で行を敷き、読み終えたプロジェクトを `id` で置き換えていく。**片方にしか

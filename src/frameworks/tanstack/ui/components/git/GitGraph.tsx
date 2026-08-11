@@ -1,4 +1,4 @@
-import { mdiHomeOutline, mdiRhombus } from '@mdi/js';
+import { mdiAlertOutline, mdiHomeOutline, mdiRhombus } from '@mdi/js';
 import { useMemo } from 'react';
 import type { GitOverviewJson } from '~/interface/presenters/git/git.presenter.ts';
 import type {
@@ -96,7 +96,7 @@ export function GitGraph({
   );
   const delay = useMemo(() => pulseDelay(nowMs), [nowMs]);
 
-  const { rows, firstMain, width } = layout;
+  const { rows, firstMain, unseenBase, width } = layout;
   const tipStates = new Map<number, string>();
   rows.forEach((row, index) => {
     if (row.type !== 'tip') return;
@@ -291,6 +291,15 @@ export function GitGraph({
                       {cut(title, 18)}
                     </button>
                   ))}
+                  {/* 分かれ目が見えていない。**黙ると、線の引き先が分かれ目として読まれる** */}
+                  {unseenBase.has(index) && (
+                    <span
+                      className="g-cut"
+                      title="The branch point is not among the commits shown, so this line runs to the bottom of the graph — it did not fork there"
+                    >
+                      <Icon path={mdiAlertOutline} size={10} /> fork not shown
+                    </span>
+                  )}
                 </span>
                 <span className="g-who">
                   {/* GitHub の担当と、いま動いているエージェント。課題の一覧と同じ並べ方にする —
@@ -360,6 +369,22 @@ export function GitGraph({
             </div>
           );
         })}
+        {/* 遡る数の上限で本流が切れている。**黙ると、これで全部の履歴として読まれる** */}
+        {overview.mainline_truncated && (
+          <div className="git-row cut">
+            <span style={{ width }} />
+            <span
+              className="g-title g-cut"
+              title={`glasshive reads only the most recent stretch of ${overview.base} — commits older than these are not read, and a branch that left earlier has no branch point to draw`}
+            >
+              ··· older commits are not read
+            </span>
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+        )}
       </div>
     </>
   );

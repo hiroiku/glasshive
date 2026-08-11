@@ -44,6 +44,7 @@ const project = (id: string, name: string): ProjectJson => ({
   tokens_24h: null,
   tokens_24h_state: 'observed',
   read: true,
+  sources: { state: 'observed', reason: null },
   sessions: [
     {
       id: 's1',
@@ -65,6 +66,7 @@ const project = (id: string, name: string): ProjectJson => ({
       intervals_complete: true,
       intervals_state: 'observed',
       size: 0,
+      sources: { state: 'observed', reason: null },
       subagents: [],
     },
   ],
@@ -90,6 +92,7 @@ function draw(props: Partial<TabBarProps> = {}) {
     name: seat?.querySelector('.tab-link > span:last-child')?.textContent ?? null,
     dot: seat?.querySelector('.dot')?.className ?? null,
     count: seat?.querySelector('.tab-slot .n')?.textContent ?? null,
+    countClass: seat?.querySelector('.tab-slot .n')?.className ?? null,
   });
   const seats = [...container.querySelectorAll('.tab')];
   return {
@@ -128,6 +131,23 @@ describe('ピン留めのタブと、まだ届いていない木', () => {
       seatCount,
       '一覧へ戻るタブだけが残る。観測から消えたものは、待っているのではなくもう無い',
     ).toBe(1);
+  });
+
+  /* タブは畳まれていて中が見えない。人待ちであることは点だけでなく件数の色でも言う。 */
+  it('人の入力を待っているプロジェクトは、件数にもその色を持たせる', () => {
+    const awaiting = project('-w-alpha', 'alpha');
+    const first = awaiting.sessions[0];
+    if (first === undefined) throw new Error('セッションが無い');
+    first.awaiting = 'user';
+
+    const { pinned } = draw({ projects: [awaiting] });
+
+    expect(pinned.dot).toContain('input');
+    expect(pinned.countClass, '点 1 つだけだと、隣のタブの点に紛れる').toContain('input');
+  });
+
+  it('人待ちでないプロジェクトの件数には、その色を付けない', () => {
+    expect(draw().pinned.countClass).toBe('n');
   });
 
   it('ピン留めしていないプロジェクトを観ている間は、末尾に暫定タブが出る', () => {

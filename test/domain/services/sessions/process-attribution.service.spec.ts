@@ -38,6 +38,22 @@ describe('生きているプロセスをプロジェクトへ割り振る', () =
     expect(counts).toEqual([1]);
   });
 
+  it('worktree の中で働くプロセスは、worktree のプロジェクトに数える', () => {
+    const counts = attributeProcesses(
+      ['/a/b', '/a/b/.worktrees/x'],
+      [proc(1, '/a/b/.worktrees/x/src')],
+    );
+    expect(counts, 'worktree は元のリポジトリの中にあるので、深い方が受け取る').toEqual([0, 1]);
+  });
+
+  it('プロジェクトの外側で働くプロセスは、その中のプロジェクトに数えない', () => {
+    const counts = attributeProcesses(['/a/b/.worktrees/x'], [proc(1, '/a/b')]);
+    expect(
+      counts,
+      '向きを問わずに重なりだけで見ると、`~` の 1 つのプロセスが配下を残らず生きているように見せる',
+    ).toEqual([0]);
+  });
+
   it('どこにも含まれないプロセスは、どこにも数えない', () => {
     const counts = attributeProcesses(['/a/b', '/a/c'], [proc(1, '/x/y')]);
     expect(counts, '当てずっぽうで割り振るより、数えないほうが嘘が少ない').toEqual([0, 0]);

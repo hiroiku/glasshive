@@ -60,6 +60,22 @@
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
+/* 稼働を観測できなかったエージェントの面。階段の上に積む。
+   輪郭を破線にしてあるのは、**塗り分けだけだと「もう一段高い階段」と読めるから**である。
+   破線は数えられた高さではなく、分からない高さを表す */
+.sf-uarea {
+  fill: rgba(148, 163, 184, 0.14);
+  stroke: rgba(148, 163, 184, 0.55);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  vector-effect: non-scaling-stroke;
+}
+/* 山の高さの脇に添える、読めなかったエージェントの数 */
+.sf-unk {
+  color: var(--dim);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
 .sf-h {
   display: flex;
   align-items: baseline;
@@ -91,6 +107,23 @@
   width: 100%;
   height: 56px;
   display: block;
+}
+/* 観測できていない数の代わりに置く一言。**空欄にしない** — 空欄は「0 だった」と読める */
+.sf-note {
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* グラフの代わりに置くときは、グラフと同じ高さを取る。取らないと、観測できなかった
+   パネルだけ背が縮んで、フッターの 4 枚が同じ行に並ばなくなる */
+.sf-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
 }
 /* ホバー詳細: カーソル線 + バケットの内訳を出す浮きラベル */
 .sf-plot {
