@@ -211,6 +211,9 @@ const SUBAGENTS_SHORT = 'Subagents could not be counted — this session may hav
 /** 時間軸の列の名前。ほかの 10 列と違い、見出しの中身は語ではなく目盛りの時刻である */
 const TIMELINE_HEADER = 'Timeline';
 
+/** 目盛りのラベル 1 文字ぶんの幅の見積もり。10px の等幅で組んでいる */
+const TICK_CHAR_PX = 6;
+
 /* 行が 1 本も出ていないときに言えること。**「無かった」と「観測できなかった」を同じ文にしない。**
 
    走査できなかったプロジェクトの `sessions` は空のまま届くので、長さだけを見ると
@@ -495,20 +498,35 @@ export function AgentsTable({
   const axis = picked ?? autoAxis;
   const span = axis.t1 - axis.t0;
   const ticks = useMemo(() => niceTicks(axis.t0, axis.t1), [axis.t0, axis.t1]);
-  /* 見出しに置く目盛り。端に貼りつくものは読めないので落とす。**残った両端の寄せ方を
-     変える。** 中央寄せのまま置くと、左端のラベルは列からはみ出して並べ替えの ▲ と
-     隣の列に被り、右端のラベルは列の外へ出る。
+  /* 見出しに置く目盛り。端に貼りつくものは読めないので落とす。**列からはみ出すものだけ
+     寄せ方を変える。** 中央寄せのままだと、左端のラベルは並べ替えの ▲ と隣の列に被り、
+     右端のラベルは列の外へ出る。逆に、はみ出さないものまで寄せると隣のラベルへ寄って行き、
+     `18:00` と `19:00` がくっついて 1 つの語に見える。
+
+     はみ出すかどうかは列の幅で決まるので、測れた幅で見る。測る前は端の 1 本だけを寄せる。
 
      位置は `left` ではなく `--tick-x` で渡す。**インラインの宣言は `!important` の無い
      規則に必ず勝つ**ので、`left` を直に置くと、並べ替えの ▲ を避ける CSS 側の底上げが
      一度も効かない。 */
-  const shownTicks = useMemo(
-    () =>
-      ticks
-        .map((at) => ({ at, x: ((at - axis.t0) / span) * 100 }))
-        .filter((tick) => tick.x >= 3 && tick.x <= 97),
-    [ticks, axis.t0, span],
-  );
+  const shownTicks = useMemo(() => {
+    const kept = ticks
+      .map((at) => ({ at, x: ((at - axis.t0) / span) * 100, label: formatTick(at, span) }))
+      .filter((tick) => tick.x >= 3 && tick.x <= 97);
+    return kept.map((tick, index) => {
+      const half = (tick.label.length * TICK_CHAR_PX) / 2;
+      const measured = tlGeom.width > 0;
+      const from = (tick.x / 100) * tlGeom.width;
+      const first = measured ? from < half : index === 0;
+      /* 幅がラベルより狭いと両端に当たる。**その 1 本には左端の寄せだけを当てる** —
+         両方当てると `.last` が後勝ちして、左へ引っ張られたまま右へも動く。 */
+      const last = first
+        ? false
+        : measured
+          ? tlGeom.width - from < half
+          : index > 0 && index === kept.length - 1;
+      return { ...tick, first, last };
+    });
+  }, [ticks, axis.t0, span, tlGeom.width]);
   const domain = useMemo(() => domainOf(nodes, axis, nowMs), [nodes, axis, nowMs]);
 
   /* 手で打ち込んだ端は最大限そのまま活かす。矛盾したら、もう一方を 1 分の幅を保って追わせる。 */
@@ -833,21 +851,15 @@ export function AgentsTable({
                   onClick={() => header.column.toggleSorting()}
                 >
                   {header.column.id === 'timeline'
-                    ? shownTicks.map((tick, index) => (
+                    ? shownTicks.map((tick) => (
                         <span
                           key={tick.at}
-                          /* 1 本しか残らないときは左端の寄せだけを当てる。両方当てると
-                             `.last` が後勝ちして、真ん中の目盛りが左へ引っ張られる */
-                          className={[
-                            'tick',
-                            index === 0 ? 'first' : '',
-                            index > 0 && index === shownTicks.length - 1 ? 'last' : '',
-                          ]
+                          className={['tick', tick.first ? 'first' : '', tick.last ? 'last' : '']
                             .filter(Boolean)
                             .join(' ')}
                           style={{ '--tick-x': `${tick.x}%` } as React.CSSProperties}
                         >
-                          {formatTick(tick.at, span)}
+                          {tick.label}
                         </span>
                       ))
                     : flexRender(header.column.columnDef.header, header.getContext())}

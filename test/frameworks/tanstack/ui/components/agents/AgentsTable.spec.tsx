@@ -409,6 +409,8 @@ describe('軸の両端の目盛りを、列の中へ寄せる', () => {
   const spanned = project([
     session('long', [], { started: new Date(NOW - 6 * 3_600_000).toISOString() }),
   ]);
+  // 幅を差し替えた例が在るので、次の例へ持ち越さない
+  afterEach(() => vi.restoreAllMocks());
 
   it('左端の目盛りに `first`、右端に `last` が出る', () => {
     mount({ project: spanned });
@@ -425,6 +427,33 @@ describe('軸の両端の目盛りを、列の中へ寄せる', () => {
     for (const tick of ticks().slice(1, -1)) {
       expect(tick.className).toBe('tick');
     }
+  });
+
+  /* 列がラベルを置ける幅を持っていれば、端の目盛りも中央寄せのままで収まる。そこまで
+     寄せると隣のラベルへ寄って行き、`18:00` と `19:00` がくっついて 1 つの語に見える。 */
+  it('列の中に収まる目盛りは、端でも寄せない', async () => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 1200,
+        bottom: 26,
+        width: 1200,
+        height: 26,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
+    mount({ project: spanned });
+
+    await waitFor(() => {
+      const shown = ticks();
+      expect(shown.length).toBeGreaterThan(1);
+      expect(shown[0]?.className, '収まるのに左端へ寄せている').toBe('tick');
+    });
   });
 
   /* インラインの宣言は `!important` の無い規則に必ず勝つ。位置を `left` で直に渡すと、
