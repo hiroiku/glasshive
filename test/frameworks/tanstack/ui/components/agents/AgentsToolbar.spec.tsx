@@ -160,6 +160,7 @@ describe('メッセージの数が、何を言っているのかを分ける', (
     messages: 12,
     marks: 5,
     dropped: 0,
+    peers: 0,
     complete: true,
     ...over,
   });
@@ -181,6 +182,31 @@ describe('メッセージの数が、何を言っているのかを分ける', (
     const { container } = mount({ talk: true, talkNote: note() });
 
     expect(chipOf(container, '⇄').textContent).toBe('⇄ 12');
+  });
+
+  /* 片端しか置けていないやり取りもメッセージである。矢の中身だけを数えると、
+     隣のセッションと 21 通交わした画面が `0` と名乗る。 */
+  it('この画面に居ない相手とのやり取りも、数に入れる', () => {
+    const { container } = mount({
+      talk: true,
+      talkNote: note({ messages: 0, marks: 0, peers: 21 }),
+    });
+
+    expect(chipOf(container, '⇄').textContent).toBe('⇄ 21');
+    expect(chipOf(container, '⇄').getAttribute('title')).toContain('not in this view');
+  });
+
+  it('本当に 1 通も無かった回は、そう言う', () => {
+    const { container } = mount({
+      talk: true,
+      talkNote: note({ messages: 0, marks: 0, peers: 0 }),
+    });
+
+    expect(chipOf(container, '⇄').textContent).toBe('⇄ 0');
+    expect(
+      chipOf(container, '⇄').getAttribute('title'),
+      '0 だけでは、読めなかった回と見分けが付かない',
+    ).toContain('messaged each other');
   });
 
   it('描けなかった数は、読めた回にだけ添える', () => {

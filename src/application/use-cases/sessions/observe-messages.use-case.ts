@@ -7,7 +7,13 @@ import {
 import type { TranscriptRepository } from '~/application/ports/repositories/sessions/transcript.repository.ts';
 import type { TreeSnapshotService } from '~/application/services/sessions/tree-snapshot.service.ts';
 import type { TranscriptSession } from '~/domain/entities/sessions/session.entity.ts';
-import { extractHops, placeHop } from '~/domain/services/sessions/agent-message.service.ts';
+import {
+  extractDeliveries,
+  extractHops,
+  peerNameOf,
+  placeHop,
+  senderOf,
+} from '~/domain/services/sessions/agent-message.service.ts';
 import {
   type AgentHop,
   SESSION_ADDRESSES,
@@ -30,11 +36,35 @@ export interface PlacedHop {
   readonly hop: AgentHop;
 }
 
+/* この画面に居ないセッションとのやり取り 1 通。
+
+   **相手の `transcript` は指せていない。** 名乗る名前はセッションの id でも `slug` でも
+   なく、こちらが観測した一覧のどれとも一致しない。指せているのは `msgId` —— 相手の
+   `transcript` にも同じ文字列が書かれているので、**探せば辿り着ける**が、ここでは
+   探していない。「相手が居ない」ではなく「相手をまだ置いていない」である。 */
+export interface PeerExchange {
+  readonly atMs: number;
+  readonly direction: 'sent' | 'received';
+  /** この画面の側の相手。送ったセッションか子の id */
+  readonly agentId: string;
+  /** 向こう側が自己申告した名前。送ったときは宛先として書いた文字列、届いたときは名乗った名前 */
+  readonly peer: string;
+  /** 両端を結ぶ鍵 */
+  readonly msgId: string;
+  /** 送り手が添えた一行。届いた側では持たない */
+  readonly summary: string;
+  /** 届き方。`prompting` など。**別の値なら別のことである** */
+  readonly mode: string | null;
+}
+
 export interface SessionMessages {
   readonly hops: readonly PlacedHop[];
+  /** この画面に居ないセッションとのやり取り。時刻の順に並ぶ */
+  readonly peers: readonly PeerExchange[];
   /** 読み取り範囲が `transcript` の先頭まで届いたか。届いていなければ、これより前のメッセージは見えていない */
   readonly complete: boolean;
-  /** 宛先を置けなかったメッセージの数。読み取り範囲の外の相手へ出ていったもの */
+  /* 宛先も相手が自己申告した名前も決まらなかったメッセージの数。**別のセッションへ渡ったものは
+     ここに入らない** —— そちらは `peers` に、相手の自己申告した名前ごと在る。 */
   readonly unplaced: number;
 }
 
@@ -86,6 +116,7 @@ export function createObserveMessages(deps: {
       ];
 
       const placed: PlacedHop[] = [];
+      const peers: PeerExchange[] = [];
       let complete = true;
       let unplaced = 0;
       for (const owner of owners) {
@@ -105,13 +136,48 @@ export function createObserveMessages(deps: {
         if (!window.value.complete) complete = false;
         for (const hop of extractHops(window.value.text)) {
           const put = placeHop(hop, owner.id, addresses);
-          if (put === null) unplaced += 1;
-          else placed.push(put);
+          if (put !== null) {
+            placed.push(put);
+            continue;
+          }
+          /* このセッションの誰にも当たらなかった。**`msgId` が在れば、それは届いている** ——
+             届いた先は別のセッションで、この画面には居ないというだけである。無ければ
+             届いたかどうかも分からないので、置けなかった数として数える。 */
+          if (hop.msgId === null) {
+            unplaced += 1;
+            continue;
+          }
+          peers.push({
+            atMs: hop.atMs,
+            direction: 'sent',
+            agentId: senderOf(hop, owner.id, addresses),
+            /* ソケットで名指したメッセージは、相手の名前を持っていない。
+               パスをそのまま相手として出すと、プロセスが終われば別のセッションを指す。 */
+            peer: peerNameOf(hop.to) ?? '',
+            msgId: hop.msgId,
+            summary: hop.summary,
+            mode: null,
+          });
+        }
+
+        for (const delivery of extractDeliveries(window.value.text)) {
+          peers.push({
+            atMs: delivery.atMs,
+            direction: 'received',
+            agentId: owner.id,
+            /* 自己申告した名前が無ければ、届いた先は分かっていても相手が分からない。
+               宛先の綴りで代わりにはしない —— ソケットのパスはプロセスを指す。 */
+            peer: delivery.fromName ?? '',
+            msgId: delivery.msgId,
+            summary: '',
+            mode: delivery.mode,
+          });
         }
       }
 
       placed.sort((a, b) => a.hop.atMs - b.hop.atMs);
-      return ok(observed({ hops: placed, complete, unplaced }));
+      peers.sort((a, b) => a.atMs - b.atMs);
+      return ok(observed({ hops: placed, peers, complete, unplaced }));
     },
   };
 }

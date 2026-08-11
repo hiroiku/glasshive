@@ -36,6 +36,9 @@ export interface AgentsToolbarProps {
     readonly messages: number;
     readonly marks: number;
     readonly dropped: number;
+    /* この画面に居ないセッションとのやり取りの数。**`messages` とは別に数える** ——
+       片端しか置けていないので、矢の数に混ぜると置いた相手が居るように読める。 */
+    readonly peers: number;
     /* 読み取り範囲が `transcript` の先頭まで届いたか。届かなかったぶんの古いメッセージは
        数に入っていない。 */
     readonly complete: boolean;
@@ -88,6 +91,14 @@ export function AgentsToolbar({
       return 'Messages could not be read — this is not the same as no messages';
     }
     const parts = [`${talkNote.messages} messages in ${talkNote.marks} arrows`];
+    if (talkNote.peers > 0) {
+      parts.push(
+        `${talkNote.peers} with a session that is not in this view — only this end is drawn`,
+      );
+    }
+    if (talkNote.messages === 0 && talkNote.peers === 0) {
+      parts.push('none of these agents messaged each other in this window');
+    }
     if (talkNote.dropped > 0) {
       parts.push(`${talkNote.dropped} outside the window or over the limit`);
     }
@@ -127,12 +138,14 @@ export function AgentsToolbar({
         title={talkTitle()}
         onClick={() => onTalk(!talk)}
       >
-        {/* 読めなかった回は `?`、先頭まで届かなかった回は `≥` を添えて、数の意味を変える */}
+        {/* 読めなかった回は `?`、先頭まで届かなかった回は `≥` を添えて、数の意味を変える。
+            **数えるのは矢の中身だけではない** —— 片端しか置けていないやり取りもメッセージで、
+            外すと隣のセッションと 21 通交わした画面が `0` と名乗る */}
         {talkNote === null
           ? '⇄ messages'
           : !talkNote.readable
             ? '⇄ ?'
-            : `⇄ ${talkNote.complete ? '' : '≥'}${talkNote.messages}`}
+            : `⇄ ${talkNote.complete ? '' : '≥'}${talkNote.messages + talkNote.peers}`}
         {talkNote?.readable === true && talkNote.dropped > 0 && (
           <span className="n">+{talkNote.dropped}</span>
         )}

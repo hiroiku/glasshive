@@ -185,7 +185,14 @@ beforeEach(() => {
     body: { state: 'observed', reason: null, files: [], scanned: 0, total: 0, done: true },
   });
   messagesQuery.mockReset();
-  answerMessages({ state: 'observed', reason: null, complete: true, unplaced: 0, hops: [] });
+  answerMessages({
+    state: 'observed',
+    reason: null,
+    complete: true,
+    unplaced: 0,
+    peers: [],
+    hops: [],
+  });
 });
 
 /** 親 → 子 → 孫。実データに在る深さ 3 をそのまま置く */
@@ -362,6 +369,7 @@ describe('メッセージを観測できなかったことを、0 通と言わ�
       reason: 'EACCES',
       complete: false,
       unplaced: 0,
+      peers: [],
       hops: [],
     });
     mount({ project: three });
@@ -379,7 +387,14 @@ describe('メッセージを観測できなかったことを、0 通と言わ�
   });
 
   it('読み取り範囲が先頭まで届かなかった回は、数がそこまでだと言う', async () => {
-    answerMessages({ state: 'observed', reason: null, complete: false, unplaced: 0, hops: [] });
+    answerMessages({
+      state: 'observed',
+      reason: null,
+      complete: false,
+      unplaced: 0,
+      peers: [],
+      hops: [],
+    });
     mount({ project: three });
 
     fireEvent.click(chipOf('⇄ messages'));
@@ -756,6 +771,7 @@ describe('メッセージの矢印を、行の束の中へ浮かせない', () =
       reason: null,
       complete: true,
       unplaced: 0,
+      peers: [],
       hops: [
         {
           at: new Date(NOW - 30_000).toISOString(),
@@ -835,6 +851,73 @@ describe('メッセージの矢印を、行の束の中へ浮かせない', () =
         child.getAttribute('role') === 'row' || child.getAttribute('aria-hidden') === 'true';
       expect(kept, `${child.getAttribute('class') ?? ''} が行の束の直下に浮いている`).toBe(true);
     }
+  });
+
+  /* 別のセッションとのやり取りは、こちら側の行しか置けない。**相手が「無い」のではなく
+     「置いていない」。** 実線の矢と同じ顔で描くと、置いていない相手が置いた相手として読まれる。 */
+  const withPeer = async (over: Record<string, unknown> = {}) => {
+    widen();
+    answerMessages({
+      state: 'observed',
+      reason: null,
+      complete: true,
+      unplaced: 0,
+      hops: [],
+      peers: [
+        {
+          at: new Date(NOW - 30_000).toISOString(),
+          direction: 'received',
+          agent: 'sess',
+          peer: 'glasshive-clean-arch-port',
+          msg_id: 'be3ecd13',
+          summary: '',
+          mode: 'prompting',
+          ...over,
+        },
+      ],
+    });
+    mount({ project: three });
+
+    fireEvent.click(chipOf('⇄ messages'));
+
+    await waitFor(() => expect(document.querySelectorAll('.tl-msg .msg')).toHaveLength(1), {
+      timeout: 2000,
+    });
+  };
+
+  it('片端しか無いやり取りにも、マークを置く', async () => {
+    await withPeer();
+
+    expect(
+      document.querySelectorAll('.tl-msg .msg.peer'),
+      '置けない相手のぶんを描かないと、隣のセッションと話していたことが消える',
+    ).toHaveLength(1);
+  });
+
+  it('実線の矢と同じ顔で描かない', async () => {
+    await withPeer();
+
+    expect(
+      document.querySelector('.tl-msg .msg.peer .msg-line')?.getAttribute('class'),
+      '同じ顔にすると、置いていない相手が置いた相手として読まれる',
+    ).toContain('peer');
+  });
+
+  it('相手が自己申告した名前と、相手が居ないことを、その行に文字で残す', async () => {
+    await withPeer();
+
+    const said = rowOf('sess').textContent ?? '';
+    expect(said).toContain('glasshive-clean-arch-port');
+    expect(said, 'マークだけでは、相手がこの画面に居ないことが読めない').toContain(
+      'not in this view',
+    );
+  });
+
+  /* 自己申告した名前が無ければ、相手が誰かは分かっていない。空欄にすると、名乗った相手と同じに見える。 */
+  it('名前を自己申告しなかったことを、空欄で済ませない', async () => {
+    await withPeer({ peer: '' });
+
+    expect(rowOf('sess').textContent).toContain('did not give a name');
   });
 });
 

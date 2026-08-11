@@ -161,10 +161,26 @@ interface TalkArrow {
   readonly label: string;
 }
 
+/* この画面に居ないセッションとのやり取り 1 通。片端しか無いので、矢にはならない。
+
+   **相手の行は「無い」のではなく「置いていない」。** 名乗った名前から相手の `transcript`
+   は引けず、引くには別のプロジェクトまで探しに行くことになる。ここでは片端にマークを置いて、
+   相手が自己申告した名前を添えるところまでにする。 */
+interface TalkPeerMark {
+  readonly key: string;
+  /** こちら側の行 */
+  readonly row: number;
+  readonly x: number;
+  readonly out: boolean;
+  readonly label: string;
+}
+
 /* 1 つのセッションのやりとり。**`readable` を最初に読む。** 観測できなかった回も
    0 本で返るので、数だけを見ると「一度も話さなかった」と読める。 */
 interface TalkHops {
   readonly drawn: readonly TalkArrow[];
+  /** この画面に居ないセッションとのやり取り。両端が揃っていないので矢にしない */
+  readonly peers: readonly TalkPeerMark[];
   /** 矢印が語っているメッセージの数 */
   readonly shown: number;
   /** 描けなかったメッセージの数 */
@@ -665,7 +681,7 @@ export function AgentsTable({
        `unobservable` でも `hops` を空で返す。** 空をそのまま数えると、走査に失敗した
        セッションが「一度も話さなかった」ことになる。 */
     if (!answer.ok || answer.body.state !== 'observed') {
-      return { drawn: [], shown: 0, dropped: 0, complete: false, readable: false };
+      return { drawn: [], peers: [], shown: 0, dropped: 0, complete: false, readable: false };
     }
 
     const visible = new Map<string, number>();
@@ -746,6 +762,35 @@ export function AgentsTable({
       });
     }
 
+    /* 片端しか無いやり取り。**この画面に居ない相手なので、矢にはしない。**
+       時間の外へ出たものは矢と同じく描かない —— 端へ寄せると、そこで起きたことに見える。 */
+    const peers: TalkPeerMark[] = [];
+    for (const exchange of answer.body.peers) {
+      const atMs = Date.parse(exchange.at);
+      const x = ((atMs - axis.t0) / span) * 100;
+      const row = seat(exchange.agent);
+      if (!Number.isFinite(x) || x < 0 || x > 99.8 || row === null) {
+        dropped += 1;
+        continue;
+      }
+      const out = exchange.direction === 'sent';
+      const who = exchange.peer === '' ? 'a session that did not give a name' : exchange.peer;
+      peers.push({
+        key: `${exchange.direction}:${exchange.msg_id}`,
+        row,
+        x,
+        out,
+        label: [
+          out ? `to ${who}` : `from ${who}`,
+          'not in this view',
+          exchange.mode === null ? '' : exchange.mode,
+          exchange.summary,
+        ]
+          .filter((part) => part !== '')
+          .join(' · '),
+      });
+    }
+
     const drawn = [...marks.values()].map((mark) => ({
       ...mark,
       label: [mark.who, mark.count > 1 ? `${mark.count} messages` : '', mark.summary]
@@ -754,6 +799,7 @@ export function AgentsTable({
     }));
     return {
       drawn,
+      peers,
       // 矢印が語っているメッセージの数。まとめた本数ではなく、まとめられた中身の数で言う
       shown: drawn.reduce((count, mark) => count + mark.count, 0),
       dropped: dropped + answer.body.unplaced,
@@ -770,11 +816,14 @@ export function AgentsTable({
      その行を辿った人にそのまま届く。 */
   const talkByRow = useMemo(() => {
     const byRow = new Map<number, string[]>();
-    for (const arrow of talkHops?.drawn ?? []) {
-      const found = byRow.get(arrow.from) ?? [];
-      found.push(arrow.label);
-      byRow.set(arrow.from, found);
-    }
+    const put = (row: number, label: string) => {
+      const found = byRow.get(row) ?? [];
+      found.push(label);
+      byRow.set(row, found);
+    };
+    for (const arrow of talkHops?.drawn ?? []) put(arrow.from, arrow.label);
+    // 片端しか無いやり取りも、その行を辿った人には届く。マークだけでは相手が自己申告した名前が読めない
+    for (const mark of talkHops?.peers ?? []) put(mark.row, mark.label);
     return byRow;
   }, [talkHops]);
 
@@ -810,6 +859,7 @@ export function AgentsTable({
                 messages: talkHops.shown,
                 marks: talkHops.drawn.length,
                 dropped: talkHops.dropped,
+                peers: talkHops.peers.length,
                 complete: talkHops.complete,
               }
         }
@@ -954,7 +1004,7 @@ export function AgentsTable({
           {rows.length > 0 &&
             tlGeom.width > 0 &&
             talkHops !== null &&
-            talkHops.drawn.length > 0 && (
+            talkHops.drawn.length + talkHops.peers.length > 0 && (
               /* 重ねる面は中の要素ごと読み上げから外す。**`role="presentation"` は子に
                  継がれない** ので、面だけを役から外すと、中の押しどころが `rowgroup` である
                  `#rows` の直下に `row` を挟まずに残る。
@@ -1001,6 +1051,39 @@ export function AgentsTable({
                       />
                       <svg x={`${arrow.x}%`} overflow="visible" aria-hidden="true">
                         <polygon points={`-2.8,${tip} 2.8,${tip} 0,${y2}`} className="msg-arrow" />
+                      </svg>
+                    </g>
+                  );
+                })}
+                {/* 片端しか無いやり取り。**線を破線にして、行の外へ向ける** —— 実線の矢と
+                    同じ顔で描くと、置いていない相手が置いた相手として読まれる */}
+                {talkHops.peers.map((mark) => {
+                  const mid = midOf(mark.row);
+                  const near = mid + (mark.out ? -4 : -6);
+                  const far = mid - 13;
+                  const tip = mark.out ? far : mid - 2;
+                  return (
+                    <g key={mark.key} className="msg peer">
+                      <title>{mark.label}</title>
+                      <line
+                        x1={`${mark.x}%`}
+                        x2={`${mark.x}%`}
+                        y1={near}
+                        y2={far}
+                        className="msg-hit"
+                      />
+                      <line
+                        x1={`${mark.x}%`}
+                        x2={`${mark.x}%`}
+                        y1={near}
+                        y2={far}
+                        className="msg-line peer"
+                      />
+                      <svg x={`${mark.x}%`} overflow="visible" aria-hidden="true">
+                        <polygon
+                          points={`-2.8,${tip + (mark.out ? 4 : -4)} 2.8,${tip + (mark.out ? 4 : -4)} 0,${tip}`}
+                          className="msg-arrow peer"
+                        />
                       </svg>
                     </g>
                   );

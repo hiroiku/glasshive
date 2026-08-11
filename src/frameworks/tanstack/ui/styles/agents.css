@@ -478,6 +478,15 @@ body.tl-panning .row .tl {
   fill: #f0c060;
   opacity: 1;
 }
+/* 片端しか置けていないやり取り。**破線にする** —— 実線の矢と同じ顔で描くと、
+   置いていない相手が置いた相手として読まれる。押しても開く先が無いので、指もささない */
+.tl-msg .msg.peer {
+  pointer-events: auto;
+  cursor: default;
+}
+.msg-line.peer {
+  stroke-dasharray: 2 2;
+}
 .tl .bar.unknown {
   top: 6px;
   bottom: 6px;
