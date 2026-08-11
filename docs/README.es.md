@@ -56,10 +56,9 @@ Los issues, las ramas y los milestones en una sola pantalla, porque son el mismo
 desde tres lados. Cambia entre ellos sin salir de la vista.
 
 Los issues vienen de GitHub a través de la CLI [`gh`](https://cli.github.com) —glasshive le
-pregunta a `gh` a qué repositorio apuntan tus remotes, igual que lo decide `gh`— o de un registro
-de [`bd`](https://github.com/gastownhall/beads). Los sub-issues se anidan, `blocked by` se dibuja
-como una arista de dependencia, y los tipos de issue, las etiquetas, los milestones y los asignados
-vienen con ellos.
+pregunta a `gh` a qué repositorio apuntan tus remotes, igual que lo decide `gh`. Los sub-issues se
+anidan, `blocked by` se dibuja como una arista de dependencia, y los tipos de issue, las etiquetas,
+los milestones y los asignados vienen con ellos.
 
 Las ramas y los worktrees se dibujan sobre la rama del worktree principal, para que veas quién está
 dónde. Los pares que se dirigen a los mismos archivos suben al principio. Elige una ref para ver
@@ -77,18 +76,23 @@ código y las llamadas a herramientas se renderizan; la transcripción original 
 
 ![Side panel](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/conversation.png)
 
+Un issue trae consigo sus comentarios y su cronología: quién le puso etiquetas, qué lo bloqueaba y
+qué pull request lo referenció, leído junto a los agentes que están trabajando en él ahora mismo.
+
+![Issue](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/issue.png)
+
 ## Solo lectura por diseño
 
-- **Lee cuatro cosas y no escribe en ninguna de ellas.** Los registros de sesión de Claude Code
-  (`~/.claude/projects/**/*.jsonl`), el registro de beads (`<project>/.beads/issues.jsonl`), `git`
-  y —a través de la CLI `gh`— los issues del repositorio de GitHub al que apuntan tus remotes. Nunca
-  se modifica ninguna transcripción, ningún registro, ningún repositorio ni ningún issue.
+- **Lee tres cosas y no escribe en ninguna de ellas.** Los registros de sesión de Claude Code
+  (`~/.claude/projects/**/*.jsonl`), `git` y —a través de la CLI `gh`— los issues del repositorio de
+  GitHub al que apuntan tus remotes. Nunca se modifica ninguna transcripción, ningún repositorio ni
+  ningún issue.
 - **El único archivo que escribe es el suyo.** `~/.config/glasshive/preferences.json` guarda tus
   pestañas fijadas y tus preferencias de vista. Antes de escribir, glasshive comprueba que la ruta no
-  esté dentro de `~/.claude`, de la raíz de las transcripciones ni de ningún directorio `.beads` o
-  `.git` observado, y se niega si lo está: escribir en lo que observa está bloqueado por
-  construcción, no por convención. Borra ese único archivo y no queda nada de lo que glasshive
-  haya escrito.
+  esté dentro de `~/.claude`, de la raíz de las transcripciones ni de un directorio `.git` o
+  `.beads` de un proyecto que pueda ver, y se niega si lo está: escribir en lo que observa está
+  bloqueado por construcción, no por convención. Borra ese único archivo y no queda nada de lo que
+  glasshive haya escrito.
 - **El paquete publicado se puede rastrear hasta este repositorio.** Cada versión se publica desde
   GitHub Actions mediante OIDC y lleva una atestación de procedencia, así que `npm audit signatures`
   puede contrastar el paquete que instalaste con el workflow y el commit desde los que se compiló.

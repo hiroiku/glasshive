@@ -1,0 +1,366 @@
+import {
+  mdiAccountMinusOutline,
+  mdiAccountPlusOutline,
+  mdiCancel,
+  mdiCheckCircleOutline,
+  mdiContentDuplicate,
+  mdiFileTreeOutline,
+  mdiFlagOffOutline,
+  mdiFlagOutline,
+  mdiGithub,
+  mdiLabelOffOutline,
+  mdiLabelOutline,
+  mdiLinkVariant,
+  mdiPencilOutline,
+  mdiRestart,
+} from '@mdi/js';
+import type { ReactNode } from 'react';
+import type { ApiResponse } from '~/interface/presenters/api-error.presenter.ts';
+import type {
+  GithubIssueDiscussionEntryJson,
+  GithubIssueDiscussionJson,
+  GithubIssueReferenceJson,
+  GithubLabelJson,
+} from '~/interface/presenters/issues/issues.presenter.ts';
+import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
+import { formatSinceIso } from '../../format.ts';
+import { useNav } from '../../nav/NavContext.tsx';
+import { IssueChip } from '../chips/Chips.tsx';
+import { Avatar } from '../primitives/Avatar.tsx';
+import { Icon } from '../primitives/Icon.tsx';
+import { NotObserved } from '../primitives/NotObserved.tsx';
+import { MdView } from '../text/MdView.tsx';
+
+/* 課題 1 件のやり取り。コメントと `timeline` のイベントを 1 本のタイムラインに並べる。
+
+   **コメントとイベントの重さを変える。** コメントは読むもので、イベントは文脈である。
+   同じ姿で並べると、ラベルの付け外し 10 件がコメント 1 件を埋めてしまう。コメントは本文と
+   同じ `MdView` で描き、イベントは 1 行に畳んで沈める。
+
+   ここは描くだけで、尋ねるのは `GithubIssueDetail` である。答えをそのまま受け取るのは、
+   途中で潰さないためである —— 「まだ返っていない」「誰も何も言っていない」「読めなかった」
+   の 3 つは、どれも項目の無い画面になる。 */
+
+export interface IssueDiscussionProps {
+  /** 尋ねた答え。まだ返っていなければ `undefined` */
+  readonly answer: ApiResponse<GithubIssueDiscussionJson> | undefined;
+  /** まだ尋ねている最中か。答えの無いことと、読めなかったことは違う */
+  readonly pending: boolean;
+  readonly project: ProjectJson | undefined;
+  readonly nowMs: number;
+  /** GitHub 上のこの課題の URL。読めなかったときの手立てに添える */
+  readonly url: string | null;
+}
+
+/** その項目が名指しているもの。並びの中で 1 項目を指す名前を作るためだけに使う */
+function subjectOf(entry: GithubIssueDiscussionEntryJson): string {
+  switch (entry.kind) {
+    case 'comment':
+      return String(entry.body?.length ?? -1);
+    case 'closed':
+      return entry.reason ?? '';
+    case 'reopened':
+      return '';
+    case 'labeled':
+    case 'unlabeled':
+      return entry.label.name;
+    case 'assigned':
+    case 'unassigned':
+      return entry.assignee ?? '';
+    case 'milestoned':
+    case 'demilestoned':
+      return entry.milestone_title ?? '';
+    case 'renamed':
+      return entry.current_title ?? '';
+    case 'parent-added':
+      return String(entry.parent.number);
+    case 'blocked-by-added':
+      return String(entry.blocking_issue.number);
+    case 'marked-as-duplicate':
+      return String(entry.canonical.number);
+    case 'cross-referenced':
+      return String(entry.source.number);
+  }
+}
+
+/* 並びの中で 1 項目を指す名前。
+
+   GitHub は項目に id を振って返さないので、区別の付くものを繋いで作る。同じ人が同じ秒に
+   同じ種類のイベントを同じ相手へ起こすことは無い。 */
+const entryKey = (entry: GithubIssueDiscussionEntryJson): string =>
+  `${entry.at}:${entry.kind}:${entry.actor ?? ''}:${subjectOf(entry)}`;
+
+/** 起こした人。読めなかった `login` を、誰かの名前で埋めない */
+function Who({ actor }: { actor: string | null }) {
+  if (actor === null) return <span className="dimtxt">unknown</span>;
+  return <span className="disc-who">{actor}</span>;
+}
+
+/** イベントが名指す題。GitHub が題を返さなかったことを、無題として出さない */
+function Named({ title }: { title: string | null }) {
+  if (title === null) return <span className="dimtxt">unknown</span>;
+  return <span className="disc-ttl">{title}</span>;
+}
+
+/* イベントが名指す課題や PR。**押せる。** ここを素の番号で出すと、話の繋がった先を
+   読んだ人が自分で探すことになる。 */
+function Reference({ reference }: { reference: GithubIssueReferenceJson }) {
+  return (
+    <>
+      <IssueChip id={`#${reference.number}`} />
+      {reference.title !== null && <span className="disc-ttl"> {reference.title}</span>}
+    </>
+  );
+}
+
+/* ラベル。課題のパネルのラベルの行と同じ姿にしてある —— 同じものが場所によって違う
+   見た目で出ると、同じものだと読めない。押せば、そのラベルで絞った一覧へ移る。 */
+function Label({ label }: { label: GithubLabelJson }) {
+  const nav = useNav();
+  const color = label.color === null || label.color === '' ? null : label.color;
+  return (
+    <button
+      type="button"
+      className={`lbl${color === null ? '' : ' tinted'}`}
+      style={color === null ? undefined : { ['--lc' as string]: `#${color}` }}
+      onClick={() => nav.gotoIssues(label.name)}
+    >
+      {label.name}
+    </button>
+  );
+}
+
+/** コメント以外の項目。コメントは本文を持つので、1 行のイベントとは別の姿で描く */
+type DiscussionEventJson = Exclude<GithubIssueDiscussionEntryJson, { kind: 'comment' }>;
+
+/* イベント 1 件の、アイコンと言い分。
+
+   **種類を網羅した `switch` にする。** `default` でまとめると、種類を足したときに
+   「何かが起きた」としか出ない行が黙って混ざる。 */
+function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode } {
+  switch (entry.kind) {
+    case 'closed':
+      return {
+        icon: mdiCheckCircleOutline,
+        what: (
+          <>
+            closed this
+            {entry.reason !== null && <span className="dimtxt"> as {entry.reason}</span>}
+          </>
+        ),
+      };
+    case 'reopened':
+      return { icon: mdiRestart, what: 'reopened this' };
+    case 'labeled':
+      return {
+        icon: mdiLabelOutline,
+        what: (
+          <>
+            added <Label label={entry.label} />
+          </>
+        ),
+      };
+    case 'unlabeled':
+      return {
+        icon: mdiLabelOffOutline,
+        what: (
+          <>
+            removed <Label label={entry.label} />
+          </>
+        ),
+      };
+    case 'assigned':
+      return {
+        icon: mdiAccountPlusOutline,
+        what: (
+          <>
+            assigned <Who actor={entry.assignee} />
+          </>
+        ),
+      };
+    case 'unassigned':
+      return {
+        icon: mdiAccountMinusOutline,
+        what: (
+          <>
+            unassigned <Who actor={entry.assignee} />
+          </>
+        ),
+      };
+    case 'milestoned':
+      return {
+        icon: mdiFlagOutline,
+        what: (
+          <>
+            added this to <Named title={entry.milestone_title} />
+          </>
+        ),
+      };
+    case 'demilestoned':
+      return {
+        icon: mdiFlagOffOutline,
+        what: (
+          <>
+            removed this from <Named title={entry.milestone_title} />
+          </>
+        ),
+      };
+    /* 改題は前と後ろを両方出す。後ろだけでは、題の何が変わったのかが読めない */
+    case 'renamed':
+      return {
+        icon: mdiPencilOutline,
+        what: (
+          <>
+            renamed <span className="disc-was">{entry.previous_title}</span> to{' '}
+            <Named title={entry.current_title} />
+          </>
+        ),
+      };
+    case 'parent-added':
+      return {
+        icon: mdiFileTreeOutline,
+        what: (
+          <>
+            added this to <Reference reference={entry.parent} />
+          </>
+        ),
+      };
+    case 'blocked-by-added':
+      return {
+        icon: mdiCancel,
+        what: (
+          <>
+            marked this blocked by <Reference reference={entry.blocking_issue} />
+          </>
+        ),
+      };
+    case 'marked-as-duplicate':
+      return {
+        icon: mdiContentDuplicate,
+        what: (
+          <>
+            marked this a duplicate of <Reference reference={entry.canonical} />
+          </>
+        ),
+      };
+    /* 触れただけの参照と、マージされたらこの課題を閉じる参照は別のことである */
+    case 'cross-referenced':
+      return {
+        icon: mdiLinkVariant,
+        what: (
+          <>
+            referenced this in <Reference reference={entry.source} />
+            {entry.will_close_target && <span className="dimtxt"> will close this</span>}
+          </>
+        ),
+      };
+  }
+}
+
+function Entry({
+  entry,
+  project,
+  nowMs,
+}: {
+  entry: GithubIssueDiscussionEntryJson;
+  project: ProjectJson | undefined;
+  nowMs: number;
+}) {
+  const since = formatSinceIso(entry.at, nowMs);
+
+  if (entry.kind === 'comment') {
+    return (
+      <div className="cmt">
+        <div className="cmt-h">
+          {entry.actor !== null && <Avatar actor={{ login: entry.actor, avatar: null }} />}
+          <Who actor={entry.actor} />
+          <span className="disc-when">{since}</span>
+        </div>
+        {/* 本文の無いコメントと、本文を読めなかったコメントを同じ空白にしない */}
+        {entry.body === null ? (
+          <span className="dimtxt">The text of this comment did not come back</span>
+        ) : (
+          entry.body !== '' && <MdView text={entry.body} project={project} />
+        )}
+      </div>
+    );
+  }
+
+  const { icon, what } = eventOf(entry);
+  return (
+    <div className="disc-ev">
+      <Icon path={icon} size={11} className="disc-ico" />
+      <span className="disc-say">
+        <Who actor={entry.actor} /> {what}
+      </span>
+      <span className="disc-when">{since}</span>
+    </div>
+  );
+}
+
+export function IssueDiscussion({ answer, pending, project, nowMs, url }: IssueDiscussionProps) {
+  const discussion = answer?.ok === true ? answer.body : null;
+
+  /* 尋ねている最中は何も出さない。まだ答えが返っていないだけで、読めなかったのではない。
+     ここで空の一覧を出すと、これから届くやり取りが「無かった」ものとして画面に出る。 */
+  if (discussion === null && pending) return null;
+
+  if (discussion === null || discussion.state !== 'observed') {
+    /* 読めなかった理由。`gh` が入っていないのか、認証が切れたのか、その番号が無かったのかは
+       ここにしか残らない */
+    const code =
+      answer === undefined ? null : answer.ok ? answer.body.reason : (answer.body.code ?? null);
+    const steps =
+      url === null ? {} : { steps: [{ text: 'Read the discussion on GitHub', href: url }] };
+    /* **観測できなかったのと、その番号が無かったのは別である。** 前者は `gh` が答えなかった
+       ことで、後者は `gh` が答えたうえで、その答えにこの課題が無かったことである。 */
+    if (discussion?.state === 'absent') {
+      return (
+        <NotObserved
+          partial
+          icon={mdiGithub}
+          title="GitHub has no discussion under this number"
+          detail="gh answered, and the answer carried no issue with this number. A deleted issue, or a number that belongs to another repository, looks like this. It does not say that nothing was written."
+          {...(code === null ? {} : { code })}
+          {...steps}
+        />
+      );
+    }
+    return (
+      <NotObserved
+        partial
+        icon={mdiGithub}
+        title="The discussion did not come back"
+        detail="Comments and events are fetched on their own when you open an issue, and that fetch did not answer. The rest of this panel is built from the issue list, which glasshive already has."
+        {...(code === null ? {} : { code })}
+        {...steps}
+      />
+    );
+  }
+
+  return (
+    <>
+      <div className="sec-h">Discussion</div>
+      {discussion.entries.length === 0 ? (
+        /* 誰も何も言っていない。**読めなかったのとは違う画面にする** —— 同じ画面にすると、
+           静かな課題と観測できなかった課題の見分けが付かない。 */
+        <p className="disc-quiet">Nothing has been said on this issue yet.</p>
+      ) : (
+        <div className="disc">
+          {/* GitHub が返した順のまま、古いものから並べる。並べ替えると、同じ時刻に並んだ
+              イベントの前後が入れ替わる */}
+          {discussion.entries.map((entry) => (
+            <Entry key={entryKey(entry)} entry={entry} project={project} nowMs={nowMs} />
+          ))}
+        </div>
+      )}
+      {/* 切ったことを黙らない。黙ると、読まなかったぶんが「言われなかった」ことになる */}
+      {discussion.truncated && (
+        <p className="disc-cut">
+          Only the first part of this discussion was read. Anything said after the last entry above
+          is not on this screen.
+        </p>
+      )}
+    </>
+  );
+}

@@ -173,3 +173,138 @@ describe('gh に課題 1 件の本文を尋ねる', () => {
     expect(answer.kind === 'unobservable' && answer.error.code).toBe('tracker.not_installed');
   });
 });
+
+describe('gh に課題 1 件のやり取りを尋ねる', () => {
+  const one = { owner: 'hiroiku', name: 'glasshive', number: 13, cursor: null };
+
+  /** 渡した引数のうち、問い合わせの文字列だけを取り出す */
+  const queryOf = (args: readonly string[]): string =>
+    args.find((arg) => arg.startsWith('query=')) ?? '';
+
+  it('owner も名前も番号も、問い合わせの文字列に埋めずに渡す', async () => {
+    let seen: readonly string[] = [];
+    const tracker = createGhIssueTrackerIntegration({
+      run: async (args) => {
+        seen = args;
+        return '{}';
+      },
+    });
+
+    await tracker.fetchIssueDiscussion(one);
+
+    expect(seen.slice(0, 2)).toEqual(['api', 'graphql']);
+    expect(seen).toContain('owner=hiroiku');
+    expect(seen).toContain('name=glasshive');
+    expect(seen).toContain('number=13');
+  });
+
+  it('最初のページでは続きの位置を渡さない', async () => {
+    let seen: readonly string[] = [];
+    const tracker = createGhIssueTrackerIntegration({
+      run: async (args) => {
+        seen = args;
+        return '{}';
+      },
+    });
+
+    await tracker.fetchIssueDiscussion(one);
+
+    expect(
+      seen.some((arg) => arg.startsWith('cursor=')),
+      '空の続きの位置を送ると、GitHub は「そこから先」を 0 件と答える',
+    ).toBe(false);
+  });
+
+  it('2 ページ目からは続きの位置を渡す', async () => {
+    let seen: readonly string[] = [];
+    const tracker = createGhIssueTrackerIntegration({
+      run: async (args) => {
+        seen = args;
+        return '{}';
+      },
+    });
+
+    await tracker.fetchIssueDiscussion({ ...one, cursor: 'Y3Vyc29y' });
+
+    expect(seen).toContain('cursor=Y3Vyc29y');
+  });
+
+  it('読む種類だけを名指しで求める', async () => {
+    let query = '';
+    const tracker = createGhIssueTrackerIntegration({
+      run: async (args) => {
+        query = queryOf(args);
+        return '{}';
+      },
+    });
+
+    await tracker.fetchIssueDiscussion(one);
+
+    expect(query).toContain('itemTypes:');
+    for (const type of ['ISSUE_COMMENT', 'CLOSED_EVENT', 'RENAMED_TITLE_EVENT']) {
+      expect(query).toContain(type);
+    }
+    expect(
+      query,
+      '購読まで並ぶと、画面に何も足さない項目で 1 ページ 100 件の枠が埋まる',
+    ).not.toContain('SUBSCRIBED_EVENT');
+  });
+
+  it('introspection で確かめた欄の名前で求める', async () => {
+    let query = '';
+    const tracker = createGhIssueTrackerIntegration({
+      run: async (args) => {
+        query = queryOf(args);
+        return '{}';
+      },
+    });
+
+    await tracker.fetchIssueDiscussion(one);
+
+    expect(query).toContain('blockingIssue');
+    expect(query, 'BlockedByAddedEvent が持つのは blockingIssue である').not.toContain(
+      'blockedByIssue',
+    );
+    expect(query).toContain('milestoneTitle');
+    expect(query).toContain('canonical');
+    expect(query).toContain('willCloseTarget');
+  });
+
+  it('総数は求めない', async () => {
+    let query = '';
+    const tracker = createGhIssueTrackerIntegration({
+      run: async (args) => {
+        query = queryOf(args);
+        return '{}';
+      },
+    });
+
+    await tracker.fetchIssueDiscussion(one);
+
+    expect(
+      query,
+      'GitHub の総数はこちらが読み飛ばす種類まで数えているので、entries の数と引き比べると起きていない切り捨てを報せることになる',
+    ).not.toContain('totalCount');
+  });
+
+  it('応答をそのまま持ち帰る', async () => {
+    const tracker = createGhIssueTrackerIntegration({ run: async () => '{"data":{}}' });
+    const answer = await tracker.fetchIssueDiscussion(one);
+    expect(answer.kind === 'observed' && answer.value).toBe('{"data":{}}');
+  });
+
+  it('落ちた理由は一覧のときと同じに分ける', async () => {
+    const tracker = createGhIssueTrackerIntegration({
+      run: async () => {
+        throw exitError(1, 'gh: To get started with GitHub CLI, please run: gh auth login');
+      },
+    });
+
+    const answer = await tracker.fetchIssueDiscussion(one);
+
+    expect(answer.kind === 'unobservable' && answer.error.code).toBe('tracker.exit_nonzero');
+    expect(answer.kind === 'unobservable' && answer.error.details?.repository).toBe(
+      'hiroiku/glasshive',
+    );
+  });
+});

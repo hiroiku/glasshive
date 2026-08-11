@@ -1,52 +1,47 @@
-import { err, type Result } from '~/app-kernel/result.ts';
+import { err, ok, type Result } from '~/app-kernel/result.ts';
 import type { TranscriptIndexService } from '~/application/services/sessions/transcript-index.service.ts';
 import {
   fromIndex,
   resolveProject,
 } from '~/application/services/workspace/readable-scope.service.ts';
 import type { GetGithubIssueBodyUseCase } from '~/application/use-cases/issues/get-github-issue-body.use-case.ts';
-import type { GetIssueUseCase } from '~/application/use-cases/issues/get-issue.use-case.ts';
+import type { GetGithubIssueDiscussionUseCase } from '~/application/use-cases/issues/get-github-issue-discussion.use-case.ts';
 import type { ListGithubIssuesUseCase } from '~/application/use-cases/issues/list-github-issues.use-case.ts';
-import type { ListIssuesUseCase } from '~/application/use-cases/issues/list-issues.use-case.ts';
 import { own, projectIdOf } from '~/interface/controllers/sessions/project-query.controller.ts';
 import { InvalidSessionsRequestError } from '~/interface/errors/sessions/request.error.ts';
 import { type ApiResponse, presentError } from '~/interface/presenters/api-error.presenter.ts';
 import {
   type GithubIssueBodyJson,
-  type IssueJson,
+  type GithubIssueDiscussionJson,
   type IssuesJson,
   presentGithubIssueBody,
-  presentIssue,
+  presentGithubIssueDiscussion,
   presentIssues,
 } from '~/interface/presenters/issues/issues.presenter.ts';
 
-/* 課題の台帳を読むコントローラー。
+/* 課題を読むコントローラー。
 
    **パスは受け取らない。** プロジェクトを名指せるのは自分の一覧に出た id だけで、
    パスはこちらが自分の観測から引く。ここで任意の絶対パスを受けると、画像を 1 枚
-   読み込ませるだけで、ローカルの課題が外へ流れることになる。 */
+   読み込ませるだけで、ローカルのどこを尋ねるかを外から決められることになる。 */
 
 export type IssuesResponse = ApiResponse<IssuesJson>;
-export type IssueResponse = ApiResponse<IssueJson>;
 export type GithubIssueBodyResponse = ApiResponse<GithubIssueBodyJson>;
-
-export interface IssuesDeps {
-  readonly list: ListIssuesUseCase;
-  readonly get: GetIssueUseCase;
-  readonly index: TranscriptIndexService;
-}
+export type GithubIssueDiscussionResponse = ApiResponse<GithubIssueDiscussionJson>;
 
 export interface GithubIssuesDeps {
   readonly list: ListGithubIssuesUseCase;
   readonly body: GetGithubIssueBodyUseCase;
+  /** 開いた 1 件のやり取り。本文とは別の呼び出しで、開いたときにだけ尋ねる */
+  readonly discussion: GetGithubIssueDiscussionUseCase;
   readonly index: TranscriptIndexService;
 }
 
 /* 名指されたプロジェクトの、解決済みのパス。引けない id は、形が違うのも一覧に無いのも同じ断り方。
 
    **木ではなく索引を引く。** 要るのは「この id はどこに在るか」だけで、それは中身を読む前に
-   決まっている。木を組んでから引くと、台帳を 1 つ読むために `~/.claude/projects` を
-   全部読むことになる — この画面が待たされていたのは台帳ではなく、その前のここである。 */
+   決まっている。木を組んでから引くと、課題を一覧するたびに `~/.claude/projects` を
+   全部読むことになり、`gh` を呼ぶ前の段階で画面が待たされる。 */
 async function locate(index: TranscriptIndexService, input: unknown): Promise<Result<string>> {
   const projectId = projectIdOf(input);
   if (!projectId.ok) return err(projectId.error);
@@ -58,21 +53,19 @@ async function locate(index: TranscriptIndexService, input: unknown): Promise<Re
   );
 }
 
-export async function listIssues(deps: IssuesDeps, input: unknown): Promise<IssuesResponse> {
-  const path = await locate(deps.index, input);
-  if (!path.ok) return { ok: false, ...presentError(path.error) };
+/* 尋ねられた課題の番号。**受け取った値をそのまま使わない。**
 
-  // 載せるかどうかだけの指定なので、読めない値は「載せない」に倒してよい
-  const includeClosed = own(input, 'includeClosed') === true;
-  const ledger = await deps.list.execute({
-    projectPath: path.value,
-    includeClosed,
-  });
-  if (!ledger.ok) return { ok: false, ...presentError(ledger.error) };
-  return { ok: true, body: presentIssues(ledger.value) };
+   一覧に出る番号は必ず正の整数である。小数も 0 も負も、`Number.MAX_SAFE_INTEGER` を超えた値も
+   一覧には現れないので、`gh` を起こす前にここで断る。 */
+function issueNumberOf(input: unknown): Result<number> {
+  const number = own(input, 'number');
+  if (typeof number !== 'number' || !Number.isSafeInteger(number) || number <= 0) {
+    return err(new InvalidSessionsRequestError('No issue number to fetch'));
+  }
+  return ok(number);
 }
 
-/* GitHub の課題を一覧にする。**受け取るのは台帳のときと同じ id だけである。**
+/* GitHub の課題を一覧にする。**受け取るのはプロジェクトの id だけである。**
    どのリポジトリを尋ねるかは、観測したプロジェクトの remote が決める。 */
 export async function listGithubIssues(
   deps: GithubIssuesDeps,
@@ -81,10 +74,11 @@ export async function listGithubIssues(
   const path = await locate(deps.index, input);
   if (!path.ok) return { ok: false, ...presentError(path.error) };
 
+  // 載せるかどうかだけの指定なので、読めない値は「載せない」に倒してよい
   const includeClosed = own(input, 'includeClosed') === true;
-  const ledger = await deps.list.execute({ projectPath: path.value, includeClosed });
-  if (!ledger.ok) return { ok: false, ...presentError(ledger.error) };
-  return { ok: true, body: presentIssues(ledger.value) };
+  const issues = await deps.list.execute({ projectPath: path.value, includeClosed });
+  if (!issues.ok) return { ok: false, ...presentError(issues.error) };
+  return { ok: true, body: presentIssues(issues.value) };
 }
 
 /* GitHub の課題 1 件の本文。**番号は一覧に出ていたものを渡す。**
@@ -98,32 +92,33 @@ export async function getGithubIssueBody(
   const path = await locate(deps.index, input);
   if (!path.ok) return { ok: false, ...presentError(path.error) };
 
-  const number = own(input, 'number');
-  if (typeof number !== 'number' || !Number.isSafeInteger(number) || number <= 0) {
-    return {
-      ok: false,
-      ...presentError(new InvalidSessionsRequestError('No issue number to fetch')),
-    };
-  }
+  const number = issueNumberOf(input);
+  if (!number.ok) return { ok: false, ...presentError(number.error) };
 
-  const body = await deps.body.execute({ projectPath: path.value, number });
+  const body = await deps.body.execute({ projectPath: path.value, number: number.value });
   if (!body.ok) return { ok: false, ...presentError(body.error) };
   return { ok: true, body: presentGithubIssueBody(body.value) };
 }
 
-export async function getIssue(deps: IssuesDeps, input: unknown): Promise<IssueResponse> {
+/* GitHub の課題 1 件のやり取り。コメントと `timeline` のイベントを 1 本の並びで返す。
+
+   本文と同じく、プロジェクトの id と番号だけを受け取る。**本文とは別の呼び出しである** ——
+   やり取りは何ページにもなることがあり、本文と一緒に運ぶと、本文だけを見たい人まで
+   全ページぶんを待つことになる。 */
+export async function getGithubIssueDiscussion(
+  deps: GithubIssuesDeps,
+  input: unknown,
+): Promise<GithubIssueDiscussionResponse> {
   const path = await locate(deps.index, input);
   if (!path.ok) return { ok: false, ...presentError(path.error) };
 
-  const id = own(input, 'id');
-  if (typeof id !== 'string' || id === '') {
-    return {
-      ok: false,
-      ...presentError(new InvalidSessionsRequestError('No issue to fetch')),
-    };
-  }
+  const number = issueNumberOf(input);
+  if (!number.ok) return { ok: false, ...presentError(number.error) };
 
-  const record = await deps.get.execute({ projectPath: path.value, id });
-  if (!record.ok) return { ok: false, ...presentError(record.error) };
-  return { ok: true, body: presentIssue(record.value) };
+  const discussion = await deps.discussion.execute({
+    projectPath: path.value,
+    number: number.value,
+  });
+  if (!discussion.ok) return { ok: false, ...presentError(discussion.error) };
+  return { ok: true, body: presentGithubIssueDiscussion(discussion.value) };
 }

@@ -133,14 +133,9 @@ const MARK_MERGE_PX = 4;
 const labelOf = (row: AgentRow): string =>
   row.kind === 'session' ? (row.node.title ?? row.node.id.slice(0, 8)) : row.node.label;
 
-/* 課題まわりの短い表示。チップにする前の、並べ替えのための素の文字列 */
-function bdOf(row: AgentRow): string {
-  if (row.kind === 'subagent') return row.node.issue ?? '';
-  const parts: string[] = [];
-  if (row.node.actor !== null) parts.push(row.node.actor);
-  if (row.node.issues.length > 0) parts.push(row.node.issues.slice(0, 2).join(' '));
-  return parts.join(' · ');
-}
+/* 何に取り組んでいるかの短い表示。チップにする前の、並べ替えのための素の文字列 */
+const workingOn = (row: AgentRow): string =>
+  row.kind === 'subagent' ? (row.node.issue ?? '') : row.node.issues.slice(0, 2).join(' ');
 
 /** 見えている欄への部分一致(大文字小文字を問わない) */
 const hits = (query: string, haystack: readonly (string | null | undefined)[]): boolean =>
@@ -230,7 +225,6 @@ export function AgentsTable({
           hits(trimmed, [
             session.title,
             session.id,
-            session.actor,
             session.git_branch,
             session.current,
             worktreeName(session.cwd),
@@ -277,7 +271,6 @@ export function AgentsTable({
           session.title ?? '',
           session.model ?? '',
           session.effort ?? '',
-          session.actor ?? '',
           session.issues.join(','),
           session.git_branch ?? '',
           current,
@@ -335,7 +328,7 @@ export function AgentsTable({
         accessorFn: (row) => row.node.tokens ?? -1,
         sortDescFirst: true,
       },
-      { id: 'bd', header: 'bd', accessorFn: bdOf },
+      { id: 'work', header: 'Working on', accessorFn: workingOn },
       {
         id: 'worktree',
         header: 'Worktree',
@@ -383,6 +376,23 @@ export function AgentsTable({
   });
 
   const rows = table.getRowModel().rows;
+
+  /* バーの長さを決める分母。**いま出ている行の合計である。** 出ている行のバーを足すと
+     100% になり、絞り込みや開き閉じで出ている行が変われば分母も変わる。
+
+     セッションとサブエージェントの消費はそれぞれ自分の `transcript` からだけ数えているので、
+     親と子を一緒に足しても二重にはならない。
+
+     全部 0 のときに 0 で割らないよう 1 で下支えする。 */
+  const tokenTotal = useMemo(
+    () =>
+      Math.max(
+        1,
+        rows.reduce((sum, row) => sum + (row.original.node.tokens ?? 0), 0),
+      ),
+    [rows],
+  );
+
   const nodes = useMemo<TimelineNode[]>(() => rows.map((row) => row.original.node), [rows]);
   const autoAxis = useMemo(() => axisOf(nodes, scale, nowMs), [nodes, scale, nowMs]);
   const axis = picked ?? autoAxis;
@@ -795,6 +805,7 @@ export function AgentsTable({
               selected={selectedFile !== null && selectedFile === row.original.node.file}
               axis={axis}
               nowMs={nowMs}
+              tokenTotal={tokenTotal}
               onPanStart={onPanStart}
               onOpen={() => {
                 // 掴んで動かした直後のマウスアップで会話が開かないようにする
@@ -826,6 +837,7 @@ function AgentRowView({
   selected,
   axis,
   nowMs,
+  tokenTotal,
   onPanStart,
   onOpen,
   onToggle,
@@ -838,6 +850,8 @@ function AgentRowView({
   selected: boolean;
   axis: Axis;
   nowMs: number;
+  /** バーの長さを決める分母。いま出ている行の消費の合計 */
+  tokenTotal: number;
   onPanStart: (event: React.MouseEvent) => void;
   onOpen: () => void;
   onToggle: () => void;
@@ -848,7 +862,7 @@ function AgentRowView({
   const entry = row.original;
   const node: AgentNode = entry.node;
   const pop = popStyleOf(entry.rid, nowMs);
-  const bd = bdOf(entry);
+  const working = workingOn(entry);
   const worktree = worktreeName(node.cwd);
   const branch = node.git_branch ?? '';
   const awaiting = entry.kind === 'session' ? entry.node.awaiting : null;
@@ -912,17 +926,24 @@ function AgentRowView({
         {modelShort(node.model)}
       </span>
       <span className="col-eff">{node.effort ?? ''}</span>
+      {/* バーは、いま出ている行の合計に対する割合である。足すと 100% になる */}
       <span
         className="col-tok"
-        title="input + output + cache write (transcripts active in the last 7 days only)"
+        title={
+          node.tokens === null
+            ? 'input + output + cache write (transcripts active in the last 7 days only)'
+            : `${formatTokens(node.tokens)} — ${Math.round((node.tokens / tokenTotal) * 100)}% of the ${formatTokens(tokenTotal)} shown. input + output + cache write (transcripts active in the last 7 days only)`
+        }
       >
-        {node.tokens === null ? '' : formatTokens(node.tokens)}
+        <span className="mono">{node.tokens === null ? '' : formatTokens(node.tokens)}</span>
+        <span className="tok-bar">
+          {node.tokens !== null && node.tokens > 0 && (
+            <i style={{ width: `${(node.tokens / tokenTotal) * 100}%` }} />
+          )}
+        </span>
       </span>
 
-      <span className="col-bd" title={bd}>
-        {entry.kind === 'session' && entry.node.actor !== null && (
-          <span className="bd-actor">{entry.node.actor}</span>
-        )}
+      <span className="col-work" title={working}>
         {issueTokens.map((id) => (
           <IssueChip key={id} id={id} />
         ))}

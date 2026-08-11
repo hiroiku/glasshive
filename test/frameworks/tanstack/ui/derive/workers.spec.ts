@@ -9,7 +9,7 @@ import {
 
 /* 課題の id から「いま誰が触っているか」を引くインデックス。
 
-   **bd には書かれていない。** 書かれているのは assignee という人の申告だけである。
+   **GitHub には書かれていない。** 書かれているのは assignee という人の申告だけである。
    ここが繋がって初めて、申告と実態の食い違いが画面に出る。 */
 
 /* プロジェクトの形は、インデックスを組む実装そのものから引く。写して持てば、形が変わったときに片方だけ古いまま残る */
@@ -57,7 +57,6 @@ const session = (over: Partial<SessionJson> = {}): SessionJson => ({
   effort: null,
   git_branch: null,
   cwd: null,
-  actor: null,
   issues: [],
   current: null,
   intervals: [],
@@ -151,27 +150,24 @@ type Issue = Parameters<typeof workersOn>[1];
 
 const issue = (id: string, branches: readonly (string | null)[] = []): Issue => ({
   id,
-  github:
-    branches.length === 0
-      ? null
-      : {
-          url: null,
-          labels: [],
-          assignees: [],
-          author: null,
-          milestone: null,
-          issue_type_color: null,
-          sub_issues: null,
-          pull_requests: branches.map((head, at) => ({
-            number: at + 1,
-            state: 'OPEN',
-            is_draft: false,
-            review_decision: null,
-            head_ref_name: head,
-          })),
-          comments: 0,
-          reactions: 0,
-        },
+  github: {
+    url: null,
+    labels: [],
+    assignees: [],
+    author: null,
+    milestone: null,
+    issue_type_color: null,
+    sub_issues: null,
+    pull_requests: branches.map((head, at) => ({
+      number: at + 1,
+      state: 'OPEN',
+      is_draft: false,
+      review_decision: null,
+      head_ref_name: head,
+    })),
+    comments: 0,
+    reactions: 0,
+  },
 });
 
 describe('PR のブランチで、エージェントと課題を結ぶ', () => {

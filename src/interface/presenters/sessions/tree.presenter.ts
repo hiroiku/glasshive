@@ -79,7 +79,6 @@ export interface SessionJson {
   effort: string | null;
   git_branch: string | null;
   cwd: string | null;
-  actor: string | null;
   issues: string[];
   current: string | null;
   intervals: [string, string][];
@@ -245,7 +244,6 @@ const presentSession = (session: TranscriptSession): SessionJson => ({
   effort: session.effort,
   git_branch: session.gitBranch,
   cwd: session.cwd,
-  actor: session.actor,
   issues: [...session.issues],
   current: session.current,
   ...intervalsOf(session.activity),

@@ -181,8 +181,8 @@ export function refTrouble(code: string | null): NotObservedProps {
   return gitTrouble(code);
 }
 
-/* 課題 1 件を開けなかった。**台帳にも GitHub にも居ない、が答えのことがある** ——
-   一覧を取った後に閉じられて消えた課題がそれで、失敗ではない。 */
+/* 課題 1 件を開けなかった。**取ってきた一覧に居ない、が答えのことがある** ——
+   一覧を取った後に立てられた課題がそれで、失敗ではない。 */
 export function issueTrouble(id: string, code: string | null): NotObservedProps {
   if (code !== null) {
     return {
@@ -196,7 +196,7 @@ export function issueTrouble(id: string, code: string | null): NotObservedProps 
   return {
     icon: mdiRhombus,
     title: 'This issue is not in view',
-    detail: `Neither the ledger export nor the issues fetched from GitHub has ${id}. It may have been created after this page loaded, or it may live in another project.`,
+    detail: `The issues fetched from GitHub for this project do not include ${id}. It may have been created after this page loaded, or it may live in another project.`,
     code: id,
     steps: [
       { text: 'Reload to fetch the issues again' },

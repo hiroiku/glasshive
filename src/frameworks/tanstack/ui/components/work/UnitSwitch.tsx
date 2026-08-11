@@ -67,6 +67,9 @@ export function UnitSwitch({
 
 /* 課題の並べ方。一覧か、依存グラフか。
 
+   **絵だけでは何に切り替わるのか読めない。** 隣の `UnitSwitch` と同じく、絵に言葉を添える。
+   絵は覚えた人が速く押すためのもので、初めての人が読むのは言葉のほうである。
+
    **着手順はここに出さない。** 一覧の `Start` 列の並べ替えがそのまま着手順で、
    同じことを 2 か所から選べるようにすると、どちらが効いているのか読めなくなる。 */
 export function LayoutSwitch({
@@ -82,21 +85,21 @@ export function LayoutSwitch({
         type="button"
         className={`lbtn${graph ? '' : ' on'}`}
         aria-pressed={!graph}
-        aria-label="List layout"
         title="List — rows, with dependency arcs in the gutter"
         onClick={() => onGraph(false)}
       >
         <Icon path={mdiViewSequentialOutline} size={13} />
+        List
       </button>
       <button
         type="button"
         className={`lbtn${graph ? ' on' : ''}`}
         aria-pressed={graph}
-        aria-label="Graph layout"
         title="Graph — laid out left to right in start order"
         onClick={() => onGraph(true)}
       >
         <Icon path={mdiSitemapOutline} size={13} />
+        Graph
       </button>
     </span>
   );

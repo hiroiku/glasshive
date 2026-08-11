@@ -21,17 +21,25 @@ const issue = (id: string, over: Partial<Issue> = {}): Issue => ({
   id,
   title: id,
   status: 'open',
-  priority: 2,
   issue_type: 'task',
   labels: [],
   assignee: null,
-  owner: null,
   created_at: null,
   updated_at: null,
   deps: [],
   deps_complete: true,
-  github: null,
-
+  github: {
+    url: null,
+    labels: [],
+    assignees: [],
+    author: null,
+    milestone: null,
+    issue_type_color: null,
+    sub_issues: null,
+    pull_requests: [],
+    comments: 0,
+    reactions: 0,
+  },
   ...over,
 });
 
@@ -162,16 +170,17 @@ describe('着手の順', () => {
     expect(rank([done, next], next)).toBe(0);
   });
 
-  it('着手済み・マージ待ち・見送り・閉じたもの、の順に下がる', () => {
+  /* open でも closed でもない状態は、GitHub が付けたものも含めて一括りにする。
+     並び順を状態ごとに刻むと、知らない状態が来たときだけ順序が決まらない。 */
+  it('open でも closed でもないものは、手を付けられるものの後ろ・閉じたものの前に来る', () => {
     const rows = [
-      issue('p', { status: 'in_progress' }),
-      issue('m', { status: 'merge-ready' }),
-      issue('d', { status: 'deferred' }),
+      issue('b', { status: 'blocked' }),
+      issue('n', { status: 'not_planned' }),
       issue('c', { status: 'closed' }),
     ];
     const ranker = startRanker(rows);
 
-    expect(rows.map(ranker)).toEqual([2, 3, 4, 5]);
+    expect(rows.map(ranker)).toEqual([3, 3, 5]);
   });
 });
 

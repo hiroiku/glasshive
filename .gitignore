@@ -37,12 +37,6 @@ coverage/
 # 移植を終えたらディレクトリごと消す。
 old/
 
-# Beads / Dolt files (added by bd init)
-.dolt/
-*.db
-.beads-credential-key
-.beads/proxieddb/
-
 # ブラウザーで確かめたときの写し
 .playwright-mcp/
 

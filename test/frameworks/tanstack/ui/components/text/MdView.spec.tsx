@@ -25,11 +25,11 @@ vi.mock('~/frameworks/tanstack/ui/hooks/useTokenIndex.ts', async () => {
   );
   const dict = tokenDict(
     issueIndex([
-      { id: 'glasshive-4f2a', status: 'open' },
-      { id: 'glasshive-9b31', status: 'open' },
+      { id: '#209', status: 'open' },
+      { id: '#131', status: 'open' },
     ]),
     new Map(),
-    new Map(),
+    new Map([['glasshive-2dt', 'worktree' as const]]),
     commitTokens({
       state: 'observed',
       reason: null,
@@ -58,41 +58,42 @@ const view = (text: string) => {
 
 describe('会話の本文のチップ', () => {
   it('地の文の id は枠付きのチップになる', () => {
-    const container = view('直したのは glasshive-4f2a です');
+    const container = view('直したのは #209 です');
 
     expect(container.querySelectorAll('.ichip')).toHaveLength(1);
   });
 
-  it('地の文の略記は正式な id に伸ばす', () => {
-    const container = view('直したのは 4f2a です');
+  /* 番号だけでチップにすると、文中のただの数が押せるものに見える。 */
+  it('`#` の付かない番号はチップにしない', () => {
+    const container = view('直したのは 209 件です');
 
-    expect(container.querySelector('.ichip')?.textContent).toContain('glasshive-4f2a');
+    expect(container.querySelectorAll('.ichip')).toHaveLength(0);
   });
 
   it('インラインコードの中もチップになる', () => {
-    const container = view('`.worktrees/glasshive-4f2a` で直した');
+    const container = view('`.worktrees/glasshive-2dt` で直した');
 
     expect(container.querySelectorAll('code .tokref'), '引用の中でも押せる').toHaveLength(1);
   });
 
   it('引用の中は書かれたとおりに残る', () => {
-    const container = view('`.worktrees/glasshive-4f2a` で直した');
+    const container = view('`.worktrees/glasshive-2dt` で直した');
 
-    expect(container.querySelector('code')?.textContent).toBe('.worktrees/glasshive-4f2a');
+    expect(container.querySelector('code')?.textContent).toBe('.worktrees/glasshive-2dt');
   });
 
-  /* 引用の中で略記を伸ばすと、そこに書かれていない文字列が現れる。 */
-  it('引用の中の略記は伸ばさず、指す先だけ正式な id で持つ', () => {
-    const container = view('`bd show 4f2a` を叩いた');
+  /* 引用の中で文字列を差し替えると、そこに書かれていないものが現れる。 */
+  it('引用の中は書き換えず、指す先だけ id で持つ', () => {
+    const container = view('`gh issue view #209` を叩いた');
 
     const chip = container.querySelector<HTMLElement>('code .tokref');
-    expect(container.querySelector('code')?.textContent).toBe('bd show 4f2a');
-    expect(chip?.dataset.issue).toBe('glasshive-4f2a');
+    expect(container.querySelector('code')?.textContent).toBe('gh issue view #209');
+    expect(chip?.dataset.issue).toBe('#209');
   });
 
   /* チップが自前の余白と背景を持つと、等幅の一続きの中で枠を突き破る。 */
   it('引用の中のチップは、枠付きのチップの姿を持たない', () => {
-    const container = view('`glasshive-4f2a` を見た');
+    const container = view('`#209` を見た');
 
     const chip = container.querySelector('code .tokref');
     expect(chip?.classList.contains('ichip')).toBe(false);
@@ -100,14 +101,14 @@ describe('会話の本文のチップ', () => {
   });
 
   it('コードブロックの中もチップになる', () => {
-    const container = view('```\ngit worktree add .worktrees/glasshive-4f2a\n```');
+    const container = view('```\ngit worktree add .worktrees/glasshive-2dt\n```');
 
     expect(container.querySelectorAll('pre .tokref')).toHaveLength(1);
-    expect(container.querySelector('pre')?.textContent).toContain('.worktrees/glasshive-4f2a');
+    expect(container.querySelector('pre')?.textContent).toContain('.worktrees/glasshive-2dt');
   });
 
   it('引用を抜けたら、また枠付きのチップになる', () => {
-    const container = view('`glasshive-4f2a` を見て、glasshive-4f2a を直した');
+    const container = view('`#209` を見て、#209 を直した');
 
     expect(container.querySelectorAll('code .tokref'), '引用の中は書かれたまま').toHaveLength(1);
     expect(container.querySelectorAll('.ichip'), '引用の外は枠付きのチップ').toHaveLength(1);

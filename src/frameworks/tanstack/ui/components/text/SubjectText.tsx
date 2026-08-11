@@ -7,8 +7,9 @@ import { AgentChip, CommitChip, IssueChip, RefChip } from '../chips/Chips.tsx';
    タイトルや 1 行の要約に使う。本文(Markdown)のほうは `MdView` が受け持つ —
    あちらは組み上がった HTML の文字列を扱うので、同じインデックスでも当て方が違う。 */
 
-/** 語の切り出し。`/` を含めて切るのは、`mgr-x/issue-y` のようなブランチの名を丸ごと当てるため */
-const WORD = /([A-Za-z0-9][\w./-]*)/g;
+/* 語の切り出し。`/` を含めて切るのは、`mgr-x/issue-y` のようなブランチの名を丸ごと当てるため。
+   `#` から始まる語も切る — 課題の id は `#209` の形で、番号だけでは引けない。 */
+const WORD = /(#[0-9]+|[A-Za-z0-9][\w./-]*)/g;
 
 export function SubjectText({ text, project }: { text: string; project: ProjectJson | undefined }) {
   const dict = useTokenIndex(project);

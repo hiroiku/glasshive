@@ -1,3 +1,5 @@
+import { GANTT_WINDOWS } from '../derive/issueGantt.ts';
+
 /* プロジェクト 1 つぶんの画面が、URL の検索パラメータに載せる状態。
 
    載せるかどうかは「人に見せたい状態か」で選り分ける。**この条件で見て、と言えるものは載せる。**
@@ -40,6 +42,9 @@ export interface ProjectSearch {
   /* 課題の並べ方。**同じデータの見方を変えるだけ**なので、載せておけば URL を渡した先でも
      同じ見方で開く。無ければ一覧である。着手順は一覧の `sort=start` がそのまま担う。 */
   view?: IssueView | undefined;
+  /* 一覧の右のタイムラインが一度に見せる幅。`GANTT_WINDOWS` のラベルをそのまま載せる。
+     無ければ `DEFAULT_GANTT_WINDOW` である。 */
+  gw?: string | undefined;
 }
 
 /** Work の画面の行が指すもの。無ければ課題 */
@@ -60,6 +65,9 @@ export function parseProjectSearch(raw: Record<string, unknown>): ProjectSearch 
   const dir = raw.dir;
   const view = raw.view;
   const unit = raw.unit;
+  /* 選べる幅は `GANTT_WINDOWS` が持っている。ここで書き写すと、片方だけが増えたときに
+     URL からは選べない幅ができる */
+  const gw = asString(raw.gw);
   return {
     panel: panel === 'conv' || panel === 'issue' || panel === 'ref' ? panel : undefined,
     pv: asString(raw.pv),
@@ -74,6 +82,7 @@ export function parseProjectSearch(raw: Record<string, unknown>): ProjectSearch 
     unit: unit === 'branches' || unit === 'milestones' ? unit : undefined,
     ms: asString(raw.ms),
     view: view === 'graph' ? view : undefined,
+    gw: GANTT_WINDOWS.some((preset) => preset.label === gw) ? gw : undefined,
   };
 }
 

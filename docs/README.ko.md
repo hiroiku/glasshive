@@ -53,10 +53,10 @@ worktree, 지금 실행 중인 도구, 그리고 좌우로 끌고 확대·축소
 이슈, 브랜치, 마일스톤을 한 화면에. 셋 다 같은 일을 세 방향에서 본 것이기 때문입니다. 화면을 떠나지
 않고 그 사이를 오갈 수 있습니다.
 
-이슈는 [`gh`](https://cli.github.com) CLI를 통해 GitHub에서 오거나,
-[`bd`](https://github.com/gastownhall/beads) 원장에서 옵니다. 어느 저장소인지는 glasshive가 `gh`에게
-물어봅니다 — `gh`가 스스로 정하는 방식 그대로, 당신의 remote가 가리키는 저장소입니다. sub-issue는
-중첩되고, `blocked by`는 의존 관계의 간선으로 그려지며, 이슈 타입·레이블·마일스톤·담당자도 함께 옵니다.
+이슈는 [`gh`](https://cli.github.com) CLI를 통해 GitHub에서 옵니다. 어느 저장소인지는 glasshive가
+`gh`에게 물어봅니다 — `gh`가 스스로 정하는 방식 그대로, 당신의 remote가 가리키는 저장소입니다.
+sub-issue는 중첩되고, `blocked by`는 의존 관계의 간선으로 그려지며,
+이슈 타입·레이블·마일스톤·담당자도 함께 옵니다.
 
 브랜치와 worktree는 메인 worktree의 브랜치 위에 그려지므로, 누가 어디에 있는지 보입니다. 같은 파일로
 향하고 있는 짝은 위쪽으로 올라옵니다. ref를 고르면 그 커밋, diff 통계, 그리고 어떤 에이전트가 그
@@ -73,17 +73,22 @@ worktree, 지금 실행 중인 도구, 그리고 좌우로 끌고 확대·축소
 
 ![Side panel](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/conversation.png)
 
+이슈에는 거기에 달린 코멘트와 타임라인이 함께 따라옵니다. 누가 라벨을 붙였는지, 무엇에 막혀
+있었는지, 어떤 pull request가 참조했는지를, 지금 그 이슈를 붙들고 있는 에이전트 바로 옆에서
+읽습니다.
+
+![Issue](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/issue.png)
+
 ## 설계상 읽기 전용
 
-- **네 가지를 읽고, 그중 어느 것에도 쓰지 않습니다.** Claude Code 세션 로그
-  (`~/.claude/projects/**/*.jsonl`), beads 원장(`<project>/.beads/issues.jsonl`), `git`, 그리고
-  `gh` CLI를 통해 당신의 remote가 가리키는 GitHub 저장소의 이슈. 트랜스크립트도, 원장도, 저장소도,
-  이슈도 결코 수정되지 않습니다.
+- **세 가지를 읽고, 그중 어느 것에도 쓰지 않습니다.** Claude Code 세션 로그
+  (`~/.claude/projects/**/*.jsonl`), `git`, 그리고 `gh` CLI를 통해 당신의 remote가 가리키는 GitHub
+  저장소의 이슈. 트랜스크립트도, 저장소도, 이슈도 결코 수정되지 않습니다.
 - **쓰는 파일은 자기 것 하나뿐입니다.** `~/.config/glasshive/preferences.json`에 고정한 탭과 화면
-  설정이 들어갑니다. 쓰기 전에 glasshive는 그 경로가 `~/.claude`, 트랜스크립트 루트, 또는 관찰 중인
-  어떤 `.beads`나 `.git` 디렉터리 안에 있지 않은지 확인하고, 안에 있으면 거부합니다 — 관찰하는 대상에
-  쓰는 일은 관례가 아니라 구조로 막혀 있습니다. 그 파일 하나를 지우면 glasshive가 쓴 것은
-  아무것도 남지 않습니다.
+  설정이 들어갑니다. 쓰기 전에 glasshive는 그 경로가 `~/.claude`, 트랜스크립트 루트, 또는
+  glasshive가 볼 수 있는 프로젝트의 `.git`이나 `.beads` 디렉터리 안에 있지 않은지 확인하고,
+  안에 있으면 거부합니다 — 관찰하는 대상에 쓰는 일은 관례가 아니라 구조로 막혀 있습니다. 그 파일
+  하나를 지우면 glasshive가 쓴 것은 아무것도 남지 않습니다.
 - **배포된 패키지는 이 저장소까지 추적할 수 있습니다.** 모든 버전은 GitHub Actions에서 OIDC로
   publish되며 provenance attestation이 붙으므로, `npm audit signatures`로 설치한 패키지를
   그것을 빌드한 workflow와 커밋까지 대조할 수 있습니다.

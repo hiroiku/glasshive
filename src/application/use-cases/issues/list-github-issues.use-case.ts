@@ -10,7 +10,7 @@ import type {
   GithubActor,
   GithubIssueExtra,
 } from '~/domain/entities/issues/github-issue.entity.ts';
-import type { IssueLedger } from '~/domain/entities/issues/issue.entity.ts';
+import type { IssueLedger, IssueSummary } from '~/domain/entities/issues/issue.entity.ts';
 import { buildLedger, parseIssuePage } from '~/domain/services/issues/github-issue.service.ts';
 
 /* プロジェクト 1 つぶんの GitHub の課題を一覧にする。
@@ -22,7 +22,7 @@ import { buildLedger, parseIssuePage } from '~/domain/services/issues/github-iss
 
 /* GitHub の課題が持つ形は、外へ出すときにもそのまま要る。
    `interface` は domain を直に見られないので、ここが受け渡しの場所になる。 */
-export type { GithubActor, GithubIssueExtra, IssueLedger };
+export type { GithubActor, GithubIssueExtra, IssueLedger, IssueSummary };
 
 /* 1 ページで求める件数と、辿るページ数の上限。
 

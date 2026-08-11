@@ -63,8 +63,6 @@ export interface GitOrder {
 export interface GitGraphProps {
   readonly overview: GitOverviewJson;
   readonly project: ProjectJson | undefined;
-  /** 台帳の上で統合待ちになっている課題の id */
-  readonly mergeReady: readonly string[];
   readonly query: string;
   readonly onQuery: (query: string) => void;
   readonly order: GitOrder;
@@ -79,7 +77,6 @@ export interface GitGraphProps {
 export function GitGraph({
   overview,
   project,
-  mergeReady,
   query,
   onQuery,
   order,
@@ -254,14 +251,6 @@ export function GitGraph({
                       <Icon path={mdiHomeOutline} size={10} /> {worktreeLeaf}
                     </span>
                   )}
-                  {mergeReady.some(
-                    (id) => tip.name.includes(id) || (tip.worktree ?? '').includes(id),
-                  ) && (
-                    <span className="chip st-merge-ready" title="Merge-ready in the ledger">
-                      {' '}
-                      merge-ready
-                    </span>
-                  )}
                   {pull !== null && (
                     <span
                       className={`prchip ${pull.is_draft ? 'draft' : pull.state.toLowerCase()}`}
@@ -304,7 +293,7 @@ export function GitGraph({
                   ))}
                 </span>
                 <span className="g-who">
-                  {/* 台帳の担当と、いま動いているエージェント。課題の一覧と同じ並べ方にする —
+                  {/* GitHub の担当と、いま動いているエージェント。課題の一覧と同じ並べ方にする —
                       同じ 2 つを見ているので、単位が違っても読み方は変えない */}
                   {assignees.length > 0 && (
                     <AvatarStack actors={assignees} max={MAX_LISTED_FACES} />

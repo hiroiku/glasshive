@@ -152,7 +152,7 @@ body.dragging #drawer-grip {
   margin-top: 2px;
 }
 
-/* ヘッダーのエージェント文脈(親・子・bd・git) */
+/* ヘッダーのエージェント文脈(親・子・`working on`・git) */
 .agent-ctx {
   display: flex;
   flex-wrap: wrap;
@@ -331,15 +331,83 @@ body.dragging #drawer-grip {
   padding-bottom: 4px;
   margin: 14px 0 8px;
 }
+/* ---------- 課題のパネルのやり取り ----------
+
+   コメントと `timeline` のイベントを 1 本のタイムラインに並べる。**重さを変える** ——
+   コメントは読むもので、イベントは文脈である。同じ姿で並べると、ラベルの付け外し 10 件が
+   コメント 1 件を埋めてしまう。コメントは本文と同じ `.md` で、イベントは 1 行に畳む。
+
+   色は新しく作らない。沈める側は `--dim`、読ませる側は `--fg` で、どちらもこのパネルの
+   他の欄が既に使っているものである。 */
+.disc {
+  min-width: 0;
+}
+/* 縦線は 1 本に繋げる。**項目ごとに引くと、そこで切れる** —— 切れた線は時間の列ではなく、
+   別々の引用に見える。項目の間を margin で空けないのはこのためで、間隔は padding で取る */
+.disc > * {
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+  min-width: 0;
+}
+/* コメントは本文を持つので、上下に息を入れる */
 .cmt {
-  border-left: 2px solid var(--border);
-  padding: 2px 0 2px 10px;
-  margin-bottom: 10px;
+  padding-top: 4px;
+  padding-bottom: 8px;
 }
 .cmt-h {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   color: var(--dim);
   font-size: 10.5px;
-  margin-bottom: 2px;
+  margin-bottom: 3px;
+}
+/* イベントは [アイコン][言い分][いつ] の 1 行 */
+.disc-ev {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  color: var(--dim);
+  font-size: 11px;
+}
+.disc-ico {
+  flex: none;
+  align-self: center;
+  opacity: 0.7;
+}
+/* 言い分は行の中で折り返す。長い題が来ても、パネルそのものを横に広げない */
+.disc-say {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.disc-who,
+.disc-ttl {
+  color: var(--fg);
+}
+/* 改題の前の題。取り消し線が「これはもう無い」を言うので、文言を足さなくて済む */
+.disc-was {
+  text-decoration: line-through;
+}
+.disc-when {
+  flex: none;
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 10px;
+  font-family: var(--mono);
+}
+/* 誰も何も言っていない課題。読めなかったときの板とは、静けさで見分ける */
+.disc-quiet {
+  color: var(--dim);
+  padding: 2px 0 6px 13px;
+}
+/* 読み切っていないことは、やり取りそのものと同じ場所で言う */
+.disc-cut {
+  color: var(--waiting);
+  font-size: 10.5px;
+  padding: 6px 0 0 13px;
 }
 .md {
   overflow-wrap: break-word;

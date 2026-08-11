@@ -56,10 +56,9 @@ Les tickets, les branches et les milestones sur un seul écran, parce qu'il s'ag
 vu sous trois angles. Passez de l'un à l'autre sans quitter la vue.
 
 Les tickets viennent de GitHub via la CLI [`gh`](https://cli.github.com) — glasshive demande à `gh`
-vers quel dépôt pointent vos remotes, exactement comme `gh` le décide — ou d'un registre
-[`bd`](https://github.com/gastownhall/beads). Les sous-tickets s'imbriquent, `blocked by` est tracé
-comme une arête de dépendance, et les types de ticket, les labels, les milestones et les assignés
-suivent.
+vers quel dépôt pointent vos remotes, exactement comme `gh` le décide. Les sous-tickets
+s'imbriquent, `blocked by` est tracé comme une arête de dépendance, et les types de ticket, les
+labels, les milestones et les assignés suivent.
 
 Les branches et les worktrees sont tracés par-dessus la branche du worktree principal, pour voir
 qui est où. Les paires qui se dirigent vers les mêmes fichiers remontent en haut. Choisissez une ref
@@ -77,18 +76,22 @@ code et les appels d'outils sont rendus ; la transcription brute n'est jamais r�
 
 ![Side panel](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/conversation.png)
 
+Un ticket amène avec lui ses commentaires et sa chronologie : qui l'a étiqueté, ce qui le bloquait
+et quelle pull request y a fait référence, lus à côté des agents qui y travaillent en ce moment.
+
+![Issue](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/issue.png)
+
 ## En lecture seule par conception
 
-- **Il lit quatre choses et n'écrit dans aucune.** Les journaux de session de Claude Code
-  (`~/.claude/projects/**/*.jsonl`), le registre beads (`<project>/.beads/issues.jsonl`), `git` et —
-  via la CLI `gh` — les tickets du dépôt GitHub vers lequel pointent vos remotes. Aucune
-  transcription, aucun registre, aucun dépôt, aucun ticket n'est jamais modifié.
+- **Il lit trois choses et n'écrit dans aucune.** Les journaux de session de Claude Code
+  (`~/.claude/projects/**/*.jsonl`), `git` et — via la CLI `gh` — les tickets du dépôt GitHub vers
+  lequel pointent vos remotes. Aucune transcription, aucun dépôt, aucun ticket n'est jamais modifié.
 - **Le seul fichier qu'il écrit est le sien.** `~/.config/glasshive/preferences.json` conserve vos
   onglets épinglés et vos préférences d'affichage. Avant d'écrire, glasshive vérifie que le chemin
-  n'est ni dans `~/.claude`, ni dans la racine des transcriptions, ni dans un répertoire `.beads` ou
-  `.git` observé, et refuse si c'est le cas — écrire dans ce qu'il observe est empêché par
-  construction, pas par convention. Supprimez ce seul fichier et il ne reste rien de ce que
-  glasshive a écrit.
+  n'est ni dans `~/.claude`, ni dans la racine des transcriptions, ni dans un répertoire `.git` ou
+  `.beads` appartenant à un projet qu'il peut voir, et refuse si c'est le cas — écrire dans ce qu'il
+  observe est empêché par construction, pas par convention. Supprimez ce seul fichier et il ne reste
+  rien de ce que glasshive a écrit.
 - **Le paquet publié remonte jusqu'à ce dépôt.** Chaque version est publiée depuis GitHub Actions
   via OIDC et porte une attestation de provenance ; `npm audit signatures` peut donc confronter le
   paquet que vous avez installé au workflow et au commit à partir desquels il a été construit.

@@ -42,7 +42,7 @@ const MAX_FACES = 2;
 /* 凡例に並べる状態の順。**この絵に出ている状態しか凡例に出さない** —
    出ていない色を並べると、読む人はそれを探して見つからないことになる。
    ここに無い状態は末尾へ回る(GitHub は好きな状態名を持てる)。 */
-const STATUS_ORDER = ['open', 'blocked', 'in_progress', 'merge-ready', 'deferred', 'closed'];
+const STATUS_ORDER = ['open', 'blocked', 'closed'];
 
 export interface DependencyGraphProps {
   /** 描く課題。**閉じたものを混ぜない** — 片付いた相手が堰き止め続けることになる */

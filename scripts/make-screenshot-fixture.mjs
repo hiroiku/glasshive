@@ -450,7 +450,6 @@ const QUIET_SESSIONS = QUIET_PROJECTS.map((project, index) => ({
   branch: 'main',
   model: index % 3 === 0 ? MODELS.sonnet : MODELS.haiku,
   effort: index % 3 === 0 ? 'medium' : 'low',
-  actor: 'mgr-a02c74f1',
   aiTitle: project.description,
   startAgo: project.agoHours * HOUR + 40 * MINUTE,
   endAgo: project.agoHours * HOUR,
@@ -473,8 +472,7 @@ const SESSIONS = [
     branch: 'feature/ingest-backfill',
     model: MODELS.opus,
     effort: 'high',
-    actor: 'mgr-3f9a2c17',
-    worktree: 'issue-118',
+    worktree: 'issue-101',
     aiTitle: 'Backfill the 2019 archive',
     startAgo: 3 * HOUR,
     endAgo: 25 * MINUTE,
@@ -496,7 +494,7 @@ const SESSIONS = [
         parent: null,
         model: MODELS.opus,
         effort: 'high',
-        worktree: 'issue-118',
+        worktree: 'issue-101',
         startAgo: 58 * MINUTE,
         endAgo: 3 * SECOND,
         clusters: 4,
@@ -510,7 +508,7 @@ const SESSIONS = [
         parent: 'ingest-mapper',
         model: MODELS.sonnet,
         effort: 'medium',
-        worktree: 'issue-118',
+        worktree: 'issue-101',
         startAgo: 52 * MINUTE,
         endAgo: 24 * MINUTE,
         clusters: 3,
@@ -524,7 +522,7 @@ const SESSIONS = [
         parent: 'schema-diff',
         model: MODELS.haiku,
         effort: 'low',
-        worktree: 'issue-118',
+        worktree: 'issue-101',
         startAgo: 47 * MINUTE,
         endAgo: 38 * MINUTE,
         clusters: 2,
@@ -577,8 +575,7 @@ const SESSIONS = [
     branch: 'fix/stale-cursor',
     model: MODELS.sonnet,
     effort: 'medium',
-    actor: 'mgr-91b04d6e',
-    worktree: 'issue-131',
+    worktree: 'issue-102',
     aiTitle: 'Cursor resume skips a page',
     startAgo: 5 * HOUR,
     endAgo: 5 * SECOND,
@@ -593,7 +590,7 @@ const SESSIONS = [
         parent: null,
         model: MODELS.sonnet,
         effort: 'medium',
-        worktree: 'issue-131',
+        worktree: 'issue-102',
         startAgo: 4 * HOUR,
         endAgo: 2 * HOUR,
         clusters: 3,
@@ -607,7 +604,7 @@ const SESSIONS = [
         parent: 'repro',
         model: MODELS.haiku,
         effort: 'low',
-        worktree: 'issue-131',
+        worktree: 'issue-102',
         startAgo: 3.5 * HOUR,
         endAgo: 2.5 * HOUR,
         clusters: 2,
@@ -621,7 +618,6 @@ const SESSIONS = [
     branch: 'feature/token-window',
     model: MODELS.opus,
     effort: 'xhigh',
-    actor: 'mgr-3f9a2c17',
     aiTitle: 'One axis for 5h and 7d',
     startAgo: 11 * HOUR,
     endAgo: 6 * HOUR,
@@ -688,7 +684,6 @@ const SESSIONS = [
     branch: 'chore/deps-bump',
     model: MODELS.haiku,
     effort: 'low',
-    actor: 'mgr-c47f2a90',
     aiTitle: 'Bump the parquet writer',
     startAgo: 2 * DAY + 3 * HOUR,
     endAgo: 2 * DAY,
@@ -716,7 +711,6 @@ const SESSIONS = [
     branch: 'main',
     model: MODELS.sonnet,
     effort: 'medium',
-    actor: 'mgr-91b04d6e',
     aiTitle: 'Migration notes for the work view',
     startAgo: 5 * DAY + 4 * HOUR,
     endAgo: 5 * DAY,
@@ -730,7 +724,6 @@ const SESSIONS = [
     branch: 'feature/plant-command',
     model: MODELS.opus,
     effort: 'high',
-    actor: 'mgr-5d1e88b3',
     aiTitle: 'The plant command needs a dry run',
     startAgo: 90 * MINUTE,
     endAgo: 8 * SECOND,
@@ -771,7 +764,6 @@ const SESSIONS = [
     branch: 'main',
     model: MODELS.sonnet,
     effort: 'medium',
-    actor: 'mgr-5d1e88b3',
     aiTitle: 'Fleet listing is slow on 400 hosts',
     startAgo: 27 * HOUR,
     endAgo: 26 * HOUR,
@@ -799,7 +791,6 @@ const SESSIONS = [
     branch: 'fix/sample-window',
     model: MODELS.sonnet,
     effort: 'medium',
-    actor: 'mgr-a02c74f1',
     aiTitle: 'Sample window drifts under load',
     startAgo: 4 * DAY + 5 * HOUR,
     endAgo: 4 * DAY,
@@ -840,7 +831,6 @@ const SESSIONS = [
     branch: 'main',
     model: MODELS.haiku,
     effort: 'low',
-    actor: 'mgr-a02c74f1',
     aiTitle: 'Board columns lose their order',
     startAgo: 4 * HOUR,
     endAgo: 3 * HOUR,
@@ -885,8 +875,8 @@ function writeProjects(root, repoPaths, nowMs) {
     };
     const opening =
       session.worktree === undefined
-        ? `Session opened by ${session.actor} in ${repo}`
-        : `Session opened by ${session.actor} in ${repo}/.worktrees/${session.worktree}`;
+        ? `Session opened in ${repo}`
+        : `Session opened in ${repo}/.worktrees/${session.worktree}`;
 
     writeTranscript(
       path.join(dir, `${sessionId}.jsonl`),
@@ -935,7 +925,7 @@ function writeProjects(root, repoPaths, nowMs) {
             clusters: child.clusters,
             turnsPerCluster: child.turnsPerCluster,
             last: child.last,
-            opening: `Delegated by ${session.actor}`,
+            opening: `Delegated by ${session.aiTitle}`,
           },
         ),
         childEnd,
@@ -1172,89 +1162,6 @@ const SMALL_BRANCHES = {
   pinboard: ['feature/column-order'],
 };
 
-// ── 台帳(bd の書き出し) ────────────────────────────────────────────────────
-
-/* `.beads/issues.jsonl` は bd の書き出しである。ここに置くのは、セッションが名指す
-   `.worktrees/<名前>` と同じ id の課題を、パネルで開けるようにするためである。 */
-const LEDGER = [
-  {
-    id: 'issue-118',
-    title: 'Backfill drops rows whose source cursor is null',
-    status: 'merge-ready',
-    priority: 0,
-    issue_type: 'bug',
-    assignee: 'rin_sato',
-    labels: ['area/ingest', 'needs-backport'],
-    description:
-      'The backfill advances the cursor before the batch commits, so a retry resumes past rows that were never written. Reproduced on the 2019 shard.',
-  },
-  {
-    id: 'issue-131',
-    title: 'Cursor resume is off by one page after a retry',
-    status: 'in_progress',
-    priority: 0,
-    issue_type: 'bug',
-    assignee: 'mira_okonkwo',
-    labels: ['area/ingest'],
-    description: 'Resume takes the page after the last committed key instead of the page it is on.',
-    dependencies: [{ depends_on_id: 'issue-118', type: 'blocks' }],
-  },
-  {
-    id: 'issue-140',
-    title: 'One axis for the 5h and 7d token views',
-    status: 'in_progress',
-    priority: 1,
-    issue_type: 'feature',
-    assignee: 'dev_ramanathan',
-    labels: ['area/api'],
-    description: 'The axis and the summary compute the window separately and disagree at the edge.',
-  },
-  {
-    id: 'issue-144',
-    title: 'Streaming parquet writer',
-    status: 'blocked',
-    priority: 2,
-    issue_type: 'feature',
-    assignee: 'elif_kaya',
-    labels: ['area/ingest', 'spike'],
-    description: 'Holding every row group in memory caps the shard size at about 2 GiB.',
-    dependencies: [{ depends_on_id: 'issue-131', type: 'blocks' }],
-  },
-  {
-    id: 'issue-150',
-    title: 'Work view migration notes',
-    status: 'open',
-    priority: 2,
-    issue_type: 'task',
-    assignee: 'tomas_b',
-    labels: ['docs'],
-    description: 'Describe what moved when Git, GitHub and the ledger became one view.',
-  },
-  {
-    id: 'issue-112',
-    title: 'Manifest fetch retries forever on a 404',
-    status: 'closed',
-    priority: 1,
-    issue_type: 'bug',
-    assignee: 'rin_sato',
-    labels: ['area/ingest'],
-    description: 'A missing manifest is not a transient failure and must not be retried.',
-  },
-];
-
-function writeLedger(repo, nowMs) {
-  const lines = LEDGER.map((issue, index) =>
-    JSON.stringify({
-      _type: 'issue',
-      ...issue,
-      owner: 'rin_sato',
-      created_at: iso(nowMs - (30 - index) * DAY),
-      updated_at: iso(nowMs - index * 6 * HOUR),
-    }),
-  );
-  writeRepoFile(repo, path.join('.beads', 'issues.jsonl'), `${lines.join('\n')}\n`);
-}
-
 // ── GitHub の課題 ────────────────────────────────────────────────────────────
 
 /* 課題の本文。glasshive は開いた 1 件だけ `gh` に尋ねるので、ここも 1 件ずつ持つ。
@@ -1477,6 +1384,168 @@ const isNotPlannedAt = (i) => i === 13;
 /** 堰き止めている相手。番号ではなく並びの位置で返し、相手の状態を引けるようにする */
 const blockerIndexesAt = (i) => (i % 5 === 2 && i > 4 ? [i - 3] : []);
 
+/* コメントの本文。**markdown で書く。** パネルは課題の本文と同じ描き方で出すので、
+   平文だけを並べると、引用も一覧も箇条書きも一度も画面に出ない。
+
+   `#` から始まる番号を混ぜてあるのは、それがチップになるからである —— 課題どうしの
+   繋がりは、やり取りの中でこそ書かれる。 */
+const DISCUSSION_COMMENTS = [
+  `Reproduced on the 5h window. The cursor is written at \`ingest/cursor.rs:88\`, before
+the batch commits:
+
+\`\`\`rust
+store.put_cursor(next)?;
+batch.commit()?;
+\`\`\`
+
+Swapping the two lines is not enough on its own — a replay has to be safe first.`,
+
+  `Two shapes fit here:
+
+1. one transaction for the cursor and the batch
+2. write the cursor last and accept one replayed batch
+
+I would take 2. Replays are already idempotent and 1 holds a lock across the whole write.`,
+
+  `> the gap only shows up in the weekly reconcile
+
+That is the part that worries me. Whatever we do, the reconcile should be able to say
+*which* window it disagrees about.`,
+
+  `Picked this up. The test needs a source that can fail mid-page, so the first commit is
+just the harness — no behaviour change.`,
+
+  `Same root cause as #103, but that one is about the reader and this one is about the
+writer. Keeping them apart.`,
+
+  `Left this out of the release notes on purpose: nothing user-visible changed, only the
+order of two writes.`,
+];
+
+/* 課題 1 件のやり取り。**`gh` が `timeline` で返す形をそのまま作る。**
+
+   起きたことの順に積んで、最後に立てた時刻から更新された時刻までへ均して置く。GitHub は
+   古いものから返すので、この並びがそのまま画面の並びになる。
+
+   一言も無い課題も混ぜてある。**そこが画面の要になる** —— 誰も何も言っていない課題と、
+   やり取りを読みに行けなかった課題は、glasshive では別の画面になる。 */
+function buildDiscussion(i, context) {
+  const {
+    createdMs,
+    updatedMs,
+    titleFrom,
+    author,
+    assignee,
+    milestone,
+    closed,
+    notPlanned,
+    blockers,
+    parentNumber,
+    pull,
+  } = context;
+
+  // 静かな課題。立てただけで誰も触っていない
+  if (i % 11 === 6) return [];
+
+  const login = (n) => PEOPLE[(i + n) % PEOPLE.length].login;
+  const titleOf = (n) => ISSUE_TITLES[(titleFrom + n) % ISSUE_TITLES.length];
+  const said = [];
+
+  said.push({
+    __typename: 'LabeledEvent',
+    actor: { login: author.login },
+    label: LABELS[i % LABELS.length],
+  });
+  if (assignee !== null) {
+    said.push({
+      __typename: 'AssignedEvent',
+      actor: { login: login(1) },
+      assignee: { login: assignee.login },
+    });
+  }
+  if (milestone !== null) {
+    said.push({
+      __typename: 'MilestonedEvent',
+      actor: { login: login(1) },
+      milestoneTitle: milestone.title,
+    });
+  }
+  if (parentNumber !== null) {
+    said.push({
+      __typename: 'ParentIssueAddedEvent',
+      actor: { login: login(2) },
+      parent: { number: parentNumber, title: titleOf(parentNumber - 101) },
+    });
+  }
+  for (const blocker of blockers) {
+    said.push({
+      __typename: 'BlockedByAddedEvent',
+      actor: { login: login(2) },
+      blockingIssue: { number: blocker.number, title: titleOf(blocker.number - 101) },
+    });
+  }
+  if (i % 2 === 0) {
+    said.push({
+      __typename: 'IssueComment',
+      author: { login: login(3) },
+      body: DISCUSSION_COMMENTS[i % DISCUSSION_COMMENTS.length],
+    });
+  }
+  if (i % 3 === 1) {
+    said.push({
+      __typename: 'RenamedTitleEvent',
+      actor: { login: author.login },
+      previousTitle: `${titleOf(i)} (draft)`,
+      currentTitle: titleOf(i),
+    });
+  }
+  if (i % 5 === 3) {
+    said.push({
+      __typename: 'UnlabeledEvent',
+      actor: { login: login(4) },
+      label: LABELS[(i + 6) % LABELS.length],
+    });
+  }
+  if (i % 4 === 2) {
+    said.push({
+      __typename: 'IssueComment',
+      author: { login: login(2) },
+      body: DISCUSSION_COMMENTS[(i + 2) % DISCUSSION_COMMENTS.length],
+    });
+  }
+  if (pull !== undefined) {
+    /* PR からの参照。**閉じる約束をした参照と、触れただけの参照を分ける** ——
+       同じ見た目で出すと、どの PR がこの課題を片付けるのか読めない。 */
+    said.push({
+      __typename: 'CrossReferencedEvent',
+      actor: { login: login(1) },
+      willCloseTarget: true,
+      source: { number: pull.number, title: titleOf(i) },
+    });
+  }
+  if (i % 9 === 4) {
+    said.push({
+      __typename: 'MarkedAsDuplicateEvent',
+      actor: { login: login(3) },
+      canonical: { number: 101 + ((i + 2) % 40), title: titleOf(i + 2) },
+    });
+  }
+  if (i % 7 === 4) {
+    said.push({ __typename: 'ReopenedEvent', actor: { login: login(2) } });
+  }
+  if (closed || notPlanned) {
+    said.push({
+      __typename: 'ClosedEvent',
+      actor: { login: login(1) },
+      stateReason: notPlanned ? 'NOT_PLANNED' : 'COMPLETED',
+    });
+  }
+
+  // 立てた時刻から更新された時刻までへ均して置く。GitHub と同じく古いものが先に来る
+  const step = (updatedMs - createdMs) / (said.length + 1);
+  return said.map((node, index) => ({ createdAt: iso(createdMs + step * (index + 1)), ...node }));
+}
+
 /* 課題 1 ページぶんの並び。**`gh` が返す形をそのまま作る。**
    欄を 1 つでも省くと、省いた欄を読んでいる導出だけが黙って落ちる。 */
 function buildIssues(repoName, nowMs) {
@@ -1542,6 +1611,21 @@ function buildIssues(repoName, nowMs) {
         totalBlockedBy: blockers.length,
         totalBlocking: blocking.get(i) ?? 0,
       },
+      /* 一覧の問い合わせもこれを求めない。パネルが 1 件を開いたときに、本文とも別の
+         問い合わせで尋ねに来る。 */
+      discussion: buildDiscussion(i, {
+        createdMs: nowMs - (60 - i) * DAY,
+        updatedMs: updatedAt,
+        titleFrom,
+        author,
+        assignee: assignees[0] ?? null,
+        milestone,
+        closed,
+        notPlanned,
+        blockers,
+        parentNumber: parentNumber === number ? null : parentNumber,
+        pull,
+      }),
       labels: { nodes: [LABELS[i % LABELS.length], LABELS[(i + 3) % LABELS.length]] },
       assignees: { nodes: assignees.map((person) => ({ login: person.login, avatarUrl: null })) },
       blockedBy: { nodes: blockers },
@@ -1578,10 +1662,10 @@ import path from 'node:path';
 
 /* A stand-in for the gh CLI, written by scripts/make-screenshot-fixture.mjs.
 
-   It answers the two GraphQL calls glasshive makes — a page of issues, and the body of a
-   single issue — with canned data from issues.json next to this directory. Anything else
-   exits non-zero, the same way the real gh does when it cannot serve a request. It never
-   touches the network. */
+   It answers the three GraphQL calls glasshive makes — a page of issues, the body of a
+   single issue, and the discussion on a single issue — with canned data from issues.json
+   next to this directory. Anything else exits non-zero, the same way the real gh does when
+   it cannot serve a request. It never touches the network. */
 
 const args = process.argv.slice(2);
 if (args[0] !== 'api' || args[1] !== 'graphql') {
@@ -1608,11 +1692,29 @@ if (nodes === undefined) {
   process.exit(0);
 }
 
-/* The body of one issue. GraphQL returns only the fields a query asks for, so this answer
-   carries the body and nothing else — the panel already holds the rest. A number that is
-   not here comes back as a null issue, which is what GitHub does too. */
+/* One issue, asked about on its own. GraphQL returns only the fields a query asks for, so
+   each answer carries just what was asked — the panel already holds the rest. Which of the
+   two it is can only be read from the query itself. A number that is not here comes back as
+   a null issue, which is what GitHub does too. */
 if (fields.has('number')) {
   const found = nodes.find((node) => node.number === Number(fields.get('number')));
+  const wantsDiscussion = (fields.get('query') ?? '').includes('timelineItems');
+
+  if (wantsDiscussion) {
+    /* Comments and events on one timeline, oldest first. Everything canned here fits in a
+       single page, so there is never a next page to walk. */
+    const timelineItems = {
+      pageInfo: { hasNextPage: false, endCursor: null },
+      nodes: found?.discussion ?? [],
+    };
+    process.stdout.write(
+      JSON.stringify({
+        data: { repository: { issue: found === undefined ? null : { timelineItems } } },
+      }),
+    );
+    process.exit(0);
+  }
+
   process.stdout.write(
     JSON.stringify({
       data: { repository: { issue: found === undefined ? null : { body: found.body ?? '' } } },
@@ -1636,8 +1738,8 @@ process.stdout.write(
       repository: {
         issues: {
           pageInfo: { hasNextPage: next < nodes.length, endCursor },
-          // The page query does not ask for the body, so the answer does not carry it.
-          nodes: page.map(({ body, ...rest }) => rest),
+          // The page query asks for neither the body nor the discussion, so neither is here.
+          nodes: page.map(({ body, discussion, ...rest }) => rest),
         },
       },
     },
@@ -1687,8 +1789,8 @@ Run that from a glasshive checkout (or replace \`node bin/glasshive.js\` with
 
 \`GLASSHIVE_CONFIG_DIR\` points inside this directory, so taking a screenshot cannot
 touch your own \`preferences.json\`. \`PATH\` puts the stub \`gh\` first; it answers the
-issue queries from \`issues.json\` — both the page glasshive lists from and the body it
-fetches when you open one — and never reaches the network.
+issue queries from \`issues.json\` — the page glasshive lists from, and the body and the
+discussion it fetches when you open one — and never reaches the network.
 
 ### Active rows go stale in 60 seconds
 
@@ -1725,14 +1827,13 @@ ${repos.map((repo) => `- \`${repo.name}\` — \`${repo.path}\``).join('\n')}
 
 \`atlas-api\` is the busy one: five sessions, thirteen subagents (three levels deep, some
 inside \`subagents/workflows/<runId>/\`), six unmerged branches, three worktrees, and 44
-issues. It also carries a \`.beads/issues.jsonl\`, so the ledger chips have something to
-resolve.
+issues.
 
 Where things are:
 
 - Transcripts: \`${projectsRoot}\`
 - Stub \`gh\`: \`${binDir}/gh\`
-- Canned issues, bodies included: \`${outDir}/issues.json\`
+- Canned issues, bodies and discussions included: \`${outDir}/issues.json\`
 
 ## What it cannot show
 
@@ -1818,12 +1919,11 @@ function main() {
     historyDays: 24,
     mainline: 26,
     worktrees: [
-      { name: 'issue-118', branch: 'feature/ingest-backfill' },
-      { name: 'issue-131', branch: 'fix/stale-cursor' },
+      { name: 'issue-101', branch: 'feature/ingest-backfill' },
+      { name: 'issue-102', branch: 'fix/stale-cursor' },
       { name: 'review-221', detached: true, at: 'main~4' },
     ],
   });
-  writeLedger(repoPaths['atlas-api'], parsed.nowMs);
 
   /* 静かなプロジェクトにも、履歴の短いリポジトリを 1 つずつ作る。作らないと `cwd` の指す先が
      無く、Work を開いたときだけ「git のリポジトリではない」と出て、一覧との辻褄が合わない */

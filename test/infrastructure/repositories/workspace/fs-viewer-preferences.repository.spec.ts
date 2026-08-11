@@ -222,13 +222,15 @@ describe('書いてよいパスかを見る', () => {
     ).toBe(false);
   });
 
-  it.each(['.beads', '.git'])('プロジェクトの中で読みに行く %s の配下は断る', async (material) => {
+  it.each(['.beads', '.git'])('プロジェクトの中の %s の配下は断る', async (material) => {
     const nest = path.join(sandbox, 'w', 'proj');
     const inside = path.join(nest, material, 'glasshive');
 
     const saved = await repo(inside).save(DOCUMENT, { observedRoots: [nest] });
-    expect(saved.ok, '読みに行く先へ書き込むと、観測が自分の足跡を観ることになる').toBe(false);
-    if (saved.ok) throw new Error('読む先へ書いてしまった');
+    expect(saved.ok, '別のプログラムのデータの中へ書けば、そのプログラムの持ち物を汚す').toBe(
+      false,
+    );
+    if (saved.ok) throw new Error('断るはずの場所へ書いてしまった');
     expect(saved.error.code).toBe('preferences.refused');
     expect(fs.existsSync(inside)).toBe(false);
   });
@@ -248,11 +250,11 @@ describe('書いてよいパスかを見る', () => {
     expect(await repo(inside).load()).toEqual({ kind: 'observed', value: DOCUMENT });
   });
 
-  it('プロジェクトそのものが保存先でも、読む材料の外なら置ける', async () => {
+  it('プロジェクトそのものが保存先でも、断る場所の外なら置ける', async () => {
     const nest = path.join(sandbox, 'w', 'proj');
     const saved = await repo(nest).save(DOCUMENT, { observedRoots: [nest] });
     expect(saved.ok).toBe(true);
-    expect(fs.existsSync(path.join(nest, '.beads')), '読む材料は作られていない').toBe(false);
+    expect(fs.existsSync(path.join(nest, '.beads')), '断る場所は作られていない').toBe(false);
   });
 
   it('名前の頭が同じだけの隣は断らない', async () => {
@@ -316,18 +318,18 @@ describe('書いてよいパスかを見る', () => {
     expect(fs.readdirSync(claude), '観測元へ何一つ置かれていない').toEqual([]);
   });
 
-  it('読みに行く先へ向けたシンボリックリンクを保存先に渡しても断る', async () => {
+  it('断る場所へ向けたシンボリックリンクを保存先に渡しても断る', async () => {
     const nest = path.join(sandbox, 'w', 'proj');
-    const ledger = path.join(nest, '.beads');
-    fs.mkdirSync(ledger, { recursive: true });
-    const link = path.join(sandbox, 'link-ledger');
-    fs.symlinkSync(ledger, link);
+    const owned = path.join(nest, '.beads');
+    fs.mkdirSync(owned, { recursive: true });
+    const link = path.join(sandbox, 'link-owned');
+    fs.symlinkSync(owned, link);
 
     const saved = await repo(path.join(link, 'cfg')).save(DOCUMENT, {
       observedRoots: [nest],
     });
-    expect(saved.ok, 'パスだけ見ると外に見えるが、書き込みは台帳の中へ落ちる').toBe(false);
-    expect(fs.readdirSync(ledger), '台帳の中へ何一つ置かれていない').toEqual([]);
+    expect(saved.ok, 'パスだけ見ると外に見えるが、書き込みは断る場所の中へ落ちる').toBe(false);
+    expect(fs.readdirSync(owned), '断る場所の中へ何一つ置かれていない').toEqual([]);
   });
 
   it.skipIf(!CASE_INSENSITIVE)('大小だけ違う保存先も、同じディレクトリなら断る', async () => {

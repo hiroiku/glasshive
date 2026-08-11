@@ -29,17 +29,13 @@ import {
   type GetGithubIssueBodyUseCase,
 } from '~/application/use-cases/issues/get-github-issue-body.use-case.ts';
 import {
-  createGetIssue,
-  type GetIssueUseCase,
-} from '~/application/use-cases/issues/get-issue.use-case.ts';
+  createGetGithubIssueDiscussion,
+  type GetGithubIssueDiscussionUseCase,
+} from '~/application/use-cases/issues/get-github-issue-discussion.use-case.ts';
 import {
   createListGithubIssues,
   type ListGithubIssuesUseCase,
 } from '~/application/use-cases/issues/list-github-issues.use-case.ts';
-import {
-  createListIssues,
-  type ListIssuesUseCase,
-} from '~/application/use-cases/issues/list-issues.use-case.ts';
 import {
   createObserveMessages,
   type ObserveMessagesUseCase,
@@ -71,7 +67,6 @@ import { createGhIssueTrackerIntegration } from '~/infrastructure/integrations/i
 import { createHttpAvatarIntegration } from '~/infrastructure/integrations/issues/http-avatar.integration.ts';
 import { createFsWatchTranscript } from '~/infrastructure/integrations/sessions/fs-watch-transcript.integration.ts';
 import { createOsAgentProcessIntegration } from '~/infrastructure/integrations/sessions/os-agent-process.integration.ts';
-import { createFsIssueLedgerRepository } from '~/infrastructure/repositories/issues/fs-issue-ledger.repository.ts';
 import { createFsTranscriptRepository } from '~/infrastructure/repositories/sessions/fs-transcript.repository.ts';
 import { createFsTranscriptEventsRepository } from '~/infrastructure/repositories/sessions/fs-transcript-events.repository.ts';
 import { createFsViewerPreferencesRepository } from '~/infrastructure/repositories/workspace/fs-viewer-preferences.repository.ts';
@@ -94,11 +89,11 @@ export interface Kernel {
   usage: ObserveUsageUseCase;
   messages: ObserveMessagesUseCase;
   search: ObserveSearchUseCase;
-  listIssues: ListIssuesUseCase;
-  getIssue: GetIssueUseCase;
   listGithubIssues: ListGithubIssuesUseCase;
   /** GitHub の課題 1 件の本文。一覧は本文を運ばないので、開いた 1 件だけをここで尋ねる */
   githubIssueBody: GetGithubIssueBodyUseCase;
+  /** 開いた 1 件のやり取り。本文とは別の呼び出しで、ページを辿るぶんだけ時間が違う */
+  githubIssueDiscussion: GetGithubIssueDiscussionUseCase;
   /** 顔を、こちらで読んで、こちらから返す。画面は GitHub に触らない */
   avatars: AvatarCacheService;
   gitOverview: ObserveRepositoryUseCase;
@@ -139,9 +134,6 @@ function assemble(): Kernel {
   });
   const tree = createTreeSnapshot({ observe: observeTree, clock: systemClock });
 
-  /* 台帳はプロジェクトごとにある。ポートはパスを言われて開くだけなので、ルートを持たない */
-  const ledger = createFsIssueLedgerRepository();
-
   /* `git` はプロジェクトごとに起動する。衝突の見込みだけは、先端の組が同じならキャッシュを
      返す — 先端が 18 本あれば差分を取るだけで 18 回起動することになり、そこが一番重い。 */
   const git = createCliGitCommandIntegration();
@@ -178,10 +170,9 @@ function assemble(): Kernel {
       tree,
       search: createTranscriptSearch({ transcripts }),
     }),
-    listIssues: createListIssues({ ledger }),
-    getIssue: createGetIssue({ ledger }),
     listGithubIssues: createListGithubIssues({ git, tracker, avatars }),
     githubIssueBody: createGetGithubIssueBody({ git, tracker }),
+    githubIssueDiscussion: createGetGithubIssueDiscussion({ git, tracker }),
     avatars,
     gitOverview: createObserveRepository({ git, conflicts: createConflictCache() }),
     gitRef: createObserveRef({ git }),

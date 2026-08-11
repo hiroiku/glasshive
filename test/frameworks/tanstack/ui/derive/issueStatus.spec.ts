@@ -6,24 +6,33 @@ type IssueSummaryJson = Parameters<typeof withoutClosed>[0][number];
 
 /* GitHub の課題は 1 回で全部を取ってきて、一覧に出すぶんだけをここで絞る。
 
-   **絞る決まりは向こう側と同じでなければならない。** 台帳を読むときは `buildLedger` が
-   落としてよこすので、こちらが違う集合を持つと、同じ課題が Beads では消え GitHub では
+   **絞る決まりは `buildLedger` と同じでなければならない。** `counts` を数えるのは
+   `buildLedger` の側なので、こちらが違う集合を持つと、一覧から消えた課題が件数にだけ
    残る、という食い違いになる。 */
 
 const issue = (id: string, status: string): IssueSummaryJson => ({
   id,
   title: id,
   status,
-  priority: null,
   issue_type: null,
   labels: [],
   assignee: null,
-  owner: null,
   created_at: null,
   updated_at: null,
   deps: [],
   deps_complete: true,
-  github: null,
+  github: {
+    url: null,
+    labels: [],
+    assignees: [],
+    author: null,
+    milestone: null,
+    issue_type_color: null,
+    sub_issues: null,
+    pull_requests: [],
+    comments: 0,
+    reactions: 0,
+  },
 });
 
 describe('閉じた課題の見分け', () => {
@@ -37,7 +46,9 @@ describe('閉じた課題の見分け', () => {
   it('開いているものと塞がっているものは落とさない', () => {
     expect(isClosedStatus('open')).toBe(false);
     expect(isClosedStatus('blocked'), '塞がっているのは、済んだのではない').toBe(false);
-    expect(isClosedStatus('in_progress')).toBe(false);
+    expect(isClosedStatus('その他'), 'GitHub が付けた見知らぬ状態も、済んだとは言えない').toBe(
+      false,
+    );
   });
 });
 
@@ -63,7 +74,7 @@ describe('閉じたものを含めない一覧', () => {
   });
 
   it('落とすものが無ければ、全部そのまま返す', () => {
-    const all = [issue('#1', 'open'), issue('#2', 'in_progress')];
+    const all = [issue('#1', 'open'), issue('#2', 'blocked')];
 
     expect(withoutClosed(all)).toHaveLength(2);
   });

@@ -11,7 +11,7 @@ import type { AppError } from './error.ts';
    だから外の世界を読むポートは、すべてこの 3 つのどれかを返す。 */
 
 export type AbsentReason =
-  /** 観測元そのものが無い(台帳が無い、そこがリポジトリでない) */
+  /** 観測元そのものが無い(そこがリポジトリでない、GitHub の remote を持たない) */
   | 'no-source'
   /** 在るが中身が無い */
   | 'empty'

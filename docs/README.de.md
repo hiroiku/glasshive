@@ -56,10 +56,9 @@ Issues, Branches und Milestones auf einem Bildschirm, denn sie sind dieselbe Arb
 Blickwinkeln. Wechsle zwischen ihnen, ohne die Ansicht zu verlassen.
 
 Issues kommen von GitHub über die [`gh`](https://cli.github.com)-CLI – glasshive fragt `gh`, auf
-welches Repository deine Remotes zeigen, genauso, wie `gh` es selbst bestimmt – oder aus einem
-[`bd`](https://github.com/gastownhall/beads)-Register. Sub-Issues verschachteln sich, `blocked by`
-wird als Abhängigkeitskante gezeichnet, und Issue-Typen, Labels, Milestones und Zuständige kommen
-mit.
+welches Repository deine Remotes zeigen, genauso, wie `gh` es selbst bestimmt. Sub-Issues
+verschachteln sich, `blocked by` wird als Abhängigkeitskante gezeichnet, und Issue-Typen, Labels,
+Milestones und Zuständige kommen mit.
 
 Branches und Worktrees werden über den Branch des Haupt-Worktrees gezeichnet, damit du siehst, wer
 wo ist. Paare, die auf dieselben Dateien zusteuern, rücken an den Anfang. Wähle eine Ref, und du
@@ -77,18 +76,24 @@ Tool-Aufrufe werden gerendert; das rohe Transkript wird nie umgeschrieben.
 
 ![Side panel](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/conversation.png)
 
+Ein Issue bringt seine Kommentare und seine Timeline mit: wer es beschriftet hat, wodurch es
+blockiert war und welcher Pull Request darauf verwiesen hat – gelesen neben den Agenten, die gerade
+daran arbeiten.
+
+![Issue](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/issue.png)
+
 ## Nur lesend, per Design
 
-- **Es liest vier Dinge und schreibt in keines davon.** Die Session-Logs von Claude Code
-  (`~/.claude/projects/**/*.jsonl`), das beads-Register (`<project>/.beads/issues.jsonl`), `git`
-  und – über die `gh`-CLI – die Issues des GitHub-Repositorys, auf das deine Remotes zeigen. Kein
-  Transkript, kein Register, kein Repository und kein Issue wird je verändert.
+- **Es liest drei Dinge und schreibt in keines davon.** Die Session-Logs von Claude Code
+  (`~/.claude/projects/**/*.jsonl`), `git` und – über die `gh`-CLI – die Issues des
+  GitHub-Repositorys, auf das deine Remotes zeigen. Kein Transkript, kein Repository und kein Issue
+  wird je verändert.
 - **Die einzige Datei, die es schreibt, ist seine eigene.** `~/.config/glasshive/preferences.json`
   enthält deine angehefteten Tabs und Ansichtseinstellungen. Vor dem Schreiben prüft glasshive, dass
-  der Pfad nicht in `~/.claude`, im Wurzelverzeichnis der Transkripte oder in einem beobachteten
-  `.beads`- oder `.git`-Verzeichnis liegt, und verweigert es andernfalls – in das zu schreiben, was es
-  beobachtet, ist bauartbedingt ausgeschlossen, nicht bloß per Konvention. Lösche diese eine Datei,
-  und von allem, was glasshive je geschrieben hat, bleibt nichts übrig.
+  der Pfad nicht in `~/.claude`, im Wurzelverzeichnis der Transkripte oder in einem `.git`- oder
+  `.beads`-Verzeichnis eines Projekts liegt, das es sehen kann, und verweigert es andernfalls – in
+  das zu schreiben, was es beobachtet, ist bauartbedingt ausgeschlossen, nicht bloß per Konvention.
+  Lösche diese eine Datei, und von allem, was glasshive je geschrieben hat, bleibt nichts übrig.
 - **Das veröffentlichte Paket lässt sich zu diesem Repository zurückverfolgen.** Jede Version wird
   aus GitHub Actions über OIDC veröffentlicht und trägt eine Provenance-Attestation, sodass
   `npm audit signatures` das installierte Paket gegen den Workflow und den Commit prüfen kann, aus

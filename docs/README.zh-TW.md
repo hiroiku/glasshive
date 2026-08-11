@@ -51,9 +51,8 @@ issue、branch 與 milestone 在同一個畫面上，因為它們本來就是同
 就能互相切換，不必離開。
 
 issue 透過 [`gh`](https://cli.github.com) CLI 從 GitHub 來——glasshive 會問 `gh` 你的 remote
-指向哪個儲存庫，判斷方式和 `gh` 自己一樣——或是來自 [`bd`](https://github.com/gastownhall/beads)
-帳本。sub-issue 會巢狀排列，`blocked by` 會畫成相依邊，issue 類型、標籤、milestone 與負責人
-也一併帶來。
+指向哪個儲存庫，判斷方式和 `gh` 自己一樣。sub-issue 會巢狀排列，`blocked by` 會畫成相依邊，
+issue 類型、標籤、milestone 與負責人也一併帶來。
 
 branch 與 worktree 疊畫在主 worktree 所在的 branch 上，讓你看得出誰在哪裡。正在動到同一批檔案的
 組合會被提到最上面。點一個 ref，就會看到它的 commit、diff 統計，以及有哪些代理程式在上面活動過。
@@ -68,15 +67,19 @@ issue 與 branch 只靠 pull request 的 head branch 相接——差一點對上
 
 ![Side panel](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/conversation.png)
 
+一個 issue 會把它的留言與時間軸一起帶來：誰貼了標籤、被什麼擋住過、哪個 pull request 引用過它，
+就讀在此刻正在做這件事的 agent 旁邊。
+
+![Issue](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/issue.png)
+
 ## 設計上唯讀
 
-- **它讀四樣東西，一樣都不寫。** Claude Code 的 session 記錄
-  （`~/.claude/projects/**/*.jsonl`）、beads 帳本（`<project>/.beads/issues.jsonl`）、`git`，
-  以及——透過 `gh` CLI——你的 remote 指向的 GitHub 儲存庫的 issue。任何 transcript、帳本、
-  儲存庫或 issue 都不會被修改。
+- **它讀三樣東西，一樣都不寫。** Claude Code 的 session 記錄
+  （`~/.claude/projects/**/*.jsonl`）、`git`，以及——透過 `gh` CLI——你的 remote 指向的
+  GitHub 儲存庫的 issue。任何 transcript、儲存庫或 issue 都不會被修改。
 - **它唯一會寫的檔案是它自己的。** `~/.config/glasshive/preferences.json` 存放你釘選的分頁與檢視偏好。
-  寫入之前，glasshive 會檢查該路徑不在 `~/.claude`、transcript 根目錄，或任何被觀察的 `.beads` 或 `.git`
-  目錄底下，若在其中就拒絕——寫入自己觀察的對象是由結構擋下的，不是靠慣例。
+  寫入之前，glasshive 會檢查該路徑不在 `~/.claude`、transcript 根目錄，或它看得到的專案裡的
+  `.git` 或 `.beads` 目錄底下，若在其中就拒絕——寫入自己觀察的對象是由結構擋下的，不是靠慣例。
   刪掉這一個檔案，glasshive 寫過的東西就一點也不剩。
 - **發佈的套件可以追溯到這個儲存庫。** 每個版本都由 GitHub Actions 透過 OIDC 發佈，並帶有
   provenance attestation，所以 `npm audit signatures` 能把你裝到的套件，對上建置它的 workflow

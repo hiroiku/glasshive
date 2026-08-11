@@ -21,7 +21,7 @@ describe('セッションのメタ情報を導き出す', () => {
       timestamp: '2026-08-04T00:00:00Z',
       message: {
         role: 'user',
-        content: '最初の依頼をここに書く\nBEADS_ACTOR=mgr-deadbeef を用いる',
+        content: '最初の依頼をここに書く',
       },
     },
     {
@@ -63,7 +63,6 @@ describe('セッションのメタ情報を導き出す', () => {
     expect(meta.gitBranch).toBe('main');
     expect(meta.model).toBe('claude-opus-5');
     expect(meta.effort).toBe('xhigh');
-    expect(meta.actor).toBe('mgr-deadbeef');
     expect(meta.issues).toEqual(['foo-123']);
     expect(meta.current, 'ツールの一言は `description` を先に見る').toBe('Bash: テスト実行');
   });
@@ -155,23 +154,6 @@ describe('セッションのメタ情報を導き出す', () => {
       parseSessionMeta(head, tail).lastEventShape,
       '種別を持つ最後のブロックで判断を止めるので、手前の本文までは遡らない',
     ).toBe('text');
-  });
-
-  it('actor が `tail` にしか無いときは拾わない', () => {
-    const bare = jsonl({
-      type: 'user',
-      cwd: '/w',
-      message: { content: '依頼' },
-    });
-    const tail = jsonl({
-      type: 'user',
-      cwd: '/w',
-      message: { content: 'mgr-deadbeef が引き継ぐ' },
-    });
-    expect(
-      parseSessionMeta(bare, tail).actor,
-      'actor はセッションの始めに一度だけ差し込まれるので、`head` だけを見る',
-    ).toBeNull();
   });
 
   it('issues は `head` と `tail` から併合され、5 件で切られる', () => {
@@ -360,7 +342,6 @@ describe('セッションのメタ情報を導き出す', () => {
       gitBranch: null,
       model: null,
       effort: null,
-      actor: null,
       issues: [],
       current: null,
       awaitingCandidate: false,

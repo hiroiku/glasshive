@@ -52,6 +52,16 @@ function AgentsView() {
     });
   };
 
+  /* 検索語だけは履歴を積まずに置き換える。**1 文字が 1 つの行き先ではない** —
+     積むと 10 文字打った人は戻るを 10 回押すことになり、打つ前の画面へ戻れなくなる。 */
+  const onQuery = (next: string) => {
+    void navigate({
+      to: '.',
+      replace: true,
+      search: (prev: ProjectSearch) => ({ ...prev, q: next === '' ? undefined : next }),
+    });
+  };
+
   const sorting: SortingState =
     search.sort === undefined
       ? DEFAULT_SORTING
@@ -77,7 +87,7 @@ function AgentsView() {
         selectedFile={selectedFile}
         firstPaint={firstPaint}
         query={search.q ?? ''}
-        onQuery={(q) => patch({ q: q === '' ? undefined : q })}
+        onQuery={onQuery}
         attention={search.attention === true}
         onAttention={(on) => patch({ attention: on ? true : undefined })}
         sorting={sorting}

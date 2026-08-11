@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
-import { githubIssueBodyQuery } from '../../../queries/issues.query.ts';
+import { githubIssueBodyQuery, githubIssueDiscussionQuery } from '../../../queries/issues.query.ts';
 import { labelColors, subProgress } from '../../derive/githubIssue.ts';
 import { viaLabel, workerIndex, workersOn } from '../../derive/workers.ts';
 import { absTime, formatSinceIso } from '../../format.ts';
@@ -16,6 +16,7 @@ import { Icon } from '../primitives/Icon.tsx';
 import { NotObserved } from '../primitives/NotObserved.tsx';
 import { MdView } from '../text/MdView.tsx';
 import { SubjectText } from '../text/SubjectText.tsx';
+import { IssueDiscussion } from './IssueDiscussion.tsx';
 
 /* GitHub の課題 1 件のパネル。
 
@@ -96,6 +97,10 @@ export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDet
   const bodyReason =
     answer === undefined ? null : answer.ok ? answer.body.reason : (answer.body.code ?? null);
 
+  /* やり取り。本文とは別に尋ねる —— 何ページにもなることがあり、同じ問い合わせにすると
+     本文だけを見たい人まで全ページぶんを待つ。描くのは `IssueDiscussion` である。 */
+  const discussion = useQuery({ ...githubIssueDiscussionQuery(slug, number), enabled: askable });
+
   return (
     <div className="detail">
       <div id="detail-header">
@@ -133,7 +138,7 @@ export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDet
 
           <span className="mk">assignees</span>
           <span className="mv-agents">
-            {github !== null && github.assignees.length > 0 ? (
+            {github.assignees.length > 0 ? (
               <AvatarStack actors={github.assignees} max={MAX_FACES} />
             ) : (
               <span className="dimtxt">—</span>
@@ -189,7 +194,7 @@ export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDet
 
           <span className="mk">pull requests</span>
           <span className="mv-agents">
-            {github === null || github.pull_requests.length === 0 ? (
+            {github.pull_requests.length === 0 ? (
               <span className="dimtxt">—</span>
             ) : (
               github.pull_requests.map((pull) => (
@@ -313,6 +318,14 @@ export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDet
               : { steps: [{ text: 'Read the whole issue on GitHub', href: github.url }] })}
           />
         )}
+
+        <IssueDiscussion
+          answer={discussion.data}
+          pending={discussion.isPending && askable}
+          project={project}
+          nowMs={nowMs}
+          url={github?.url ?? null}
+        />
       </div>
     </div>
   );

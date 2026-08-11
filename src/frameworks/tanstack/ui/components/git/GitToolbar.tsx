@@ -1,6 +1,7 @@
 import { mdiSourceBranch } from '@mdi/js';
 import type React from 'react';
 import { Icon } from '../primitives/Icon.tsx';
+import { SearchInput } from '../primitives/SearchInput.tsx';
 
 /* Git 画面のツールバー。検索と、比較の相手と、いま見えている数。
 
@@ -37,13 +38,7 @@ export function GitToolbar({
   return (
     <div className="view-toolbar">
       {lead}
-      <input
-        className="search"
-        type="search"
-        placeholder="Search refs & commits…"
-        value={query}
-        onChange={(event) => onQuery(event.target.value)}
-      />
+      <SearchInput value={query} onChange={onQuery} placeholder="Search refs &amp; commits…" />
       <span className="g-base">
         <Icon path={mdiSourceBranch} size={12} /> {base}
       </span>

@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import type { GitOverviewResponse } from '~/interface/controllers/git/git.controller.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { gitQuery } from '../queries/git.query.ts';
-import { githubIssuesQuery, issuesQuery } from '../queries/issues.query.ts';
+import { githubIssuesQuery } from '../queries/issues.query.ts';
 import { treeQuery } from '../queries/tree.query.ts';
 import { GitGraph, type GitOrder } from '../ui/components/git/GitGraph.tsx';
 import { DependencyGraph } from '../ui/components/issues/DependencyGraph.tsx';
@@ -15,10 +15,12 @@ import { IssuesLegend } from '../ui/components/issues/Legend.tsx';
 import { Icon } from '../ui/components/primitives/Icon.tsx';
 import { NotObserved } from '../ui/components/primitives/NotObserved.tsx';
 import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
+import { SearchInput } from '../ui/components/primitives/SearchInput.tsx';
 import { Milestones } from '../ui/components/work/Milestones.tsx';
 import { UnitSwitch } from '../ui/components/work/UnitSwitch.tsx';
 import { WorkToolbar } from '../ui/components/work/WorkToolbar.tsx';
 import type { TipSortKey } from '../ui/derive/gitGraph.ts';
+import { DEFAULT_GANTT_WINDOW, GANTT_WINDOWS, type GanttWindow } from '../ui/derive/issueGantt.ts';
 import { withoutClosed } from '../ui/derive/issueStatus.ts';
 import { milestoneOf } from '../ui/derive/milestones.ts';
 import { githubTrouble, gitTrouble, transportTrouble } from '../ui/derive/trouble.ts';
@@ -51,7 +53,6 @@ const ISSUE_SORT_KEYS: readonly IssueSortKey[] = [
   'id',
   'title',
   'status',
-  'priority',
   'type',
   'labels',
   'assignee',
@@ -75,22 +76,22 @@ function WorkView() {
   /* **1 回しか取りに行かない。** `gh` の起動と GitHub への往復はこの画面で最も高く、
      閉じたものを含めるかどうかで取ってくる中身は変わらない。絞り込みはここでやる。 */
   const issues = useQuery(githubIssuesQuery(slug, true));
-  /* 統合待ちのチップは台帳から来る。台帳が無いプロジェクトではチップが出ないだけ */
-  const ledger = useQuery(issuesQuery(slug, false));
 
   const project = tree.data?.projects.find((candidate) => candidate.id === slug);
   const workers = useMemo(() => workerIndex(project), [project]);
 
-  const mergeReady = useMemo(() => {
-    if (ledger.data?.ok !== true) return [];
-    return ledger.data.body.issues
-      .filter((issue) => issue.status === 'merge-ready')
-      .map((issue) => issue.id)
-      .filter((id): id is string => id !== null);
-  }, [ledger.data]);
-
   const patch = (next: Partial<ProjectSearch>) => {
     void navigate({ to: '.', search: (prev: ProjectSearch) => ({ ...prev, ...next }) });
+  };
+
+  /* 検索語だけは履歴を積まずに置き換える。**1 文字が 1 つの行き先ではない** —
+     積むと 10 文字打った人は戻るを 10 回押すことになり、打つ前の画面へ戻れなくなる。 */
+  const onQuery = (next: string) => {
+    void navigate({
+      to: '.',
+      replace: true,
+      search: (prev: ProjectSearch) => ({ ...prev, q: next === '' ? undefined : next }),
+    });
   };
 
   /* 単位を移るときは並べ替えを落とす。**列が違うので、持ち越すと意味が変わる** —
@@ -133,11 +134,10 @@ function WorkView() {
           answer={git.data}
           failed={git.error !== null}
           project={project}
-          mergeReady={mergeReady}
           join={join}
           lead={unitSwitch}
           query={search.q ?? ''}
-          onQuery={(next) => patch({ q: next === '' ? undefined : next })}
+          onQuery={onQuery}
           sort={search.sort}
           dir={search.dir}
           onSort={(key, dir) => patch({ sort: key, dir })}
@@ -162,6 +162,17 @@ function WorkView() {
     patch({ sort: key, dir: flip });
   };
 
+  /* タイムラインの幅は URL に載る。**渡した先でも同じ軸が出る** —— 幅が違えば同じ一覧でも
+     バーの長さが変わるので、「この期間で見て」と言えないと画面を渡す意味が薄れる。
+     既定のときはパラメータを落として、URL に既定の値が居座らないようにする。 */
+  const ganttWindow =
+    GANTT_WINDOWS.find((preset) => preset.label === search.gw)?.key ?? DEFAULT_GANTT_WINDOW;
+
+  const onGantt = (next: GanttWindow) => {
+    const label = GANTT_WINDOWS.find((preset) => preset.key === next)?.label;
+    patch({ gw: next === DEFAULT_GANTT_WINDOW ? undefined : label });
+  };
+
   const toolbar = (chips?: React.ReactNode) => (
     <WorkToolbar
       unit={search.unit ?? null}
@@ -171,8 +182,10 @@ function WorkView() {
       milestoneCount={milestoneCount}
       graph={search.view === 'graph'}
       onGraph={(on) => patch({ view: on ? 'graph' : undefined })}
+      gantt={ganttWindow}
+      onGantt={onGantt}
       query={search.q ?? ''}
-      onQuery={(query) => patch({ q: query === '' ? undefined : query })}
+      onQuery={onQuery}
     >
       {chips}
     </WorkToolbar>
@@ -238,14 +251,10 @@ function WorkView() {
         lead={
           <div className="view-toolbar">
             {unitSwitch}
-            <input
-              className="search"
-              type="search"
-              placeholder="Search milestones…"
+            <SearchInput
               value={search.q ?? ''}
-              onChange={(event) =>
-                patch({ q: event.target.value === '' ? undefined : event.target.value })
-              }
+              onChange={onQuery}
+              placeholder="Search milestones…"
             />
           </div>
         }
@@ -322,10 +331,11 @@ function WorkView() {
           workers={workers}
           join={join}
           query={search.q ?? ''}
-          onQuery={(query) => patch({ q: query === '' ? undefined : query })}
+          onQuery={onQuery}
           status={search.status ?? null}
           order={order}
           onSort={onSort}
+          ganttWindow={ganttWindow}
           nowMs={nowMs}
           firstPaint={false}
         />
@@ -347,7 +357,6 @@ interface BranchesProps {
   readonly answer: GitOverviewResponse | undefined;
   readonly failed: boolean;
   readonly project: ProjectJson | undefined;
-  readonly mergeReady: readonly string[];
   readonly join: WorkJoin;
   readonly lead: React.ReactNode;
   readonly query: string;
@@ -362,7 +371,6 @@ function Branches({
   answer,
   failed,
   project,
-  mergeReady,
   join,
   lead,
   query,
@@ -390,7 +398,6 @@ function Branches({
     <GitGraph
       overview={overview}
       project={project}
-      mergeReady={mergeReady}
       join={join}
       lead={lead}
       query={query}

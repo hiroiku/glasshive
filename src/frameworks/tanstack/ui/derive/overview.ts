@@ -314,9 +314,18 @@ export function filterRows(rows: readonly OverviewRow[], query: string): readonl
   );
 }
 
-/** バーの長さを決める基準。全部 0 のときに 0 で割らないよう 1 で下支えする */
-export const tokensCeiling = (rows: readonly OverviewRow[]): number =>
-  Math.max(1, ...rows.map((row) => row.tokens24h ?? 0));
+/* バーの長さを決める分母。**いま出ている行の合計である。**
+
+   絞り込みを変えれば分母も変わり、出ている行のバーはいつも合わせて 100% になる。
+   いちばん多い 1 本を基準にすると、絞り込んでも他の行の長さが変わらないので、
+   「いま見ている中でどれだけを占めるか」が読めない。
+
+   全部 0 のときに 0 で割らないよう 1 で下支えする。 */
+export const shownTokens = (rows: readonly OverviewRow[]): number =>
+  Math.max(
+    1,
+    rows.reduce((sum, row) => sum + (row.tokens24h ?? 0), 0),
+  );
 
 export interface OverviewTotals {
   readonly active: number;

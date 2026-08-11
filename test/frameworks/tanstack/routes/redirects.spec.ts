@@ -1,6 +1,5 @@
 import { isRedirect } from '@tanstack/react-router';
 import { describe, expect, it } from 'vitest';
-import { Route as BeadsRoute } from '~/frameworks/tanstack/routes/projects.$slug.beads.tsx';
 import { Route as GitRoute } from '~/frameworks/tanstack/routes/projects.$slug.git.tsx';
 import { type ProjectSearch, parseProjectSearch } from '~/frameworks/tanstack/ui/nav/search.ts';
 
@@ -38,7 +37,7 @@ const opened: ProjectSearch = {
   pv: 'a1b2c3d',
   pl: 'feat/tabs',
   q: 'auth',
-  status: 'in_progress',
+  status: 'open',
 };
 
 describe('1.2.0 より前のリンクを Work へ送る', () => {
@@ -52,26 +51,16 @@ describe('1.2.0 より前のリンクを Work へ送る', () => {
     ).toEqual({ unit: 'branches' });
   });
 
-  it('`/beads` は課題の一覧を開く', () => {
-    const options = forward(BeadsRoute, {});
-    expect(options.to).toBe('/projects/$slug/work');
-    expect(options.params).toEqual({ slug: 'demo' });
-    expect(options.search, '課題の一覧は Work の既定の単位である').toEqual({});
-  });
-
-  it('パネルと絞り込みは、どちらの URL からもそのまま渡る', () => {
+  it('パネルと絞り込みは、そのまま渡る', () => {
     expect(forward(GitRoute, opened).search).toEqual({ ...opened, unit: 'branches' });
-    expect(forward(BeadsRoute, opened).search).toEqual(opened);
   });
 
   it('渡した検索パラメータは、行き先でもそのまま読める', () => {
-    for (const route of [GitRoute, BeadsRoute]) {
-      const { search } = forward(route, opened);
-      expect(
-        parseProjectSearch(search),
-        '行き先が読めない欄を載せると、渡した先で黙って落ちる',
-      ).toEqual(search);
-    }
+    const { search } = forward(GitRoute, opened);
+    expect(
+      parseProjectSearch(search),
+      '行き先が読めない欄を載せると、渡した先で黙って落ちる',
+    ).toEqual(search);
   });
 
   it('古い URL は履歴に残さない', () => {
@@ -79,6 +68,5 @@ describe('1.2.0 より前のリンクを Work へ送る', () => {
       forward(GitRoute, opened).replace,
       '戻るを押して、送り出されるだけのルートへ帰らせない',
     ).toBe(true);
-    expect(forward(BeadsRoute, opened).replace).toBe(true);
   });
 });

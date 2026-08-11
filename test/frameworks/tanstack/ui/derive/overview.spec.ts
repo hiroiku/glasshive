@@ -7,8 +7,8 @@ import {
   filterRows,
   holdOrder,
   type OverviewRow,
+  shownTokens,
   sortRows,
-  tokensCeiling,
   totalsOf,
   unionSpans,
   withinSpan,
@@ -65,7 +65,6 @@ function session(overrides: Partial<SessionJson> = {}): SessionJson {
     effort: null,
     git_branch: null,
     cwd: null,
-    actor: null,
     issues: [],
     current: null,
     intervals: [],
@@ -368,12 +367,23 @@ describe('期間で絞る', () => {
 });
 
 describe('バーと合計', () => {
-  it('バーの基準は最も大きい消費', () => {
-    expect(tokensCeiling([row({ tokens24h: 10 }), row({ tokens24h: 40 })])).toBe(40);
+  /* バーの分母は、いま出ている行の合計である。**いちばん大きい 1 本ではない** —
+     出ている行のバーを足すと 100% になり、絞り込みを変えれば分母も変わる。 */
+  it('バーの分母は出ている行の合計', () => {
+    expect(shownTokens([row({ tokens24h: 10 }), row({ tokens24h: 40 })])).toBe(50);
+  });
+
+  it('絞り込んで消えた行は分母に入らない', () => {
+    const all = [row({ tokens24h: 10 }), row({ tokens24h: 40 })];
+    expect(shownTokens(all.slice(0, 1)), '出ていない行を数えると、合計が 100% を超える').toBe(10);
+  });
+
+  it('読めなかった消費は 0 として足す', () => {
+    expect(shownTokens([row({ tokens24h: null }), row({ tokens24h: 40 })])).toBe(40);
   });
 
   it('全部 0 でも 0 で割らない', () => {
-    expect(tokensCeiling([row({ tokens24h: 0 })])).toBe(1);
+    expect(shownTokens([row({ tokens24h: 0 })])).toBe(1);
   });
 
   it('数と待ちを足し上げる', () => {

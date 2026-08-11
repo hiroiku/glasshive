@@ -58,7 +58,6 @@ function session(at: number, overrides: Partial<DraftSession> = {}): DraftSessio
     effort: null,
     gitBranch: null,
     cwd: '/work/myproj',
-    actor: null,
     issues: [],
     current: null,
     activity: observed(EMPTY_ACTIVITY),

@@ -13,7 +13,6 @@
       "!old",
       "!src/frameworks/tanstack/routeTree.gen.ts",
       "!**/*.min.*",
-      "!.beads",
       "!.claude"
     ],
     "ignoreUnknown": true

@@ -12,7 +12,6 @@ import {
 } from '~/application/errors/sessions/not-observed.error.ts';
 import { TranscriptOutOfScopeError } from '~/application/errors/workspace/out-of-scope.error.ts';
 import { InvalidPathError, OutOfScopePathError } from '~/domain/errors/workspace/path.error.ts';
-import { LedgerReadError } from '~/infrastructure/errors/issues/ledger-read.error.ts';
 import {
   ProcessInspectionError,
   TranscriptReadError,
@@ -47,7 +46,6 @@ const CASES: [AppError, ApiStatus, 'invalid' | 'unobservable'][] = [
   [new SessionNotObservedError('知らないセッション'), 404, 'invalid'],
   [new UnexpectedError('壊れた'), 500, 'unobservable'],
   [new TranscriptReadError('読めない'), 503, 'unobservable'],
-  [new LedgerReadError('台帳を読めない'), 503, 'unobservable'],
   [new ProcessInspectionError('数えられない'), 503, 'unobservable'],
   [new TranscriptWatchError('張れない'), 503, 'unobservable'],
   [new PreferencesReadError('`preferences.json` を読めない'), 503, 'unobservable'],

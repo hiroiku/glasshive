@@ -51,9 +51,8 @@ issue、分支和 milestone 放在同一块屏幕上，因为它们本来就是�
 不用离开当前视图。
 
 issue 来自 GitHub，通过 [`gh`](https://cli.github.com) CLI 读取 —— glasshive 会问 `gh` 你的 remote
-指向哪个仓库，判断方式和 `gh` 自己一样 —— 也可以来自 [`bd`](https://github.com/gastownhall/beads)
-账本。sub-issue 会嵌套，`blocked by` 会画成依赖关系的连线，issue 类型、标签、milestone 和负责人也
-一并带来。
+指向哪个仓库，判断方式和 `gh` 自己一样。sub-issue 会嵌套，`blocked by` 会画成依赖关系的连线，
+issue 类型、标签、milestone 和负责人也一并带来。
 
 分支和 worktree 画在主 worktree 所在分支之上，让你看清谁在哪里。正在改动同一批文件的组合会被提到
 顶部。选中一个 ref，就能看到它的提交、差异统计，以及哪些智能体在它上面活动过。issue 和分支只靠
@@ -68,14 +67,19 @@ pull request 的 head 分支相连 —— 差一点点对上的，宁可留着�
 
 ![Side panel](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/conversation.png)
 
+一个 issue 会把它的评论和时间线一起带来：谁打了标签、被什么挡住过、哪个 pull request 引用过它，
+就读在此刻正在做这件事的 agent 旁边。
+
+![Issue](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/issue.png)
+
 ## 设计上只读
 
-- **它读四样东西，一样都不写。** Claude Code 的会话记录（`~/.claude/projects/**/*.jsonl`）、beads
-  账本（`<project>/.beads/issues.jsonl`）、`git`，以及 —— 通过 `gh` CLI —— 你的 remote 指向的
-  GitHub 仓库的 issue。任何会话记录、账本、仓库或 issue 都不会被修改。
+- **它读三样东西，一样都不写。** Claude Code 的会话记录（`~/.claude/projects/**/*.jsonl`）、`git`，
+  以及 —— 通过 `gh` CLI —— 你的 remote 指向的 GitHub 仓库的 issue。
+  任何会话记录、仓库或 issue 都不会被修改。
 - **它唯一会写的文件是它自己的。** `~/.config/glasshive/preferences.json` 保存你固定的标签和视图偏好。
-  写入之前，glasshive 会检查这个路径不在 `~/.claude`、会话记录的根目录，或任何被观察的 `.beads` 或
-  `.git` 目录里面，只要在就拒绝 —— 不写入自己观察的东西，是由构造挡住的，不是靠约定。
+  写入之前，glasshive 会检查这个路径不在 `~/.claude`、会话记录的根目录，或它能看到的项目下的
+  `.git` 或 `.beads` 目录里面，只要在就拒绝 —— 不写入自己观察的东西，是由构造挡住的，不是靠约定。
   删掉这一个文件，glasshive 写过的东西就一点也不剩。
 - **发布出来的包可以追溯到这个仓库。** 每个版本都由 GitHub Actions 通过 OIDC 发布，并带有
   provenance attestation，所以 `npm audit signatures` 能把你装到的包，对上构建它的 workflow

@@ -1,5 +1,6 @@
 import type { OverviewSpan, OverviewTotals } from '../../derive/overview.ts';
 import { formatTokens } from '../../format.ts';
+import { SearchInput } from '../primitives/SearchInput.tsx';
 
 /* Overview のツールバー。検索と、いま全体がどうなっているかの 1 行。 */
 
@@ -66,13 +67,11 @@ export function OverviewToolbar({
   ) : null;
   return (
     <div className="view-toolbar">
-      <input
-        className="search"
-        type="search"
+      <SearchInput
         value={query}
+        onChange={onQuery}
         placeholder="Search projects…"
-        aria-label="Search projects"
-        onChange={(event) => onQuery(event.target.value)}
+        label="Search projects"
       />
 
       {CHIPS.map((chip) => (

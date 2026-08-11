@@ -18,7 +18,6 @@ import {
   parseFirstJsonLine,
   parseJsonlLines,
 } from '~/app-kernel/json.ts';
-import { scanActorId } from '~/domain/value-objects/sessions/actor.value-object.ts';
 import {
   MAX_SESSION_ISSUES,
   scanWorktreeMentions,
@@ -51,7 +50,6 @@ export interface SessionMeta {
   readonly gitBranch: string | null;
   readonly model: string | null;
   readonly effort: string | null;
-  readonly actor: string | null;
   readonly issues: readonly string[];
   readonly current: string | null;
   /** 末尾の形が「自分の番が終わっている」ものか */
@@ -229,8 +227,7 @@ export function parseSessionMeta(head: string, tail: string): SessionMeta {
   // Claude Code が付けた題は最初の発話より後に決まるので、全部を辿り終えてから被せる
   if (aiTitle !== undefined) title = aiTitle;
 
-  /* actor の id は先頭だけから拾い、課題は先頭と末尾の両方から拾う。
-     actor の id はセッションの始めに一度だけ差し込まれ、課題は途中で増えるからである。 */
+  /* 課題は先頭と末尾の両方から拾う。セッションの途中で増えるからである */
   const issues = scanWorktreeMentions(head);
   for (const issue of scanWorktreeMentions(tail)) {
     if (!issues.includes(issue)) issues.push(issue);
@@ -243,7 +240,6 @@ export function parseSessionMeta(head: string, tail: string): SessionMeta {
     gitBranch: gitBranch ?? null,
     model: model ?? null,
     effort: effort ?? null,
-    actor: scanActorId(head),
     issues: issues.slice(0, MAX_SESSION_ISSUES),
     current: current ?? null,
     awaitingCandidate: isAwaitingUserShape(lastEventShape),

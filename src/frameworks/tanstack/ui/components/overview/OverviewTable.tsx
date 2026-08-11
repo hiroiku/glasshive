@@ -4,7 +4,7 @@ import {
   type OverviewRow,
   type SortKey,
   type SortOrder,
-  tokensCeiling,
+  shownTokens,
 } from '../../derive/overview.ts';
 import { formatSince, formatTokens } from '../../format.ts';
 import { Dot } from '../primitives/Dot.tsx';
@@ -122,7 +122,7 @@ export function OverviewTable({
   nowMs,
   spanMs,
 }: OverviewTableProps) {
-  const ceiling = tokensCeiling(rows);
+  const tokenTotal = shownTokens(rows);
 
   /* 稼働のトラックの軸は、行をまたいで 1 つである。**行ごとに合わせない** —
      行ごとに合わせると、5 分だけ動いたプロジェクトと 3 日動いたプロジェクトが
@@ -143,7 +143,6 @@ export function OverviewTable({
         <SortHead label="Waiting" sortKey="waiting" order={order} onSort={onSort} right />
         <SortHead label="Input" sortKey="input" order={order} onSort={onSort} right />
         <SortHead label="Tokens 24h" sortKey="tokens" order={order} onSort={onSort} right />
-        <span>Share</span>
         <span>Activity</span>
         <SortHead label="Last activity" sortKey="last" order={order} onSort={onSort} right />
       </div>
@@ -187,30 +186,36 @@ export function OverviewTable({
             </span>
 
             {/* 観測できなかった消費は空にせず、観測できなかったと言う。
-                空にすると「使っていない」と並んで見えてしまう。 */}
+                空にすると「使っていない」と並んで見えてしまう。
+
+                バーの長さは、**いま出ている行の合計に対する割合**である。出ている行のバーを
+                足すと 100% になり、絞り込みを変えれば分母も変わる。 */}
             <span
-              className={`right mono${row.read ? '' : ' dimtxt'}`}
+              className={`dash-tok${row.read ? '' : ' dimtxt'}`}
               title={
                 row.read
                   ? row.tokens24hState === 'unobservable'
                     ? 'Could not be read'
-                    : undefined
+                    : row.tokens24h !== null && row.tokens24h > 0
+                      ? `${formatTokens(row.tokens24h)} — ${Math.round((row.tokens24h / tokenTotal) * 100)}% of the ${formatTokens(tokenTotal)} shown`
+                      : undefined
                   : NOT_READ
               }
             >
-              {!row.read
-                ? DASH
-                : row.tokens24hState === 'unobservable'
-                  ? '?'
-                  : row.tokens24h !== null && row.tokens24h > 0
-                    ? formatTokens(row.tokens24h)
-                    : ''}
-            </span>
-
-            <span className="dash-bar">
-              {row.tokens24h !== null && row.tokens24h > 0 && (
-                <i style={{ width: `${(row.tokens24h / ceiling) * 100}%` }} />
-              )}
+              <span className="mono">
+                {!row.read
+                  ? DASH
+                  : row.tokens24hState === 'unobservable'
+                    ? '?'
+                    : row.tokens24h !== null && row.tokens24h > 0
+                      ? formatTokens(row.tokens24h)
+                      : ''}
+              </span>
+              <span className="dash-bar">
+                {row.read && row.tokens24h !== null && row.tokens24h > 0 && (
+                  <i style={{ width: `${(row.tokens24h / tokenTotal) * 100}%` }} />
+                )}
+              </span>
             </span>
 
             <ActivityStrip row={row} fromMs={fromMs} toMs={nowMs} />

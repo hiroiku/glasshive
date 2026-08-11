@@ -55,10 +55,13 @@
 .lbtn {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   background: transparent;
   border: none;
   color: var(--dim);
-  padding: 3px 8px;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 9px;
   cursor: pointer;
 }
 .lbtn + .lbtn {

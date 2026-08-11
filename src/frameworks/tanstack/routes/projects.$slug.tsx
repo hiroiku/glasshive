@@ -33,9 +33,9 @@ export const Route = createFileRoute('/projects/$slug')({
 /* サイドパネルの中身は、パネルを開いたときに読み込む。
 
    会話と課題の本文は Markdown レンダラーとシンタックスハイライタを連れてくる。これらは
-   パネルの中でしか使わないので、一緒にバンドルすると Agents も Git も Beads も、
-   開きもしないパネルのぶんを毎回読み込むことになる。分けたぶん、`ref` のパネルを
-   開いても Markdown 側は付いてこない。 */
+   パネルの中でしか使わないので、一緒にバンドルすると Agents も Work も、開きもしない
+   パネルのぶんを毎回読み込むことになる。分けたぶん、`ref` のパネルを開いても
+   Markdown 側は付いてこない。 */
 const ConvPanel = lazy(() =>
   import('../ui/components/conversation/ConvPanel.tsx').then((it) => ({ default: it.ConvPanel })),
 );

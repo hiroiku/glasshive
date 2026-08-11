@@ -49,13 +49,13 @@ p.warn {
 .dash-sum b.input {
   color: var(--input);
 }
-/* 左端にピン留めの列を置くので、列は 9 本になる。
+/* 左端にピン留めの列を置くので、列は 8 本になる。
    行の属性として状態の点と並べて読めるようにしてある(右端だと消す操作に見える) */
 .dash-grid {
   display: grid;
   grid-template-columns:
-    max-content minmax(180px, max-content) max-content max-content max-content max-content
-    minmax(90px, 0.6fr) minmax(180px, 1.4fr) max-content;
+    max-content minmax(180px, max-content) max-content max-content max-content
+    minmax(66px, max-content) minmax(200px, 1fr) max-content;
   column-gap: 22px;
   max-width: 1400px;
 }
@@ -92,11 +92,23 @@ p.warn {
 .dash-row .inputc {
   color: var(--input);
 }
+/* 消費と、その割合を 1 つの欄に重ねる。**別の列にしない** —— 同じ数を 2 度出すことになり、
+   そのぶん名前と稼働の欄が狭くなる。数を右へ揃え、そのすぐ下にバーを敷く。 */
+.dash-tok {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  line-height: 14px;
+}
+.dash-tok .mono {
+  font-family: var(--mono);
+}
 .dash-bar {
   position: relative;
-  height: 8px;
+  width: 100%;
+  height: 3px;
   background: rgba(42, 52, 65, 0.5);
-  border-radius: 4px;
+  border-radius: 2px;
   overflow: hidden;
 }
 .dash-bar i {
@@ -104,8 +116,10 @@ p.warn {
   left: 0;
   top: 0;
   bottom: 0;
+  /* 値が在るのにバーが見えないと、0 と並んで見える */
+  min-width: 2px;
   background: rgba(96, 165, 250, 0.55);
-  border-radius: 4px;
+  border-radius: 2px;
 }
 
 /* プロジェクトの中で動いていた時間。行をまたいで同じ軸に載っているので、並べて比べられる */

@@ -2,10 +2,9 @@ import type { Observation } from '~/app-kernel/observation.ts';
 
 /* 課題トラッカーに問い合わせるポート。
 
-   台帳を読む `IssueLedgerRepository` とは別のものである。あちらは形を知っているファイルを
-   読んで、こちらの課題を組み立て直す。こちらは**他人のプログラムを起こして、他人の答えを
-   受け取る**。失敗の語彙も違う — 無い・読めないではなく、コマンドが無い・断られた・
-   時間内に答えなかった、になる。
+   形を知っているファイルを読んで、こちらの型を組み立て直すリポジトリとは別のものである。
+   こちらは**他人のプログラムを起こして、他人の答えを受け取る**。失敗の語彙も違う —
+   無い・読めないではなく、コマンドが無い・断られた・時間内に答えなかった、になる。
 
    持ち帰るのは応答のテキストだけである。中身をどう読むかは domain の純関数に在り、実装に
    残る仕事は「起こして、テキストを受け取る」ことだけになる。
@@ -48,6 +47,15 @@ export interface IssueBodyRequest {
   readonly number: number;
 }
 
+export interface IssueDiscussionRequest {
+  readonly owner: string;
+  readonly name: string;
+  /** 課題の番号。**一覧に出ていた番号だけを渡す** — 尋ねてきた側の値ではない */
+  readonly number: number;
+  /** 前のページが答えた続きの位置。最初のページを求めるときは無い */
+  readonly cursor: string | null;
+}
+
 export interface IssueTrackerIntegration {
   /* 課題 1 ページぶんの応答テキスト。
 
@@ -64,4 +72,12 @@ export interface IssueTrackerIntegration {
      **一覧とは別の呼び出しである。** 一覧は本文を求めない —— 100 件ぶんを運ぶと一覧そのものが
      開かなくなる。読む人が 1 件を開いたときだけ、その 1 件を尋ねる。 */
   fetchIssueBody(request: IssueBodyRequest): Promise<Observation<string>>;
+
+  /* 課題 1 件のやり取り(コメントと `timeline` のイベント)1 ページぶんの応答テキスト。
+
+     本文と同じく、1 件を開いたときにだけ尋ねる。ページを何枚まで辿るかを決めるのは
+     呼ぶ側で、このポートは渡されたカーソルの続きを 1 ページ返すだけである。
+
+     持ち帰るのは応答のテキストだけである。どの項目をどう読むかは domain の純関数に在る。 */
+  fetchIssueDiscussion(request: IssueDiscussionRequest): Promise<Observation<string>>;
 }

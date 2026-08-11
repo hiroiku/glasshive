@@ -25,7 +25,6 @@ export interface TranscriptSession {
   readonly effort: string | null;
   readonly gitBranch: string | null;
   readonly cwd: string | null;
-  readonly actor: string | null;
   readonly issues: readonly string[];
   readonly current: string | null;
   /* 動いていた稼働区間。**観測できたかどうかごと持つ。**

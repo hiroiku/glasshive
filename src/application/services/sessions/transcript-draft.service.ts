@@ -344,7 +344,6 @@ export function createTranscriptDrafts(deps: {
         effort: found?.effort ?? null,
         gitBranch: found?.gitBranch ?? null,
         cwd: found?.cwd ?? null,
-        actor: found?.actor ?? null,
         issues: (found?.issues ?? []).slice(0, MAX_SESSION_ISSUES),
         current: found?.current ?? null,
         activity,

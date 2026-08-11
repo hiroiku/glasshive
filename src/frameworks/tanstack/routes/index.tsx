@@ -219,7 +219,7 @@ function Overview() {
           <Dot state="unknown" /> not read yet
         </span>
         <span>
-          <i className="lg-bar" /> share of the tokens spent in the last 24h
+          <i className="lg-bar" /> share of the tokens spent in the last 24h by the projects shown
         </span>
         <span>
           <i className="lg-act" /> when anything in the project was running, over the {span} window

@@ -46,7 +46,6 @@ function sessionOf(file: string): ProjectTree['projects'][number]['sessions'][nu
     effort: null,
     gitBranch: null,
     cwd: null,
-    actor: null,
     issues: [],
     current: null,
     activity: absent('empty'),

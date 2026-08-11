@@ -138,8 +138,7 @@ export function buildEdges(shown: readonly IssueSummaryJson[]): {
 
 /* 着手の順。**次に取る 1 件を上へ出すための並びである。**
 
-   塞がれているかは、blocks の相手が台帳にまだ生きているかで見る。閉じた相手は
-   もう塞いでいない。 */
+   塞がれているかは、blocks の相手がまだ生きているかで見る。閉じた相手はもう塞いでいない。 */
 export function startRanker(
   issues: readonly IssueSummaryJson[],
 ): (issue: IssueSummaryJson) => number {
@@ -157,10 +156,8 @@ export function startRanker(
 
   return (issue) => {
     if (issue.status === 'open') return blocked(issue) ? 1 : 0;
-    if (issue.status === 'in_progress') return 2;
     if (issue.status === 'closed') return 5;
-    if (issue.status.startsWith('defer')) return 4;
-    // merge-ready などの統合待ち
+    // blocked・not_planned と、GitHub が付けた見知らぬ状態。手を付けられるものの後ろに置く
     return 3;
   };
 }

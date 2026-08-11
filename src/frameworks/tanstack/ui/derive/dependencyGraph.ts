@@ -69,7 +69,8 @@ export function buildDependencyGraph(issues: readonly IssueSummaryJson[]): Depen
       if (dependency.type !== BLOCKS) continue;
       const on = dependency.on;
       /* 渡された並びに居ない相手は、辺にしない。閉じた課題も検索から外れた課題も
-         ここへ来る。**自分自身を堰き止める辺も落とす** — GitHub は拒むが、台帳は拒まない。 */
+         ここへ来る。**自分自身を堰き止める辺も落とす** — 自分へ戻る辺は、どう描いても
+         「永久に着手できない」としか読めない。 */
       if (on === null || on === id || !placed.has(on)) continue;
       blockedBy.get(id)?.push(on);
       blocking.get(on)?.push(id);

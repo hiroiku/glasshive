@@ -163,13 +163,6 @@
   cursor: pointer;
   text-decoration: underline dotted rgba(125, 138, 153, 0.6);
 }
-/* ブランチの上の merge-ready は緑。台帳の上の紫と同じ名前だが、意味が違う —
-   台帳は「人がその状態に置いた」、ブランチは「そのブランチが統合を待っている」。
-   親のセレクタで括らないと、後に書いた方が両方を塗り替える。 */
-#git-rows .chip.st-merge-ready {
-  background: rgba(52, 211, 153, 0.14);
-  color: #6ee7b7;
-}
 .g-behind {
   color: var(--dim);
   font-family: var(--mono);

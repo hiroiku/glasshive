@@ -4,6 +4,7 @@ import {
   IssuesTable,
   type IssuesTableProps,
 } from '~/frameworks/tanstack/ui/components/issues/IssuesTable.tsx';
+import { DEFAULT_GANTT_WINDOW, MONTH_MS } from '~/frameworks/tanstack/ui/derive/issueGantt.ts';
 
 /* 一覧は「次に何を取るか」を答える表である。
 
@@ -11,7 +12,7 @@ import {
    残ることを見る。**どちらも、並び順そのものではなく読み方を決める仕掛けである** ——
    落ちても表は出てしまうので、目で気付けない。 */
 
-/* 題名の中の語を課題や `ref` へ結ぶところは、台帳を読みに行く。ここで見たいのは
+/* 題名の中の語を課題や `ref` へ結ぶところは、観測を読みに行く。ここで見たいのは
    束と絞り込みなので、素の文字に差し替える。 */
 vi.mock('~/frameworks/tanstack/ui/components/text/SubjectText.tsx', () => ({
   SubjectText: ({ text }: { text: string }) => <span>{text}</span>,
@@ -37,16 +38,25 @@ const issue = (id: string, over: Partial<Issue> = {}): Issue => ({
   id,
   title: `title ${id}`,
   status: 'open',
-  priority: null,
   issue_type: null,
   labels: [],
   assignee: null,
-  owner: null,
   created_at: null,
   updated_at: '2026-08-09T11:00:00Z',
   deps: [],
   deps_complete: true,
-  github: null,
+  github: {
+    url: null,
+    labels: [],
+    assignees: [],
+    author: null,
+    milestone: null,
+    issue_type_color: null,
+    sub_issues: null,
+    pull_requests: [],
+    comments: 0,
+    reactions: 0,
+  },
   ...over,
 });
 
@@ -64,6 +74,7 @@ function draw(issues: readonly Issue[], over: Partial<IssuesTableProps> = {}) {
       status={null}
       order={{ key: 'updated', direction: 'desc' }}
       onSort={vi.fn()}
+      ganttWindow={DEFAULT_GANTT_WINDOW}
       nowMs={NOW}
       firstPaint
       {...over}
@@ -180,6 +191,144 @@ describe('行に触れると、関わりのある行だけが残る', () => {
 
     expect(container.querySelector('#issues-list')?.classList.contains('hot')).toBe(false);
     expect(rowsOf(container).some((row) => row.classList.contains('lit'))).toBe(false);
+  });
+});
+
+describe('右のタイムライン', () => {
+  const DAY = 86_400_000;
+  const iso = (daysAgo: number) => new Date(NOW - daysAgo * DAY).toISOString();
+
+  /* 1 か月の幅で見る。`all` は出ている課題で軸が決まるので、位置を数で確かめられない */
+  const drawGantt = (issues: readonly Issue[]) => draw(issues, { ganttWindow: MONTH_MS });
+
+  const rowOf = (container: HTMLElement, id: string) => {
+    const row = rowsOf(container).find((candidate) => idOf(candidate) === id);
+    if (row === undefined) throw new Error(`${id} の行が無い`);
+    return row;
+  };
+
+  const pctOf = (node: Element | null, property: 'left' | 'width'): number =>
+    Number.parseFloat((node as HTMLElement | null)?.style.getPropertyValue(property) ?? 'NaN');
+
+  it('バーは軸の上の位置と長さで引かれる', () => {
+    const { container } = drawGantt([
+      issue('#1', {
+        status: 'closed',
+        created_at: iso(15),
+        updated_at: iso(5),
+      }),
+    ]);
+    const bar = rowOf(container, '#1').querySelector('.gt-bar');
+
+    expect(pctOf(bar, 'left'), '15 日前は 30 日の軸のちょうど半ばである').toBeCloseTo(50, 5);
+    expect(pctOf(bar, 'width'), '10 日ぶんの幅は 30 日の軸の 3 分の 1 である').toBeCloseTo(
+      100 / 3,
+      5,
+    );
+  });
+
+  it('`created_at` を読めない課題には、バーを引かない', () => {
+    const { container } = drawGantt([issue('#1'), issue('#2', { created_at: iso(3) })]);
+
+    expect(
+      rowOf(container, '#1').querySelector('.gt-bar'),
+      '現在で代用すると、いま作られたという持っていない事実を描くことになる',
+    ).toBe(null);
+    expect(rowOf(container, '#2').querySelector('.gt-bar')).not.toBe(null);
+  });
+
+  it('閉じたバーと開いたバーを、同じ見た目にしない', () => {
+    const { container } = drawGantt([
+      issue('#1', { status: 'closed', created_at: iso(9), updated_at: iso(2) }),
+      issue('#2', { created_at: iso(9) }),
+    ]);
+    const done = rowOf(container, '#1').querySelector('.gt-bar');
+    const live = rowOf(container, '#2').querySelector('.gt-bar');
+
+    expect(done?.className).toContain('done');
+    expect(live?.className).toContain('live');
+    expect(
+      done?.getAttribute('title'),
+      '閉じた時刻は `updated_at` からの近似である。画面の側で言い落とすと、近似が観測に化ける',
+    ).toContain('updated_at');
+  });
+
+  it('状態の色は、行のチップと同じところから採る', () => {
+    const { container } = drawGantt([issue('#1', { status: 'blocked', created_at: iso(4) })]);
+
+    expect(
+      rowOf(container, '#1').querySelector('.gt-bar')?.className,
+      'バーだけ別の色にすると、行の中で状態が 2 つの意味を持つ',
+    ).toContain('st-blocked');
+  });
+
+  it('堰き止めていた相手が先に片付いていれば、待ちの線を引く', () => {
+    const { container } = drawGantt([
+      issue('#1', { status: 'closed', created_at: iso(20), updated_at: iso(16) }),
+      issue('#2', { created_at: iso(10), deps: [blocks('#1')] }),
+    ]);
+    const lag = rowOf(container, '#2').querySelector('.gt-lag');
+
+    expect(pctOf(lag, 'left'), '16 日前は 30 日の軸の 14 日目である').toBeCloseTo(
+      (14 / 30) * 100,
+      5,
+    );
+    expect(pctOf(lag, 'width'), '待った 6 日ぶんの幅である').toBeCloseTo((6 / 30) * 100, 5);
+    expect(lag?.getAttribute('title')).toContain('#1');
+    expect(rowOf(container, '#1').querySelector('.gt-lag'), '待つ相手が無い行には引かない').toBe(
+      null,
+    );
+  });
+
+  it('相手がこの課題より後に終わるなら、待ちの線を引かない', () => {
+    const { container } = drawGantt([
+      issue('#1', { created_at: iso(20) }),
+      issue('#2', { created_at: iso(10), deps: [blocks('#1')] }),
+    ]);
+
+    expect(
+      rowOf(container, '#2').querySelector('.gt-lag'),
+      '逆向きの線は、待っていない期間を待ったと描く',
+    ).toBe(null);
+  });
+
+  it('待ちを決めるのは、いちばん後に終わる相手である', () => {
+    const { container } = drawGantt([
+      issue('#1', { status: 'closed', created_at: iso(25), updated_at: iso(22) }),
+      issue('#2', { created_at: iso(20) }),
+      issue('#3', { created_at: iso(10), deps: [blocks('#1'), blocks('#2')] }),
+    ]);
+
+    expect(
+      rowOf(container, '#3').querySelector('.gt-lag'),
+      'まだ塞いでいる相手が居るのに、先に片付いた相手から待ちを引くと、空いていた期間が伸びる',
+    ).toBe(null);
+  });
+
+  it('区切りの期日を、どの行にも同じ位置で引く', () => {
+    const withDue = (id: string, over: Partial<Issue> = {}): Issue =>
+      issue(id, {
+        created_at: iso(12),
+        github: { ...issue(id).github, milestone: { title: 'v2', due_on: iso(10) } },
+        ...over,
+      });
+    const { container } = drawGantt([withDue('#1'), withDue('#2')]);
+
+    const guides = [...container.querySelectorAll('.issue-row:not(.head) .gt-guide')];
+    expect(guides.length, '行ごとに引くから、一覧を下へ辿るときの縦の目印になる').toBe(2);
+    for (const guide of guides) {
+      expect(pctOf(guide, 'left')).toBeCloseTo((20 / 30) * 100, 5);
+      expect(guide.getAttribute('title')).toContain('v2');
+    }
+  });
+
+  it('見出しに目盛りを出す', () => {
+    const { container } = drawGantt([issue('#1', { created_at: iso(20) })]);
+
+    expect(
+      container.querySelectorAll('.gt-head .tick').length,
+      '目盛りが無いと、バーの長さが何日ぶんなのか読めない',
+    ).toBeGreaterThan(0);
   });
 });
 

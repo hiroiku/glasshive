@@ -54,10 +54,13 @@ function fakeTracker(pages: readonly string[]) {
       const text = pages[asked.length - 1];
       return text === undefined ? absent('empty') : observed(text);
     },
-    /* 一覧の呼び出しは本文を尋ねない。**尋ねたら落ちるようにしておく** —— 尋ね始めたら、
-       それは一覧に本文を混ぜ戻したということである */
+    /* 一覧の呼び出しは本文もやり取りも尋ねない。**尋ねたら落ちるようにしておく** ——
+       尋ね始めたら、それは一覧に 1 件ぶんの読み込みを混ぜ戻したということである */
     async fetchIssueBody() {
       throw new Error('一覧は本文を尋ねない');
+    },
+    async fetchIssueDiscussion() {
+      throw new Error('一覧はやり取りを尋ねない');
     },
   };
   return { tracker, asked };
@@ -221,10 +224,13 @@ describe('GitHub の課題を一覧にする', () => {
       async fetchIssuePage() {
         return unobservable(new TrackerUnreachable('gh exited non-zero'));
       },
-      /* 一覧の呼び出しは本文を尋ねない。**尋ねたら落ちるようにしておく** —— 尋ね始めたら、
-       それは一覧に本文を混ぜ戻したということである */
+      /* 一覧の呼び出しは本文もやり取りも尋ねない。**尋ねたら落ちるようにしておく** ——
+       尋ね始めたら、それは一覧に 1 件ぶんの読み込みを混ぜ戻したということである */
       async fetchIssueBody() {
         throw new Error('一覧は本文を尋ねない');
+      },
+      async fetchIssueDiscussion() {
+        throw new Error('一覧はやり取りを尋ねない');
       },
     };
     const useCase = createListGithubIssues({
@@ -249,10 +255,13 @@ describe('GitHub の課題を一覧にする', () => {
         if (calls === 1) return observed(pageOf([1, 2], 'cur1'));
         return unobservable(new TrackerUnreachable('rate limited'));
       },
-      /* 一覧の呼び出しは本文を尋ねない。**尋ねたら落ちるようにしておく** —— 尋ね始めたら、
-       それは一覧に本文を混ぜ戻したということである */
+      /* 一覧の呼び出しは本文もやり取りも尋ねない。**尋ねたら落ちるようにしておく** ——
+       尋ね始めたら、それは一覧に 1 件ぶんの読み込みを混ぜ戻したということである */
       async fetchIssueBody() {
         throw new Error('一覧は本文を尋ねない');
+      },
+      async fetchIssueDiscussion() {
+        throw new Error('一覧はやり取りを尋ねない');
       },
     };
     const useCase = createListGithubIssues({

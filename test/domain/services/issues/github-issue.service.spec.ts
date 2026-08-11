@@ -3,6 +3,7 @@ import type { JsonRecord } from '~/app-kernel/json.ts';
 import {
   buildLedger,
   parseIssueBody,
+  parseIssueDiscussion,
   parseIssuePage,
 } from '~/domain/services/issues/github-issue.service.ts';
 
@@ -144,12 +145,7 @@ describe('GitHub の課題を台帳の形へ写す', () => {
     });
   });
 
-  it('優先度は無い', () => {
-    const { issues } = buildLedger([node()], { includeClosed: false, truncated: false });
-    expect(issues[0]?.priority, 'GitHub に優先度の欄は無い。0 にすると最優先として並ぶ').toBeNull();
-  });
-
-  it('ラベル・担当・種類・書いた人を写す', () => {
+  it('ラベル・担当・種類を写し、書いた人は GitHub の欄に残す', () => {
     const { issues } = buildLedger(
       [
         node({
@@ -165,8 +161,10 @@ describe('GitHub の課題を台帳の形へ写す', () => {
       issueType: 'Bug',
       labels: ['p2', 'chore'],
       assignee: 'someone',
-      owner: 'reporter',
     });
+    expect(issues[0]?.github.author?.login, '書いた人は GitHub にしか無い欄である').toBe(
+      'reporter',
+    );
   });
 
   it('番号を持たない記録は課題にしない', () => {
@@ -340,5 +338,290 @@ describe('課題 1 件の本文を取り出す', () => {
     expect(parseIssueBody(answerOf(null))).toBe(null);
     expect(parseIssueBody('{}')).toBe(null);
     expect(parseIssueBody('これは JSON ではない')).toBe(null);
+  });
+});
+
+/* 課題 1 件のやり取り。コメントと `timeline` のイベントを 1 つの並びにする。
+
+   見るのは 2 つ —— **何が起きたのかを言えているか**と、言えない項目を並びに混ぜていないか。 */
+describe('課題 1 件のやり取りを読む', () => {
+  const discussionOf = (nodes: readonly unknown[], pageInfo: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      data: {
+        repository: {
+          issue: {
+            timelineItems: {
+              pageInfo: { hasNextPage: false, endCursor: null, ...pageInfo },
+              nodes,
+            },
+          },
+        },
+      },
+    });
+
+  it('コメントとイベントを、GitHub が返した順のまま並べる', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([
+        {
+          __typename: 'LabeledEvent',
+          createdAt: '2026-08-01T00:00:00Z',
+          actor: { login: 'hiroiku' },
+          label: { name: 'enhancement', color: 'a2eeef' },
+        },
+        {
+          __typename: 'IssueComment',
+          createdAt: '2026-08-01T01:00:00Z',
+          author: { login: 'octocat' },
+          body: '書いた本文',
+        },
+        {
+          __typename: 'ParentIssueAddedEvent',
+          createdAt: '2026-08-01T02:00:00Z',
+          actor: { login: 'hiroiku' },
+          parent: { number: 3, title: '束ねている課題' },
+        },
+      ]),
+    );
+
+    expect(
+      page?.entries.map((entry) => entry.kind),
+      '並べ替えると、前後が入れ替わる',
+    ).toEqual(['labeled', 'comment', 'parent-added']);
+    expect(page?.entries[1]).toEqual({
+      kind: 'comment',
+      at: '2026-08-01T01:00:00Z',
+      actor: 'octocat',
+      body: '書いた本文',
+    });
+  });
+
+  it('コメントを書いた人は `author` から、イベントを起こした人は `actor` から採る', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([
+        {
+          __typename: 'IssueComment',
+          createdAt: '2026-08-01T00:00:00Z',
+          author: { login: 'octocat' },
+          body: '',
+        },
+        {
+          __typename: 'ReopenedEvent',
+          createdAt: '2026-08-01T01:00:00Z',
+          actor: { login: 'hiroiku' },
+        },
+      ]),
+    );
+
+    expect(page?.entries.map((entry) => entry.actor)).toEqual(['octocat', 'hiroiku']);
+  });
+
+  it('誰が起こしたか読めなくても、起きたことは残す', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([
+        { __typename: 'ReopenedEvent', createdAt: '2026-08-01T00:00:00Z', actor: null },
+      ]),
+    );
+
+    expect(page?.entries, '消えたユーザーの操作を、起きなかったことにしない').toEqual([
+      { kind: 'reopened', at: '2026-08-01T00:00:00Z', actor: null },
+    ]);
+  });
+
+  it('本文の無いコメントと、本文を読めなかったコメントを分ける', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([
+        {
+          __typename: 'IssueComment',
+          createdAt: '2026-08-01T00:00:00Z',
+          author: { login: 'octocat' },
+          body: '',
+        },
+        { __typename: 'IssueComment', createdAt: '2026-08-01T01:00:00Z', author: null },
+      ]),
+    );
+
+    expect(
+      page?.entries.map((entry) => (entry.kind === 'comment' ? entry.body : undefined)),
+    ).toEqual(['', null]);
+  });
+
+  it('閉じた理由を落とさない', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([
+        {
+          __typename: 'ClosedEvent',
+          createdAt: '2026-08-01T00:00:00Z',
+          actor: { login: 'hiroiku' },
+          stateReason: 'NOT_PLANNED',
+        },
+      ]),
+    );
+
+    expect(page?.entries[0], 'やらないことにしたのと、やり終えたのは別である').toEqual({
+      kind: 'closed',
+      at: '2026-08-01T00:00:00Z',
+      actor: 'hiroiku',
+      reason: 'NOT_PLANNED',
+    });
+  });
+
+  it('ラベルは色ごと持つ', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([
+        {
+          __typename: 'UnlabeledEvent',
+          createdAt: '2026-08-01T00:00:00Z',
+          actor: { login: 'hiroiku' },
+          label: { name: 'bug' },
+        },
+      ]),
+    );
+
+    expect(page?.entries[0]).toEqual({
+      kind: 'unlabeled',
+      at: '2026-08-01T00:00:00Z',
+      actor: 'hiroiku',
+      label: { name: 'bug', color: null },
+    });
+  });
+
+  it('名指した課題を、番号と題で持つ', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([
+        {
+          __typename: 'BlockedByAddedEvent',
+          createdAt: '2026-08-01T00:00:00Z',
+          actor: { login: 'hiroiku' },
+          blockingIssue: { number: 9, title: '先に片付ける課題' },
+        },
+        {
+          __typename: 'MarkedAsDuplicateEvent',
+          createdAt: '2026-08-01T01:00:00Z',
+          actor: { login: 'hiroiku' },
+          canonical: { number: 4, title: '元の課題' },
+        },
+      ]),
+    );
+
+    expect(page?.entries).toEqual([
+      {
+        kind: 'blocked-by-added',
+        at: '2026-08-01T00:00:00Z',
+        actor: 'hiroiku',
+        blockingIssue: { number: 9, title: '先に片付ける課題' },
+      },
+      {
+        kind: 'marked-as-duplicate',
+        at: '2026-08-01T01:00:00Z',
+        actor: 'hiroiku',
+        canonical: { number: 4, title: '元の課題' },
+      },
+    ]);
+  });
+
+  it('触れただけの参照と、閉じる約束をした参照を分ける', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([
+        {
+          __typename: 'CrossReferencedEvent',
+          createdAt: '2026-08-01T00:00:00Z',
+          actor: { login: 'hiroiku' },
+          willCloseTarget: true,
+          source: { number: 21, title: 'Add the discussion panel' },
+        },
+        {
+          __typename: 'CrossReferencedEvent',
+          createdAt: '2026-08-01T01:00:00Z',
+          actor: { login: 'hiroiku' },
+          source: { number: 22, title: 'Unrelated note' },
+        },
+      ]),
+    );
+
+    expect(
+      page?.entries.map((entry) =>
+        entry.kind === 'cross-referenced' ? entry.willCloseTarget : undefined,
+      ),
+    ).toEqual([true, false]);
+  });
+
+  it('題の変更を、前後どちらも持つ', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([
+        {
+          __typename: 'RenamedTitleEvent',
+          createdAt: '2026-08-01T00:00:00Z',
+          actor: { login: 'hiroiku' },
+          previousTitle: 'Old title',
+          currentTitle: 'New title',
+        },
+      ]),
+    );
+
+    expect(page?.entries[0]).toMatchObject({
+      kind: 'renamed',
+      previousTitle: 'Old title',
+      currentTitle: 'New title',
+    });
+  });
+
+  it('マイルストーンは題だけが返る', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([
+        {
+          __typename: 'MilestonedEvent',
+          createdAt: '2026-08-01T00:00:00Z',
+          actor: { login: 'hiroiku' },
+          milestoneTitle: 'v0.2',
+        },
+      ]),
+    );
+
+    expect(page?.entries[0]).toMatchObject({ kind: 'milestoned', milestoneTitle: 'v0.2' });
+  });
+
+  it('何が起きたのか言えない項目は採らない', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([
+        // 尋ねていない種類。GitHub は `timeline` に新しいイベントを足し続ける
+        { __typename: 'PinnedEvent', createdAt: '2026-08-01T00:00:00Z', actor: { login: 'x' } },
+        // 時刻が読めないと、並びの中に置く位置が決まらない
+        { __typename: 'ReopenedEvent', actor: { login: 'x' } },
+        // どのラベルの話なのか言えない
+        { __typename: 'LabeledEvent', createdAt: '2026-08-01T02:00:00Z', label: null },
+        // 何を指したのか言えない
+        { __typename: 'ParentIssueAddedEvent', createdAt: '2026-08-01T03:00:00Z', parent: {} },
+        { __typename: 'ReopenedEvent', createdAt: '2026-08-01T04:00:00Z', actor: { login: 'x' } },
+      ]),
+    );
+
+    expect(
+      page?.entries.map((entry) => entry.at),
+      '読めない項目を並びに混ぜても、読む人には何も伝わらない',
+    ).toEqual(['2026-08-01T04:00:00Z']);
+  });
+
+  it('次のページの在りかを取り出す', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([], { hasNextPage: true, endCursor: 'Y3Vyc29y' }),
+    );
+
+    expect(page?.hasNextPage).toBe(true);
+    expect(page?.endCursor).toBe('Y3Vyc29y');
+  });
+
+  it('やり取りの無い課題は、空の並びとして読める', () => {
+    const page = parseIssueDiscussion(discussionOf([]));
+
+    expect(page?.entries, '誰も何も言っていないのは、読めなかったのとは違う').toEqual([]);
+  });
+
+  it.each([
+    ['読めない JSON', 'これは JSON ではない'],
+    ['課題が null', JSON.stringify({ data: { repository: { issue: null } } })],
+    ['`timelineItems` が無い', JSON.stringify({ data: { repository: { issue: {} } } })],
+    ['data が無い', JSON.stringify({ errors: [{ message: 'Could not resolve to a Repository' }] })],
+  ])('%s は辿れなかったと言う', (_name, text) => {
+    expect(parseIssueDiscussion(text)).toBe(null);
   });
 });

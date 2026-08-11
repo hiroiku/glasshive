@@ -53,7 +53,6 @@ const STATUS_BY_CODE: Record<string, ApiStatus> = {
   unexpected: 500,
   // 観測できなかった
   'transcript.unreadable': 503,
-  'ledger.unreadable': 503,
   'preferences.unreadable': 503,
   // 置きに行けなかった。断ったのではないので、次に求めれば通るかもしれない
   'preferences.unwritable': 503,

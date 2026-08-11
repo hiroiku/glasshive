@@ -72,7 +72,8 @@ Two consequences worth knowing before you move code around:
 - **`interface` and `infrastructure` never name `domain`.** They speak to it through `application`.
 - **`domain` never crosses a bounded context.** `sessions`, `issues`, `git`, and `workspace` are
   separate; coordinating them is `application`'s job. This is the one rule the type system cannot
-  catch on its own, since it is a same-layer import.
+  catch on its own, since it is a same-layer import. `issues` means GitHub issues and nothing
+  else — every issue glasshive shows arrives through the `gh` CLI.
 
 The bundler enforces the same boundaries from the other side: `vite.config.ts` sets
 `importProtection` so a build fails if `src/infrastructure/**`, `src/composition/**`, or `node:fs`
@@ -86,8 +87,11 @@ Beyond the layers, three ideas carry most of the design:
   other way round: the whole point is that "nothing happened" and "we could not look" stay distinct
   all the way to the screen.
 - **Ports split by access shape.** A *repository* reads a store whose format we know and rebuilds our
-  own model from it. An *integration* runs someone else's program and translates its answer. They
-  fail differently and they are faked differently in tests, which is why the line is drawn there.
+  own model from it — transcripts, `preferences.json`. An *integration* asks someone else and
+  translates the answer — `git`, the `gh` CLI, the avatar images `gh` points at. They fail
+  differently and they are faked differently in tests, which is why the line is drawn there. The
+  `issues` context is integrations all the way down; it has no repository, because there is no local
+  file it reads.
 - **`ViewerPreferencesRepository` is the only port with a write method.** If you find yourself adding
   a second one, something has gone wrong.
 
@@ -101,8 +105,11 @@ Beyond the layers, three ideas carry most of the design:
 
 Two rules are absolute:
 
-- **Tests only write under `mkdtemp`.** Never `~/.claude`, never a real `.beads`. If a test replaces
-  `process.env.HOME`, it must put it back.
+- **Tests only write under `mkdtemp`.** Never `~/.claude`, never a project someone actually works
+  in. The `.beads` and `.git` directories in the preferences tests are sandbox ones the test builds
+  itself: glasshive reads no beads ledger, but `ViewerPreferencesRepository` still refuses to drop
+  `preferences.json` inside either, and that refusal has to be proven somewhere safe. If a test
+  replaces `process.env.HOME`, it must put it back.
 - **Determinism comes from injection, not from sleeping.** Time arrives through the `Clock` port.
 
 ## Language

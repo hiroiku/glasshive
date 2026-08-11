@@ -49,36 +49,31 @@ const issue = (id: string, branches: readonly (string | null)[] = []): Issue => 
   id,
   title: id,
   status: 'open',
-  priority: null,
   issue_type: null,
   labels: [],
   assignee: null,
-  owner: null,
   created_at: null,
   updated_at: null,
   deps: [],
   deps_complete: true,
-  github:
-    branches.length === 0
-      ? null
-      : {
-          url: null,
-          labels: [],
-          assignees: [],
-          author: null,
-          milestone: null,
-          issue_type_color: null,
-          sub_issues: null,
-          pull_requests: branches.map((head, at) => ({
-            number: at + 1,
-            state: 'OPEN',
-            is_draft: false,
-            review_decision: null,
-            head_ref_name: head,
-          })),
-          comments: 0,
-          reactions: 0,
-        },
+  github: {
+    url: null,
+    labels: [],
+    assignees: [],
+    author: null,
+    milestone: null,
+    issue_type_color: null,
+    sub_issues: null,
+    pull_requests: branches.map((head, at) => ({
+      number: at + 1,
+      state: 'OPEN',
+      is_draft: false,
+      review_decision: null,
+      head_ref_name: head,
+    })),
+    comments: 0,
+    reactions: 0,
+  },
 });
 
 /* 衝突のインデックスは外へ出ていないので、まとめて組む側から取る。
@@ -267,12 +262,10 @@ describe('ブランチ名から PR を引く', () => {
     head: string,
   ): Issue => {
     const base = issue(id, [head]);
-    const github = base.github;
-    if (github === null) throw new Error('PR を持つ課題として組めていない');
     return {
       ...base,
       github: {
-        ...github,
+        ...base.github,
         pull_requests: pulls.map((pull) => ({
           number: pull.number,
           state: pull.state,

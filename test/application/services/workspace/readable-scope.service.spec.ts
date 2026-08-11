@@ -80,7 +80,6 @@ function session(
     effort: null,
     gitBranch: null,
     cwd: null,
-    actor: null,
     issues: [],
     current: null,
     activity: NO_ACTIVITY,

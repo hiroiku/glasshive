@@ -111,14 +111,19 @@ function classifyLoadFailure(error: unknown, file: string): Observation<never> {
   );
 }
 
-/* プロジェクトの中で、glasshive が実際に読みに行くもの。
+/* プロジェクトの中で、別のプログラムが自分のデータを置いている場所。
 
-   **断るのは読む先であって、プロジェクトそのものではない。** プロジェクトは人の作業
+   **断るのはこの中であって、プロジェクトそのものではない。** プロジェクトは人の作業
    ディレクトリで、`~` を作業ディレクトリにして走らせた履歴があれば `~` 自体がプロジェクトに
    なる。プロジェクトごと断ると、`~` の下にある既定の保存先(`~/.config/glasshive`)にも
-   置けず、ピン留めが一切できなくなる。読みに行く先へは絶対に書かないという芯は、この 2 つと
-   `~/.claude`・`transcript` のルートで足りる。 */
-const READ_INSIDE_NEST = ['.beads', '.git'] as const;
+   置けず、ピン留めが一切できなくなる。ここへ書かないという芯は、この 2 つと
+   `~/.claude`・`transcript` のルートで足りる。
+
+   `.git` は git のプロジェクトを読むために実際に見に行く先である。`.beads` は読まないが、
+   bd が自分の書き出しを置く場所で、そこへ `preferences.json` を落とせば他人のデータの中へ
+   書いたことになる。**読むかどうかで分けない** —— 分けると、読まなくなった場所が黙って
+   書ける場所に変わる。 */
+const NEVER_WRITE_INSIDE_NEST = ['.beads', '.git'] as const;
 
 /* 書いてよいパスかを見る。断る理由が在ればそれを返す。
 
@@ -155,10 +160,10 @@ function refusalFor(
   for (const root of observedRoots) {
     // プロジェクトのパスは材料でしかない。使えない文字列は判定に足さないだけで、断りにはしない
     if (!isSafeAbsolutePath(root)) continue;
-    for (const material of READ_INSIDE_NEST) {
+    for (const material of NEVER_WRITE_INSIDE_NEST) {
       if (rootContains(canonicalize(path.join(root, material)), canonical)) {
         return new PreferencesRefusedError(
-          `${target} is inside what glasshive reads — it never writes where it reads`,
+          `${target} is inside another program's data directory — glasshive never writes there`,
           { details: { reason: 'observed-material', material } },
         );
       }

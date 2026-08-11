@@ -1,63 +1,17 @@
-/* ---------- Beads。課題の一覧と依存の線 ---------- */
+/* ---------- Issues。課題の一覧と依存の線 ---------- */
 
-/* bd 未検出時の案内(何ができるようになるかを添えて活用をうながす)。
-   置き場所は空状態の定石 — ペインの水平中央、上から 1/3(視線が自然に落ちる高さ)。
-   親の #issues-list は多列グリッドなので、全列にまたがらせてから中央へ寄せる */
-.bd-promo {
-  grid-column: 1 / -1;
-  justify-self: center;
-  margin: max(56px, 16vh) 24px 40px;
-  max-width: 500px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 18px 22px;
-  color: var(--fg);
-  line-height: 1.7;
-  font-size: 12px;
-}
-.bd-promo .bp-title {
-  font-weight: 700;
-  font-size: 13px;
-  margin-bottom: 6px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.bd-promo .bp-title .mdi {
-  color: var(--accent);
-}
-/* #git-view は縦 flex なので、カード自身を中央へ寄せる */
-#git-view > .bd-promo {
-  align-self: center;
-}
-.bd-promo p {
-  color: var(--dim);
-  margin: 0 0 10px;
-}
-.bd-promo code {
-  background: rgba(125, 155, 190, 0.12);
-  border: 1px solid rgba(125, 155, 190, 0.22);
-  padding: 0 4px;
-  border-radius: 4px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: #c9dcf0;
-}
-.bd-promo a {
-  color: var(--accent);
-}
-
-/* ---------- bd issues 一覧 ---------- */
+/* ---------- 課題の一覧 ---------- */
 #issues-list {
   flex: 1;
   overflow: auto;
   padding: 0 0 14px;
   font-size: 12px;
   display: grid;
+  /* 9 本目が時間軸である。余った幅はここが取る —— 軸は広いほど読めるものが増える唯一の列で、
+     他の列は中身のぶんだけ在れば足りる */
   grid-template-columns:
-    max-content fit-content(190px) minmax(150px, 1fr) max-content max-content max-content
-    minmax(100px, 0.45fr) minmax(150px, 0.8fr) max-content;
+    max-content fit-content(190px) minmax(150px, 1fr) max-content max-content
+    minmax(100px, 0.45fr) minmax(150px, 0.8fr) max-content minmax(220px, 1.1fr);
   column-gap: 10px;
   grid-auto-rows: min-content;
   align-content: start;
@@ -204,35 +158,7 @@
   border-top: 1px solid #3a4756;
 }
 
-/* Priority / Type の色分け */
-.pchip {
-  border-radius: 3px;
-  padding: 2px 6px;
-  font-size: 10.5px;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-.pchip.p0 {
-  background: rgba(248, 113, 113, 0.18);
-  color: #f87171;
-}
-.pchip.p1 {
-  background: rgba(251, 146, 60, 0.16);
-  color: #fb923c;
-}
-.pchip.p2 {
-  background: rgba(234, 179, 8, 0.14);
-  color: #eab308;
-}
-.pchip.p3 {
-  background: rgba(125, 138, 153, 0.16);
-  color: #9aa8b8;
-}
-.pchip.p4,
-.pchip.px {
-  background: rgba(100, 116, 139, 0.12);
-  color: var(--dim);
-}
+/* Type の色分け */
 .tchip {
   border-radius: 3px;
   padding: 2px 6px;
@@ -295,7 +221,7 @@
 /* 状態の色は 1 か所で決める。チップも依存グラフのカードも、ここから採る。
    知らない状態は無彩色に落とす —— 色を作って当てると、見た人は意味を推し量ってしまう。
    `:where()` は詳細度を持たないので、この既定は状態のどれにも負ける。 */
-:where(.chip, .dg-node, .legend-bar i.rail) {
+:where(.chip, .dg-node, .legend-bar i.rail, .gt-bar, .lg-gt-bar) {
   --st: var(--ended);
 }
 .st-open {
@@ -303,15 +229,6 @@
 }
 .st-blocked {
   --st: #f87171;
-}
-.st-in_progress {
-  --st: var(--active);
-}
-.st-merge-ready {
-  --st: #a78bfa;
-}
-.st-deferred {
-  --st: var(--waiting);
 }
 .st-closed {
   --st: #94a3b8;
@@ -323,13 +240,108 @@
 
 .chip.st-open,
 .chip.st-blocked,
-.chip.st-in_progress,
-.chip.st-merge-ready,
-.chip.st-deferred,
 .chip.st-closed,
 .chip.st-not_planned {
   background: color-mix(in srgb, var(--st) 17%, transparent);
   color: var(--st);
+}
+
+/* ---------- 課題のタイムライン ---------- */
+
+/* 一覧の右に引く時間軸。**観測した時刻しか描かない。**
+
+   始まりは `created_at`、終わりは閉じたものが `updated_at`、開いたものが現在である。
+   高さを 14px に抑えてあるのは、題名の列の行送り 20px より低く保つためである ——
+   これより高いと、この列だけが行を押し広げて、Agents の表と密度が揃わなくなる。 */
+.gt,
+.gt-head {
+  position: relative;
+  height: 14px;
+}
+/* 目盛りは Agents の `.tl-head` と同じ引き方で、軸の位置そのものに置く。
+   同じ密度の 2 つの表を行き来するので、目盛りの読み方まで別にしない */
+.gt-head .tick {
+  position: absolute;
+  top: 0;
+  color: var(--dim);
+  font-size: 10px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+/* バーの色は状態から採る。**同じ課題のチップと違う色にしない** —— 行の中で 2 か所が
+   同じことを別の色で言うと、どちらかが別の意味に読まれる */
+.gt-bar {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 2px;
+  background: var(--st);
+  opacity: 0.85;
+  /* 同じ日に作って閉じた課題にも幅を残す。幅の無いバーは「無かった」と同じ絵になる */
+  min-width: 3px;
+}
+/* 開いている課題はまだ終わっていない。**右端を落として、閉じたバーの平らな終わりと分ける** */
+.gt-bar.live {
+  background: linear-gradient(90deg, var(--st) 0 70%, transparent 100%);
+  border-radius: 2px 0 0 2px;
+}
+/* 縦の線は行の高さを跨いで伸ばす。行の中だけに引くと、行間で切れて 1 本に見えない。
+   右端に立つ線が列の外へ出ないように、自分の幅ぶん内側へ寄せる */
+.gt-guide,
+.gt-now {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  width: 1px;
+  margin-left: -1px;
+}
+/* 区切りの期日。**現在の線と同じ顔にしない** —— 素材の中で先を指す日付はこれだけである */
+.gt-guide {
+  background: repeating-linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--input) 70%, transparent) 0 3px,
+    transparent 3px 6px
+  );
+}
+.gt-now {
+  background: color-mix(in srgb, var(--active) 55%, transparent);
+}
+/* 堰き止めが解けてから作られるまでの待ち。**塗らない** —— 何も起きていない期間である */
+.gt-lag {
+  position: absolute;
+  top: 50%;
+  height: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--ended) 85%, transparent);
+}
+
+/* 凡例に出す見本。**行に出るものと同じ描き方から採る** — 作り直すと本物とずれる */
+.lg-gt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.lg-gt-bar {
+  width: 22px;
+  height: 6px;
+  border-radius: 2px;
+  flex: none;
+  background: linear-gradient(90deg, var(--st) 0 70%, transparent 100%);
+  opacity: 0.85;
+}
+.lg-gt-bar.done {
+  background: var(--st);
+}
+.lg-gt-line {
+  width: 1px;
+  height: 12px;
+  flex: none;
+}
+.lg-gt-line.guide {
+  background: repeating-linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--input) 70%, transparent) 0 3px,
+    transparent 3px 6px
+  );
 }
 
 .iworkers {
@@ -344,10 +356,6 @@
 .iworkers > * {
   flex: none;
   white-space: nowrap;
-}
-.iworkers .assg {
-  color: var(--dim);
-  font-size: 11px;
 }
 .wk {
   display: inline-flex;
@@ -449,7 +457,7 @@
   font-weight: 400;
 }
 
-/* Beads 依存線の凡例 */
+/* 依存線の凡例 */
 .legend {
   margin-left: auto;
   display: inline-flex;
@@ -509,10 +517,14 @@
 
 .mschip {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   border-radius: 9px;
-  padding: 0 7px;
+  padding: 0 7px 0 5px;
   font-size: 10px;
-  line-height: 1.5;
+  /* 行送りより背を高くしない。inline の箱は行の高さに足されるので、大きいと行が伸びる */
+  line-height: 14px;
   white-space: nowrap;
   border: 1px solid var(--border);
   color: var(--dim);

@@ -59,7 +59,6 @@ const session = (over: Partial<SessionJson> = {}): SessionJson => ({
   effort: null,
   git_branch: null,
   cwd: null,
-  actor: null,
   issues: [],
   current: null,
   intervals: [],
@@ -98,13 +97,8 @@ const project = (sessions: SessionJson[]): ProjectJson => ({
 });
 
 describe('エージェントを特定できる語', () => {
-  it('actor の名前で引ける', () => {
-    const index = agentTokens(project([session({ actor: 'mgr-x', file: '/nest/s.jsonl' })]));
-
-    expect(index.get('mgr-x')?.file).toBe('/nest/s.jsonl');
-  });
-
-  /* bd に書き込むエージェントは `mgr-{セッション id の先頭 8 桁}` で記録される。 */
+  /* `transcript` の本文には `mgr-{セッション id の先頭 8 桁}` という綴りでセッションが
+     名指されることがある。 */
   it('命名の決め事からも引ける', () => {
     const index = agentTokens(project([session({ id: 'a1b2c3d4e5f6' })]));
 
@@ -122,8 +116,8 @@ describe('エージェントを特定できる語', () => {
   it('同じ名前が二度出たら、先に見付けたほうを残す', () => {
     const index = agentTokens(
       project([
-        session({ actor: 'dup', file: '/nest/first.jsonl' }),
-        session({ actor: 'dup', file: '/nest/second.jsonl' }),
+        session({ subagents: [subagent({ label: 'dup', file: '/nest/first.jsonl' })] }),
+        session({ subagents: [subagent({ label: 'dup', file: '/nest/second.jsonl' })] }),
       ]),
     );
 
@@ -293,7 +287,7 @@ describe('コミットの sha のインデックス', () => {
 describe('一つの辞書として引く', () => {
   const dict = () =>
     tokenDict(
-      issueIndex([{ id: 'glasshive-4f2a', status: 'open' }]),
+      issueIndex([{ id: '#209', status: 'open' }]),
       agentTokens(project([session({ id: 'a1b2c3d4e5f6', subagents: [subagent()] })])),
       gitTokens(project([session({ git_branch: 'work/x' })])),
       commitTokens(
@@ -316,9 +310,9 @@ describe('一つの辞書として引く', () => {
   });
 
   it('種類ごとに指す先が違う', () => {
-    expect(dict().lookup('glasshive-4f2a')).toEqual({
+    expect(dict().lookup('#209')).toEqual({
       kind: 'issue',
-      id: 'glasshive-4f2a',
+      id: '#209',
       closed: false,
     });
     expect(dict().lookup('work/x')?.kind).toBe('ref');
@@ -369,56 +363,27 @@ describe('一つの辞書として引く', () => {
 });
 
 describe('課題の id のインデックス', () => {
-  it('正式な id で引ける', () => {
-    const index = issueIndex([{ id: 'kuden-os-4f2a', status: 'open' }]);
+  it('書かれたとおりの id で引ける', () => {
+    const index = issueIndex([{ id: '#209', status: 'open' }]);
 
-    expect(index.get('kuden-os-4f2a')).toEqual({ id: 'kuden-os-4f2a', closed: false });
+    expect(index.get('#209')).toEqual({ id: '#209', closed: false });
   });
 
   it('閉じたものもインデックスに入れる', () => {
-    const index = issueIndex([{ id: 'kuden-os-4f2a', status: 'closed' }]);
+    const index = issueIndex([{ id: '#209', status: 'closed' }]);
 
-    expect(index.get('kuden-os-4f2a')?.closed).toBe(true);
+    expect(index.get('#209')?.closed).toBe(true);
   });
 
-  /* 会話では `kuden-os-4f2a` が `4f2a` と略される。 */
-  it('共通の頭を見付けて、略記からも引けるようにする', () => {
-    const index = issueIndex([
-      { id: 'kuden-os-4f2a', status: 'open' },
-      { id: 'kuden-os-9b31', status: 'open' },
-    ]);
+  /* `#` の落ちた番号を鍵にすると、文中のただの数がチップに化ける。 */
+  it('番号だけでは引かない', () => {
+    const index = issueIndex([{ id: '#209', status: 'open' }]);
 
-    expect(index.get('4f2a')?.id).toBe('kuden-os-4f2a');
-    expect(index.get('9b31')?.id).toBe('kuden-os-9b31');
-  });
-
-  it('短すぎる略記は引かない', () => {
-    const index = issueIndex([
-      { id: 'kuden-os-4f2', status: 'open' },
-      { id: 'kuden-os-9b3', status: 'open' },
-    ]);
-
-    expect(index.get('4f2'), 'ふつうの語に当たってしまう').toBeUndefined();
-  });
-
-  it('共通の頭が無ければ、略記は作らない', () => {
-    const index = issueIndex([
-      { id: 'alpha-1234', status: 'open' },
-      { id: 'beta-5678', status: 'open' },
-    ]);
-
-    expect(index.size).toBe(2);
-  });
-
-  it('id を持たない課題は飛ばす', () => {
-    const index = issueIndex([{ id: null, status: 'open' }]);
-
-    expect(index.size).toBe(0);
-  });
-
-  it('1 件だけなら略記は作らない', () => {
-    const index = issueIndex([{ id: 'kuden-os-4f2a', status: 'open' }]);
-
+    expect(index.get('209'), 'ふつうの数に当たってしまう').toBeUndefined();
     expect(index.size).toBe(1);
+  });
+
+  it('課題が 1 件も無ければ空', () => {
+    expect(issueIndex([]).size).toBe(0);
   });
 });

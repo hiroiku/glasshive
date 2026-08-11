@@ -55,9 +55,8 @@ Issues, branches, and milestones on one screen, because they are the same work s
 sides. Switch between them without leaving the view.
 
 Issues come from GitHub through the [`gh`](https://cli.github.com) CLI — glasshive asks `gh` which
-repository your remotes point at, the same way `gh` decides it — or from a
-[`bd`](https://github.com/gastownhall/beads) ledger. Sub-issues nest, `blocked by` is drawn as a
-dependency edge, and issue types, labels, milestones and assignees come along.
+repository your remotes point at, the same way `gh` decides it. Sub-issues nest, `blocked by` is
+drawn as a dependency edge, and issue types, labels, milestones and assignees come along.
 
 Branches and worktrees are drawn over the main worktree's branch, so you can see who is where.
 Pairs heading for the same files are lifted to the top. Pick a ref to get its commits, diff stats,
@@ -74,17 +73,21 @@ rendered; the raw transcript is never rewritten.
 
 ![Side panel](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/conversation.png)
 
+An issue brings its comments and its timeline along: who labelled it, what it was blocked by, and
+which pull request referenced it, read next to the agents working on it right now.
+
+![Issue](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/issue.png)
+
 ## Read-only by design
 
-- **It reads four things and writes to none of them.** Claude Code session logs
-  (`~/.claude/projects/**/*.jsonl`), the beads ledger (`<project>/.beads/issues.jsonl`), `git`, and —
-  through the `gh` CLI — the issues of the GitHub repository your remotes point at. No transcript,
-  ledger, repository, or issue is ever modified.
+- **It reads three things and writes to none of them.** Claude Code session logs
+  (`~/.claude/projects/**/*.jsonl`), `git`, and — through the `gh` CLI — the issues of the GitHub
+  repository your remotes point at. No transcript, repository, or issue is ever modified.
 - **The one file it writes is its own.** `~/.config/glasshive/preferences.json` holds your pinned
   tabs and view preferences. Before writing, glasshive checks that the path is not inside `~/.claude`,
-  the transcripts root, or any observed `.beads` or `.git` directory, and refuses if it is — writing
-  to what it observes is blocked by construction, not by convention. Delete that one file and
-  nothing glasshive has ever written is left behind.
+  the transcripts root, or a `.git` or `.beads` directory belonging to a project it can see, and
+  refuses if it is — writing to what it observes is blocked by construction, not by convention.
+  Delete that one file and nothing glasshive has ever written is left behind.
 - **The published package is traceable to this repository.** Every version is published from GitHub
   Actions over OIDC and carries a provenance attestation, so `npm audit signatures` can check the
   package you installed against the workflow and the commit it was built from.

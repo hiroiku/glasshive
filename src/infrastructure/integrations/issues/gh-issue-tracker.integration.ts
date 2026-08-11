@@ -4,6 +4,7 @@ import { UnexpectedError } from '~/app-kernel/error.ts';
 import { type Observation, observed, unobservable } from '~/app-kernel/observation.ts';
 import {
   type IssueBodyRequest,
+  type IssueDiscussionRequest,
   type IssuePageRequest,
   type IssueTrackerIntegration,
   TRACKER_DENIED,
@@ -30,7 +31,7 @@ const execFileAsync = promisify(execFile);
 /** 応答を待つ上限。待ち続けると、課題の画面が開いたまま止まる */
 const DEFAULT_TIMEOUT_MS = 15_000;
 
-/** バッファの大きさ。1 ページ 100 件に本文は含めないので、これで足りる */
+/** バッファの大きさ。一番大きいのはコメント 100 件ぶんのやり取りで、それでもこれに収まる */
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 
 /* 課題 1 ページぶんの問い合わせ。
@@ -89,6 +90,56 @@ query($owner:String!,$name:String!,$number:Int!){
   }
 }`;
 
+/* 課題 1 件のやり取り 1 ページぶん。コメントと `timeline` のイベントを 1 本の並びで求める。
+
+   **`itemTypes` を名指しで絞る。** 絞らないと `timeline` には購読やラベルの色替えまで並び、
+   1 ページ 100 件の枠が、画面に何も足さない項目で埋まる。ここに挙げてあるのは、読む人が
+   「この課題に何が起きたか」を追うのに要る種類だけである。
+
+   欄の名前は introspection で確かめたものを使う。推測が当たらないものが幾つかある ——
+   `BlockedByAddedEvent` は `blockingIssue`(`blockedByIssue` ではない)、
+   `MarkedAsDuplicateEvent` は `canonical`、`MilestonedEvent` が返すのは `milestoneTitle` という
+   文字列で、マイルストーンのオブジェクトではない。
+
+   `totalCount` は求めない。GitHub の総数はこちらが読み飛ばす種類まで数えているので、
+   持ち帰ると画面が `entries` の数と引き比べて、起きていない切り捨てを報せることになる。
+
+   本文の HTML は求めない。一覧・本文と同じく、Markdown はこちらが描く。 */
+const ISSUE_DISCUSSION_QUERY = `
+query($owner:String!,$name:String!,$number:Int!,$cursor:String){
+  repository(owner:$owner,name:$name){
+    issue(number:$number){
+      timelineItems(first:100, after:$cursor, itemTypes:[
+        ISSUE_COMMENT,CLOSED_EVENT,REOPENED_EVENT,LABELED_EVENT,UNLABELED_EVENT,
+        ASSIGNED_EVENT,UNASSIGNED_EVENT,MILESTONED_EVENT,DEMILESTONED_EVENT,
+        CROSS_REFERENCED_EVENT,MARKED_AS_DUPLICATE_EVENT,PARENT_ISSUE_ADDED_EVENT,
+        BLOCKED_BY_ADDED_EVENT,RENAMED_TITLE_EVENT]){
+        pageInfo{ hasNextPage endCursor }
+        nodes{
+          __typename
+          ... on IssueComment { createdAt author{login} body }
+          ... on ClosedEvent { createdAt actor{login} stateReason }
+          ... on ReopenedEvent { createdAt actor{login} }
+          ... on LabeledEvent { createdAt actor{login} label{name color} }
+          ... on UnlabeledEvent { createdAt actor{login} label{name color} }
+          ... on AssignedEvent { createdAt actor{login} assignee{ ... on User { login } } }
+          ... on UnassignedEvent { createdAt actor{login} assignee{ ... on User { login } } }
+          ... on MilestonedEvent { createdAt actor{login} milestoneTitle }
+          ... on DemilestonedEvent { createdAt actor{login} milestoneTitle }
+          ... on RenamedTitleEvent { createdAt actor{login} previousTitle currentTitle }
+          ... on ParentIssueAddedEvent { createdAt actor{login} parent{number title} }
+          ... on BlockedByAddedEvent { createdAt actor{login} blockingIssue{number title} }
+          ... on MarkedAsDuplicateEvent { createdAt actor{login} canonical{ ... on Issue { number title } } }
+          ... on CrossReferencedEvent {
+            createdAt actor{login} willCloseTarget
+            source{ ... on PullRequest { number title } ... on Issue { number title } }
+          }
+        }
+      }
+    }
+  }
+}`;
+
 export interface GhRunOptions {
   readonly timeoutMs: number;
 }
@@ -136,7 +187,7 @@ const textOf = (value: unknown): string =>
    1 つしかない — 入っていない。 */
 function classifyFailure(
   error: unknown,
-  request: IssuePageRequest | IssueBodyRequest,
+  request: IssuePageRequest | IssueBodyRequest | IssueDiscussionRequest,
 ): Observation<never> {
   const details = { repository: `${request.owner}/${request.name}` };
   const errno = errnoOf(error);
@@ -230,6 +281,30 @@ export function createGhIssueTrackerIntegration(
         '-F',
         `number=${request.number}`,
       ];
+
+      try {
+        return observed(await run(args, { timeoutMs }));
+      } catch (error) {
+        return classifyFailure(error, request);
+      }
+    },
+
+    async fetchIssueDiscussion(request) {
+      const args = [
+        'api',
+        'graphql',
+        '-f',
+        `query=${ISSUE_DISCUSSION_QUERY}`,
+        '-F',
+        `owner=${request.owner}`,
+        '-F',
+        `name=${request.name}`,
+        '-F',
+        `number=${request.number}`,
+      ];
+      /* 最初のページには続きの位置が無い。一覧と同じで、`cursor=` と空で渡すと `gh` は
+         空文字列を送り、GitHub は「そこから先」を 0 件と答える。 */
+      if (request.cursor !== null) args.push('-F', `cursor=${request.cursor}`);
 
       try {
         return observed(await run(args, { timeoutMs }));

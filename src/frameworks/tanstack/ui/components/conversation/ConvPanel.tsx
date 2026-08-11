@@ -75,8 +75,8 @@ function AgentContext({
     }
     if (session.issues.length > 0) {
       groups.push(
-        <span key="bd" className="ctx-g">
-          <span className="mk">bd</span>
+        <span key="work" className="ctx-g">
+          <span className="mk">working on</span>
           {session.issues.slice(0, MAX_LISTED_ISSUES).map((id) => (
             <IssueChip key={id} id={id} />
           ))}
@@ -102,8 +102,8 @@ function AgentContext({
     }
     if (subagent.issue !== null) {
       groups.push(
-        <span key="bd" className="ctx-g">
-          <span className="mk">bd</span>
+        <span key="work" className="ctx-g">
+          <span className="mk">working on</span>
           <IssueChip id={subagent.issue} />
         </span>,
       );

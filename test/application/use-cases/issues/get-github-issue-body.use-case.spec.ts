@@ -11,8 +11,7 @@ import { createGetGithubIssueBody } from '~/application/use-cases/issues/get-git
 /* 課題 1 件の本文は、一覧とは別の呼び出しで引く。
 
    一覧が本文を運ばないのは大きさのためであって、持てないからではない。**1 件を開いたときに
-   読めないままにすると**、台帳の課題は本文が出るのに GitHub の課題だけ出ない、という
-   食い違いが残る。 */
+   読めないままにすると**、一覧には並ぶのに開くと何も書かれていない課題になる。 */
 
 class TrackerUnreachable extends AppError {
   readonly code = 'tracker.exit_nonzero';
@@ -43,6 +42,9 @@ function fakeTracker(text: string | (() => never)) {
       asked.push(request);
       if (typeof text !== 'string') return text();
       return observed(text);
+    },
+    async fetchIssueDiscussion() {
+      throw new Error('本文の呼び出しはやり取りを尋ねない');
     },
   };
   return { tracker, asked };

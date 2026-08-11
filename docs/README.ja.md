@@ -53,10 +53,9 @@ glasshive をどこで起動しても、エージェントが作業したすべ�
 issue、ブランチ、マイルストーンを 1 つの画面に。どれも同じ仕事を 3 つの側面から見たものだからだ。
 画面を離れないまま行き来できる。
 
-issue は [`gh`](https://cli.github.com) CLI 越しに GitHub から、あるいは
-[`bd`](https://github.com/gastownhall/beads) の台帳から読む。どのリポジトリを見るかは、remote が
-指している先を `gh` に尋ねて決める — `gh` 自身が決めるのと同じやり方だ。sub-issue は入れ子
-になり、`blocked by` は依存の辺として描かれ、issue の種類・ラベル・マイルストーン・担当も
+issue は [`gh`](https://cli.github.com) CLI 越しに GitHub から読む。どのリポジトリを見るかは、
+remote が指している先を `gh` に尋ねて決める — `gh` 自身が決めるのと同じやり方だ。sub-issue は
+入れ子になり、`blocked by` は依存の辺として描かれ、issue の種類・ラベル・マイルストーン・担当も
 付いてくる。
 
 ブランチと worktree は主たる worktree が出しているブランチの上に描くので、誰がどこにいるかが
@@ -74,16 +73,21 @@ issue は [`gh`](https://cli.github.com) CLI 越しに GitHub から、あるい
 
 ![Side panel](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/conversation.png)
 
+issue には、そこに書かれたコメントとタイムラインが付いてくる。誰がラベルを付けたか、何に堰き
+止められたか、どの pull request が触れたかを、いまその issue に取り組んでいるエージェントの隣で
+読める。
+
+![Issue](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/issue.png)
+
 ## 読み取り専用という設計
 
-- **読むのは 4 つ、そのどれにも書かない。** Claude Code のセッションログ
-  (`~/.claude/projects/**/*.jsonl`)、beads の台帳(`<project>/.beads/issues.jsonl`)、`git`、
-  そして `gh` CLI 越しに、remote が指している GitHub リポジトリの issue。セッションログも
-  台帳もリポジトリも issue も、書き換えられることはない。
+- **読むのは 3 つ、そのどれにも書かない。** Claude Code のセッションログ
+  (`~/.claude/projects/**/*.jsonl`)、`git`、そして `gh` CLI 越しに、remote が指している GitHub
+  リポジトリの issue。セッションログもリポジトリも issue も、書き換えられることはない。
 - **書く 1 つのファイルは、自分のものだけ。** `~/.config/glasshive/preferences.json` に、留めた
   タブと表示の好みが入る。書く前に glasshive は、そのパスが `~/.claude`、セッションログの
-  ルートディレクトリ、観測している `.beads` や `.git` のディレクトリの中に無いことを確かめ、
-  中にあれば断る — 観測している先へ書かないことは、約束ではなく仕組みで塞いである。
+  ルートディレクトリ、見えているプロジェクトの `.git` や `.beads` のディレクトリの中に無いことを
+  確かめ、中にあれば断る — 観測している先へ書かないことは、約束ではなく仕組みで塞いである。
   このファイルを消せば、glasshive が書いたものは 1 つも残らない。
 - **公開しているパッケージは、このリポジトリまで辿れる。** どのバージョンも GitHub Actions から
   OIDC で publish していて provenance の attestation が付くので、`npm audit signatures` で、

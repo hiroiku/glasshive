@@ -28,8 +28,8 @@ const TRANSCRIPT_SUFFIX = '.jsonl';
 
 /* エージェントを特定できる語 → 会話のパス。
 
-   **その 1 人を指せる文字列は、片端から入れる。** セッションは actor の名前・id・その頭
-   8 桁・`mgr-{頭 8 桁}`(bd へ書き込む側はこの名前で記録される)で指される。子は
+   **その 1 人を指せる文字列は、片端から入れる。** セッションは id・その頭 8 桁・
+   `mgr-{頭 8 桁}`(`transcript` の本文にこの綴りで書かれることがある)で指される。子は
    ラベル・id・頭を落とした素の id・呼びかけに使う名前・生まれた `tool_use` の id で
    指される。どれで書かれても同じ会話へ行けるようにする。
 
@@ -42,7 +42,6 @@ export function agentTokens(project: ProjectJson | undefined): Map<string, Agent
     if (key !== null && key !== '' && !index.has(key)) index.set(key, { file, state });
   };
   for (const session of project?.sessions ?? []) {
-    put(session.actor, session.file, session.state);
     put(session.id, session.file, session.state);
     put(session.id.slice(0, SESSION_SHORT_CHARS), session.file, session.state);
     put(`mgr-${session.id.slice(0, SESSION_SHORT_CHARS)}`, session.file, session.state);
@@ -151,43 +150,17 @@ export interface IssueRef {
   readonly closed: boolean;
 }
 
-/** 略記として引くのに最低限要る長さ。これより短いと、ふつうの語に当たる */
-const MIN_SHORT_ID_CHARS = 4;
+/* 課題の id のインデックス。**書かれたとおりの id でしか引かない。**
 
-/** 共通の頭として認めるのに最低限要る長さ */
-const MIN_PREFIX_CHARS = 3;
-
-/* 課題の id のインデックス。正式な id に加え、**共通の頭を見付けて略記からも引けるようにする。**
-
-   会話では `kuden-os-4f2a` が `4f2a` と略される。台帳の全部の id に共通する頭を求め、
-   区切りまで戻したものを頭と見なす。
+   id は `#209` の形で、番号だけを鍵にすると文中のただの数がチップに化ける。
 
    閉じた課題もインデックスに入れる。コミットの題や Git が参照するのは、大半が統合済みの課題である。 */
 export function issueIndex(
-  issues: readonly { readonly id: string | null; readonly status: string }[],
+  issues: readonly { readonly id: string; readonly status: string }[],
 ): Map<string, IssueRef> {
   const index = new Map<string, IssueRef>();
-  const ids: string[] = [];
   for (const issue of issues) {
-    if (issue.id === null || issue.id === '') continue;
-    ids.push(issue.id);
     index.set(issue.id, { id: issue.id, closed: issue.status === 'closed' });
-  }
-  if (ids.length < 2) return index;
-
-  let common = ids[0] ?? '';
-  for (const id of ids) {
-    while (common !== '' && !id.startsWith(common)) common = common.slice(0, -1);
-  }
-  const cut = common.lastIndexOf('-');
-  const prefix = cut > 0 ? common.slice(0, cut + 1) : '';
-  if (prefix.length < MIN_PREFIX_CHARS) return index;
-
-  for (const id of ids) {
-    const short = id.slice(prefix.length);
-    if (short.length < MIN_SHORT_ID_CHARS || index.has(short)) continue;
-    const full = index.get(id);
-    if (full !== undefined) index.set(short, full);
   }
   return index;
 }

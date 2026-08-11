@@ -59,7 +59,6 @@ const project = (id: string, name: string): ProjectJson => ({
       effort: null,
       git_branch: null,
       cwd: null,
-      actor: null,
       issues: [],
       current: null,
       intervals: [],

@@ -1,5 +1,6 @@
 import { WINDOWS } from '../../derive/timeWindow.ts';
 import type { Axis, Scale } from '../../timeline/axis.ts';
+import { SearchInput } from '../primitives/SearchInput.tsx';
 import { RangeSlider, TimeInput } from '../timeline/RangeSlider.tsx';
 
 /* 表のツールバー。検索と絞り込みと、いま見ている時間帯。
@@ -61,13 +62,7 @@ export function AgentsToolbar({
 }: AgentsToolbarProps) {
   return (
     <div className="view-toolbar">
-      <input
-        className="search"
-        type="search"
-        placeholder="Search agents and transcripts…"
-        value={query}
-        onChange={(event) => onQuery(event.target.value)}
-      />
+      <SearchInput value={query} onChange={onQuery} placeholder="Search agents and transcripts…" />
       {/* 読み終えるまで出し続ける。消えたときが、全部を見終えたときである */}
       {deepNote !== null && (
         <span

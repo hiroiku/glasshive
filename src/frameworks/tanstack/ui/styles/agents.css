@@ -27,7 +27,7 @@
   overflow: auto;
   display: grid;
   grid-template-columns:
-    fit-content(400px) max-content max-content max-content max-content
+    fit-content(400px) max-content max-content max-content minmax(62px, max-content)
     fit-content(200px) fit-content(170px) fit-content(170px)
     fit-content(260px) max-content minmax(280px, 1fr);
   column-gap: 10px;
@@ -195,13 +195,38 @@
   color: var(--dim);
   font-size: 11px;
 }
+/* 消費と、その割合を 1 つの欄に重ねる。列は増やせない —— 11 本の `subgrid` を崩すと
+   表全体の列が揃わなくなる。数を右へ揃え、そのすぐ下にバーを敷く。 */
 .row .col-tok {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
   color: var(--dim);
   font-size: 11px;
-  font-family: var(--mono);
-  text-align: right;
+  line-height: 14px;
 }
-.row .col-bd {
+.row .col-tok .mono {
+  font-family: var(--mono);
+}
+.tok-bar {
+  position: relative;
+  width: 100%;
+  height: 3px;
+  background: rgba(42, 52, 65, 0.5);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.tok-bar i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  /* 値が在るのにバーが見えないと、0 と並んで見える */
+  min-width: 2px;
+  background: rgba(96, 165, 250, 0.55);
+  border-radius: 2px;
+}
+.row .col-work {
   color: var(--dim);
   font-size: 11.5px;
 }
@@ -227,8 +252,8 @@
   color: #7dd3fc;
 }
 
-/* 残る fit-content の 4 列にも下限を持たせる。下限が無いとヘッダの語の幅(bd なら 13px)まで
-   潰れ、チップもブランチ名もいま何をしているかも clip に呑まれて跡形も無くなる。
+/* 残る fit-content の 4 列にも下限を持たせる。下限が無いとヘッダの語の幅まで潰れ、
+   チップもブランチ名もいま何をしているかも clip に呑まれて跡形も無くなる。
    チップ 1 つぶんは残して、それでも足りない幅は横送りに回す。
 
    **中身の在るセルにだけ持たせる。** 下限は「潰れて読めなくなる」ことを防ぐためのもので、
@@ -236,7 +261,7 @@
    プロジェクトや、走っているセッションが無いときにも空の列が幅を握り、その分だけ
    タイムラインが痩せる — この表で伸び縮みするのはタイムラインの列 1 つだけなので、
    余った幅の行き先は他に無い。 */
-.row .col-bd:not(:empty),
+.row .col-work:not(:empty),
 .row .col-wt:not(:empty),
 .row .col-br:not(:empty) {
   min-width: 92px;
@@ -245,13 +270,10 @@
   min-width: 104px;
 }
 
-.row .col-bd {
+.row .col-work {
   display: flex;
   gap: 6px;
   overflow: hidden;
-}
-.row .bd-actor {
-  flex: none;
 }
 .row .col-upd {
   color: var(--dim);
