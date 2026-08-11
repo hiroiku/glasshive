@@ -64,6 +64,8 @@ export function WorkToolbar({
           <button
             type="button"
             className={`fchip ${group === null ? 'on' : ''}`}
+            /* 押されているかは色でしか出ていない。読み上げにも同じことを言わせる */
+            aria-pressed={group === null}
             title="Leave the issues nested under their parents"
             onClick={() => onGroup(null)}
           >
@@ -72,6 +74,7 @@ export function WorkToolbar({
           <button
             type="button"
             className={`fchip ${group === 'milestone' ? 'on' : ''}`}
+            aria-pressed={group === 'milestone'}
             title="Gather the issues under the milestone each one is in"
             onClick={() => onGroup('milestone')}
           >
@@ -91,6 +94,7 @@ export function WorkToolbar({
               key={preset.label}
               type="button"
               className={`fchip ${gantt === preset.key ? 'on' : ''}`}
+              aria-pressed={gantt === preset.key}
               title={preset.title}
               onClick={() => onGantt(preset.key)}
             >

@@ -11,14 +11,26 @@ import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter
 import { buildDependencyGraph, startOrder } from '../../derive/dependencyGraph.ts';
 import { labelColors, leadPullRequest, subProgress } from '../../derive/githubIssue.ts';
 import {
+  buildCloses,
+  buildTracks,
+  type CloseInstant,
+  closeFlagOf,
+  type EventLog,
+  type EventMark,
+  type OffAxis,
+  type RowTrack,
+  unlistedTrack,
+} from '../../derive/issueEvents.ts';
+import {
+  atPct,
+  clampPct,
   formatGanttTick,
   type GanttAxis,
   type GanttGuide,
-  type GanttSpan,
   type GanttWindow,
   ganttAxis,
+  ganttGridImage,
   ganttGuides,
-  ganttSpan,
   ganttTicks,
 } from '../../derive/issueGantt.ts';
 import {
@@ -78,21 +90,32 @@ const EMPTY_WORKERS: readonly MatchedWorker[] = [];
 /** 端に貼り付いた目盛りはラベルが列から溢れる。Agents の見出しと同じところで落とす */
 const TICK_EDGE_PCT = 3;
 
-/* 軸の上での位置を百分率で。**軸の外は端で止めずに、呼ぶ側が描くのをやめる。**
-   端へ寄せたバーは、位置も長さも観測していない値を言うことになる。 */
-const atPct = (at: number, axis: GanttAxis): number => ((at - axis.t0) / (axis.t1 - axis.t0)) * 100;
-
-const clampPct = (pct: number): number => Math.min(100, Math.max(0, pct));
-
 /** 待った長さ。日より細かくは言わない —— 課題の待ちは日の単位で読むものである */
-const lagDays = (ms: number): number => Math.max(0, Math.round(ms / DAY_MS));
+const lagDays = (ms: number): number => Math.round(ms / DAY_MS);
 
-/** 課題 1 件ぶんのタイムライン。バーと、直前の堰き止めから空くまでの待ち */
-interface RowGantt {
-  readonly span: GanttSpan;
-  /** 最後に片付いた堰き止めの相手と、その終わり。待ちが無ければ `null` */
-  readonly lag: { readonly at: number; readonly blocker: string } | null;
+/** 最後に片付いた堰き止めの相手と、その終わり */
+interface RowLag {
+  readonly at: number;
+  readonly blocker: string;
+  /** 相手の閉じた時刻が `updated_at` の代用か。**待ちの長さは、その端から測っている** */
+  readonly approx: boolean;
 }
+
+/** 1 行に引く待ちの線。位置は軸に収めたもので、収めた端は `soft` が言う */
+interface RowWait {
+  readonly left: number;
+  readonly right: number;
+  readonly blocker: string;
+  readonly days: number;
+  readonly approx: boolean;
+  /** 始まり —— 相手が片付いた時刻 —— が軸の外に在って、軸の端で止めているとき */
+  readonly softFrom: boolean;
+  /** 終わり —— この課題が作られた時刻 —— が軸の外に在って、軸の端で止めているとき */
+  readonly softTo: boolean;
+}
+
+/** まとまった点に添える種類の並びの長さ。これより長いと `title` が画面からはみ出す */
+const MAX_KIND_TEXT = 40;
 
 export type IssueSortKey =
   | 'start'
@@ -162,6 +185,9 @@ export interface IssuesTableProps {
   readonly onSort: (key: IssueSortKey) => void;
   /** 右のタイムラインが一度に見せる幅 */
   readonly ganttWindow: GanttWindow;
+  /* 課題に起きたことの記録。**一覧とは別に届く** —— 届く前でも一覧は開くので、
+     `reading` のまま描き始める。 */
+  readonly eventLog: EventLog;
   /** 一覧の束ね方。無ければ束ねず、親子の入れ子のまま並べる */
   readonly group: IssueGroup | undefined;
   readonly nowMs: number;
@@ -181,6 +207,7 @@ export function IssuesTable({
   order,
   onSort,
   ganttWindow,
+  eventLog,
   group,
   nowMs,
   firstPaint,
@@ -247,7 +274,7 @@ export function IssuesTable({
      着手順の一覧が着手できないものから始まる。
 
      マイルストーンで束ねているときは、そちらが束を決める。**並べ替えは束の中で効く** ——
-     着手順を選んだままマイルストーンで束ねれば、「この区切りで次に取るのはどれか」が読める。 */
+     着手順を選んだままマイルストーンで束ねれば、「このマイルストーンで次に取るのはどれか」が読める。 */
   const banded = useMemo(() => {
     if (group === 'milestone' || order.key !== 'start') return null;
     const live = shown.filter((issue) => issue.status !== 'closed');
@@ -344,36 +371,84 @@ export function IssuesTable({
   const guides = useMemo(() => ganttGuides(shown, axis), [shown, axis]);
   const ticks = useMemo(() => ganttTicks(axis.t0, axis.t1), [axis]);
   const axisSpan = axis.t1 - axis.t0;
+  const gridImage = useMemo(() => ganttGridImage(guides, axis, nowMs), [guides, axis, nowMs]);
+  const inAxis = useMemo(() => datedGuides(guides, 'in'), [guides]);
+  const before = datedGuides(guides, 'before');
+  const after = datedGuides(guides, 'after');
+  const undated = guides.filter((guide) => guide.where === 'undated');
 
-  /* バーと待ちの線を、行の外で 1 度だけ組む。待ちを引くには堰き止めている相手のバーが要り、
-     それは他の行のものなので、行の中では組めない。 */
-  const bars = useMemo(() => {
-    const spans = new Map<string, GanttSpan>();
+  /* 点と閉じた時刻を組む相手。**絞り込む前の全件と、一覧に渡された課題の両方**である。
+     待ちの線は堰き止めていた相手が閉じた時刻を引くので全件が要り、行は自分の `id` で引くので
+     渡された課題も要る —— 片方だけで組むと、もう片方にしか居ない行が答えを持たないまま残る。 */
+  const covered = useMemo(() => {
+    const found = new Map<string, IssueSummaryJson>();
+    for (const issue of all) found.set(issue.id ?? '', issue);
+    for (const issue of issues) found.set(issue.id ?? '', issue);
+    return [...found.values()];
+  }, [all, issues]);
+
+  /* 課題ごとの閉じた時刻。**軸を渡さない** —— 依存の並びに `axis` が無いことが、幅を
+     切り替えても絞り込んでも同じ答えが出ることそのものである。フラグも待ちの線もここを読む。 */
+  const closes = useMemo(() => buildCloses(covered, eventLog), [covered, eventLog]);
+
+  /* 行ごとの点を、行の外で 1 度だけ組む。**行の中で組むと、どれか 1 行にホバーしただけで
+     200 行ぶんの点が組み直され、行の `memo` が効かなくなる。**
+
+     行はどれも自分の `id` で引くだけなので、出ていない課題まで組んでも絵は変わらない。 */
+  const tracks = useMemo(
+    () => buildTracks(covered, eventLog, closes, axis),
+    [covered, eventLog, closes, axis],
+  );
+
+  /** どちらにも居ない行のトラック。読み終えた記録の下で、その行だけを読み込み中の顔にしない */
+  const unlisted = useMemo(() => unlistedTrack(eventLog), [eventLog]);
+
+  /* 待ちの線を、行の外で 1 度だけ組む。待ちを引くには堰き止めている相手が閉じた時刻が要り、
+     それは他の行のものなので、行の中では組めない。
+
+     読むのは `closes` である。**フラグから読まない** —— フラグは軸に入るときだけ立つ
+     描き方の答えなので、そこから時刻を採ると、幅を切り替えただけで待った長さが変わる。
+
+     **開いたままの相手が 1 つでも在れば、待ちは引かない。** 閉じた時刻の無い相手はまだ
+     終わっていないので、そこから「空いた」と言える時刻は観測できていない。
+
+     相手の閉じた時刻が `updated_at` の代用なら、それを持って回る。**代用の端から測った
+     長さを、測った長さの顔で描かない** —— 同じ時刻を相手の行はぼかしたフラグで描いており、
+     こちらだけが硬い日数を言うと、1 つの時刻が 2 つの意味を持つ。 */
+  const lags = useMemo(() => {
+    const index = new Map<string, RowLag>();
     for (const row of rows) {
-      const span = ganttSpan(row.issue, nowMs);
-      if (span !== null) spans.set(row.issue.id, span);
-    }
-    const index = new Map<string, RowGantt>();
-    for (const row of rows) {
-      const span = spans.get(row.issue.id);
-      if (span === undefined) continue;
+      const from = Date.parse(row.issue.created_at ?? '');
+      if (!Number.isFinite(from)) continue;
       /* 待ちを決めるのは、いちばん後に終わる相手である。**先に片付いた相手を採ると、
          まだ他の相手が塞いでいた期間まで「空いていた」と描くことになる。** */
-      let latest: RowGantt['lag'] = null;
+      let latest: RowLag | null = null;
+      let open = false;
       for (const dependency of row.issue.deps) {
         if (dependency.type !== 'blocks') continue;
         const on = dependency.on;
         if (on === null || on === row.issue.id) continue;
-        const other = spans.get(on);
-        if (other === undefined) continue;
-        if (latest === null || other.to > latest.at) latest = { at: other.to, blocker: on };
+        /* 手元に無い相手は、まだ閉じていない相手と同じ扱いにする。**無かったことにしない**
+           —— 依存が在ることは分かっていて、それがいつ解けたのかを観測できていない。 */
+        const end = closes.get(on) ?? null;
+        if (end === null) {
+          open = true;
+          break;
+        }
+        /* 同じ時刻で終わる相手が 2 つ在るなら、観測した時刻を持つほうを採る。`updated_at` は
+           実際に閉じた時刻より後ろにしか出ないので、同じ時刻に読めた `closed` が在るなら、
+           塞ぎが解けた時刻はそちらで観測できている。 */
+        const better =
+          latest === null ||
+          end.at > latest.at ||
+          (end.at === latest.at && latest.approx && !end.approx);
+        if (better) latest = { at: end.at, blocker: on, approx: end.approx };
       }
       // 相手がこの課題の始まりより後に終わるなら、待った時間は無い。逆向きの線は引かない
-      const lag = latest !== null && latest.at < span.from ? latest : null;
-      index.set(row.issue.id, { span, lag });
+      if (!open && latest !== null && latest.at < from) index.set(row.issue.id, latest);
     }
     return index;
-  }, [rows, nowMs]);
+  }, [rows, closes]);
 
   /* 触れている行と、繋がっている行。**繋がりの向きは問わない** —
      残したいのは「この課題と関わりのある行」であって、依存の向きではない。
@@ -408,8 +483,27 @@ export function IssuesTable({
     [related],
   );
 
+  /* 記録の読めなさは、行ごとに繰り返さず 1 度だけ言う。**黙らない** —— 点の無い行が
+     「何も起きなかった行」として読まれるのは、この列がいちばんやってはいけない嘘である。
+
+     **理由を 1 つに決めない。** ハッチの絵はどの理由でも同じなので、掛かっている行の
+     理由がひとつでも文から漏れると、その行は自分に当てはまらない説明の下に並ぶ。 */
+  const unread = useMemo(() => {
+    const found = { row: false, cut: false, unreadable: false };
+    // 数えるのは出ている行だけである。画面に無い行の理由まで言うと、文がどの行の話か合わない
+    for (const row of rows) {
+      const track = tracks.get(row.issue.id ?? '') ?? unlisted;
+      if (track.kind !== 'unread') continue;
+      if (track.why === 'row') found.row = true;
+      if (track.why === 'cut') found.cut = true;
+      if (track.why === 'unreadable') found.unreadable = true;
+    }
+    return found;
+  }, [rows, tracks, unlisted]);
+  const logBand = bandForLog(eventLog, unread);
+
   return (
-    <div id="issues-list" ref={listRef}>
+    <div id="issues-list" ref={listRef} style={{ ['--gt-grid' as string]: gridImage }}>
       <div className="issue-row head">
         {/* 弧の列の見出しは着手順の並べ替えを兼ねる。依存が解けた open を上へ */}
         <button
@@ -428,7 +522,9 @@ export function IssuesTable({
         <SortHead label="Labels" sortKey="labels" order={order} onSort={onSort} />
         <SortHead label="Assignee / Agents" sortKey="assignee" order={order} onSort={onSort} />
         <SortHead label="Updated" sortKey="updated" order={order} onSort={onSort} right />
-        {/* 目盛りだけの見出し。この列に並べ替えは無いので、押せる形にしない */}
+        {/* 目盛りとマイルストーンの名前を持つ見出し。この列に並べ替えは無いので、押せる形にしない。
+            見出しは `position: sticky` なので、名前は一覧を下まで辿る間ずっと残る ——
+            だから行の中の線は名前を持たなくてよい */}
         <span className="gt-head">
           {ticks.map((tick) => {
             const x = atPct(tick, axis);
@@ -440,8 +536,51 @@ export function IssuesTable({
               </span>
             );
           })}
+          {/* 名前は自分の線と左隣の線の間に右揃えで置く。**左隣の線より先へは伸びない** ——
+              だから期日が近い 2 つでも、名前どうしが重なることが構造として起こらない */}
+          {inAxis.map((guide, index) => {
+            const pct = atPct(guide.at, axis);
+            const earlier = index === 0 ? null : inAxis[index - 1];
+            const prev = earlier === undefined || earlier === null ? 0 : atPct(earlier.at, axis);
+            // 左端に件数が立つときは、そのぶんだけ最初の名前の場所を空ける
+            const room = pct - prev - (index === 0 && undated.length > 0 ? 6 : 0);
+            return (
+              <b
+                key={guide.title}
+                className="gt-ms"
+                style={{ right: `${100 - pct}%`, maxWidth: `calc(${room}% - 6px)` }}
+                title={`Milestone ${guide.title} — due ${absTime(guide.at)}`}
+              >
+                {guide.title}
+              </b>
+            );
+          })}
+          {/* 軸の外に落ちた期日。**黙って落とさない** —— 線を引けないことと、期日が無いことは違う */}
+          {before.length > 0 && (
+            <b className="gt-off left" title={offTitle(before, 'before')}>
+              ‹{before.length}
+            </b>
+          )}
+          {after.length > 0 && (
+            <b className="gt-off right" title={offTitle(after, 'beyond')}>
+              {after.length}›
+            </b>
+          )}
+          {/* 期日の無いマイルストーン。線は引けないが、在ることは言える */}
+          {undated.length > 0 && (
+            <b className="gt-off left undated" title={undatedTitle(undated)}>
+              ?{undated.length}
+            </b>
+          )}
+          {/* 読んでいる最中に動くものは、画面に 1 つでよい。行ごとに置くと 200 個が同時に走る */}
+          {eventLog.kind === 'reading' && (
+            <i className="gt-reading" title="Reading the issue event log" />
+          )}
         </span>
       </div>
+      {logBand !== null && (
+        <Band title={logBand.title} note={logBand.note} tone="cut" key="event-log" />
+      )}
       {rows.length === 0 ? (
         <div className="empty">No matching issues</div>
       ) : (
@@ -451,12 +590,7 @@ export function IssuesTable({
           return (
             /* Fragment は DOM を作らないので、`subgrid` は親の直の子のまま保たれる */
             <Fragment key={id === '' ? index : id}>
-              {band !== undefined && (
-                <div className={`iband${band.tone === '' ? '' : ` ${band.tone}`}`}>
-                  <span>{band.title}</span>
-                  <em>{band.note}</em>
-                </div>
-              )}
+              {band !== undefined && <Band title={band.title} note={band.note} tone={band.tone} />}
               <IssueRow
                 row={row}
                 index={index}
@@ -468,8 +602,9 @@ export function IssuesTable({
                 unlocks={banded?.unlocks.get(row.issue.id) ?? null}
                 progress={progress}
                 axis={axis}
-                guides={guides}
-                gantt={bars.get(id) ?? null}
+                track={tracks.get(id) ?? unlisted}
+                close={closes.get(id) ?? null}
+                lag={lags.get(id) ?? null}
                 showMilestone={group !== 'milestone'}
                 nowMs={nowMs}
                 onHot={light}
@@ -482,13 +617,182 @@ export function IssuesTable({
       )}
       {/* 辺を採り切れていないなら黙らない。黙ると、足りない絵が正しい絵として出る */}
       {banded !== null && !banded.complete && (
-        <div className="iband cut">
-          <span>Some blocking issues were not fetched</span>
-          <em>this order may be missing constraints</em>
-        </div>
+        <Band
+          title="Some blocking issues were not fetched"
+          note="this order may be missing constraints"
+          tone="cut"
+        />
       )}
     </div>
   );
+}
+
+/* 束の見出し。**9 列目に空のトラックを持つ** —— 見出しも `subgrid` の行なので、ここに
+   トラックが在って初めて、マイルストーンの縦線が見出しを跨いで 1 本に繋がる。 */
+function Band({
+  title,
+  note,
+  tone,
+}: {
+  readonly title: string;
+  readonly note: string;
+  readonly tone: string;
+}) {
+  return (
+    <div className={`iband${tone === '' ? '' : ` ${tone}`}`}>
+      <span className="iband-t">
+        <span>{title}</span>
+        <em>{note}</em>
+      </span>
+      <i className="gt" aria-hidden="true" />
+    </div>
+  );
+}
+
+/** 行が読めていない理由の内訳。同じハッチが掛かる理由は 1 つとは限らない */
+interface UnreadWhy {
+  readonly row: boolean;
+  readonly cut: boolean;
+  readonly unreadable: boolean;
+}
+
+/* 記録そのものについて、一覧の上で 1 度だけ言うこと。
+
+   **「読めなかった」と「無かった」を同じ文にしない。** 前者は観測できなかったことで、
+   後者はこのプロジェクトに GitHub のリポジトリが無いということである。
+
+   ハッチの掛かった行が在るのに 1 文も出ないことがあってはならない。**理由はすべて並べる**
+   —— 絵はどれも同じなので、文に出ていない理由の行は、他の理由の説明の下に並ぶことになる。 */
+function bandForLog(
+  log: EventLog,
+  unread: UnreadWhy,
+): { readonly title: string; readonly note: string } | null {
+  if (log.kind === 'unobservable') {
+    return {
+      title: 'Issue events could not be read',
+      note: log.reason ?? 'no reason was given',
+    };
+  }
+  if (log.kind === 'absent') {
+    return { title: 'This project has no issue event log', note: 'nothing to read' };
+  }
+  if (log.kind !== 'observed') return null;
+
+  const notes: string[] = [];
+  // 記録そのものが途中で切れているなら、並びに居ない行はそれで説明が付く
+  if (!log.complete) notes.push('the event log was cut short');
+  else if (unread.row) notes.push('they were not in the event log');
+  if (unread.cut) notes.push('for some, it stopped before any of their events');
+  if (unread.unreadable) notes.push('for some, no event time could be read');
+  if (notes.length === 0) return null;
+  return { title: 'Some issues were not read', note: notes.join(' · ') };
+}
+
+/* トラックの状態を class にする。**4 つの状態がそれぞれ別の絵になる** —— 読んでいる最中と、
+   読み終えて何も無かったのと、読めなかったのと、読むものが無かったのは、別の答えである。 */
+function stateClass(track: RowTrack): string {
+  if (track.kind === 'reading') return ' reading';
+  if (track.kind === 'unread') return ' unread';
+  if (track.kind === 'nolog') return ' nolog';
+  return '';
+}
+
+/* トラック全体の説明。点にホバーしたときは、点の側の説明が勝つ。
+
+   **「読めなかった」を「何も起きなかった」と言わない。** 読めていない行は、なぜ読めていない
+   のかをそれぞれの言葉で言う。開いた時刻を読めていないなら、そこを始まりとして語らない。 */
+function trackTitle(track: RowTrack, openedAt: boolean): string {
+  if (track.kind === 'reading') return 'Reading the issue event log';
+  if (track.kind === 'nolog') return 'This project has no issue event log';
+  if (track.kind === 'unread') {
+    if (track.why === 'log') return 'Issue events could not be read';
+    if (track.why === 'row') return 'This issue was not in the event log that was read';
+    if (track.why === 'unreadable') {
+      // 読めなかったのと切れていたのは同時に起こる。片方だけ言うと、残りが黙って落ちる
+      const also = track.truncated ? ' — the event log was also cut short here' : '';
+      return `The time on ${countOf(track.dropped, 'event')} could not be read, so nothing is drawn here${also}`;
+    }
+    return 'The event log was cut short before it reached any event on this issue';
+  }
+  const missed =
+    track.dropped === 0
+      ? ''
+      : ` — the time on ${countOf(track.dropped, 'other event')} could not be read`;
+  if (track.count === 0 || track.lastAt === null) {
+    return openedAt
+      ? `No events on record since it was opened${missed}`
+      : `No events on record for this issue${missed}`;
+  }
+  return `${countOf(track.count, 'event')} read, the last on ${absTime(track.lastAt)}${missed}`;
+}
+
+/** 件数と、その数に合う単数・複数。1 件を `1 events` と言うと、数えていないように読める */
+function countOf(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/* 軸の外に落ちたイベントの説明。**件数だけでは、何を見損ねたのか分からない** ——
+   いちばん近いものの時刻を添えて、幅を広げれば見えることまで言う。 */
+function offEventTitle(off: OffAxis, side: 'before' | 'beyond'): string {
+  const what = `${countOf(off.count, 'event')} ${off.count === 1 ? 'is' : 'are'}`;
+  const nearest = side === 'before' ? 'the most recent' : 'the earliest';
+  const cut =
+    off.cut && side === 'before'
+      ? ' The event log was also cut short, so what is missing lies out there too.'
+      : '';
+  return `${what} ${side} this span, ${nearest} on ${absTime(off.at)} — widen the span to see them.${cut}`;
+}
+
+/* 待ちの線の説明。**測った長さは軸の外まで含んだ長さである** —— 線は軸に収めて引くので、
+   端を軸で止めているならそのことも言う。言わないと、8 日ぶんの長さの線が 18 日を名乗る。 */
+function lagTitle(wait: RowWait): string {
+  const measured = wait.approx
+    ? `Waiting on ${wait.blocker} — about ${wait.days}d, measured from a close time taken from updated_at, so where this wait starts is approximate`
+    : `Waiting on ${wait.blocker} — ${wait.days}d from ${wait.blocker} ending to this issue being created`;
+  const stopped = [
+    wait.softFrom ? `${wait.blocker} ended before this span` : '',
+    wait.softTo ? 'this issue was created after this span' : '',
+  ].filter((clause) => clause !== '');
+  if (stopped.length === 0) return measured;
+  return `${measured}. The line stops at the edge of this span: ${stopped.join(' and ')} — widen the span to see the whole wait.`;
+}
+
+/* 点の説明。**まとまった点は件数と両端の時刻を言う** —— 形は「2 つ以上が近すぎる」としか
+   言えないので、いくつがいつからいつまでなのかは言葉で持つ。 */
+function markTitle(mark: EventMark): string {
+  if (mark.count === 1) return `${mark.kinds[0] ?? 'event'} — ${absTime(mark.at)}`;
+  return `${mark.count} events between ${absTime(mark.at)} and ${absTime(mark.lastAt)} · ${cut(
+    mark.kinds.join(', '),
+    MAX_KIND_TEXT,
+  )}`;
+}
+
+/** 期日を読めたマイルストーンだけを、置ける形にして取り出す */
+function datedGuides(
+  guides: readonly GanttGuide[],
+  where: GanttGuide['where'],
+): readonly { readonly title: string; readonly at: number }[] {
+  return guides.flatMap((guide) =>
+    guide.where === where && guide.at !== null ? [{ title: guide.title, at: guide.at }] : [],
+  );
+}
+
+/** 軸の外に落ちた期日を数えて名前を添える。件数だけでは、何を見損ねたのか分からない */
+function offTitle(
+  guides: readonly { readonly title: string; readonly at: number }[],
+  side: 'before' | 'beyond',
+): string {
+  const listed = guides.map((guide) => `${guide.title} (${absTime(guide.at)})`).join(', ');
+  const what = guides.length === 1 ? 'milestone is' : 'milestones are';
+  return `${guides.length} ${what} due ${side} this span: ${listed} — widen the span to see them`;
+}
+
+/* 期日そのものが無いマイルストーン。**黙って消さない** —— 消すと「期日が無い」と「そんな
+   マイルストーンは無い」が同じ絵になる。軸に置けないので、名前を数えて言うだけにする。 */
+function undatedTitle(guides: readonly GanttGuide[]): string {
+  const listed = guides.map((guide) => guide.title).join(', ');
+  const what = guides.length === 1 ? 'milestone has' : 'milestones have';
+  return `${guides.length} ${what} no due date: ${listed} — nothing can be placed on this axis for them`;
 }
 
 interface IssueRowProps {
@@ -504,12 +808,16 @@ interface IssueRowProps {
   /** これを終わらせると着手できるようになる数。着手順で並べているときだけ */
   readonly unlocks: number | null;
   readonly progress: ReadonlyMap<string, { total: number; closed: number }>;
-  /* タイムラインの軸とガイド。**全行で同じものを見る** —— 行ごとに軸を取ると、
-     同じ長さのバーが行によって別の期間を指す。 */
+  /* タイムラインの軸。**全行で同じものを見る** —— 行ごとに軸を取ると、同じ位置の点が
+     行によって別の時刻を指す。 */
   readonly axis: GanttAxis;
-  readonly guides: readonly GanttGuide[];
-  /** この課題のバー。`created_at` を読めなければ `null` で、バーそのものが出ない */
-  readonly gantt: RowGantt | null;
+  /** この行のトラック。組むのは表の側で、行は描くだけである */
+  readonly track: RowTrack;
+  /* この課題が閉じた時刻。**軸に置けるかどうかは行が判じる** —— 時刻そのものを決めるのは
+     表の側で、堰き止められていた行の待ちも同じ 1 つの答えを読む。 */
+  readonly close: CloseInstant | null;
+  /** 直前の堰き止めが片付いた時刻と、その相手。待ちが無ければ `null` */
+  readonly lag: RowLag | null;
   /* マイルストーンの名前を、行にも出すか。**束ねているときは出さない** ——
      束の見出しが既に言っているので、行ごとに繰り返すと同じことが 2 度並ぶ。 */
   readonly showMilestone: boolean;
@@ -533,8 +841,9 @@ const IssueRow = memo(function IssueRow({
   unlocks,
   progress,
   axis,
-  guides,
-  gantt,
+  track,
+  close,
+  lag,
   showMilestone,
   nowMs,
   onHot,
@@ -552,26 +861,37 @@ const IssueRow = memo(function IssueRow({
   const milestone = showMilestone ? (issue.github?.milestone ?? null) : null;
   const comments = issue.github?.comments ?? 0;
 
-  /* バーの両端。軸からはみ出たぶんは切り落とし、丸ごと外に在るものは描かない。
-   **端へ寄せたバーは、位置も長さも観測していない値を言う。** */
-  const span = gantt?.span ?? null;
-  const bar =
-    span === null || span.to < axis.t0 || span.from > axis.t1
+  /* 作られた時刻と閉じた時刻。**軸の外に在るものは描かない** —— 端へ寄せると、誰も観測して
+     いない時刻を指すことになる。読んでいる最中はどちらも描かない —— 輪だけが在る絵は
+     「読み終えて何も起きていなかった」という別の答えだからである。 */
+  const createdMs = Date.parse(issue.created_at ?? '');
+  const quiet = track.kind === 'reading';
+  const openPct =
+    quiet || !Number.isFinite(createdMs) || createdMs < axis.t0 || createdMs > axis.t1
+      ? null
+      : atPct(createdMs, axis);
+  const flag = quiet ? null : closeFlagOf(close, axis);
+
+  /* 堰き止めが解けてから作られるまでの待ち。軸と重なるところだけを引く。
+     **輪と同じところで止める** —— どちらも一覧から出る観測なので、読んでいる最中に
+     片方だけが残ると、まだ読んでいない行が待った長さを主張することになる。
+
+     端が軸の外に在るなら、軸の端で止めて**その端をぼかす** —— `clampPct` が置いた位置は
+     誰も観測していない時刻なので、硬い端で描くとそこで待ちが始まった(終わった)ことになる。 */
+  const wait: RowWait | null =
+    quiet || lag === null || !Number.isFinite(createdMs) || lag.at > axis.t1 || createdMs < axis.t0
       ? null
       : {
-          left: clampPct(atPct(span.from, axis)),
-          right: clampPct(atPct(span.to, axis)),
+          left: clampPct(atPct(lag.at, axis)),
+          right: clampPct(atPct(createdMs, axis)),
+          blocker: lag.blocker,
+          days: lagDays(createdMs - lag.at),
+          approx: lag.approx,
+          softFrom: lag.at < axis.t0,
+          softTo: createdMs > axis.t1,
         };
-  const wait = gantt?.lag ?? null;
-  const lag =
-    wait === null || span === null || wait.at > axis.t1 || span.from < axis.t0
-      ? null
-      : {
-          left: clampPct(atPct(wait.at, axis)),
-          right: clampPct(atPct(span.from, axis)),
-          blocker: wait.blocker,
-          days: lagDays(span.from - wait.at),
-        };
+  const cutRegion = track.kind === 'read' ? track.cut : null;
+  const off = track.kind === 'read' ? track : null;
 
   return (
     /* 行そのものを button にはできない。中にチップを持っており、button の中に button は
@@ -599,7 +919,7 @@ const IssueRow = memo(function IssueRow({
       <span style={{ width: gutter }} />
       <span className="iid" title={issue.id ?? ''}>
         {row.guides.map((carry, level) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: 罫線は深さそのもので、位置が identity である
+          // biome-ignore lint/suspicious/noArrayIndexKey: 階層の線は深さそのもので、位置が identity である
           <span key={`g${level}`} className={`tg${carry ? ' cont' : ''}`} />
         ))}
         {row.depth > 0 && <span className={`tg ${row.last ? 'end' : 'tee'}`} />}
@@ -633,8 +953,8 @@ const IssueRow = memo(function IssueRow({
             {pull.is_draft && ' draft'}
           </span>
         )}
-        {/* 区切りへ渡れるようにしてある。**名前を出すだけにしない** —
-            同じ区切りの他の課題を見るのに、一覧を目で探し直すことになる。 */}
+        {/* マイルストーンへ渡れるようにしてある。**名前を出すだけにしない** —
+            同じマイルストーンの他の課題を見るのに、一覧を目で探し直すことになる。 */}
         {milestone !== null && (
           <button
             type="button"
@@ -769,43 +1089,78 @@ const IssueRow = memo(function IssueRow({
         )}
         {formatSinceIso(issue.updated_at, nowMs)}
       </span>
-      {/* 観測した時刻だけを引くタイムライン。GitHub は着手予定日も見積もりも返さないので、
-          ここに計画された日程は 1 本も無い */}
-      <span className="gt">
-        {/* 区切りの期日。**素材の中で唯一先を指す日付なので、現在の線とは分けて描く。**
-            どの行にも同じ位置で出るので、一覧を下へ辿るときの縦の目印になる */}
-        {guides.map((guide) => (
+      {/* 観測した時刻だけを置くトラック。GitHub は着手予定日も見積もりも返さないので、ここに
+          計画された日程は 1 つも無い。マイルストーンの縦線はこのセルの背景が引いている。
+
+          **子は絶対配置の `<i>` だけを平らに並べる。** 包む要素を足すと `subgrid` が切れる。
+          並べた順がそのまま重なりの順で、ハッチと罫線が下、点が上、フラグがいちばん上になる */}
+      <span
+        className={`gt st-${issue.status}${stateClass(track)}`}
+        title={trackTitle(track, Number.isFinite(createdMs))}
+      >
+        {track.kind === 'read' && <i className="gt-rule" />}
+        {cutRegion !== null && (
           <i
-            key={guide.title}
-            className="gt-guide"
-            style={{ left: `${clampPct(atPct(guide.at, axis))}%` }}
-            title={`Milestone ${guide.title} — due ${absTime(guide.at)}`}
-          />
-        ))}
-        {nowMs >= axis.t0 && nowMs <= axis.t1 && (
-          <i
-            className="gt-now"
-            style={{ left: `${clampPct(atPct(nowMs, axis))}%` }}
-            title={`Now — ${absTime(nowMs)}`}
+            className={`gt-cut${cutRegion.softFrom ? ' soft-from' : ''}${cutRegion.softTo ? ' soft-to' : ''}`}
+            style={{ left: `${cutRegion.left}%`, width: `${cutRegion.width}%` }}
+            title={
+              cutRegion.fromMs === null || cutRegion.softFrom
+                ? `Only the 30 most recent events were read — anything before ${absTime(cutRegion.toMs)} is not shown`
+                : `Only the 30 most recent events were read — anything between ${absTime(cutRegion.fromMs)} and ${absTime(cutRegion.toMs)} is not shown`
+            }
           />
         )}
         {/* 堰き止めていた相手が片付いてから、この課題が作られるまで。**一覧では読めない
-            のはここだけである** —— 依存が在ることは一覧にも出るが、待った長さは出ない */}
-        {lag !== null && (
+            のはここだけである** —— 依存が在ることは一覧にも出るが、待った長さは出ない。
+
+            観測した時刻ではない端はぼかし、言葉でも言う —— 相手の閉じた時刻が代用のときと、
+            端が軸の外に在って軸の端で止めているときの 2 つが在る */}
+        {wait !== null && (
           <i
-            className="gt-lag"
-            style={{ left: `${lag.left}%`, width: `${lag.right - lag.left}%` }}
-            title={`Waiting on ${lag.blocker} — ${lag.days}d from ${lag.blocker} ending to this issue being created`}
+            className={`gt-lag${wait.approx ? ' approx' : ''}${wait.softFrom ? ' soft-from' : ''}${wait.softTo ? ' soft-to' : ''}`}
+            style={{ left: `${wait.left}%`, width: `${wait.right - wait.left}%` }}
+            title={lagTitle(wait)}
           />
         )}
-        {bar !== null && span !== null && (
+        {openPct !== null && (
           <i
-            className={`gt-bar st-${issue.status} ${span.closed ? 'done' : 'live'}`}
-            style={{ left: `${bar.left}%`, width: `${bar.right - bar.left}%` }}
+            className="gt-open"
+            style={{ left: `${openPct}%` }}
+            title={`Opened ${absTime(createdMs)}`}
+          />
+        )}
+        {track.kind === 'read' &&
+          track.marks.map((mark) => (
+            <i
+              key={mark.at}
+              className={`gt-ev${mark.count > 1 ? ' many' : ''}`}
+              style={{ left: `${mark.pct}%` }}
+              title={markTitle(mark)}
+            />
+          ))}
+        {/* 軸の外に落ちたイベント。**黙って落とさない** —— 幅を狭めると点は全部消えるので、
+            何も言わないと「何度も動いた課題」と「何も起きていない課題」が同じ絵になる */}
+        {off?.before != null && (
+          <b
+            className={`gt-off left${off.before.cut ? ' cut' : ''}`}
+            title={offEventTitle(off.before, 'before')}
+          >
+            ‹{off.before.count}
+          </b>
+        )}
+        {off?.after != null && (
+          <b className="gt-off right" title={offEventTitle(off.after, 'beyond')}>
+            {off.after.count}›
+          </b>
+        )}
+        {flag !== null && (
+          <i
+            className={`gt-flag${flag.approx ? ' approx' : ''}`}
+            style={{ left: `${flag.pct}%` }}
             title={
-              span.closed
-                ? `Created ${absTime(span.from)} — closed around ${absTime(span.to)}, taken from updated_at, so the close time is approximate`
-                : `Created ${absTime(span.from)} — still open`
+              flag.approx
+                ? `Closed around ${absTime(flag.at)}, taken from updated_at, so the close time is approximate`
+                : `Closed ${absTime(flag.at)}`
             }
           />
         )}

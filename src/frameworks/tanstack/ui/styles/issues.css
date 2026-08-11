@@ -12,6 +12,9 @@
   grid-template-columns:
     max-content fit-content(190px) minmax(150px, 1fr) max-content max-content
     minmax(100px, 0.45fr) minmax(150px, 0.8fr) max-content minmax(220px, 1.1fr);
+  /* マイルストーンの期日と現在の縦線。**背景の 1 枚として一覧が持ち、9 列目の各セルが塗る。**
+     React が組んだ値をここへ差し替えるので、既定を宣言しておかないと差し替わる前が無効になる */
+  --gt-grid: none;
   column-gap: 10px;
   grid-auto-rows: min-content;
   align-content: start;
@@ -116,7 +119,7 @@
   display: flex;
   align-items: center;
   align-self: stretch;
-  overflow: visible; /* hidden にすると罫線の上下ブリードが刈られて行間が空く */
+  overflow: visible; /* hidden にすると階層の線の上下ブリードが刈られて行間が空く */
 }
 .issue-row .iid-t {
   overflow: hidden;
@@ -127,7 +130,7 @@
   margin-right: 5px;
 }
 
-/* 階層の実線罫線: 行の padding を貫通して隙間なく繋ぐ */
+/* 階層の実線: 行の padding を貫通して隙間なく繋ぐ */
 .tg {
   flex: none;
   width: 14px;
@@ -221,7 +224,7 @@
 /* 状態の色は 1 か所で決める。チップも依存グラフのカードも、ここから採る。
    知らない状態は無彩色に落とす —— 色を作って当てると、見た人は意味を推し量ってしまう。
    `:where()` は詳細度を持たないので、この既定は状態のどれにも負ける。 */
-:where(.chip, .dg-node, .legend-bar i.rail, .gt-bar, .lg-gt-bar) {
+:where(.chip, .dg-node, .legend-bar i.rail, .gt, .lg-gt i) {
   --st: var(--ended);
 }
 .st-open {
@@ -248,100 +251,364 @@
 
 /* ---------- 課題のタイムライン ---------- */
 
-/* 一覧の右に引く時間軸。**観測した時刻しか描かない。**
+/* マイルストーンの期日の縦線の色。**グリッドと凡例の見本が同じ 1 つを見る** —— グリッドは
+   `ganttGridImage` が組み立てた `background-image` なので、色を 2 か所に書くと、片方だけが
+   古い色のまま残る */
+:root {
+  --gt-guide: color-mix(in srgb, var(--input) 34%, transparent);
+}
 
-   始まりは `created_at`、終わりは閉じたものが `updated_at`、開いたものが現在である。
-   高さを 14px に抑えてあるのは、題名の列の行送り 20px より低く保つためである ——
-   これより高いと、この列だけが行を押し広げて、Agents の表と密度が揃わなくなる。 */
-.gt,
+/* 一覧の右のトラック。**観測した時刻しか描かない。**
+
+   置くのは点で、長さを持つバーは 1 つも無い。GitHub が返すのはイベントの時刻だけで、
+   期間はどこにも観測されていないからである。
+
+   行の高さいっぱいに広げてある。マイルストーンのグリッドをこのセルの背景で引くので、行の
+   padding まで覆っていないと、線が行の継ぎ目で切れて 1 本に見えない。同じ広げ方を階層の
+   線(`.tg`)が既にしている。**margin の値は `.issue-row` の padding と同じでなければ
+   ならない。** 子はすべて絶対配置なので、このセルが行の高さを決めることはない。 */
+.gt {
+  position: relative;
+  align-self: stretch;
+  margin: -3px 0;
+  background-image: var(--gt-grid);
+  background-repeat: no-repeat;
+}
+/* 目盛りの下にマイルストーンの名前をもう 1 行持つ。margin は `.issue-row.head` の padding と同じ値で、
+   見出しの行の上端から下端までを覆う —— ここを覆っていないと、名前とその下の線が離れる */
 .gt-head {
   position: relative;
-  height: 14px;
+  height: 40px;
+  margin: -8px 0 -6px;
+  background-image: var(--gt-grid);
+  background-repeat: no-repeat;
 }
 /* 目盛りは Agents の `.tl-head` と同じ引き方で、軸の位置そのものに置く。
    同じ密度の 2 つの表を行き来するので、目盛りの読み方まで別にしない */
 .gt-head .tick {
   position: absolute;
-  top: 0;
+  top: 8px;
   color: var(--dim);
   font-size: 10px;
   white-space: nowrap;
   transform: translateX(-50%);
 }
-/* バーの色は状態から採る。**同じ課題のチップと違う色にしない** —— 行の中で 2 か所が
-   同じことを別の色で言うと、どちらかが別の意味に読まれる */
-.gt-bar {
+/* マイルストーンの名前。**自分の線と左隣の線の間に右揃えで置く** —— 期日はその右端なので、
+   名前は線の左に在るのが素直で、右端に立つ線の名前も列から溢れない。
+   幅を割合で持たせてあるので、列が狭まると `text-overflow` がそのぶんだけ詰める。 */
+.gt-ms {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
-  border-radius: 2px;
-  background: var(--st);
-  opacity: 0.85;
-  /* 同じ日に作って閉じた課題にも幅を残す。幅の無いバーは「無かった」と同じ絵になる */
-  min-width: 3px;
+  bottom: 6px;
+  font-size: 10px;
+  line-height: 12px;
+  padding-right: 4px;
+  color: color-mix(in srgb, var(--input) 78%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
 }
-/* 開いている課題はまだ終わっていない。**右端を落として、閉じたバーの平らな終わりと分ける** */
-.gt-bar.live {
-  background: linear-gradient(90deg, var(--st) 0 70%, transparent 100%);
-  border-radius: 2px 0 0 2px;
+.gt-ms:hover {
+  color: var(--input);
 }
-/* 縦の線は行の高さを跨いで伸ばす。行の中だけに引くと、行間で切れて 1 本に見えない。
-   右端に立つ線が列の外へ出ないように、自分の幅ぶん内側へ寄せる */
-.gt-guide,
-.gt-now {
+/* 軸の外に在る期日。**黙って落とさない** —— 線を引けないことと、期日が無いことは違う。
+   目盛りのラベルが端を避けているので、ここに置けば何とも重ならない */
+.gt-off {
   position: absolute;
-  top: -6px;
-  bottom: -6px;
-  width: 1px;
-  margin-left: -1px;
+  top: 8px;
+  font-size: 10px;
+  line-height: 12px;
+  color: color-mix(in srgb, var(--input) 62%, transparent);
+  cursor: default;
 }
-/* 区切りの期日。**現在の線と同じ顔にしない** —— 素材の中で先を指す日付はこれだけである */
-.gt-guide {
-  background: repeating-linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--input) 70%, transparent) 0 3px,
-    transparent 3px 6px
-  );
+.gt-off.left {
+  left: 0;
 }
-.gt-now {
-  background: color-mix(in srgb, var(--active) 55%, transparent);
+.gt-off.right {
+  right: 0;
 }
-/* 堰き止めが解けてから作られるまでの待ち。**塗らない** —— 何も起きていない期間である */
-.gt-lag {
-  position: absolute;
+/* 期日を読めないマイルストーン。名前の行の左端に置く —— 目盛りの行の件数とは別の話である */
+.gt-off.undated {
+  top: auto;
+  bottom: 6px;
+}
+/* 行の中で数える、軸の外のイベント。色は点と同じところから採る —— 期日の件数と同じ色に
+   すると、マイルストーンの話に読める */
+.gt > .gt-off {
   top: 50%;
-  height: 0;
-  border-top: 1px dashed color-mix(in srgb, var(--ended) 85%, transparent);
+  font-weight: 400;
+  color: color-mix(in srgb, var(--dim) 80%, transparent);
+  transform: translateY(-50%);
+}
+/* 読み切れなかったぶんも軸の外に在るとき。ハッチと同じ色で、読めていないことを言う */
+.gt > .gt-off.cut {
+  color: color-mix(in srgb, var(--waiting) 70%, transparent);
+}
+/* 読んでいる最中に動くものは、画面にこの 1 本だけである。行ごとに置くと 200 本が同時に走る */
+.gt-reading {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  overflow: hidden;
+}
+.gt-reading::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  animation: rp-sweep 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gt-reading::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.35;
+  }
 }
 
+/* この行のイベントを読めた、という 1 本。**全部の行で同じ幅である。**
+   行ごとに長さを変えると、それは観測していない期間を主張するバーになる。罫線を引いた紙と
+   同じで、変わるのはその上に載るものだけである。 */
+.gt-rule {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  margin-top: -0.5px;
+  background: color-mix(in srgb, var(--border) 85%, transparent);
+}
+/* 作られた時刻。**塗らない** —— 起きたことではなく、始まりである。
+   中を背景色で塗るのは、罫線が輪の中を通り抜けないようにするためである。 */
+.gt-open {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--dim) 85%, transparent);
+  border-radius: 50%;
+  background: var(--bg);
+  transform: translate(-50%, -50%);
+}
+/* 起きたこと 1 つ */
+.gt-ev {
+  position: absolute;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dim);
+  transform: translate(-50%, -50%);
+}
+/* 5px の的はマウスで掴めない。**塗りは広げず、当たり判定だけを 11px にする** */
+.gt-ev::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+}
+/* 1 つの点に 2 つ以上が重なっている。**横には広げない** —— 広げた点は、誰も観測していない
+   期間を描くことになる。件数は `title` が言う。 */
+.gt-ev.many {
+  box-shadow:
+    0 0 0 1px var(--bg),
+    0 0 0 2px color-mix(in srgb, var(--dim) 55%, transparent);
+}
+/* 閉じた時刻。**縦に立てる** —— 線の上の点は位置を言い、線を横切るものだけが終わりを言える。
+   色は状態から採る。**同じ課題のチップと違う色にしない** —— 行の中で 2 か所が同じことを
+   別の色で言うと、どちらかが別の意味に読まれる */
+.gt-flag {
+  position: absolute;
+  top: 50%;
+  width: 1.5px;
+  height: 11px;
+  background: var(--st);
+  transform: translate(-0.75px, -50%);
+}
+.gt-flag::before {
+  content: "";
+  position: absolute;
+  left: 1.5px;
+  top: 0;
+  width: 5px;
+  height: 4px;
+  background: var(--st);
+}
+.gt-flag::after {
+  content: "";
+  position: absolute;
+  inset: -2px -4px;
+}
+/* `closed_at` を読めず `updated_at` で代用した時刻。**代用を事実として描かない。**
+   閉じたという形は残し、時刻が代用であることを線の引き方が言う。 */
+.gt-flag.approx {
+  background: repeating-linear-gradient(180deg, var(--st) 0 2px, transparent 2px 4px);
+}
+.gt-flag.approx::before {
+  background: none;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--st) 80%, transparent);
+}
+/* 読み切れなかった区間。`timelineItems(last: 30)` なので、欠けているのは**古いほう**である
+   —— 区間は `created_at` から、手元に在るいちばん古いイベントまでになる。
+   ハッチは Overview の `.dash-act.cut` と同じもので、同じ意味で使っている。
+
+   **`translateY` だけを掛ける。** `left` と `width` で置いているので、`translateX(-50%)` を
+   足すと自分の幅の半分だけ左へずれる。 */
+.gt-cut {
+  position: absolute;
+  top: 50%;
+  height: 9px;
+  transform: translateY(-50%);
+}
+/* ハッチは自分の箱いっぱいの層として持つ。**要素そのものには塗らない** —— 端をぼかすのは
+   `mask-image` で、要素に掛けると子孫まで掛かり、切れ目を言う線ごと消える */
+.gt-cut::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--border) 35%, transparent) 0 4px,
+    color-mix(in srgb, var(--waiting) 12%, transparent) 4px 8px
+  );
+}
+/* 記録が始まる時刻。**幅が 0 でも残る** —— 切れ目がどこかを言うのはこの線であって、
+   ハッチの広さではない。読み残しが 1 日ぶんの行と 1 か月ぶんの行が、同じことを言う */
+.gt-cut::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: color-mix(in srgb, var(--waiting) 55%, transparent);
+}
+/* 左端が観測した時刻ではないとき。**硬い端は観測した時刻、ぼかした端は「分からない」である**。
+   ぼかす幅は箱を超えない —— 8px より細い区間でハッチが丸ごと消えると、読み残しの在る行が
+   読み終えた行と同じ絵になる */
+.gt-cut.soft-from::before {
+  mask-image: linear-gradient(90deg, transparent 0, #000 min(8px, 100%));
+}
+/* 記録の始まりが軸の外に在って、端で止めて描いているとき。線を破線にして、この位置が
+   観測した時刻ではないことを言う。実線と同じ引き方の `.gt-flag.approx` と同じ意味である */
+.gt-cut.soft-to::after {
+  background: repeating-linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--waiting) 55%, transparent) 0 2px,
+    transparent 2px 4px
+  );
+}
+/* 堰き止めが解けてから作られるまでの待ち。**塗らない** —— 何も起きていない期間である。
+   罫線が中央に居るので、そのぶん上へ退ける */
+.gt-lag {
+  position: absolute;
+  top: calc(50% - 4px);
+  height: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--ended) 85%, transparent);
+  transform: none;
+}
+/* 待ちの端が観測した時刻ではないとき。**硬い端は観測した時刻、ぼかした端は「分からない」で
+   ある** —— 始まりが `updated_at` の代用のときと、端が軸の外に在って軸の端で止めていると
+   きの 2 つで、どちらもその端をぼかす。ぼかす幅は片側で線の 3 割までにして、両端をぼかす
+   短い待ちでも真ん中が残るようにする */
+.gt-lag.approx,
+.gt-lag.soft-from,
+.gt-lag.soft-to {
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--lag-from, 0px),
+    #000 calc(100% - var(--lag-to, 0px)),
+    transparent 100%
+  );
+}
+.gt-lag.approx,
+.gt-lag.soft-from {
+  --lag-from: min(10px, 30%);
+}
+.gt-lag.soft-to {
+  --lag-to: min(10px, 30%);
+}
+/* 読んでいる間。**空のトラックにしない** —— 読み終えて何も無かった行と同じ絵になる */
+.gt.reading::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  margin-top: -0.5px;
+  background: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--dim) 40%, transparent) 0 2px,
+    transparent 2px 6px
+  );
+}
+/* 読めなかったところ。**読めなかったことと、何も起きなかったことを同じ絵にしない。**
+   ハッチは Overview の `.dash-act.cut` と同じで、`.gt-cut` と同じ意味で使っている ——
+   ハッチは「ここは読んでいない」であり、掛かる範囲だけが違う。 */
+.gt.unread::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 9px;
+  margin-top: -4.5px;
+  background: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--border) 35%, transparent) 0 4px,
+    color-mix(in srgb, var(--waiting) 12%, transparent) 4px 8px
+  );
+}
 /* 凡例に出す見本。**行に出るものと同じ描き方から採る** — 作り直すと本物とずれる */
 .lg-gt {
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
-.lg-gt-bar {
-  width: 22px;
-  height: 6px;
-  border-radius: 2px;
+/* 見本は本物と同じ class から採る。行の中では絶対配置なので、そこだけを外す。
+
+   **`static` にはしない。** 見本の `::before` / `::after`(フラグの旗と、点の当たり判定)は
+   絶対配置のままなので、`static` にすると位置の基準が `#content` まで上がり、内容の全面を
+   覆う箱になってポインターを飲む。`relative` と `inset: auto` なら、基準は見本自身に戻り、
+   ずれもしない。 */
+.legend-bar .lg-gt i {
+  position: relative;
+  inset: auto;
+  transform: none;
+  margin: 0;
   flex: none;
-  background: linear-gradient(90deg, var(--st) 0 70%, transparent 100%);
-  opacity: 0.85;
 }
-.lg-gt-bar.done {
-  background: var(--st);
+/* 罫線と読み残しの区間は、行では両端や `width` で置いている。見本のときだけ幅を持たせる */
+.legend-bar .lg-gt .gt-rule,
+.legend-bar .lg-gt .gt-cut {
+  width: 22px;
+  margin-top: 0;
+}
+/* 読んでいる最中の見本。`.gt` そのものを置いて、行と同じ `::before` を引かせる */
+.legend-bar .lg-gt .gt {
+  width: 22px;
+  height: 9px;
+  align-self: center;
+}
+/* 旗が右へ張り出すぶん、言葉との間を空ける */
+.legend-bar .lg-gt .gt-flag {
+  margin-right: 5px;
 }
 .lg-gt-line {
   width: 1px;
-  height: 12px;
+  height: 16px;
   flex: none;
 }
 .lg-gt-line.guide {
-  background: repeating-linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--input) 70%, transparent) 0 3px,
-    transparent 3px 6px
-  );
+  background: var(--gt-guide);
 }
 
 .iworkers {
@@ -1115,15 +1382,28 @@
    これを行に数えると線が 1 行ぶんずれる(JSX 側で Fragment に入れてある) */
 .iband {
   grid-column: 1 / -1;
-  display: flex;
+  display: grid;
+  grid-template-columns: subgrid;
   align-items: baseline;
-  gap: 10px;
   padding: 12px 14px 5px 8px;
   font-size: 10.5px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--dim);
   border-bottom: 1px solid var(--border);
+}
+/* 見出しの中身は flex で横に並べる。`em { margin-left: auto }` が右端へ寄せる */
+.iband-t {
+  grid-column: 1 / 9;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+/* 見出しの行でもグリッドの線を繋ぐ。margin は `.iband` の padding と同じ値である */
+.iband .gt {
+  grid-column: 9;
+  margin: -12px 0 -5px;
 }
 .iband em {
   font-style: normal;
@@ -1154,10 +1434,17 @@
 
    **沈めるのは行の中身だけで、弧は沈めない。** 弧を沈めると、明るい行どうしを結ぶ線が
    途中の暗い行のところで切れて、辿れなくなる。 */
-#issues-list.hot .issue-row:not(.lit) > :not(.dep-gutter) {
+#issues-list.hot .issue-row:not(.lit) > :not(.dep-gutter, .gt) {
   opacity: 0.26;
 }
-.issue-row > * {
+/* グリッドは沈めず、トラックに載っているものだけを沈める。**線は動かない目印になる** ——
+   `.gt` ごと沈めると背景も一緒に沈み、マイルストーンの線が行ごとに明暗へ割れる */
+#issues-list.hot .issue-row:not(.lit) > .gt > *,
+#issues-list.hot .issue-row:not(.lit) > .gt::before {
+  opacity: 0.26;
+}
+.issue-row > *,
+.gt > * {
   transition: opacity 0.12s;
 }
 

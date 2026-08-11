@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  atPct,
   DEFAULT_GANTT_WINDOW,
   formatGanttTick,
   GANTT_WINDOWS,
   ganttAxis,
+  ganttGridImage,
   ganttGuides,
-  ganttSpan,
   ganttTicks,
   MIN_GANTT_SPAN_MS,
   MONTH_MS,
@@ -16,11 +17,11 @@ import { DAY_MS } from '~/frameworks/tanstack/ui/derive/timeWindow.ts';
 
 /* 課題の時間軸に描いてよいのは観測した時刻だけである。
 
-   見るのは 3 つ —— バーの両端が観測した時刻から来ていること、`created_at` を読めない課題が
-   現在から始まるバーを持たないこと、そして期日の読めないマイルストーンがガイドを出さないこと。 */
+   見るのは 3 つ —— 軸の両端が観測した時刻から決まること、期日の読めないマイルストーンが
+   線を出さないこと、そして軸から外れた期日が黙って落ちずに `where` で返ること。 */
 
-/* 課題の形は、バーを引く実装そのものから引く。ここは外部 API の形を宣言した層を `import` できない。 */
-type IssueSummaryJson = Parameters<typeof ganttSpan>[0];
+/* 課題の形は、軸を組む実装そのものから引く。ここは外部 API の形を宣言した層を `import` できない。 */
+type IssueSummaryJson = Parameters<typeof ganttGuides>[0][number];
 
 const NOW = Date.parse('2026-08-09T12:00:00Z');
 
@@ -89,99 +90,6 @@ describe('選べる幅', () => {
   });
 });
 
-describe('バーの両端', () => {
-  it('開いている課題は現在で終わる', () => {
-    const span = ganttSpan(issue({ created_at: iso(NOW - 3 * DAY_MS) }), NOW);
-
-    expect(span).toEqual({ from: NOW - 3 * DAY_MS, to: NOW, closed: false });
-  });
-
-  it('閉じた課題は `closed_at` で終わる', () => {
-    const span = ganttSpan(
-      issue({
-        status: 'closed',
-        created_at: iso(NOW - 10 * DAY_MS),
-        updated_at: iso(NOW - 1 * DAY_MS),
-        closed_at: iso(NOW - 4 * DAY_MS),
-      }),
-      NOW,
-    );
-
-    expect(span, '閉じた後に触られても、バーは閉じた時刻で終わる').toEqual({
-      from: NOW - 10 * DAY_MS,
-      to: NOW - 4 * DAY_MS,
-      closed: true,
-    });
-  });
-
-  it('`closed_at` を読めなければ `updated_at` へ落ちる', () => {
-    const span = ganttSpan(
-      issue({
-        status: 'closed',
-        created_at: iso(NOW - 10 * DAY_MS),
-        updated_at: iso(NOW - 4 * DAY_MS),
-        closed_at: null,
-      }),
-      NOW,
-    );
-
-    expect(span?.to, '閉じたことは分かっているので、時刻だけ無い課題を開いたままにしない').toBe(
-      NOW - 4 * DAY_MS,
-    );
-  });
-
-  it('`not_planned` も閉じたものとして扱う', () => {
-    const span = ganttSpan(
-      issue({
-        status: 'not_planned',
-        created_at: iso(NOW - 10 * DAY_MS),
-        updated_at: iso(NOW - 8 * DAY_MS),
-        closed_at: iso(NOW - 9 * DAY_MS),
-      }),
-      NOW,
-    );
-
-    expect(span?.closed).toBe(true);
-    expect(span?.to).toBe(NOW - 9 * DAY_MS);
-  });
-
-  it('`created_at` を読めない課題にはバーが無い', () => {
-    expect(ganttSpan(issue({ created_at: null }), NOW)).toBeNull();
-    expect(
-      ganttSpan(issue({ created_at: 'yesterday', updated_at: iso(NOW) }), NOW),
-      '現在から始まるバーは「いま作られた」という、持っていない事実を描く',
-    ).toBeNull();
-  });
-
-  it('閉じているのに閉じた時刻をどちらも読めなければ、幅の無いバーにする', () => {
-    const span = ganttSpan(
-      issue({
-        status: 'closed',
-        created_at: iso(NOW - 5 * DAY_MS),
-        updated_at: null,
-        closed_at: null,
-      }),
-      NOW,
-    );
-
-    expect(span).toEqual({ from: NOW - 5 * DAY_MS, to: NOW - 5 * DAY_MS, closed: true });
-  });
-
-  it('右端が左端より前に来ることは無い', () => {
-    const span = ganttSpan(
-      issue({
-        status: 'closed',
-        created_at: iso(NOW - 2 * DAY_MS),
-        updated_at: iso(NOW - 9 * DAY_MS),
-        closed_at: iso(NOW - 9 * DAY_MS),
-      }),
-      NOW,
-    );
-
-    expect(span?.to).toBe(NOW - 2 * DAY_MS);
-  });
-});
-
 describe('軸の両端', () => {
   it('決まった幅は現在で終わり、その幅だけ遡る', () => {
     expect(ganttAxis([], MONTH_MS, NOW)).toEqual({ t0: NOW - MONTH_MS, t1: NOW });
@@ -196,7 +104,7 @@ describe('軸の両端', () => {
     expect(ganttAxis(issues, 'all', NOW)).toEqual({ t0: NOW - 200 * DAY_MS, t1: NOW });
   });
 
-  it('`all` はバーの無い課題を数に入れない', () => {
+  it('`all` は `created_at` を読めない課題を数に入れない', () => {
     const issues = [
       issue({ id: '#1', created_at: 'not a date' }),
       issue({ id: '#2', created_at: iso(NOW - 5 * DAY_MS) }),
@@ -205,10 +113,10 @@ describe('軸の両端', () => {
     expect(ganttAxis(issues, 'all', NOW).t0).toBe(NOW - 5 * DAY_MS);
   });
 
-  it('`all` でバーが 1 本も無ければ、決まった幅へ落とす', () => {
+  it('`all` で読める `created_at` が 1 つも無ければ、決まった幅へ落とす', () => {
     const axis = ganttAxis([issue({ created_at: null })], 'all', NOW);
 
-    expect(axis.t1, '幅の無い軸に載せると、全部のバーが同じ位置へ潰れる').toBeGreaterThan(axis.t0);
+    expect(axis.t1, '幅の無い軸に載せると、全部の点が同じ位置へ重なる').toBeGreaterThan(axis.t0);
     expect(axis.t1).toBe(NOW);
   });
 
@@ -239,19 +147,20 @@ describe('軸の両端', () => {
       }),
     ];
 
-    expect(ganttAxis(issues, 'all', NOW).t1, '伸ばしすぎると、バーがどれも左の隅へ潰れる').toBe(
-      NOW,
-    );
+    expect(
+      ganttAxis(issues, 'all', NOW).t1,
+      '`1w` が 1 年を描くと、幅の切り替えが何も言わなくなる',
+    ).toBe(NOW);
   });
 
-  /* 先に渡すのは過ぎた時間の半分まで。**軸の 2/3 は実際に在ったものに残す** */
-  it('未来に渡す幅は、過ぎた時間の半分まで', () => {
+  /* 先に渡すのは過ぎた時間と同じだけ。**軸の半分は実際に在ったものに残る** */
+  it('未来に渡す幅は、過ぎた時間と同じだけ', () => {
     const from = iso(NOW - 20 * DAY_MS);
-    const near = [withMilestone('#1', 'near', iso(NOW + 9 * DAY_MS), { created_at: from })];
-    const far = [withMilestone('#1', 'far', iso(NOW + 11 * DAY_MS), { created_at: from })];
+    const near = [withMilestone('#1', 'near', iso(NOW + 19 * DAY_MS), { created_at: from })];
+    const far = [withMilestone('#1', 'far', iso(NOW + 21 * DAY_MS), { created_at: from })];
 
-    expect(ganttAxis(near, 'all', NOW).t1).toBe(NOW + 9 * DAY_MS);
-    expect(ganttAxis(far, 'all', NOW).t1, '半分を超える期日は軸の外へ落とす').toBe(NOW);
+    expect(ganttAxis(near, 'all', NOW).t1).toBe(NOW + 19 * DAY_MS);
+    expect(ganttAxis(far, 'all', NOW).t1, '過ぎた時間より先の期日は軸の外へ落とす').toBe(NOW);
   });
 
   it('幅を広げれば、遠い期日も軸に入る', () => {
@@ -286,7 +195,7 @@ describe('軸の両端', () => {
   });
 });
 
-describe('マイルストーンのガイド', () => {
+describe('マイルストーンの縦線', () => {
   const axis = { t0: NOW - MONTH_MS, t1: NOW + MONTH_MS };
 
   it('軸の中に入る期日を、近い順に返す', () => {
@@ -296,33 +205,95 @@ describe('マイルストーンのガイド', () => {
     ];
 
     expect(ganttGuides(issues, axis)).toEqual([
-      { title: 'v1', at: NOW - 2 * DAY_MS },
-      { title: 'v2', at: NOW + 10 * DAY_MS },
+      { title: 'v1', at: NOW - 2 * DAY_MS, where: 'in' },
+      { title: 'v2', at: NOW + 10 * DAY_MS, where: 'in' },
     ]);
   });
 
-  it('同じマイルストーンの課題が並んでも、ガイドは 1 本', () => {
+  it('同じマイルストーンの課題が並んでも、線は 1 本', () => {
     const due = iso(NOW + 3 * DAY_MS);
     const issues = [withMilestone('#1', 'v1', due), withMilestone('#2', 'v1', due)];
 
-    expect(ganttGuides(issues, axis)).toEqual([{ title: 'v1', at: NOW + 3 * DAY_MS }]);
+    expect(ganttGuides(issues, axis)).toEqual([{ title: 'v1', at: NOW + 3 * DAY_MS, where: 'in' }]);
   });
 
-  it('軸の外の期日は落とす', () => {
+  it('軸の外の期日は、落とさずに左右どちらへ外れたかを付けて返す', () => {
     const issues = [
       withMilestone('#1', 'old', iso(NOW - 90 * DAY_MS)),
       withMilestone('#2', 'far', iso(NOW + 90 * DAY_MS)),
     ];
 
-    expect(ganttGuides(issues, axis)).toEqual([]);
+    expect(ganttGuides(issues, axis), '線を引けないことと、期日が無いことは違う').toEqual([
+      { title: 'old', at: NOW - 90 * DAY_MS, where: 'before' },
+      { title: 'far', at: NOW + 90 * DAY_MS, where: 'after' },
+    ]);
   });
 
-  it('期日を読めないマイルストーンはガイドを出さない', () => {
+  it('期日を読めないマイルストーンは、線にはせずに `undated` として残す', () => {
     const issues = [withMilestone('#1', 'someday', null), withMilestone('#2', 'broken', 'soon')];
 
-    expect(ganttGuides(issues, axis), '読めない日付を 0 として置くと、軸の左端に線が立つ').toEqual(
-      [],
+    expect(
+      ganttGuides(issues, axis),
+      '読めない日付を 0 として置くと軸の左端に線が立ち、黙って落とすと「期日が無い」と「そんなマイルストーンは無い」が同じ絵になる',
+    ).toEqual([
+      { title: 'broken', at: null, where: 'undated' },
+      { title: 'someday', at: null, where: 'undated' },
+    ]);
+  });
+
+  it('同じ名前で期日を読めるものが 1 件でも在れば、そちらを採る', () => {
+    const due = iso(NOW + 3 * DAY_MS);
+    const issues = [withMilestone('#1', 'v1', null), withMilestone('#2', 'v1', due)];
+
+    expect(ganttGuides(issues, axis)).toEqual([{ title: 'v1', at: NOW + 3 * DAY_MS, where: 'in' }]);
+  });
+});
+
+describe('グリッドの背景', () => {
+  const axis = { t0: NOW - MONTH_MS, t1: NOW + MONTH_MS };
+
+  it('軸の中の期日は 1 枚の層になる', () => {
+    const image = ganttGridImage([{ title: 'v1', at: NOW + 10 * DAY_MS, where: 'in' }], axis, NOW);
+
+    expect(image.split('linear-gradient').length - 1, '現在の線と期日の線で 2 枚である').toBe(2);
+    expect(image).toContain(`${atPct(NOW + 10 * DAY_MS, axis)}%`);
+    expect(
+      image,
+      '色をここへ書き写すと、凡例の見本と 2 か所に散り、片方だけが古い色のまま残る',
+    ).toContain('var(--gt-guide)');
+    expect(
+      image,
+      '現在の線と期日の線が同じ色なら、「いま」と「何かの期日」が画面で同じ線になる',
+    ).toContain('var(--active)');
+  });
+
+  it('左端ちょうどの期日でも層が出る', () => {
+    const image = ganttGridImage([{ title: 'v1', at: axis.t0, where: 'in' }], axis, NOW);
+
+    expect(
+      image.split('linear-gradient').length - 1,
+      '0% の線を切り落とすと、期日どおりに置いた線だけが消える',
+    ).toBe(2);
+  });
+
+  it('期日を読めないマイルストーンからは層を作らない', () => {
+    const image = ganttGridImage([{ title: 'someday', at: null, where: 'undated' }], axis, NOW);
+
+    expect(image.split('linear-gradient').length - 1, '現在の線だけが残る').toBe(1);
+  });
+
+  it('軸の外の期日は層を作らない', () => {
+    const image = ganttGridImage(
+      [{ title: 'far', at: NOW + 90 * DAY_MS, where: 'after' }],
+      axis,
+      NOW,
     );
+
+    expect(image.split('linear-gradient').length - 1, '現在の線だけが残る').toBe(1);
+  });
+
+  it('引く線が 1 本も無ければ `none` を返す', () => {
+    expect(ganttGridImage([], { t0: NOW + DAY_MS, t1: NOW + 2 * DAY_MS }, NOW)).toBe('none');
   });
 });
 

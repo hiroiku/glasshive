@@ -96,7 +96,11 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
     <div className="dep-graph">
       <div className="dg-bar">
         <span className="dg-title">Dependency graph</span>
-        <span className="dg-readout">{readoutOf(hot, downstream, graph)}</span>
+        {/* この読み出しは hover でも focus でも変わる。**読み上げにも変わったことを伝える** ——
+            伝えないと、キーボードで辿れているのに何が選ばれたか分からないままになる */}
+        <span className="dg-readout" role="status">
+          {readoutOf(hot, downstream, graph)}
+        </span>
       </div>
 
       {/* 縦に流すのはここ 1 か所だけ。**絵とチップで分け合わない** —— 分けると絵が浅いときに
