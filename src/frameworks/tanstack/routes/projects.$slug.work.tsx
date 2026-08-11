@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import type { GitOverviewResponse } from '~/interface/controllers/git/git.controller.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { gitQuery } from '../queries/git.query.ts';
-import { githubIssuesQuery } from '../queries/issues.query.ts';
+import { githubIssueEventsQuery, githubIssuesQuery } from '../queries/issues.query.ts';
 import { treeQuery } from '../queries/tree.query.ts';
 import { GitGraph, type GitOrder } from '../ui/components/git/GitGraph.tsx';
 import { DependencyGraph } from '../ui/components/issues/DependencyGraph.tsx';
@@ -20,6 +20,7 @@ import { Milestones } from '../ui/components/work/Milestones.tsx';
 import { UnitSwitch } from '../ui/components/work/UnitSwitch.tsx';
 import { WorkToolbar } from '../ui/components/work/WorkToolbar.tsx';
 import type { TipSortKey } from '../ui/derive/gitGraph.ts';
+import { eventLogOf } from '../ui/derive/issueEvents.ts';
 import { DEFAULT_GANTT_WINDOW, GANTT_WINDOWS, type GanttWindow } from '../ui/derive/issueGantt.ts';
 import { withoutClosed } from '../ui/derive/issueStatus.ts';
 import { milestoneOf } from '../ui/derive/milestones.ts';
@@ -76,6 +77,14 @@ function WorkView() {
   /* **1 回しか取りに行かない。** `gh` の起動と GitHub への往復はこの画面で最も高く、
      閉じたものを含めるかどうかで取ってくる中身は変わらない。絞り込みはここでやる。 */
   const issues = useQuery(githubIssuesQuery(slug, true));
+  /* 課題に起きたことは一覧と別に尋ねる。**一覧をこれで待たせない** —— `gh` の往復 2 回ぶんを
+     待ってから開く一覧は、待った価値のあるものにならない。右のトラックは答えが返ってきた
+     ときに埋まり、それまでは「読んでいる最中」を描く。 */
+  const events = useQuery(githubIssueEventsQuery(slug));
+  const eventLog = useMemo(
+    () => eventLogOf(events.isPending, events.error !== null, events.data ?? null),
+    [events.isPending, events.error, events.data],
+  );
 
   const project = tree.data?.projects.find((candidate) => candidate.id === slug);
   const workers = useMemo(() => workerIndex(project), [project]);
@@ -283,6 +292,9 @@ function WorkView() {
         <button
           type="button"
           className="fchip on ms-chip"
+          /* 中身は絞り込んでいる名前しか言わない。**押すと何が起きるかは名前で言う** ——
+             読み上げに「1.4 — Ingest ×」とだけ渡すと、外すボタンだと分からない */
+          aria-label={`Clear the milestone filter: ${search.ms}`}
           title="Clear the milestone filter"
           onClick={() => patch({ ms: undefined })}
         >
@@ -296,6 +308,8 @@ function WorkView() {
             key={name}
             type="button"
             className={`fchip ${search.status === name ? 'on' : ''}`}
+            /* 押されているかは色でしか出ていない。読み上げにも同じことを言わせる */
+            aria-pressed={search.status === name}
             onClick={() => patch({ status: search.status === name ? undefined : name })}
           >
             {name} {count}
@@ -304,6 +318,7 @@ function WorkView() {
       <button
         type="button"
         className={`fchip ${includeClosed ? 'on' : ''}`}
+        aria-pressed={includeClosed}
         onClick={() => patch({ closed: includeClosed ? undefined : true })}
       >
         + closed {body.counts.closed ?? 0}
@@ -338,6 +353,7 @@ function WorkView() {
           order={order}
           onSort={onSort}
           ganttWindow={ganttWindow}
+          eventLog={eventLog}
           group={search.group}
           nowMs={nowMs}
           firstPaint={false}
@@ -346,7 +362,7 @@ function WorkView() {
 
       {/* 一覧のときだけ、弧とチップの読み方を下に出す。グラフは自分の凡例を持っている */}
       {search.view !== 'graph' && (
-        <IssuesLegend complete={shown.every((issue) => issue.deps_complete)} />
+        <IssuesLegend complete={shown.every((issue) => issue.deps_complete)} events={eventLog} />
       )}
 
       {/* 累積フローは常にここに在る。押して出すものにすると、押さない限り

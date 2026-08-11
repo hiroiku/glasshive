@@ -1980,6 +1980,11 @@ function main() {
   const ghFile = path.join(binDir, 'gh');
   fs.writeFileSync(ghFile, GH_STUB);
   fs.chmodSync(ghFile, 0o755);
+  /* `gh` は拡張子を持てない —— PATH に置いて `gh` として呼ばれるものだからである。拡張子が
+     無いと Node は最寄りの `package.json` で ESM かどうかを決めるので、隣にこれを置かないと
+     `import` の行で落ちる。**落ちても画面は出る** —— 課題が 1 件も無い画面が出るだけなので、
+     置き忘れると「GitHub のリポジトリが無いプロジェクト」を撮ったことになる。 */
+  fs.writeFileSync(path.join(binDir, 'package.json'), `${JSON.stringify({ type: 'module' })}\n`);
 
   /* タブに留めるものを先に決めておく。**留めないと 22 個ぶんのタブが並ぶ** —— 撮る人が
      毎回手で留め直すことになり、撮った 2 枚でタブの並びが違うことになる。glasshive が

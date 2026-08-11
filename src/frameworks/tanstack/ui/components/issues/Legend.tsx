@@ -1,5 +1,6 @@
 import { mdiAlertOutline, mdiSourceBranch } from '@mdi/js';
 import { ARROW, arrowPoints } from '../../derive/edgeShape.ts';
+import type { EventLog } from '../../derive/issueEvents.ts';
 import { edgeColorOf } from '../../derive/issueTree.ts';
 import { Icon } from '../primitives/Icon.tsx';
 
@@ -37,7 +38,13 @@ export function EdgeSample({
 
    **弧の矢じりは着手の順を指している。** 依存の向きをそのまま描くと矢は「何を待っているか」を
    指すが、読みたいのは取りかかる順である。 */
-export function IssuesLegend({ complete }: { readonly complete: boolean }) {
+export function IssuesLegend({
+  complete,
+  events,
+}: {
+  readonly complete: boolean;
+  readonly events: EventLog;
+}) {
   return (
     <div className="legend-bar">
       <span>
@@ -69,12 +76,37 @@ export function IssuesLegend({ complete }: { readonly complete: boolean }) {
         </b>{' '}
         more than one agent is on it right now
       </span>
-      {/* 右のタイムラインの読み方 */}
+      {/* 右のトラックの読み方。**見本は本物と同じ class から採る** —— 別に作ると本物とずれる。
+
+          点の形だけでなく、下地の 4 通りも並べる。**罫線・ハッチ・破線・何も無しの違いが、
+          読んだか読めなかったかを言う唯一の目印である** —— これを載せないと、読み終えて
+          何も起きていなかった行と、読めなかった行の見分け方がどこにも書いていないことになる。 */}
       <span className="lg-gt">
-        <i className="lg-gt-bar st-open" /> created until now
+        <i className="gt-rule" /> read — an empty line means nothing happened
       </span>
       <span className="lg-gt">
-        <i className="lg-gt-bar st-closed done" /> created until closed
+        <i className="gt-open" /> created
+      </span>
+      <span className="lg-gt">
+        <i className="gt-ev" /> something happened
+      </span>
+      <span className="lg-gt">
+        <i className="gt-ev many" /> more than one, too close to tell apart
+      </span>
+      <span className="lg-gt">
+        <i className="gt-flag st-closed" /> closed
+      </span>
+      <span className="lg-gt">
+        <i className="gt-flag st-closed approx" /> closed, the time taken from updated_at
+      </span>
+      <span className="lg-gt">
+        <i className="gt-cut" /> read only back to here
+      </span>
+      <span className="lg-gt">
+        <i className="gt unread" /> not read
+      </span>
+      <span className="lg-gt">
+        <i className="gt reading" /> still reading
       </span>
       <span className="lg-gt">
         <i className="lg-gt-line guide" /> a milestone is due
@@ -82,6 +114,13 @@ export function IssuesLegend({ complete }: { readonly complete: boolean }) {
       {!complete && (
         <span className="dg-cut" title="Some blocking issues were not fetched">
           some dependencies were not fetched — arcs may be missing
+        </span>
+      )}
+      {/* 全部を読めていないなら黙らない。**どこで読むのをやめたかは画面に出ている** ——
+          読まなかった行はハッチが掛かるので、言うべきなのはその見分け方である */}
+      {events.kind === 'observed' && !events.complete && (
+        <span className="dg-cut">
+          some issues were not read — those rows are hatched, not empty
         </span>
       )}
     </div>
