@@ -148,8 +148,11 @@
 .git-row.dim > span:not(:first-child) {
   opacity: 0.28;
 }
-/* コンフリクト予測: 同じファイルを触っている生きている線の組 */
+/* コンフリクト予測: 同じファイルを触っている生きている線の組。
+   `#git-view` の縦並びに、表と並べて置く。**縮ませない** —— 行の側が伸びるだけ伸びるので、
+   `flex: none` を落とすと、触っているファイルの本数から先が潰れて読めなくなる */
 .git-conflicts {
+  flex: none;
   padding: 8px 14px 4px;
   border-bottom: 1px solid var(--border);
 }

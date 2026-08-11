@@ -80,18 +80,19 @@ export function ConcurrencyPanel({
   const area = stepArea([...counts]) ?? '';
   const top = stepLine([...counts]) ?? '';
   const band = unknownPeak > 0 ? (unknownArea(stacked) ?? '') : '';
-  const peakTitle = uncounted
-    ? 'At least this many — subagents in some sessions could not be counted'
-    : 'Peak agents concurrent in range';
+  /* 数え上げられなかったエージェントが居るときの一言。**`now` と `peak` で同じ文にする** ——
+     2 つは同じ `session.subagents` を回して数えているので、足りない分も同じである。 */
+  const shortTitle = 'At least this many — some agents could not be counted';
+  const peakTitle = uncounted ? shortTitle : 'Peak agents concurrent in range';
+  const reading = observation.kind === 'pending';
+  const nowTitle = reading ? observationTitle(observation) : uncounted ? shortTitle : undefined;
   /* グラフそのものの説明。ホバーできない人にも、積んだ面が何かと、数が下限でしかないことを届ける */
   const chartTitle = [
     'Agents concurrent over time',
     ...(unknownPeak > 0
       ? ['the dashed band on top is agents whose activity could not be read']
       : []),
-    ...(uncounted
-      ? ['subagents in some sessions could not be counted, so the counts are a lower bound']
-      : []),
+    ...(uncounted ? ['some agents could not be counted, so the counts are a lower bound'] : []),
   ].join(' — ');
 
   const at = hover.at;
@@ -106,15 +107,14 @@ export function ConcurrencyPanel({
           `now` は稼働区間ではなくセッションの状態から来るので、稼働区間を読めなくても言える。
           読み終える前だけ伏せる。
 
-          子を数え上げられなかったセッションが在るときは、`peak` に `+` を添えて下限だと言う。
-          **何人居たのかは分からないので、数そのものは動かさない。** */}
+          数え上げられなかったエージェントが居るときは、`+` を添えて下限だと言う。
+          **`now` と `peak` の両方に添える** —— 2 つは同じ `session.subagents` を回して
+          数えているので、片方だけ言い切れば、`+` を足した当のものと同じ数え落としが、
+          もう片方では数そのものとして出る。何人居たのかは分からないので、数そのものは動かさない。 */}
       <div className="sf-h">
         <span className="sf-title">Agents</span>
-        <span
-          className="sf-dim"
-          title={observation.kind === 'pending' ? observationTitle(observation) : undefined}
-        >
-          now {observation.kind === 'pending' ? observationMark(observation) : liveNow}
+        <span className="sf-dim" title={nowTitle}>
+          now {reading ? observationMark(observation) : `${liveNow}${uncounted ? '+' : ''}`}
         </span>
         <span className="sf-big" title={read ? peakTitle : observationTitle(observation)}>
           peak {read ? `${peak}${uncounted ? '+' : ''}` : observationMark(observation)}

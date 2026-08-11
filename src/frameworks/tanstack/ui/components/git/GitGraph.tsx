@@ -1,3 +1,6 @@
+/* biome-ignore-all lint/a11y/useSemanticElements: 行ごとの grid で列を揃えるので table の要素を置けない */
+/* biome-ignore-all lint/a11y/useFocusableInteractive: セルは行ごと辿る。1 つずつのタブ順は作らない */
+
 import { mdiAlertOutline, mdiHomeOutline, mdiRhombus } from '@mdi/js';
 import { useMemo } from 'react';
 import type { GitOverviewJson } from '~/interface/presenters/git/git.presenter.ts';
@@ -35,7 +38,8 @@ import { GitToolbar } from './GitToolbar.tsx';
    増やさない — 線は行の高さを前提に座標を決めているので、間に何か挟むと線が行からずれる。
 
    コンフリクトの見込みは表の上に出す。同じファイルを 2 本の線が触っているという事実は、
-   どちらの行にも属さない。
+   どちらの行にも属さない。`#git-rows` は `role="grid"` なので、列を持たないもの —
+   コンフリクトの見込みと、行を開く操作の説明 — はその外へ置く。
 
    ツールバーもここが出す。**一致件数の数え方をツールバーと表で分けない** — 分けると、
    沈んだ行の数とツールバーに出た数が食い違い、どちらが本当か分からなくなる。 */
@@ -54,6 +58,9 @@ const MAX_LISTED_ISSUES = 3;
 
 /** 1 行に並べる顔の数 */
 const MAX_LISTED_FACES = 3;
+
+/** 行を開く操作の説明を指す id。全部の行が同じ 1 つを指す */
+const OPEN_HINT_ID = 'git-open-hint';
 
 export interface GitOrder {
   readonly key: TipSortKey;
@@ -146,46 +153,55 @@ export function GitGraph({
         branches={overview.branches.length}
         lead={lead}
       />
-      <div id="git-rows">
-        {overview.conflicts.length > 0 && (
-          <div className="git-conflicts">
-            {overview.conflicts.slice(0, MAX_LISTED_CONFLICTS).map((conflict) => (
-              <div
-                key={`${conflict.a}~${conflict.b}`}
-                className="gc-row"
-                title={conflict.files.join('\n')}
+      {overview.conflicts.length > 0 && (
+        <div className="git-conflicts">
+          {overview.conflicts.slice(0, MAX_LISTED_CONFLICTS).map((conflict) => (
+            <div
+              key={`${conflict.a}~${conflict.b}`}
+              className="gc-row"
+              title={conflict.files.join('\n')}
+            >
+              ⚠{' '}
+              <button
+                type="button"
+                className="gc-name"
+                onClick={() => nav.openRef(conflict.a, conflict.a)}
               >
-                ⚠{' '}
-                <button
-                  type="button"
-                  className="gc-name"
-                  onClick={() => nav.openRef(conflict.a, conflict.a)}
-                >
-                  {conflict.a}
-                </button>
-                {' ⇄ '}
-                <button
-                  type="button"
-                  className="gc-name"
-                  onClick={() => nav.openRef(conflict.b, conflict.b)}
-                >
-                  {conflict.b}
-                </button>
-                <span className="dimtxt">
-                  {' '}
-                  — {conflict.n} shared file{conflict.n > 1 ? 's' : ''} (merge conflict likely)
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="git-row head">
-          <span style={{ width }} />
+                {conflict.a}
+              </button>
+              {' ⇄ '}
+              <button
+                type="button"
+                className="gc-name"
+                onClick={() => nav.openRef(conflict.b, conflict.b)}
+              >
+                {conflict.b}
+              </button>
+              <span className="dimtxt">
+                {' '}
+                — {conflict.n} shared file{conflict.n > 1 ? 's' : ''} (merge conflict likely)
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* 行を開く操作の説明。全部の行が指す 1 つで足りるので、行の中には置かない —
+          置くと 6 列の行に 7 個目のセルが増える */}
+      <span id={OPEN_HINT_ID} className="vhidden">
+        Press Enter to open the ref or commit
+      </span>
+      {/* 表そのものが `grid` である。**行を `button` にすると中身が消える。** `button` は
+          中の要素を読み上げから外す役なので、ahead も behind も sha も更新の時刻も、
+          行の名前 1 つに置き換わってしまう。 */}
+      <div id="git-rows" role="grid" aria-label="Refs and commits">
+        <div className="git-row head" role="row">
+          {/* 線を描く余白の列。行の側でも `aria-hidden` の svg が占める */}
+          <span aria-hidden="true" style={{ width }} />
           <SortHead label="Ref / Commit" sortKey="name" order={order} onSort={onSort} />
-          <span>Assignee / Agents</span>
+          <span role="columnheader">Assignee / Agents</span>
           <SortHead label="Ahead" sortKey="ahead" order={order} onSort={onSort} right />
           <SortHead label="Updated" sortKey="date" order={order} onSort={onSort} right />
-          <span>SHA</span>
+          <span role="columnheader">SHA</span>
         </div>
         {rows.map((row, index) => {
           const gutter = (
@@ -226,19 +242,21 @@ export function GitGraph({
             const rev = tip.kind === 'branch' ? tip.name : tip.sha;
             const worktreeLeaf = tip.worktree?.split('/').pop() ?? '';
             return (
-              // biome-ignore lint/a11y/useSemanticElements: 中にチップを持つ行は button にできない
+              /* 行は `row` である。**`button` にすると中身が全部消える。** 名前は行が名乗る
+                 のではなく、5 つのセルが自分で言う。開く操作は `aria-describedby` の指す
+                 説明で言う — 名前にすると、中のチップも押しどころとして不正になる。 */
               <div
                 key={`t:${tip.name}:${tip.sha}`}
                 className={`git-row${dim}`}
                 title={tip.worktree ?? tip.name}
                 data-name={`${tip.name} ${worktreeLeaf} ${tip.sha}`}
-                role="button"
+                role="row"
                 tabIndex={0}
-                aria-label={`Open ref ${tip.name}`}
+                aria-describedby={OPEN_HINT_ID}
                 {...pressable(() => nav.openRef(rev, tip.name))}
               >
                 {gutter}
-                <span className="g-title">
+                <span className="g-title" role="gridcell">
                   <span
                     className={tip.kind === 'branch' ? 'g-branch-name' : 'g-wt-name'}
                     style={{ color: laneColor(row.lane - 1) }}
@@ -301,7 +319,7 @@ export function GitGraph({
                     </span>
                   )}
                 </span>
-                <span className="g-who">
+                <span className="g-who" role="gridcell">
                   {/* GitHub の担当と、いま動いているエージェント。課題の一覧と同じ並べ方にする —
                       同じ 2 つを見ているので、単位が違っても読み方は変えない */}
                   {assignees.length > 0 && (
@@ -309,7 +327,7 @@ export function GitGraph({
                   )}
                   <Occupants here={here} />
                 </span>
-                <span className="g-ahead right">
+                <span className="g-ahead right" role="gridcell">
                   {tip.ahead > 0 ? `+${tip.ahead}` : ''}
                   {tip.behind > 0 && (
                     <span
@@ -321,21 +339,31 @@ export function GitGraph({
                     </span>
                   )}
                 </span>
-                <span className="g-date">{formatSinceIso(tip.date, nowMs)}</span>
-                <span className="g-sha">{tip.sha.slice(0, 9)}</span>
+                <span className="g-date" role="gridcell">
+                  {formatSinceIso(tip.date, nowMs)}
+                </span>
+                <span className="g-sha" role="gridcell">
+                  {tip.sha.slice(0, 9)}
+                </span>
               </div>
             );
           }
 
           if (row.type === 'fold') {
             return (
-              <div key={`f:${row.from}`} className={`git-row fold${needle === '' ? '' : ' dim'}`}>
+              <div
+                key={`f:${row.from}`}
+                className={`git-row fold${needle === '' ? '' : ' dim'}`}
+                role="row"
+              >
                 {gutter}
-                <span className="g-title g-fold">··· {row.count} commits</span>
-                <span />
-                <span />
-                <span />
-                <span />
+                <span className="g-title g-fold" role="gridcell">
+                  ··· {row.count} commits
+                </span>
+                <span role="gridcell" />
+                <span role="gridcell" />
+                <span role="gridcell" />
+                <span role="gridcell" />
               </div>
             );
           }
@@ -343,46 +371,54 @@ export function GitGraph({
           const node = row.node;
           const isHead = index === firstMain;
           return (
-            // biome-ignore lint/a11y/useSemanticElements: 中にチップを持つ行は button にできない
+            /* コミットの行も `row` である。題名・居る者・時刻・sha は、行の名前ではなく
+               セルとして渡す */
             <div
               key={`n:${node.sha}`}
               className={`git-row${node.merge ? ' merge' : ''}${dim}`}
               /* 本文中の sha にホバーしたら、この行がハイライトされる。**完全な sha を
                  持たせる** — 突き合わせは部分一致なので、本文の桁数が短くても当たる。 */
               data-name={node.sha}
-              role="button"
+              role="row"
               tabIndex={0}
-              aria-label={`Open commit ${node.sha.slice(0, 9)}`}
+              aria-describedby={OPEN_HINT_ID}
               {...pressable(() => nav.openRef(node.sha, node.sha.slice(0, 9)))}
             >
               {gutter}
-              <span className="g-title">
+              <span className="g-title" role="gridcell">
                 {isHead && <span className="g-base-name">{overview.base} </span>}
                 <span className="g-subject" title={node.subject}>
                   <SubjectText text={node.subject} project={project} />
                 </span>
               </span>
-              <span className="g-who">{isHead ? <Occupants here={rootOccupants} /> : null}</span>
-              <span />
-              <span className="g-date">{formatSinceIso(node.date, nowMs)}</span>
-              <span className="g-sha">{node.sha.slice(0, 9)}</span>
+              <span className="g-who" role="gridcell">
+                {isHead ? <Occupants here={rootOccupants} /> : null}
+              </span>
+              <span role="gridcell" />
+              <span className="g-date" role="gridcell">
+                {formatSinceIso(node.date, nowMs)}
+              </span>
+              <span className="g-sha" role="gridcell">
+                {node.sha.slice(0, 9)}
+              </span>
             </div>
           );
         })}
         {/* 遡る数の上限で本流が切れている。**黙ると、これで全部の履歴として読まれる** */}
         {overview.mainline_truncated && (
-          <div className="git-row cut">
-            <span style={{ width }} />
+          <div className="git-row cut" role="row">
+            <span aria-hidden="true" style={{ width }} />
             <span
               className="g-title g-cut"
+              role="gridcell"
               title={`glasshive reads only the most recent stretch of ${overview.base} — commits older than these are not read, and a branch that left earlier has no branch point to draw`}
             >
               ··· older commits are not read
             </span>
-            <span />
-            <span />
-            <span />
-            <span />
+            <span role="gridcell" />
+            <span role="gridcell" />
+            <span role="gridcell" />
+            <span role="gridcell" />
           </div>
         )}
       </div>
@@ -432,6 +468,9 @@ interface HeadProps {
   readonly right?: boolean;
 }
 
+/* 並べ替えられる列の見出し。**`button` には置き換えられない** — 役が `button` だと、
+   この列がいまどう並んでいるかを言う `aria-sort` を置く先が無くなる。押しどころとしての
+   振る舞いは `pressable` が持つ。 */
 function SortHead({ label, sortKey, order, onSort, right }: HeadProps) {
   const on = order.key === sortKey;
   const className = [
@@ -443,9 +482,15 @@ function SortHead({ label, sortKey, order, onSort, right }: HeadProps) {
     .filter(Boolean)
     .join(' ');
   return (
-    <button type="button" className={className} onClick={() => onSort(sortKey)}>
+    <div
+      className={className}
+      role="columnheader"
+      tabIndex={0}
+      aria-sort={on ? (order.direction === 'desc' ? 'descending' : 'ascending') : 'none'}
+      {...pressable(() => onSort(sortKey))}
+    >
       {label}
-    </button>
+    </div>
   );
 }
 

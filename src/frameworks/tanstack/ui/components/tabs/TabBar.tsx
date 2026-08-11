@@ -24,6 +24,29 @@ import { Icon } from '../primitives/Icon.tsx';
 /** 掴んだと見なすまでの横の移動。これより小さい動きは、押しただけとして扱う */
 const DRAG_SLOP = 4;
 
+/** 数え上げられなかったプロジェクトの件数。見えたぶんは本当に在るが、それで全部とは言えない */
+const SHORT = 'Some of this project could not be read — the count may be short';
+
+/* このプロジェクトの `transcript` を数え上げられたか。**プロジェクトのディレクトリと、
+   セッションごとの子のディレクトリの両方を見る。**
+
+   どちらか一方でも歩けていなければ、タブの件数は「これで全部」ではない。タブの件数は、
+   そのプロジェクトを開くかどうかを決める最初の手掛かりなので、断定して出してはいけない。 */
+const counted = (project: ProjectJson): boolean =>
+  project.sources.state !== 'unobservable' &&
+  project.sessions.every((session) => session.sources.state !== 'unobservable');
+
+/* タブの点。**数え上げられなかったプロジェクトを `ended` に落とさない** —— `ended` は
+   「ここでは何も動いていない」という断定で、歩けなかったディレクトリの向こう側について
+   言えることではない。見えた 1 本が動いていることは、何本見落としていても変わらないので、
+   `input` と `active` はそのまま出す。 */
+function dotOf(project: ProjectJson | undefined): string {
+  if (project === undefined) return 'unknown';
+  const state = projectDotState(project);
+  if (state === 'input' || state === 'active') return state;
+  return counted(project) ? state : 'unknown';
+}
+
 /** 掴んだ後の押下を飲む。置いた場所のタブが開いてしまうのを止める */
 const swallow = (event: Event) => {
   event.preventDefault();
@@ -159,7 +182,8 @@ export function TabBar({
            いまどこに居るかがどこにも出ない画面になる(アドレスバーを読むしか手が無くなる)。 */
         const name = project?.name ?? id;
         const shown = project === undefined ? 0 : visibleSessions(project, showAll, nowMs).length;
-        const dot = project === undefined ? 'unknown' : projectDotState(project);
+        const short = project !== undefined && !counted(project);
+        const dot = dotOf(project);
         return (
           // biome-ignore lint/a11y/noStaticElementInteractions: 掴むのは並べ替えの手立てで、開くのは中の `Link` が受ける
           <span
@@ -181,11 +205,20 @@ export function TabBar({
               <Dot state={dot} />
               <span>{name}</span>
             </Link>
-            {/* 件数と × を同じ枠に重ねる。ホバーで入れ替わるだけで、枠の幅は変わらない */}
-            <span className="tab-slot">
+            {/* 件数と × を同じ枠に重ねる。ホバーで入れ替わるだけで、枠の幅は変わらない。
+
+                数え上げられなかったプロジェクトには `+?` を添える。**0 も空欄も
+                「1 つも動いていない」という断定になる。** 一言は枠そのものに付ける ——
+                件数に付けても、上に重なる × がホバーを受け取る。 */}
+            <span
+              className={short ? 'tab-slot short' : 'tab-slot'}
+              title={short ? SHORT : undefined}
+            >
               {/* 人の入力を待っているプロジェクトは、件数の色でもそう言う。タブは畳まれていて
                   中が見えないので、点 1 つだけだと隣のタブの点に紛れる */}
-              <span className={dot === 'input' ? 'n input' : 'n'}>{shown === 0 ? '' : shown}</span>
+              <span className={dot === 'input' ? 'n input' : 'n'}>
+                {short ? `${shown}+?` : shown === 0 ? '' : shown}
+              </span>
               <button
                 type="button"
                 className="tab-close"
@@ -212,10 +245,7 @@ export function TabBar({
             className="tab-link on"
             title={`${byId.get(provisional)?.path ?? provisional} — double-click to pin`}
           >
-            {(() => {
-              const project = byId.get(provisional);
-              return <Dot state={project === undefined ? 'unknown' : projectDotState(project)} />;
-            })()}
+            <Dot state={dotOf(byId.get(provisional))} />
             <span>{byId.get(provisional)?.name ?? provisional}</span>
           </Link>
         </span>

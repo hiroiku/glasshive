@@ -201,6 +201,29 @@ type AgentColumn = ColumnDef<AgentRow> & { readonly id: (typeof AGENT_COLUMN_IDS
 /** 消費の列に添える、何を数えているかの断り */
 const TOKENS_NOTE = 'input + output + cache write (transcripts active in the last 7 days only)';
 
+/** 子を数え上げられなかったセッションに添える断り。見えている子は本当に居るが、それで全部とは言えない */
+const SUBAGENTS_SHORT = 'Subagents could not be counted — this session may have more';
+
+/* 行が 1 本も出ていないときに言えること。**「無かった」と「観測できなかった」を同じ文にしない。**
+
+   走査できなかったプロジェクトの `sessions` は空のまま届くので、長さだけを見ると
+   「セッションを 1 つも持たないプロジェクト」と同じ形になる。同じページの統計フッターは
+   同じ `sources` を読んで観測できなかったと言うので、ここで断定すると 1 つの画面の中で
+   表とフッターの言うことが食い違う。 */
+function emptyNoteOf(project: ProjectJson): string {
+  const counted = project.sources.state !== 'unobservable';
+  /* 絞り込んで何も残らなかった。**分母も数え上げた数でしかない**ので、
+     数え上げられていなければ `+?` を添える */
+  if (project.sessions.length > 0) {
+    return `No matching sessions (0 of ${project.sessions.length}${counted ? '' : '+?'})`;
+  }
+  if (!counted) return 'Unknown — the sessions in this project could not be counted';
+  if (!project.read) return 'Reading the transcripts in this project';
+  return project.sources.state === 'absent'
+    ? 'Nothing to read — the directory for this project is not there'
+    : 'No sessions to show';
+}
+
 /** 見えている欄への部分一致(大文字小文字を問わない) */
 const hits = (query: string, haystack: readonly (string | null | undefined)[]): boolean =>
   haystack.some((value) => value?.toLowerCase().includes(query) === true);
@@ -871,11 +894,16 @@ export function AgentsTable({
             tlGeom.width > 0 &&
             talkHops !== null &&
             talkHops.drawn.length > 0 && (
-              /* 重ねる面そのものは役から外す。`#rows` は `rowgroup` で、持てるのは `row`
-                 だけである。矢 1 本 1 本は押しどころなので、そちらの役は残す */
+              /* 重ねる面は中の要素ごと読み上げから外す。**`role="presentation"` は子に
+                 継がれない** ので、面だけを役から外すと、中の押しどころが `rowgroup` である
+                 `#rows` の直下に `row` を挟まずに残る。
+
+                 矢が開くのは送り手の会話で、送り手はいま出ている行にしか居ない(畳まれた
+                 相手の `file` は `null` になる)。同じ会話はその行を Enter で開けるので、
+                 隠しても届かなくなる操作は無い。 */
               <svg
                 className="tl-msg"
-                role="presentation"
+                aria-hidden="true"
                 style={{ left: tlGeom.left, width: tlGeom.width }}
               >
                 <title>Messages between agents</title>
@@ -885,16 +913,15 @@ export function AgentsTable({
                   const y2 = midOf(arrow.to) + (down ? -5 : 5);
                   const tip = midOf(arrow.to) + (down ? -9 : 9);
                   return (
-                    /* svg の中に button は置けないので、押しどころの役だけをここで名乗る */
+                    /* 矢からも送り手の会話を開ける。**役もタブ順も名乗らない** — 読み上げから
+                       外した面の中にフォーカスの止まる場所を残すと、そこに何が在るのか言えなくなる */
+                    // biome-ignore lint/a11y/noStaticElementInteractions: 同じ会話は送り手の行から開ける。ここはマウスの入口でしかない
                     <g
                       key={arrow.key}
                       className="msg"
-                      role="button"
-                      tabIndex={0}
-                      aria-label={arrow.label}
-                      {...pressable(() => {
+                      onClick={() => {
                         if (arrow.file !== null) nav.openConv(arrow.file);
-                      })}
+                      }}
                     >
                       <title>{arrow.label}</title>
                       <line
@@ -922,7 +949,7 @@ export function AgentsTable({
 
           {rows.length === 0 ? (
             <div className="empty" role="row">
-              <span role="gridcell">No sessions to show</span>
+              <span role="gridcell">{emptyNoteOf(project)}</span>
             </div>
           ) : (
             rows.map((row, index) => (
@@ -1024,6 +1051,11 @@ function AgentRowView({
   /* 消費を読めなかった行。**0 と同じ空欄にしない。** 空欄は「使っていない」と読める */
   const unreadTokens = node.tokens_state === 'unobservable';
 
+  /* 子のディレクトリを歩けなかったセッション。**出ている子で全部だと言わない。**
+     見えている数は下限でしかなく、何人居たのかはここからは分からない */
+  const uncountedSubagents =
+    entry.kind === 'session' && entry.node.sources.state === 'unobservable';
+
   return (
     /* 行は `row` である。**`button` にすると中身が全部消える。** `button` は中の要素を
        読み上げから外す役なので、11 個のセルが「Open conversation for …」1 文に置き換わり、
@@ -1048,6 +1080,13 @@ function AgentRowView({
         <Dot state={awaiting === 'user' ? 'input' : node.state} />
         <span className="t">{cut(labelOf(entry), MAX_LABEL_CHARS)}</span>
         {entry.kind === 'session' && <span className="sub-id">{node.id.slice(0, 8)}</span>}
+        {/* 子を数え上げられなかったセッション。**子の居ないセッションと同じ姿にしない** —
+            同じ形で並ぶと、数え損ねた子が居なかったことになる */}
+        {uncountedSubagents && (
+          <span className="dimtxt" title={SUBAGENTS_SHORT}>
+            +?
+          </span>
+        )}
         {/* ラベルが 16 進の id しか無い子では、何をしている子かはこれでしか読めない。
             列は増やさない — 11 本の `subgrid` を崩すと表全体の列が揃わなくなる */}
         {agentTypeShort(calledAs) !== '' && (

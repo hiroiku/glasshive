@@ -193,6 +193,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 数え上げられなかった子を言う `+?`。名前の脇に並ぶ薄い文字と同じ大きさに揃える —
+   地の文の大きさのまま置くと、名前より目立って読む順が逆になる */
+.row .name .dimtxt {
+  font-size: 10.5px;
+}
 .row .col-model,
 .row .col-eff {
   color: var(--dim);
@@ -454,14 +459,12 @@ body.tl-panning .row .tl {
   fill: #d9a441;
   opacity: 0.6;
 }
-.tl-msg .msg:hover .msg-line,
-.tl-msg .msg:focus-visible .msg-line {
+.tl-msg .msg:hover .msg-line {
   stroke: #f0c060;
   stroke-width: 1.5;
   opacity: 1;
 }
-.tl-msg .msg:hover .msg-arrow,
-.tl-msg .msg:focus-visible .msg-arrow {
+.tl-msg .msg:hover .msg-arrow {
   fill: #f0c060;
   opacity: 1;
 }

@@ -108,12 +108,17 @@ export function StatsFooter({ project, nowMs }: { project: ProjectJson; nowMs: n
     return state === 'absent' ? { kind: 'absent' } : { kind: 'observed' };
   }, [project.read, project.sources]);
 
-  /* 子のディレクトリを走査できなかったセッションが在るか。**数え損ねた子を黙って落とさない**
-     —— 落とせば、数えられた高さが全部だったことになる。何人居たのかは分からないので、
-     数には足さず、その数が下限であることだけを言う。 */
+  /* 数え上げられなかったエージェントが居るか。**プロジェクトのディレクトリと、セッションごとの
+     子のディレクトリの両方を見る。** どちらか一方でも歩けていなければ、`counts` も `liveNow` も
+     同じだけ足りない —— どちらも `project.sessions` と `session.subagents` を回して数えている。
+
+     **数え損ねた分を黙って落とさない** —— 落とせば、数えられた高さが全部だったことになる。
+     何人居たのかは分からないので、数には足さず、その数が下限であることだけを言う。 */
   const uncounted = useMemo(
-    () => project.sessions.some((session) => session.sources.state === 'unobservable'),
-    [project.sessions],
+    () =>
+      project.sources.state === 'unobservable' ||
+      project.sessions.some((session) => session.sources.state === 'unobservable'),
+    [project.sources, project.sessions],
   );
 
   const liveNow = useMemo(() => {

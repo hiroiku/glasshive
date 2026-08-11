@@ -93,6 +93,9 @@ function draw(props: Partial<TabBarProps> = {}) {
     dot: seat?.querySelector('.dot')?.className ?? null,
     count: seat?.querySelector('.tab-slot .n')?.textContent ?? null,
     countClass: seat?.querySelector('.tab-slot .n')?.className ?? null,
+    slotClass: seat?.querySelector('.tab-slot')?.className ?? null,
+    /* 一言は枠に付いている。中の件数に付けても、上に重なる × がホバーを受け取る */
+    slotTitle: seat?.querySelector('.tab-slot')?.getAttribute('title') ?? null,
   });
   const seats = [...container.querySelectorAll('.tab')];
   return {
@@ -155,6 +158,76 @@ describe('ピン留めのタブと、まだ届いていない木', () => {
 
     expect(provisional.name).toBe('-w-gamma');
     expect(provisional.dot, '暫定タブでも、点の場所は同じだけ取る').toContain('unknown');
+  });
+});
+
+/* 走査できなかったプロジェクトのタブ。
+
+   **タブの件数は、そのプロジェクトを開くかどうかを決める最初の手掛かりである。**
+   数え終えた数として出すと、歩けなかったディレクトリを持つプロジェクトが、
+   本当に静かなプロジェクトと同じ見た目になる。 */
+describe('数え上げられなかったプロジェクトのタブ', () => {
+  const unwalked = (): ProjectJson => ({
+    ...project('-w-alpha', 'alpha'),
+    sessions: [],
+    sources: { state: 'unobservable', reason: 'projects.unreadable' },
+  });
+
+  it('プロジェクトのディレクトリを歩けなかったなら、件数に `+?` を添える', () => {
+    const { pinned } = draw({ projects: [unwalked()] });
+
+    expect(pinned.count, '0 も空欄も「1 つも動いていない」という断定である').toBe('0+?');
+  });
+
+  it('子のディレクトリを歩けなかったセッションが在るときも、件数に `+?` を添える', () => {
+    const short = project('-w-alpha', 'alpha');
+    const first = short.sessions[0];
+    if (first === undefined) throw new Error('セッションが無い');
+    first.sources = { state: 'unobservable', reason: 'subagents.unreadable' };
+
+    const { pinned } = draw({ projects: [short] });
+
+    expect(pinned.count, '見えた 1 本は本当に在るが、それで全部とは言えない').toBe('1+?');
+  });
+
+  it('数え終えていないことを、指せば分かるようにする', () => {
+    const { pinned } = draw({ projects: [unwalked()] });
+
+    expect(pinned.slotTitle).toBe(
+      'Some of this project could not be read — the count may be short',
+    );
+  });
+
+  /* `+?` は 1 文字ぶんの枠に収まらない。枠を広げないと、隣の名前と × に重なる。 */
+  it('`+?` を出す枠は広げる', () => {
+    expect(draw({ projects: [unwalked()] }).pinned.slotClass).toContain('short');
+  });
+
+  it('数え終えたプロジェクトの枠は広げず、一言も添えない', () => {
+    const { pinned } = draw();
+
+    expect(pinned.slotClass).toBe('tab-slot');
+    expect(pinned.slotTitle).toBeNull();
+  });
+
+  /* `ended` は「ここでは何も動いていない」という断定である。歩けなかったディレクトリの
+     向こう側について、それは言えない。 */
+  it('走査できなかったプロジェクトの点を、`ended` に落とさない', () => {
+    const { pinned } = draw({ projects: [unwalked()] });
+
+    expect(pinned.dot).toContain('unknown');
+  });
+
+  /* 見えた 1 本が動いていることは、他に何本見落としていても変わらない。 */
+  it('走査できなくても、見えた稼働はそのまま点に出す', () => {
+    const short = project('-w-alpha', 'alpha');
+    const first = short.sessions[0];
+    if (first === undefined) throw new Error('セッションが無い');
+    first.sources = { state: 'unobservable', reason: 'subagents.unreadable' };
+
+    const { pinned } = draw({ projects: [short] });
+
+    expect(pinned.dot).toContain('active');
   });
 });
 

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AGENT_COLUMN_IDS,
   AgentsTable,
@@ -102,7 +102,7 @@ function session(
   };
 }
 
-function project(sessions: SessionJson[]): ProjectJson {
+function project(sessions: SessionJson[], extra: Partial<ProjectJson> = {}): ProjectJson {
   return {
     id: 'hive',
     slug: 'hive',
@@ -115,6 +115,7 @@ function project(sessions: SessionJson[]): ProjectJson {
     read: true,
     sources: { state: 'observed', reason: null },
     sessions,
+    ...extra,
   };
 }
 
@@ -580,6 +581,180 @@ describe('稼働を観測できなかったことを、表からも渡す', () =
 
     expect(bars.filter((bar) => !bar.classList.contains('unknown'))).toEqual([]);
     expect(bars[0]?.getAttribute('title')).toContain('could not be read');
+  });
+});
+
+/* 走査できなかったプロジェクトの `sessions` は空のまま届く。**空をそのまま数えると
+   「セッションを 1 つも持たないプロジェクト」になる。** 同じページの統計フッターは同じ
+   `sources` を読んで観測できなかったと言うので、ここで断定すると言うことが食い違う。 */
+describe('空の表が、観測できなかったことを断定しない', () => {
+  const note = (): string => document.querySelector('#rows .empty')?.textContent ?? '';
+
+  it('走査できなかったプロジェクトで、セッションが無かったと言わない', () => {
+    mount({ project: project([], { sources: { state: 'unobservable', reason: 'EACCES' } }) });
+
+    expect(note(), '観測できなかったことが、無かったことになっている').not.toBe(
+      'No sessions to show',
+    );
+    expect(note()).toContain('could not be counted');
+  });
+
+  it('走査できて 1 つも無かったときは、無かったと言う', () => {
+    mount({ project: project([]) });
+
+    expect(note()).toBe('No sessions to show');
+  });
+
+  it('ディレクトリが無かったことと、走査できなかったことを別の文にする', () => {
+    mount({ project: project([], { sources: { state: 'absent', reason: 'ENOENT' } }) });
+
+    expect(note(), '「無かった」と「観測できなかった」が同じ文になっている').not.toContain(
+      'could not be counted',
+    );
+    expect(note()).toContain('not there');
+  });
+
+  it('まだ読んでいないプロジェクトを、セッションの無いプロジェクトにしない', () => {
+    mount({ project: project([], { read: false }) });
+
+    expect(note(), 'まだ観測していないことが、無かったことになっている').not.toBe(
+      'No sessions to show',
+    );
+  });
+
+  it('絞り込んで何も残らなかったことは、1 つも無いことと別に言う', () => {
+    mount({ project: project([session('sess', [])]), query: 'needle' });
+
+    expect(note()).toContain('No matching sessions');
+  });
+
+  it('走査できなかったプロジェクトでは、絞り込みの分母も断定しない', () => {
+    mount({
+      project: project([session('sess', [])], {
+        sources: { state: 'unobservable', reason: 'EACCES' },
+      }),
+      query: 'needle',
+    });
+
+    expect(note(), '数え上げられていない総数を、これで全部だと言っている').toContain('+?');
+  });
+
+  it('子を歩けなかったセッションを、子の居ないセッションに見せない', () => {
+    mount({
+      project: project([
+        session('sess', [], { sources: { state: 'unobservable', reason: 'EACCES' } }),
+      ]),
+    });
+
+    expect(
+      rowOf('sess').querySelector('.name')?.textContent,
+      '数え損ねた子が、居なかったことになっている',
+    ).toContain('+?');
+  });
+
+  it('子を歩けたセッションには、何も添えない', () => {
+    mount({ project: project([session('sess', [])]) });
+
+    expect(rowOf('sess').querySelector('.name')?.textContent).not.toContain('+?');
+  });
+});
+
+/* 矢印は `#rows` の上に重ねる。**`role="presentation"` は子に継がれない** ので、面だけを
+   役から外しても、中の押しどころは `rowgroup` の直下に `row` を挟まずに残る。 */
+describe('メッセージの矢印を、行の束の中へ浮かせない', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  /** happy-dom は幅を持たない。時間の列に幅を与えて、矢印を実際に描かせる */
+  const widen = () => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: Element,
+    ) {
+      const height = this.classList.contains('tl') ? 14 : 26;
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 400,
+        bottom: height,
+        width: 400,
+        height,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
+  };
+
+  /** 矢印が 1 本描かれた画面を作る */
+  const drawn = async () => {
+    widen();
+    answerMessages({
+      state: 'observed',
+      reason: null,
+      complete: true,
+      unplaced: 0,
+      hops: [
+        {
+          at: new Date(NOW - 30_000).toISOString(),
+          from: 'sess',
+          to: 'child',
+          summary: 'go',
+          tool_use: 't1',
+        },
+      ],
+    });
+    mount({ project: three });
+
+    fireEvent.click(chipOf('⇄ messages'));
+
+    await waitFor(() => expect(document.querySelectorAll('.tl-msg .msg')).toHaveLength(1), {
+      timeout: 2000,
+    });
+  };
+
+  it('矢印の面は、中の要素ごと読み上げから外す', async () => {
+    await drawn();
+
+    expect(document.querySelector('.tl-msg')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('行の束の中に、行でない押しどころを残さない', async () => {
+    await drawn();
+
+    expect(
+      document.querySelectorAll('#rows [role="button"]'),
+      '`rowgroup` の直下に `row` を挟まずに押しどころが浮いている',
+    ).toHaveLength(0);
+  });
+
+  it('読み上げから外したものに、タブ順を残さない', async () => {
+    await drawn();
+
+    expect(
+      document.querySelectorAll('.tl-msg [tabindex]'),
+      '辿り着けるのに読み上げられない場所が在る',
+    ).toHaveLength(0);
+  });
+
+  it('矢印が開く会話は、送り手の行からも開ける', async () => {
+    await drawn();
+    nav.openConv.mockClear();
+
+    fireEvent.keyDown(rowOf('sess'), { key: 'Enter' });
+
+    expect(
+      nav.openConv,
+      '矢印を隠した先に、同じ操作へキーボードで届く入口が無い',
+    ).toHaveBeenCalledWith('/x/sess.jsonl');
+  });
+
+  it('行の束の直の子は、行か、読み上げから外したものだけにする', async () => {
+    await drawn();
+
+    for (const child of [...(document.querySelector('#rows')?.children ?? [])]) {
+      const kept =
+        child.getAttribute('role') === 'row' || child.getAttribute('aria-hidden') === 'true';
+      expect(kept, `${child.getAttribute('class') ?? ''} が行の束の直下に浮いている`).toBe(true);
+    }
   });
 });
 

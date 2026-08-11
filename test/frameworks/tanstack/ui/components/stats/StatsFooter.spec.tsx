@@ -328,6 +328,37 @@ describe('稼働区間の観測', () => {
     );
   });
 
+  /* `now` はセッションの状態から来るので、稼働区間を読めなくても言える。**数える相手を
+     数え上げられたかは別の問いである** —— 走査できなかったプロジェクトは `sessions` が
+     短いままなので、`peak` に `+` を足した当のものが `now` では数そのものとして出る。 */
+  it('セッションを走査できなかったなら、いま動いている数も言い切らない', async () => {
+    server.usage.mockResolvedValue({ ok: true, body: usageBody() });
+
+    const { container } = mount({
+      sessions: [],
+      sources: { state: 'unobservable', reason: 'projects.unreadable' },
+    });
+
+    await waitFor(() =>
+      expect(
+        container.querySelector('.sf-conc .sf-dim')?.textContent,
+        '数え上げられなかったことが、いま誰も動いていないことになっている',
+      ).toBe('now 0+'),
+    );
+  });
+
+  it('子を数え上げられなかったセッションが在るなら、いま動いている数も言い切らない', async () => {
+    server.usage.mockResolvedValue({ ok: true, body: usageBody() });
+
+    const { container } = mount({
+      sessions: [session({ sources: { state: 'unobservable', reason: 'subagents.unreadable' } })],
+    });
+
+    await waitFor(() =>
+      expect(container.querySelector('.sf-conc .sf-dim')?.textContent).toBe('now 0+'),
+    );
+  });
+
   it('全部を読めたなら、階段を描く', async () => {
     server.usage.mockResolvedValue({ ok: true, body: usageBody() });
 

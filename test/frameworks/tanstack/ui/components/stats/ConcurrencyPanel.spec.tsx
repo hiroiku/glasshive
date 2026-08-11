@@ -104,7 +104,7 @@ describe('一部のエージェントの稼働区間を読めなかったとき'
 /* 子を数え上げられなかったセッションが在ると、数えられた高さは下限でしかない。
    **言い切ると、数え損ねた子が居なかったことになる。** 何人居たのかは分からないので、
    数を足すのではなく、その数が下限であることだけを言う。 */
-describe('子を数え上げられなかったセッションが在るとき', () => {
+describe('数え上げられなかったエージェントが居るとき', () => {
   it('山の高さを言い切らない', () => {
     const { container } = draw({ uncounted: true });
 
@@ -118,8 +118,35 @@ describe('子を数え上げられなかったセッションが在るとき', (
     const { container } = draw({ uncounted: true });
 
     expect(container.querySelector('.sf-big')?.getAttribute('title')).toBe(
-      'At least this many — subagents in some sessions could not be counted',
+      'At least this many — some agents could not be counted',
     );
+  });
+
+  /* `now` は `peak` と同じ `session.subagents` を回して数える。数え損ねる相手も同じなので、
+     **片方だけ言い切ってはいけない。** `+` を足した当のものと同じ数え落としが、
+     `now` では数そのものとして出る。 */
+  it('いま動いている数も言い切らない', () => {
+    const { container } = draw({ uncounted: true });
+
+    expect(
+      container.querySelector('.sf-dim')?.textContent,
+      '数え損ねた子が居なかったことになっている',
+    ).toBe('now 1+');
+  });
+
+  it('いま動いている数が下限であることも、指せば分かるようにする', () => {
+    const { container } = draw({ uncounted: true });
+
+    expect(container.querySelector('.sf-dim')?.getAttribute('title')).toBe(
+      'At least this many — some agents could not be counted',
+    );
+  });
+
+  /* 伏せているのは数そのものなので、そこに下限を足す相手が無い。 */
+  it('まだ読み終えていないなら、伏せた `—` に `+` を足さない', () => {
+    const { container } = draw({ uncounted: true, observation: { kind: 'pending' } });
+
+    expect(container.querySelector('.sf-dim')?.textContent).toBe('now —');
   });
 
   /* 数え上げられた分の階段まで消すと、1 本読めなかっただけのプロジェクトが
