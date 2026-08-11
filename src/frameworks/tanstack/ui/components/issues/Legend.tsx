@@ -78,11 +78,11 @@ export function IssuesLegend({
       </span>
       {/* 右のトラックの読み方。**見本は本物と同じ class から採る** —— 別に作ると本物とずれる。
 
-          点の形だけでなく、下地の 4 通りも並べる。**罫線・ハッチ・破線・何も無しの違いが、
+          点の形だけでなく、下地の 4 通りも並べる。**ハッチ・破線・何も無しの違いが、
           読んだか読めなかったかを言う唯一の目印である** —— これを載せないと、読み終えて
           何も起きていなかった行と、読めなかった行の見分け方がどこにも書いていないことになる。 */}
       <span className="lg-gt">
-        <i className="gt-rule" /> read — an empty line means nothing happened
+        <i className="gt-line" /> from the first instant observed to the last — never to now
       </span>
       <span className="lg-gt">
         <i className="gt-open" /> created

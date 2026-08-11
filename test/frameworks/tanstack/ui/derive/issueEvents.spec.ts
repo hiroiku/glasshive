@@ -5,6 +5,8 @@ import {
   EVENT_SLOTS,
   type EventLog,
   eventLogOf,
+  trackEndsOf,
+  trackLineOf,
 } from '~/frameworks/tanstack/ui/derive/issueEvents.ts';
 import { MONTH_MS } from '~/frameworks/tanstack/ui/derive/issueGantt.ts';
 import { DAY_MS } from '~/frameworks/tanstack/ui/derive/timeWindow.ts';
@@ -545,6 +547,7 @@ describe('4 つの状態は、どれも別の答えである', () => {
       marks: [],
       count: 0,
       dropped: 0,
+      firstAt: null,
       lastAt: null,
       cut: null,
       before: null,
@@ -575,5 +578,107 @@ describe('全部の課題を辿れなかったとき', () => {
       trackOf(issues, log, '#1').kind,
       '並びに居ることが「この課題は読んだ」という観測そのものである',
     ).toBe('read');
+  });
+});
+
+/* 線が結ぶのは、観測した時刻のいちばん古いものと新しいものである。**軸を知らないところで
+   決まる** —— ここが軸を受け取ると、幅を切り替えただけで結ぶ時刻が動くことになる。 */
+describe('線が結ぶ両端', () => {
+  const createdMs = NOW - 20 * DAY_MS;
+  const narrow = { t0: NOW - 3 * DAY_MS, t1: NOW };
+
+  it('作られた時刻から、最後に観測した時刻まで', () => {
+    const issues = [issue('#1')];
+    const log = logOf([entry('#1', [{ at: NOW - 8 * DAY_MS, kind: 'comment' }])]);
+
+    expect(trackEndsOf(createdMs, trackOf(issues, log, '#1'), null)).toEqual({
+      fromMs: createdMs,
+      toMs: NOW - 8 * DAY_MS,
+      opened: true,
+      closed: false,
+      approxTo: false,
+    });
+  });
+
+  /* 軸の外のイベントも観測した時刻である。**軸で切って端を決めると、幅を狭めた人が
+     いつ最後に動いたかを書き換えたことになる。** */
+  it('軸を狭めても、結ぶ 2 つの時刻は動かない', () => {
+    const issues = [issue('#1')];
+    const log = logOf([entry('#1', [{ at: NOW - 8 * DAY_MS, kind: 'comment' }])]);
+    const tracks = buildTracks(issues, log, buildCloses(issues, log), narrow);
+    const track = tracks.get('#1');
+    if (track === undefined) throw new Error('#1 のトラックが無い');
+
+    expect(trackEndsOf(createdMs, track, null), '狭い軸では点が 1 つも置けない行である').toEqual(
+      trackEndsOf(createdMs, trackOf(issues, log, '#1'), null),
+    );
+  });
+
+  it('観測した時刻が 1 つしか無いなら、結ぶ相手が居ないので線は無い', () => {
+    const issues = [issue('#1')];
+    const log = logOf([entry('#1', [])]);
+
+    expect(
+      trackEndsOf(createdMs, trackOf(issues, log, '#1'), null),
+      '長さの無い線は、観測していない何かがそこに在ることになる',
+    ).toBe(null);
+  });
+
+  it('開いた時刻を読めていないなら、いちばん古いイベントが始まりになる', () => {
+    const issues = [issue('#1')];
+    const log = logOf([
+      entry('#1', [
+        { at: NOW - 9 * DAY_MS, kind: 'comment' },
+        { at: NOW - 4 * DAY_MS, kind: 'comment' },
+      ]),
+    ]);
+
+    expect(
+      trackEndsOf(null, trackOf(issues, log, '#1'), null),
+      '読めなかった時刻を始まりに置くと、観測に化ける',
+    ).toEqual({
+      fromMs: NOW - 9 * DAY_MS,
+      toMs: NOW - 4 * DAY_MS,
+      opened: false,
+      closed: false,
+      approxTo: false,
+    });
+  });
+
+  /* 閉じた時刻が `updated_at` の代用なら、線の終わりも観測した時刻ではない。
+   **代用かどうかは軸を知らないところで決まっているので、ここで判じ直さない。** */
+  it('代用の時刻で閉じたなら、終わりが代用であることを持って返す', () => {
+    const issues = [issue('#1')];
+    const log = logOf([entry('#1', [])]);
+    const close = { at: NOW - 6 * DAY_MS, approx: true };
+
+    expect(trackEndsOf(createdMs, trackOf(issues, log, '#1'), close)).toEqual({
+      fromMs: createdMs,
+      toMs: close.at,
+      opened: true,
+      closed: true,
+      approxTo: true,
+    });
+  });
+
+  /* 端が軸の端ちょうどへ潰れる行も在る。**幅の無い線を置かない** —— 置ける時刻が
+     1 つに潰れているのだから、そこに在るのは点であって線ではない。 */
+  it('両端が軸の端で同じところへ潰れるなら、線は無い', () => {
+    const ends = {
+      fromMs: NOW - 20 * DAY_MS,
+      toMs: NOW - 10 * DAY_MS,
+      opened: true,
+      closed: false,
+      approxTo: false,
+    };
+
+    expect(trackLineOf(ends, narrow), '端で止めて引くと、観測していない 3 日を線が主張する').toBe(
+      null,
+    );
+    expect(
+      trackLineOf({ ...ends, toMs: narrow.t0 }, narrow),
+      '終わりが軸の端ちょうどでも、置ける時刻は 1 つに潰れている',
+    ).toBe(null);
+    expect(trackLineOf(ends, AXIS)?.softFrom, '軸の中に収まる端をぼかさない').toBe(false);
   });
 });

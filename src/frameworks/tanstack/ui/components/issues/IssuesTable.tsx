@@ -9,7 +9,12 @@ import { Fragment, memo, useCallback, useMemo, useRef } from 'react';
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { buildDependencyGraph, startOrder } from '../../derive/dependencyGraph.ts';
-import { labelColors, leadPullRequest, subProgress } from '../../derive/githubIssue.ts';
+import {
+  issueTypeColor,
+  labelColors,
+  leadPullRequest,
+  subProgress,
+} from '../../derive/githubIssue.ts';
 import {
   buildCloses,
   buildTracks,
@@ -19,6 +24,10 @@ import {
   type EventMark,
   type OffAxis,
   type RowTrack,
+  type TrackEnds,
+  type TrackLine,
+  trackEndsOf,
+  trackLineOf,
   unlistedTrack,
 } from '../../derive/issueEvents.ts';
 import {
@@ -757,6 +766,30 @@ function lagTitle(wait: RowWait): string {
   return `${measured}. The line stops at the edge of this span: ${stopped.join(' and ')} — widen the span to see the whole wait.`;
 }
 
+/* 線の説明。**線が結ぶ 2 つの時刻を言う。長さは言わない** —— 端を軸で止めているときは
+   描いた長さが本当の間隔ではないうえ、そもそもこの 2 つの時刻の間を観測したわけではない。
+
+   開いた時刻を読めていないなら、線が始まるのは最初のイベントである。**そこを「開いた」と
+   語らない** —— 語れば、読めなかった時刻が観測に化ける。 */
+function lineTitle(ends: TrackEnds, line: TrackLine): string {
+  const from = ends.opened
+    ? `Opened ${absTime(ends.fromMs)}`
+    : `First event ${absTime(ends.fromMs)} — when this issue was opened could not be read`;
+  const to = !ends.closed
+    ? `last event ${absTime(ends.toMs)}`
+    : ends.approxTo
+      ? `closed around ${absTime(ends.toMs)}, taken from updated_at`
+      : `closed ${absTime(ends.toMs)}`;
+  const stopped = [
+    line.softFrom ? 'it starts before this span' : '',
+    line.softTo && !ends.approxTo ? 'it runs past this span' : '',
+  ].filter((clause) => clause !== '');
+  if (stopped.length === 0) return `${from} — ${to}`;
+  return `${from} — ${to}. The line stops at the edge of this span: ${stopped.join(
+    ' and ',
+  )} — widen the span to see all of it.`;
+}
+
 /* 点の説明。**まとまった点は件数と両端の時刻を言う** —— 形は「2 つ以上が近すぎる」としか
    言えないので、いくつがいつからいつまでなのかは言葉で持つ。 */
 function markTitle(mark: EventMark): string {
@@ -855,6 +888,7 @@ const IssueRow = memo(function IssueRow({
   const live = liveCount(found);
   const pop = popStyleOf(`i:${issue.id}`, nowMs);
   const labels = issue.labels ?? [];
+  const typeColor = issueTypeColor(issue);
   const colors = labelColors(issue);
   const agg = subProgress(issue, issue.id === null ? undefined : progress.get(issue.id));
   const pull = leadPullRequest(issue);
@@ -892,6 +926,17 @@ const IssueRow = memo(function IssueRow({
         };
   const cutRegion = track.kind === 'read' ? track.cut : null;
   const off = track.kind === 'read' ? track : null;
+
+  /* 観測した時刻を結ぶ線。**軸の上に置けるかどうかだけが幅で変わる** —— どの時刻とどの
+     時刻を結ぶのかは軸を知らないところで決まっている。読み終えた行にしか両端は出ないので、
+     読んでいる最中や読めなかった行がここで長さを持つことはない。 */
+  const ends = trackEndsOf(Number.isFinite(createdMs) ? createdMs : null, track, close);
+  const line = trackLineOf(ends, axis);
+
+  /* 開いた時刻を読めず、イベントも 1 件も無い行。**空のトラックにしない** —— 置ける時刻が
+     1 つも無いので線も輪も出ず、黙ると「読んで、何も起きていなかった」行と同じ絵になる。
+     軸に置けないものは端で言う —— 期日の無いマイルストーンと同じ扱いである。 */
+  const unplacedOpening = track.kind === 'read' && track.count === 0 && !Number.isFinite(createdMs);
 
   return (
     /* 行そのものを button にはできない。中にチップを持っており、button の中に button は
@@ -1015,12 +1060,8 @@ const IssueRow = memo(function IssueRow({
       <span>
         {issue.issue_type !== null && (
           <span
-            className={`tchip t-${issue.issue_type}${issue.github?.issue_type_color == null ? '' : ' tinted'}`}
-            style={
-              issue.github?.issue_type_color == null
-                ? undefined
-                : { ['--lc' as string]: `#${issue.github.issue_type_color}` }
-            }
+            className={`tchip${typeColor === null ? '' : ' tinted'}`}
+            style={typeColor === null ? undefined : { ['--lc' as string]: typeColor }}
           >
             {issue.issue_type}
           </span>
@@ -1093,12 +1134,18 @@ const IssueRow = memo(function IssueRow({
           計画された日程は 1 つも無い。マイルストーンの縦線はこのセルの背景が引いている。
 
           **子は絶対配置の `<i>` だけを平らに並べる。** 包む要素を足すと `subgrid` が切れる。
-          並べた順がそのまま重なりの順で、ハッチと罫線が下、点が上、フラグがいちばん上になる */}
+          並べた順がそのまま重なりの順で、線とハッチが下、点が上、フラグがいちばん上になる */}
       <span
         className={`gt st-${issue.status}${stateClass(track)}`}
         title={trackTitle(track, Number.isFinite(createdMs))}
       >
-        {track.kind === 'read' && <i className="gt-rule" />}
+        {line !== null && ends !== null && (
+          <i
+            className={`gt-line${line.softFrom ? ' soft-from' : ''}${line.softTo ? ' soft-to' : ''}`}
+            style={{ left: `${line.left}%`, width: `${line.width}%` }}
+            title={lineTitle(ends, line)}
+          />
+        )}
         {cutRegion !== null && (
           <i
             className={`gt-cut${cutRegion.softFrom ? ' soft-from' : ''}${cutRegion.softTo ? ' soft-to' : ''}`}
@@ -1151,6 +1198,16 @@ const IssueRow = memo(function IssueRow({
         {off?.after != null && (
           <b className="gt-off right" title={offEventTitle(off.after, 'beyond')}>
             {off.after.count}›
+          </b>
+        )}
+        {/* 置ける時刻が 1 つも無い行。**黙って空にしない** —— 読んで何も起きていなかった行と、
+            開いた時刻を読めなかった行が、同じ空のトラックになる */}
+        {unplacedOpening && (
+          <b
+            className="gt-off left unplaced"
+            title="When this issue was opened could not be read, and no events are on record — nothing can be placed on this axis for it"
+          >
+            ?
           </b>
         )}
         {flag !== null && (

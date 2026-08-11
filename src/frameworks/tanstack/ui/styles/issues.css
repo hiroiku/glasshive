@@ -19,6 +19,15 @@
   grid-auto-rows: min-content;
   align-content: start;
 }
+/* 取ってきた件数で切れたことの断り。**一覧の見出しと同じ左端に置く** —— 一覧の外に在る
+   段落なので、素のままだと列の見出しより手前に出て、どの一覧の話なのか読めない。
+   左の値は `.issue-row` の padding 8px と border-left 2px の合計である */
+.empty.truncated {
+  margin: 0;
+  padding: 8px 14px 6px 10px;
+  color: var(--dim);
+  font-size: 11px;
+}
 #issues-list .empty {
   color: var(--dim);
   padding: 30px;
@@ -161,33 +170,13 @@
   border-top: 1px solid #3a4756;
 }
 
-/* Type の色分け */
+/* 課題の型。色は GitHub が型ごとに割り当てたもので、`--lc` で渡ってくる */
 .tchip {
   border-radius: 3px;
   padding: 2px 6px;
   font-size: 10.5px;
   line-height: 1.2;
   white-space: nowrap;
-}
-.tchip.t-bug {
-  background: rgba(248, 113, 113, 0.16);
-  color: #f87171;
-}
-.tchip.t-feature {
-  background: rgba(52, 211, 153, 0.14);
-  color: var(--active);
-}
-.tchip.t-task {
-  background: rgba(96, 165, 250, 0.14);
-  color: var(--accent);
-}
-.tchip.t-chore {
-  background: rgba(148, 163, 184, 0.14);
-  color: #94a3b8;
-}
-.tchip.t-epic {
-  background: rgba(192, 132, 252, 0.16);
-  color: var(--input);
 }
 /* 題名の列。`text-overflow` のために `overflow: hidden` が要るが、それは縦にも効く。
    **行の高さではなく行送りが切り取り線である** —— 既定の行送りは 12px の文字ぶんしか無く、
@@ -341,7 +330,8 @@
   transform: translateY(-50%);
 }
 /* 読み切れなかったぶんも軸の外に在るとき。ハッチと同じ色で、読めていないことを言う */
-.gt > .gt-off.cut {
+.gt > .gt-off.cut,
+.gt > .gt-off.unplaced {
   color: color-mix(in srgb, var(--waiting) 70%, transparent);
 }
 /* 読んでいる最中に動くものは、画面にこの 1 本だけである。行ごとに置くと 200 本が同時に走る */
@@ -371,20 +361,27 @@
   }
 }
 
-/* この行のイベントを読めた、という 1 本。**全部の行で同じ幅である。**
-   行ごとに長さを変えると、それは観測していない期間を主張するバーになる。罫線を引いた紙と
-   同じで、変わるのはその上に載るものだけである。 */
-.gt-rule {
+/* この行で観測した時刻の、いちばん古いものからいちばん新しいものまでを結ぶ 1 本。
+   **両端は観測した時刻である。いまの時刻までは引かない** —— そこは誰も観測していないので、
+   引けば開いている限り伸び続けるバーになる。観測した時刻が 1 つの行に、この線は出ない。 */
+.gt-line {
   position: absolute;
-  left: 0;
-  right: 0;
   top: 50%;
   height: 1px;
   margin-top: -0.5px;
   background: color-mix(in srgb, var(--border) 85%, transparent);
 }
+/* 端が観測した時刻ではないとき。**硬い端は観測した時刻、ぼかした端は「分からない」である**
+   —— 軸の外に在って端で止めているときと、閉じた時刻が `updated_at` の代用のときの 2 つ。
+   ぼかし方は待ちの線と同じもので、同じことを言っている */
+.gt-line.soft-from {
+  --soft-from: min(10px, 30%);
+}
+.gt-line.soft-to {
+  --soft-to: min(10px, 30%);
+}
 /* 作られた時刻。**塗らない** —— 起きたことではなく、始まりである。
-   中を背景色で塗るのは、罫線が輪の中を通り抜けないようにするためである。 */
+   中を背景色で塗るのは、線が輪の中を通り抜けないようにするためである。 */
 .gt-open {
   position: absolute;
   top: 50%;
@@ -513,27 +510,30 @@
   border-top: 1px dashed color-mix(in srgb, var(--ended) 85%, transparent);
   transform: none;
 }
-/* 待ちの端が観測した時刻ではないとき。**硬い端は観測した時刻、ぼかした端は「分からない」で
-   ある** —— 始まりが `updated_at` の代用のときと、端が軸の外に在って軸の端で止めていると
-   きの 2 つで、どちらもその端をぼかす。ぼかす幅は片側で線の 3 割までにして、両端をぼかす
-   短い待ちでも真ん中が残るようにする */
+/* 端が観測した時刻ではないときのぼかし。**観測した時刻を結ぶ線と、待ちの線が同じ引き方を
+   する** —— 同じことを言っているので、別の絵にすると片方が別の意味に読まれる。
+   ぼかす幅は片側で線の 3 割までにして、両端をぼかす短い線でも真ん中が残るようにする */
 .gt-lag.approx,
 .gt-lag.soft-from,
-.gt-lag.soft-to {
+.gt-lag.soft-to,
+.gt-line.soft-from,
+.gt-line.soft-to {
   mask-image: linear-gradient(
     90deg,
     transparent 0,
-    #000 var(--lag-from, 0px),
-    #000 calc(100% - var(--lag-to, 0px)),
+    #000 var(--soft-from, 0px),
+    #000 calc(100% - var(--soft-to, 0px)),
     transparent 100%
   );
 }
+/* 待ちの端。始まりが `updated_at` の代用のときと、端が軸の外に在って軸の端で止めていると
+   きの 2 つで、どちらもその端をぼかす */
 .gt-lag.approx,
 .gt-lag.soft-from {
-  --lag-from: min(10px, 30%);
+  --soft-from: min(10px, 30%);
 }
 .gt-lag.soft-to {
-  --lag-to: min(10px, 30%);
+  --soft-to: min(10px, 30%);
 }
 /* 読んでいる間。**空のトラックにしない** —— 読み終えて何も無かった行と同じ絵になる */
 .gt.reading::before {
@@ -586,8 +586,8 @@
   margin: 0;
   flex: none;
 }
-/* 罫線と読み残しの区間は、行では両端や `width` で置いている。見本のときだけ幅を持たせる */
-.legend-bar .lg-gt .gt-rule,
+/* 線と読み残しの区間は、行では `left` と `width` で置いている。見本のときだけ幅を持たせる */
+.legend-bar .lg-gt .gt-line,
 .legend-bar .lg-gt .gt-cut {
   width: 22px;
   margin-top: 0;
@@ -619,9 +619,11 @@
   overflow: hidden;
   align-items: center;
 }
-/* 中の要素がテキスト折り返しで行を太らせないように全て 1 行固定 */
+/* 中の要素は 1 行のまま。**縮むことは許す** —— 縮めないと、溢れたぶんを親の
+   `overflow: hidden` が語の途中で刈るだけで、省略記号がどこにも出ない */
 .iworkers > * {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   white-space: nowrap;
 }
 .wk {
@@ -637,6 +639,11 @@
   max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
+}
+/* 名前だけが縮む。状態の点とブランチのアイコンは縮めない —— どちらも形そのものが意味を持つ */
+.wk-name {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
 }
 .wk:hover {
@@ -1563,6 +1570,14 @@
   align-items: center;
   gap: 7px;
   font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 題名は中で刈る。**`gap` は旗と題名の間のものである** —— 題名の中に出るチップまで
+   同じ間隔で離すと、1 つの題名が別々の語に見える */
+.ms-title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

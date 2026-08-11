@@ -56,7 +56,9 @@ export function AgentChip({
     >
       <Dot state={state} />
       {reason !== null && <Icon path={mdiSourceBranch} size={9} className="wk-via" />}
-      {label}
+      {/* 名前は自分の要素で刈る。**`text-overflow` は flex の子には効かない** ——
+          チップそのものに書いても、素のテキストは無名の flex item になって刈られない */}
+      <span className="wk-name">{label}</span>
       {where !== null && where !== undefined && where !== '' && (
         <span className="where">@{where}</span>
       )}

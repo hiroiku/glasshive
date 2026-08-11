@@ -255,19 +255,118 @@ describe('右のトラック', () => {
   const pctOf = (node: Element | null, property: 'left' | 'width'): number =>
     Number.parseFloat((node as HTMLElement | null)?.style.getPropertyValue(property) ?? 'NaN');
 
-  it('置くのは点だけで、幅を持つ要素は観測した区間にしか出さない', () => {
+  /* 幅を持つ要素は、観測した 2 つの時刻の間にしか出ない。**線の両端は観測した時刻である** ——
+     どちらかを推測した時刻へ伸ばすと、それは誰も測っていない長さを主張するバーになる。 */
+  it('幅を持つ要素は、観測した時刻から観測した時刻までしか引かない', () => {
     const { container } = drawGantt(
       [issue('#1', { status: 'closed', created_at: iso(15), closed_at: iso(5) })],
       read([{ id: '#1', at: [12, 9] }]),
     );
-    const widths = [...gtOf(container, '#1').children].filter(
-      (node) => (node as HTMLElement).style.width !== '',
-    );
+    const cell = gtOf(container, '#1');
+    const widths = [...cell.children].filter((node) => (node as HTMLElement).style.width !== '');
+    const line = cell.querySelector('.gt-line');
 
     expect(
-      widths.length,
-      '観測していない期間に幅を与えると、それは誰も測っていない長さを主張するバーである',
-    ).toBe(0);
+      widths.map((node) => node.className),
+      '幅を持ってよいのは線だけである',
+    ).toEqual(['gt-line']);
+    expect(pctOf(line, 'left'), '線は作られた時刻から始まる').toBeCloseTo((15 / 30) * 100, 5);
+    expect(pctOf(line, 'width'), '線は閉じた時刻で止まる。いまの時刻までは引かない').toBeCloseTo(
+      (10 / 30) * 100,
+      5,
+    );
+    expect(line?.getAttribute('title')).toBe(
+      `Opened ${absTime(NOW - 15 * DAY)} — closed ${absTime(NOW - 5 * DAY)}`,
+    );
+  });
+
+  /* 開いた課題の線は、最後に観測した時刻で止まる。**いまの時刻までは引かない** ——
+     引けば、開いている限り伸び続けるバーが行ごとに並ぶ。 */
+  it('開いた課題の線は、最後のイベントで止まる', () => {
+    const { container } = drawGantt(
+      [issue('#1', { created_at: iso(20) })],
+      read([{ id: '#1', at: [12, 8] }]),
+    );
+    const line = gtOf(container, '#1').querySelector('.gt-line');
+
+    expect(pctOf(line, 'left')).toBeCloseTo((10 / 30) * 100, 5);
+    expect(pctOf(line, 'width'), '軸の右端まで引くと、それは観測していない期間である').toBeCloseTo(
+      (12 / 30) * 100,
+      5,
+    );
+    expect(line?.getAttribute('title')).toBe(
+      `Opened ${absTime(NOW - 20 * DAY)} — last event ${absTime(NOW - 8 * DAY)}`,
+    );
+  });
+
+  /* 観測した時刻が 1 つしか無い行は、線を持たない。**輪 1 つが完全な答えである** ——
+     長さの無い線を引くと、観測していない何かがそこに在ることになる。 */
+  it('イベントの無い開いた課題には、線を引かず、輪だけを置く', () => {
+    const { container } = drawGantt([issue('#1', { created_at: iso(20) })], read([{ id: '#1' }]));
+    const cell = gtOf(container, '#1');
+
+    expect(cell.querySelector('.gt-line'), '観測した時刻が 1 つなら、結ぶ相手が居ない').toBe(null);
+    expect(cell.querySelector('.gt-open'), '輪が「観測した時刻は 1 つだった」と言う').not.toBe(
+      null,
+    );
+  });
+
+  /* 作られた時刻が軸の左の外に在る行。線は軸の端で止めるしかないので、**その端をぼかす**
+     —— 硬い端で描くと、軸の端で開いた課題として読める。 */
+  it('作られた時刻が軸の外なら、左端から引いて、その端をぼかす', () => {
+    const { container } = drawGantt(
+      [issue('#1', { created_at: iso(90) })],
+      read([{ id: '#1', at: [10] }]),
+    );
+    const line = gtOf(container, '#1').querySelector('.gt-line');
+
+    expect(pctOf(line, 'left'), '軸の左端から引く').toBe(0);
+    expect(pctOf(line, 'width')).toBeCloseTo((20 / 30) * 100, 5);
+    expect(line?.className, '止めた端を硬く描くと、そこで開いたことになる').toBe(
+      'gt-line soft-from',
+    );
+    expect(line?.getAttribute('title'), '本当に開いた時刻は、言葉の側が持つ').toBe(
+      `Opened ${absTime(NOW - 90 * DAY)} — last event ${absTime(NOW - 10 * DAY)}. The line stops at the edge of this span: it starts before this span — widen the span to see all of it.`,
+    );
+  });
+
+  /* 閉じた時刻が `updated_at` の代用なら、線の終わりも観測した時刻ではない。
+   **フラグを破線にしておいて線を硬く描くと、線のほうが代用を事実にしてしまう。** */
+  it('代用の時刻で閉じた課題は、線の終わりの端もぼかす', () => {
+    const { container } = drawGantt(
+      [issue('#1', { status: 'closed', created_at: iso(20), updated_at: iso(6), closed_at: null })],
+      read([{ id: '#1' }]),
+    );
+    const cell = gtOf(container, '#1');
+
+    expect(cell.querySelector('.gt-line')?.className).toBe('gt-line soft-to');
+    expect(cell.querySelector('.gt-flag')?.className, '同じ 1 つの端が、2 つの絵で食い違う').toBe(
+      'gt-flag approx',
+    );
+    expect(cell.querySelector('.gt-line')?.getAttribute('title')).toBe(
+      `Opened ${absTime(NOW - 20 * DAY)} — closed around ${absTime(NOW - 6 * DAY)}, taken from updated_at`,
+    );
+  });
+
+  /* 開いた時刻を読めず、イベントも 1 件も無い行。置ける時刻が 1 つも無いので、線も輪も
+     出ない。**そこで黙ると、読んで何も起きていなかった行と同じ空のトラックになる。** */
+  it('開いた時刻を読めずイベントも無い行は、軸に置けないことを端で言う', () => {
+    const { container } = drawGantt(
+      [issue('#1', { created_at: 'yesterday' }), issue('#2', { created_at: iso(20) })],
+      read([{ id: '#1' }, { id: '#2' }]),
+    );
+    const unplaced = gtOf(container, '#1').querySelector('.gt-off.unplaced');
+
+    expect(unplaced?.textContent, '空のトラックは「読んで、何も起きていなかった」と読まれる').toBe(
+      '?',
+    );
+    expect(unplaced?.getAttribute('title')).toBe(
+      'When this issue was opened could not be read, and no events are on record — nothing can be placed on this axis for it',
+    );
+    expect(
+      gtOf(container, '#2').querySelector('.gt-off.unplaced'),
+      '開いた時刻を読めている行にまで出すと、目印そのものが意味を失う',
+    ).toBe(null);
   });
 
   it('`created_at` を読めない課題には、作られた時刻の輪を置かない', () => {
@@ -280,7 +379,11 @@ describe('右のトラック', () => {
     expect(cell.querySelector('.gt-open'), '読めない時刻を軸の左端に置くと、観測に化ける').toBe(
       null,
     );
-    expect(cell.querySelector('.gt-rule'), 'イベントは読めているので、罫線は引く').not.toBe(null);
+    expect(
+      cell.querySelector('.gt-line'),
+      '置けた時刻は 1 つだけである。結ぶ相手の無い線を引かない',
+    ).toBe(null);
+    expect(cell.querySelectorAll('.gt-ev').length, '読めたイベントは点として残る').toBe(1);
   });
 
   /* 開いた時刻を語るのは、イベントが 1 件も無かった行の文だけである。1 件でも読めた行は
@@ -863,6 +966,63 @@ describe('右のトラック', () => {
       }
     });
 
+    /** 線が結ぶと言っている 2 つの時刻。**位置ではなく、言葉の側から採る** ——
+        位置は軸に収めてあるので、幅を変えれば動くのが正しい */
+    const lineClaimOf = (node: Element | null) => {
+      const title = node?.getAttribute('title') ?? '';
+      return {
+        from: /^(?:Opened|First event) ([\d\-: ]+) —/.exec(title)?.[1] ?? null,
+        to: /— (?:last event|closed(?: around)?) ([\d\-: ]+)/.exec(title)?.[1] ?? null,
+        approx: title.includes('taken from updated_at'),
+      };
+    };
+
+    /* 線の両端を見る 2 行。**`#3` はどの幅でも終わりが軸の中に在り、狭い幅では始まりだけが
+       軸の外へ出る** —— 端を軸で止める行でこそ、言うことが動かないかを見られる。 */
+    const spanned = [
+      issue('#0', { created_at: iso(200) }),
+      issue('#3', { status: 'closed', created_at: iso(60), closed_at: iso(5) }),
+    ];
+    const spannedLog = read([{ id: '#0' }, { id: '#3' }]);
+    const lineOf = (container: HTMLElement) => gtOf(container, '#3').querySelector('.gt-line');
+
+    /* 線の両端も観測した時刻である。**幅で変わってよいのは、そこに置けるかどうかだけ** ——
+       幅を切り替えただけで結ぶ時刻が動くなら、線は観測を語っていない。 */
+    it('線が結ぶ 2 つの時刻は、どの幅でも同じである', () => {
+      const lines = GANTT_WINDOWS.map((window) => {
+        const { container } = draw(spanned, { ganttWindow: window.key, eventLog: spannedLog });
+        return { label: window.label, ...lineClaimOf(lineOf(container)) };
+      });
+      const drawn = lines.filter((line) => line.from !== null);
+
+      expect(drawn.length, '1 つの幅でしか引かないなら、比べたことにならない').toBeGreaterThan(1);
+      for (const line of drawn) {
+        expect(line, '幅を切り替えただけで、線の端が別の時刻を指すことになる').toEqual({
+          label: line.label,
+          from: absTime(NOW - 60 * DAY),
+          to: absTime(NOW - 5 * DAY),
+          approx: false,
+        });
+      }
+    });
+
+    /* `all` の軸は出ている行で決まるので、絞り込みは軸を動かす。**軸が動いても、線が結ぶ
+       時刻は動かない** —— 検索語を打った人が、開いた時刻と閉じた時刻を書き換えたことになる。 */
+    it('絞り込みで軸が動いても、線が結ぶ 2 つの時刻は変わらない', () => {
+      const whole = draw(spanned, { ganttWindow: 'all', eventLog: spannedLog });
+      const filtered = draw(spanned, { ganttWindow: 'all', eventLog: spannedLog, query: '#3' });
+
+      expect(rowsOf(filtered.container).length, '絞り込みで残るのは `#3` だけである').toBe(1);
+      expect(
+        lineClaimOf(lineOf(filtered.container)),
+        '画面に残った行の数が、開いた時刻と閉じた時刻を決める',
+      ).toEqual(lineClaimOf(lineOf(whole.container)));
+      expect(
+        lineClaimOf(lineOf(whole.container)).from,
+        '両方とも黙っていては、比べたことにならない',
+      ).toBe(absTime(NOW - 60 * DAY));
+    });
+
     /* `all` の軸は出ている行で決まるので、絞り込みは軸を動かす。**軸が動いても、待ちの言う
        長さは動かない** —— 検索語を打った人が、待った日数を書き換えたことになる。 */
     it('絞り込みで行が画面から消えても、待ちの言う長さは変わらない', () => {
@@ -1002,7 +1162,7 @@ describe('マイルストーンのグリッド', () => {
       github: { ...issue(id).github, milestone: { title, due_on: iso(dueDaysAgo) } },
     });
 
-  /* 読み終えた記録。行に罫線と輪が出るので、期日の数だけ要素が増えていないかを数えられる */
+  /* 読み終えた記録。行に輪が出るので、期日の数だけ要素が増えていないかを数えられる */
   const readAll = (ids: readonly string[]): EventLog => ({
     kind: 'observed',
     complete: true,
@@ -1022,7 +1182,7 @@ describe('マイルストーンのグリッド', () => {
     const countOf = (root: HTMLElement) =>
       root.querySelectorAll('.issue-row:not(.head) .gt > *').length;
 
-    expect(countOf(plain.container), '罫線と輪が出ている行で数える').toBe(2);
+    expect(countOf(plain.container), '輪が出ている行で数える').toBe(1);
     expect(
       countOf(container) / 2,
       '行ごとに線を引くと、行の中の要素が期日の数だけ増え、行の継ぎ目で線が切れる',
@@ -1119,7 +1279,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
     const cell = gt(container);
 
     expect(cell.className).toContain('reading');
-    expect(cell.querySelector('.gt-rule'), '読み終えて何も無かった行と同じ絵にしない').toBe(null);
+    expect(cell.querySelector('.gt-line'), '読み終えて何も無かった行と同じ絵にしない').toBe(null);
     expect(cell.querySelector('.gt-open')).toBe(null);
     expect(cell.querySelector('.gt-flag')).toBe(null);
     expect(container.querySelector('.gt-head .gt-reading'), '動くものは画面に 1 つでよい').not.toBe(
@@ -1127,14 +1287,16 @@ describe('4 つの状態は、どれも別の絵になる', () => {
     );
   });
 
-  it('読み終えて何も起きていなければ、罫線だけが残る', () => {
+  it('読み終えて何も起きていなければ、輪だけが残る', () => {
     const { container } = drawLog(observed([{ id: '#1' }]));
     const cell = gt(container);
 
-    expect(cell.className).not.toContain('unread');
-    expect(cell.querySelector('.gt-rule'), '罫線が「この行は読んだ」と言う').not.toBe(null);
+    expect(cell.className, 'ハッチを掛けると、読めなかった行になる').not.toContain('unread');
+    expect(cell.querySelector('.gt-line'), '観測した時刻が 1 つなら、結ぶ相手が居ない').toBe(null);
     expect(cell.querySelectorAll('.gt-ev').length).toBe(0);
-    expect(cell.querySelector('.gt-open'), '作られた時刻は別の観測である').not.toBe(null);
+    expect(cell.querySelector('.gt-open'), '作られた時刻は観測した時刻の 1 つである').not.toBe(
+      null,
+    );
     expect(cell.getAttribute('title')).toContain('No events on record');
   });
 
@@ -1151,14 +1313,14 @@ describe('4 つの状態は、どれも別の絵になる', () => {
     ).toBe(null);
   });
 
-  it('切れていてイベントが 1 件も無い行は、罫線ではなくハッチを掛ける', () => {
+  it('切れていてイベントが 1 件も無い行には、ハッチを掛ける', () => {
     const { container } = drawLog(observed([{ id: '#1', truncated: true }]));
     const cell = gt(container);
 
     expect(cell.className, '読み切れなかった行を「何も起きなかった行」と同じ絵にしない').toContain(
       'unread',
     );
-    expect(cell.querySelector('.gt-rule')).toBe(null);
+    expect(cell.querySelector('.gt-line')).toBe(null);
     expect(cell.getAttribute('title')).toContain('cut short');
   });
 
@@ -1167,7 +1329,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
     const cell = gt(container);
 
     expect(cell.className).toContain('unread');
-    expect(cell.querySelector('.gt-rule'), '読めていないのに、読めたという 1 本を引かない').toBe(
+    expect(cell.querySelector('.gt-line'), '読めていない行に、観測した時刻を結ぶ線は無い').toBe(
       null,
     );
     expect(
@@ -1187,7 +1349,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
 
     expect(cell.className).toContain('nolog');
     expect(cell.className, '無かったものを「読んでいない」と描かない').not.toContain('unread');
-    expect(cell.querySelector('.gt-rule')).toBe(null);
+    expect(cell.querySelector('.gt-line')).toBe(null);
     expect(container.querySelector('.iband.cut .iband-t > span')?.textContent).toBe(
       'This project has no issue event log',
     );
@@ -1197,7 +1359,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
     const { container } = drawLog(observed([{ id: '#1', at: [8], truncated: true }]));
     const cell = gt(container);
 
-    expect(cell.querySelector('.gt-rule'), '読めたところまでは読めている').not.toBe(null);
+    expect(cell.querySelector('.gt-line'), '読めたところまでは読めている').not.toBe(null);
     const cut = cell.querySelector('.gt-cut');
     expect(cut, '30 件で切れた記録と、30 件しか無い記録を同じ絵にしない').not.toBe(null);
     expect(cut?.getAttribute('title')).toContain('30 most recent events');

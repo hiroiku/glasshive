@@ -10,6 +10,7 @@ import { useNav } from '../../nav/NavContext.tsx';
 import { pressable } from '../../pressable.ts';
 import { AgentChip } from '../chips/Chips.tsx';
 import { Icon } from '../primitives/Icon.tsx';
+import { SubjectText } from '../text/SubjectText.tsx';
 
 /* マイルストーンの一覧。**課題とブランチと並ぶ 3 つ目の単位である。**
 
@@ -39,7 +40,15 @@ export interface MilestonesProps {
   readonly nowMs: number;
 }
 
-export function Milestones({ issues, workers, join, lead, query, nowMs }: MilestonesProps) {
+export function Milestones({
+  issues,
+  workers,
+  join,
+  project,
+  lead,
+  query,
+  nowMs,
+}: MilestonesProps) {
   const rows = useMemo(() => buildMilestones(issues, join, workers), [issues, join, workers]);
 
   const needle = query.trim().toLowerCase();
@@ -67,7 +76,7 @@ export function Milestones({ issues, workers, join, lead, query, nowMs }: Milest
             <span>Agents</span>
           </div>
           {shown.map((row) => (
-            <MilestoneLine key={row.title ?? ''} row={row} nowMs={nowMs} />
+            <MilestoneLine key={row.title ?? ''} row={row} project={project} nowMs={nowMs} />
           ))}
         </div>
       )}
@@ -89,33 +98,56 @@ export function Milestones({ issues, workers, join, lead, query, nowMs }: Milest
           </b>{' '}
           a branch that is alive here and carries one of these issues
         </span>
-        <span>press a row to see just that milestone in the issue list</span>
+        <span>press a named row to see just that milestone in the issue list</span>
       </div>
     </>
   );
 }
 
-function MilestoneLine({ row, nowMs }: { row: MilestoneRow; nowMs: number }) {
+function MilestoneLine({
+  row,
+  project,
+  nowMs,
+}: {
+  row: MilestoneRow;
+  project: ProjectJson | undefined;
+  nowMs: number;
+}) {
   const nav = useNav();
   const dueMs = row.dueOn === null ? null : Date.parse(row.dueOn);
   const soon = dueMs !== null && Number.isFinite(dueMs) && dueMs - nowMs < SOON_MS;
   const done = row.total === 0 ? 0 : row.closed / row.total;
 
+  /* 押しどころとして出すのは、行ける先を持つ行だけである。役もフォーカスの順も名前も
+     まとめてここで決める —— 3 つのうち 1 つだけが残ると、辿れるのに動かない行になる。 */
+  const title = row.title;
+  const press =
+    title === null
+      ? {}
+      : {
+          role: 'button' as const,
+          tabIndex: 0,
+          'aria-label': `Show issues in ${title}`,
+          ...pressable(() => nav.gotoMilestone(title)),
+        };
+
   return (
+    /* マイルストーンの付いていない束は、押しても行き先が無い。**押しどころとして出さない**
+       —— `ms` はマイルストーンの名前で絞る仕組みで、「付いていない」を表す綴りを持たない。
+       名前として通せる綴りはどれも実在の名前と衝突しうるので、行ける先が無いことを
+       そのまま出す。 */
     // biome-ignore lint/a11y/useSemanticElements: 中にチップを持つ行は button にできない
-    <div
-      className={`ms-row${row.title === null ? ' none' : ''}`}
-      role="button"
-      tabIndex={0}
-      aria-label={
-        row.title === null ? 'Show issues with no milestone' : `Show issues in ${row.title}`
-      }
-      {...pressable(() => row.title !== null && nav.gotoMilestone(row.title))}
-    >
+    <div className={`ms-row${title === null ? ' none' : ''}`} {...press}>
       <span className="ms-name">
         <Icon path={mdiFlagOutline} size={11} />
         {/* 名前が無いことを名前で表さない。付いていない課題の束であることをそのまま言う */}
-        {row.title === null ? <em>no milestone</em> : cut(row.title, 44)}
+        {title === null ? (
+          <em>no milestone</em>
+        ) : (
+          <span className="ms-title">
+            <SubjectText text={title} project={project} />
+          </span>
+        )}
       </span>
 
       <span className={`ms-due${soon ? ' soon' : ''}`}>
