@@ -136,7 +136,6 @@ function MilestoneLine({
        —— `ms` はマイルストーンの名前で絞る仕組みで、「付いていない」を表す綴りを持たない。
        名前として通せる綴りはどれも実在の名前と衝突しうるので、行ける先が無いことを
        そのまま出す。 */
-    // biome-ignore lint/a11y/useSemanticElements: 中にチップを持つ行は button にできない
     <div className={`ms-row${title === null ? ' none' : ''}`} {...press}>
       <span className="ms-name">
         <Icon path={mdiFlagOutline} size={11} />

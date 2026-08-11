@@ -462,25 +462,36 @@ describe('右のトラック', () => {
     expect(off?.getAttribute('title')).toContain('beyond this span');
   });
 
-  it('軸の外で作られた課題にも、輪を置かない', () => {
+  /* 軸の外で作られた課題。**輪は置き、置いた位置が時刻ではないことを見た目で言う** ——
+     落とすと、幅を狭めただけで、この幅より後に作られた課題と同じ絵になる。 */
+  it('軸の外で作られた課題は、輪を端に寄せて置き、寄せたことを言う', () => {
     const { container } = drawGantt(
       [issue('#1', { created_at: iso(90) })],
       read([{ id: '#1', at: [10] }]),
     );
+    const open = gtOf(container, '#1').querySelector('.gt-open');
 
+    expect(pctOf(open, 'left'), '軸の左端に寄せて置く').toBe(0);
     expect(
-      gtOf(container, '#1').querySelector('.gt-open'),
-      '端へ寄せた輪は、誰も観測していない時刻を指す',
-    ).toBe(null);
+      open?.className.split(' '),
+      '硬い輪のままだと、幅を切り替えただけで開いた時刻が動いたことになる',
+    ).toContain('soft-from');
+    expect(open?.getAttribute('title'), '指す時刻はいつも本当の時刻である').toBe(
+      `Opened ${absTime(NOW - 90 * DAY)}, before this span starts — the ring sits at the edge, not at that time. Widen the span to place it.`,
+    );
   });
 
-  it('軸の外に落ちたイベントは、端で数える', () => {
+  /* 軸の外のイベントを数える `‹N` は、起きたことだけを数えている。**始まりは数に入らない**
+     —— 開いた時刻も軸の外に在って輪が端に立つので、数え方を間違えると `‹3` になる。 */
+  it('軸の外に落ちたイベントは、端で数える。端に寄せた輪はそこに入らない', () => {
     const { container } = drawGantt(
       [issue('#1', { created_at: iso(90) })],
       read([{ id: '#1', at: [80, 60, 10] }]),
     );
-    const off = gtOf(container, '#1').querySelector('.gt-off');
+    const cell = gtOf(container, '#1');
+    const off = cell.querySelector('.gt-off');
 
+    expect(cell.querySelector('.gt-open.soft-from'), '端の輪も出ている行で数える').not.toBe(null);
     expect(off?.textContent, '黙って落とすと、何度も動いた課題と何も無い課題が同じ絵になる').toBe(
       '‹2',
     );
@@ -860,17 +871,21 @@ describe('右のトラック', () => {
 
     expect(pctOf(lag, 'left')).toBeCloseTo((20 / 30) * 100, 5);
     expect(pctOf(lag, 'width'), '軸の右端で止めて引く').toBeCloseTo((10 / 30) * 100, 5);
-    expect(
-      lag?.className,
-      '作られた時刻の輪は軸の外なので置いていない。線だけが端で硬く終わることになる',
-    ).toBe('gt-lag soft-to');
+    expect(lag?.className, '作られた時刻は軸の外なので、線は端で硬く終わることになる').toBe(
+      'gt-lag soft-to',
+    );
     expect(lag?.getAttribute('title')).toBe(
       'Waiting on #1 — 12d from #1 ending to this issue being created. The line stops at the edge of this span: this issue was created after this span — widen the span to see the whole wait.',
     );
-    expect(
-      gtOf(container, '#2').querySelector('.gt-open'),
-      '軸の先の時刻に輪を置くと、列の外へはみ出したところを観測した時刻として指すことになる',
-    ).toBe(null);
+    const open = gtOf(container, '#2').querySelector('.gt-open');
+
+    expect(pctOf(open, 'left'), '軸の先で作られた課題の輪は、右端に寄せて置く').toBe(100);
+    expect(open?.className.split(' '), '寄せた輪を硬い輪と同じ顔にしない').toContain('soft-to');
+    /* **置けないものに、幅を広げてみるようには言わない。** 軸の右端は現在より手前には
+       来ないので、軸の先に作られた課題はどの幅を選んでも置けない。 */
+    expect(open?.getAttribute('title'), '広げれば見えると言うと、幅を全部試させることになる').toBe(
+      `Opened ${absTime(NOW + 2 * DAY)}, after this span ends — the ring sits at the edge, not at that time.`,
+    );
   });
 
   /* 依存には堰き止め以外の種類も在る。堰き止めでない依存から線を引くと、データが言って
@@ -1006,6 +1021,40 @@ describe('右のトラック', () => {
       }
     });
 
+    /* 輪はどの幅でも置く。**置く位置は幅で動いてよいが、指す時刻は動いてはいけない** ——
+       輪だけは軸の外でも端に寄せて置くので、位置と時刻が食い違うのはこの 1 つだけである。
+       言葉のほうまで端に合わせると、幅を選んだ人が課題の開いた日を書き換えたことになる。 */
+    it('輪はどの幅でも置き、指す時刻も変わらない', () => {
+      const opens = GANTT_WINDOWS.map((window) => {
+        const { container } = draw(spanned, { ganttWindow: window.key, eventLog: spannedLog });
+        const open = gtOf(container, '#3').querySelector('.gt-open');
+        return {
+          label: window.label,
+          at: /^Opened ([\d\-: ]+)/.exec(open?.getAttribute('title') ?? '')?.[1] ?? null,
+        };
+      });
+
+      expect(opens, '幅を切り替えただけで、開いた時刻が消えたり別の日を指したりする').toEqual(
+        GANTT_WINDOWS.map((window) => ({ label: window.label, at: absTime(NOW - 60 * DAY) })),
+      );
+    });
+
+    /* 端に寄せて置いた輪は、**寄せたことを見た目でも言う** —— 硬い輪のままだと、狭い幅で
+       見た人には軸の左端で開いた課題として読める。狭い幅と広い幅の両方で見て確かめる。 */
+    it('端に寄せた輪だけが、寄せたことを見た目で言う', () => {
+      const classOf = (window: IssuesTableProps['ganttWindow']) => {
+        const { container } = draw(spanned, { ganttWindow: window, eventLog: spannedLog });
+        return (gtOf(container, '#3').querySelector('.gt-open')?.className ?? '').split(' ');
+      };
+
+      expect(classOf(MONTH_MS), '軸の外に在る輪は、そこで開いたことにならない').toContain(
+        'soft-from',
+      );
+      expect(classOf('all'), '軸の中に置けた輪までぼかすと、観測した時刻が推測に見える').toEqual([
+        'gt-open',
+      ]);
+    });
+
     /* `all` の軸は出ている行で決まるので、絞り込みは軸を動かす。**軸が動いても、線が結ぶ
        時刻は動かない** —— 検索語を打った人が、開いた時刻と閉じた時刻を書き換えたことになる。 */
     it('絞り込みで軸が動いても、線が結ぶ 2 つの時刻は変わらない', () => {
@@ -1074,16 +1123,23 @@ describe('右のトラック', () => {
       },
     );
     const oldest = gtOf(container, '#1').querySelector('.gt-open');
+    const newest = gtOf(container, '#2').querySelector('.gt-open');
 
     expect(pctOf(oldest, 'left'), '軸の左端を決めている行の輪が消える').toBe(0);
     expect(
       oldest?.getAttribute('title'),
       '輪が指すのは作られた時刻である。閉じた時刻のフラグと同じ言葉にすると、1 行に「閉じた」が 2 つ並ぶ',
     ).toBe(`Opened ${absTime(NOW - 40 * DAY)}`);
+    expect(pctOf(newest, 'left'), 'いま作られた課題は軸の右端ちょうどに立つ').toBe(100);
+
+    /* 端に立つ輪は、中央に置くと半分が隣の列に載る。**軸の外から寄せた輪だけの話ではない**
+       —— 既定の幅では、この 2 行がいつも端に立っている。 */
+    expect(oldest?.className.split(' '), '左端の輪が `.iupd` の上へはみ出す').toContain('at-start');
+    expect(newest?.className.split(' ')).toContain('at-end');
     expect(
-      pctOf(gtOf(container, '#2').querySelector('.gt-open'), 'left'),
-      'いま作られた課題は軸の右端ちょうどに立つ',
-    ).toBe(100);
+      [oldest, newest].map((node) => (node?.className ?? '').includes('soft')),
+      '端ちょうどは観測した時刻そのものなので、ぼかさない',
+    ).toEqual([false, false]);
   });
 
   /* 相手の閉じた時刻を一覧から読めないことは在る。**記録に `closed` が読めているなら、

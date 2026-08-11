@@ -23,6 +23,8 @@ import {
   type EventLog,
   type EventMark,
   type OffAxis,
+  type OpenMark,
+  openMarkOf,
   type RowTrack,
   type TrackEnds,
   type TrackLine,
@@ -752,6 +754,27 @@ function offEventTitle(off: OffAxis, side: 'before' | 'beyond'): string {
   return `${what} ${side} this span, ${nearest} on ${absTime(off.at)} — widen the span to see them.${cut}`;
 }
 
+/* 輪の置き方。軸の端に立つ輪は列の中へ収める。**端に寄せた輪も同じところに立つ** ——
+   軸の外の時刻は端で止めてあるので、位置は端の輪と変わらない。変わるのはぼかし方だけである。 */
+function openClass(open: OpenMark): string {
+  const edge = open.pct <= 0 ? ' at-start' : open.pct >= 100 ? ' at-end' : '';
+  const soft =
+    open.clamped === 'before' ? ' soft-from' : open.clamped === 'after' ? ' soft-to' : '';
+  return `gt-open${edge}${soft}`;
+}
+
+/* 輪の説明。**時刻はいつも本当の時刻を言う** —— 端に寄せて描いていても、開いたのはその端では
+   ない。幅を広げれば置けるのは軸の手前に在るときだけで、軸の先は `1w` でも `All` でも
+   現在より先までは伸びない。だから広げてみるように言うのは手前の側だけにする。 */
+function openTitle(open: OpenMark): string {
+  const opened = `Opened ${absTime(open.at)}`;
+  if (open.clamped === null) return opened;
+  const edge = 'the ring sits at the edge, not at that time';
+  return open.clamped === 'before'
+    ? `${opened}, before this span starts — ${edge}. Widen the span to place it.`
+    : `${opened}, after this span ends — ${edge}.`;
+}
+
 /* 待ちの線の説明。**測った長さは軸の外まで含んだ長さである** —— 線は軸に収めて引くので、
    端を軸で止めているならそのことも言う。言わないと、8 日ぶんの長さの線が 18 日を名乗る。 */
 function lagTitle(wait: RowWait): string {
@@ -895,15 +918,14 @@ const IssueRow = memo(function IssueRow({
   const milestone = showMilestone ? (issue.github?.milestone ?? null) : null;
   const comments = issue.github?.comments ?? 0;
 
-  /* 作られた時刻と閉じた時刻。**軸の外に在るものは描かない** —— 端へ寄せると、誰も観測して
-     いない時刻を指すことになる。読んでいる最中はどちらも描かない —— 輪だけが在る絵は
-     「読み終えて何も起きていなかった」という別の答えだからである。 */
+  /* 作られた時刻と閉じた時刻。**輪は軸の外でも置き、フラグは置かない** —— どの課題にも
+     始まりは在るので、輪を落とすと軸を狭めただけで「まだ無かった課題」の絵になる。閉じた
+     時刻のほうは、そもそも答えない課題が在るので、端に寄せると開いている課題と見分けが付かない。
+     読んでいる最中はどちらも描かない —— 輪だけが在る絵は「読み終えて何も起きていなかった」
+     という別の答えだからである。 */
   const createdMs = Date.parse(issue.created_at ?? '');
   const quiet = track.kind === 'reading';
-  const openPct =
-    quiet || !Number.isFinite(createdMs) || createdMs < axis.t0 || createdMs > axis.t1
-      ? null
-      : atPct(createdMs, axis);
+  const open = quiet ? null : openMarkOf(createdMs, axis);
   const flag = quiet ? null : closeFlagOf(close, axis);
 
   /* 堰き止めが解けてから作られるまでの待ち。軸と重なるところだけを引く。
@@ -1169,12 +1191,10 @@ const IssueRow = memo(function IssueRow({
             title={lagTitle(wait)}
           />
         )}
-        {openPct !== null && (
-          <i
-            className="gt-open"
-            style={{ left: `${openPct}%` }}
-            title={`Opened ${absTime(createdMs)}`}
-          />
+        {/* 作られた時刻。軸の外に在るときは端に寄せ、**寄せたことを見た目で言う** ——
+            硬い輪のままだと、幅を切り替えただけで開いた時刻が動いたことになる */}
+        {open !== null && (
+          <i className={openClass(open)} style={{ left: `${open.pct}%` }} title={openTitle(open)} />
         )}
         {track.kind === 'read' &&
           track.marks.map((mark) => (

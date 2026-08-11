@@ -393,6 +393,33 @@
   background: var(--bg);
   transform: translate(-50%, -50%);
 }
+/* 軸の端ちょうどに立つ輪。**自分の幅ぶんだけ内へ置く** —— 中央に置くと半分が隣の列に載る。
+   既定の幅では、いちばん古い課題が左端に、いま作られた課題が右端に立つ。軸の外の時刻を端へ
+   寄せた輪も同じところに立つので、置き方はこの 2 つで足りる。 */
+.gt-open.at-start {
+  transform: translate(0, -50%);
+}
+.gt-open.at-end {
+  transform: translate(-100%, -50%);
+}
+/* 開いた時刻が軸の外に在って、端へ寄せて描いているとき。**硬い端は観測した時刻、ぼかした端は
+   「分からない」である** —— 線と読み残しの端をぼかすのと、同じことを言っている。ぼかすのは
+   軸の外へ続く側だけで、輪の残りは硬いままにする。7px の輪を破線にすると輪の形そのものが
+   消えて、点が散っているようにしか見えない。 */
+.gt-open.soft-from {
+  mask-image: linear-gradient(90deg, transparent 0, #000 100%);
+}
+.gt-open.soft-to {
+  mask-image: linear-gradient(90deg, #000 0, transparent 100%);
+}
+/* 端に寄せた輪と、軸の外のイベントの件数は同じ角に置かれる。輪のぶんだけ件数を内へ寄せる
+   —— 重ねると、どちらも読めなくなる */
+.gt-open.soft-from ~ .gt-off.left {
+  left: 11px;
+}
+.gt-open.soft-to ~ .gt-off.right {
+  right: 11px;
+}
 /* 起きたこと 1 つ */
 .gt-ev {
   position: absolute;

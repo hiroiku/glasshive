@@ -192,6 +192,30 @@ export function closeFlagOf(close: CloseInstant | null, axis: GanttAxis): CloseF
   return { at: close.at, pct: atPct(close.at, axis), approx: close.approx };
 }
 
+/** 軸の上に置いた、作られた時刻の輪 */
+export interface OpenMark {
+  readonly at: number;
+  readonly pct: number;
+  /** 端に寄せて置いたか。**この位置は観測した時刻ではない** —— 描く側がそう見せる */
+  readonly clamped: 'before' | 'after' | null;
+}
+
+/* 作られた時刻を軸の上に置く。**軸の外でも置く** —— どの課題にも始まりは在るので、置くのを
+   やめると「まだ無かった課題」と同じ絵になる。ここがフラグと違うのはそこだけで、閉じたかどうかは
+   その課題が答えないことが在るが、開いたかどうかはどの課題も答える。
+
+   軸の外に在るときは端に寄せ、`clamped` を立てて渡す。寄せた位置は誰も観測していない時刻
+   なので、そのまま硬く描けば、そこで開いたことになる。
+
+   数には入らない。軸の外のイベントを数える `‹N` は起きたことだけを数えていて、始まりは
+   そこに含まれない。 */
+export function openMarkOf(createdMs: number | null, axis: GanttAxis): OpenMark | null {
+  if (createdMs === null || !Number.isFinite(createdMs)) return null;
+  if (createdMs < axis.t0) return { at: createdMs, pct: 0, clamped: 'before' };
+  if (createdMs > axis.t1) return { at: createdMs, pct: 100, clamped: 'after' };
+  return { at: createdMs, pct: atPct(createdMs, axis), clamped: null };
+}
+
 /** トラックの線が結ぶ両端。**軸を持たない** —— 幅を変えても、この 2 つの時刻は動かない */
 export interface TrackEnds {
   readonly fromMs: number;

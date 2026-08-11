@@ -5,6 +5,7 @@ import {
   EVENT_SLOTS,
   type EventLog,
   eventLogOf,
+  openMarkOf,
   trackEndsOf,
   trackLineOf,
 } from '~/frameworks/tanstack/ui/derive/issueEvents.ts';
@@ -680,5 +681,47 @@ describe('線が結ぶ両端', () => {
       '終わりが軸の端ちょうどでも、置ける時刻は 1 つに潰れている',
     ).toBe(null);
     expect(trackLineOf(ends, AXIS)?.softFrom, '軸の中に収まる端をぼかさない').toBe(false);
+  });
+});
+
+/* 作られた時刻の輪だけは、軸の外でも置く。**始まりはどの課題にも在るからである** ——
+   閉じたかどうかは答えない課題が在るのでフラグは端に寄せられないが、開いた時刻は
+   読めた課題なら必ず在る。落とすと、幅を狭めただけで「まだ無かった課題」の絵になる。 */
+describe('作られた時刻の輪', () => {
+  it('軸の中の時刻は、その位置に置く', () => {
+    expect(openMarkOf(NOW - 15 * DAY_MS, AXIS)).toEqual({
+      at: NOW - 15 * DAY_MS,
+      pct: (15 / 30) * 100,
+      clamped: null,
+    });
+  });
+
+  it('軸の端ちょうどは寄せたことにしない', () => {
+    expect(openMarkOf(AXIS.t0, AXIS), '端ちょうどは観測した時刻そのものである').toEqual({
+      at: AXIS.t0,
+      pct: 0,
+      clamped: null,
+    });
+    expect(openMarkOf(AXIS.t1, AXIS)).toEqual({ at: AXIS.t1, pct: 100, clamped: null });
+  });
+
+  /* 寄せた輪が持つ時刻は本当の時刻である。**位置だけを端に寄せる** —— 時刻まで端に
+     合わせると、幅を選んだ人が課題の開いた日を書き換えたことになる。 */
+  it('軸の外の時刻は端に寄せ、寄せたことを持って返す', () => {
+    expect(openMarkOf(AXIS.t0 - 1, AXIS)).toEqual({
+      at: AXIS.t0 - 1,
+      pct: 0,
+      clamped: 'before',
+    });
+    expect(openMarkOf(AXIS.t1 + 1, AXIS)).toEqual({
+      at: AXIS.t1 + 1,
+      pct: 100,
+      clamped: 'after',
+    });
+  });
+
+  it('読めなかった時刻には輪を置かない', () => {
+    expect(openMarkOf(null, AXIS), '読めない時刻を端に置くと、観測に化ける').toBe(null);
+    expect(openMarkOf(Number.NaN, AXIS)).toBe(null);
   });
 });
