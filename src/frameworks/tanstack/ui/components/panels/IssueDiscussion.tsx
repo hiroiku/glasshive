@@ -272,7 +272,10 @@ function Entry({
     return (
       <div className="cmt">
         <div className="cmt-h">
-          {entry.actor !== null && <Avatar actor={{ login: entry.actor, avatar: null }} />}
+          {/* 隣の `Who` が同じ名前を文字で出す。顔にも名乗らせると 2 回読まれる */}
+          {entry.actor !== null && (
+            <Avatar actor={{ login: entry.actor, avatar: null }} decorative />
+          )}
           <Who actor={entry.actor} />
           <span className="disc-when">{since}</span>
         </div>

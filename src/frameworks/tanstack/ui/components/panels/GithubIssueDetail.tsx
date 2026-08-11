@@ -151,7 +151,8 @@ export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDet
               <span className="dimtxt">—</span>
             ) : (
               <>
-                <AvatarStack actors={[github.author]} max={1} />
+                {/* 隣に login をそのまま出している。顔にも名乗らせると 2 回読まれる */}
+                <AvatarStack actors={[github.author]} max={1} decorative />
                 <span>{github.author.login}</span>
               </>
             )}
