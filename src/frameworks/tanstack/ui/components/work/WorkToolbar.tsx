@@ -82,29 +82,41 @@ export function WorkToolbar({
           </button>
         </span>
       )}
-      {/* タイムラインの幅は、そのタイムラインが在るときだけ選ばせる。**ブランチにも
-          マイルストーンにも依存グラフにも時間軸は無い** —— 押しても何も動かないチップが
-          並ぶと、効かない操作を覚えることになる */}
-      {unit === null && !graph && (
-        <span className="scale-chips">
-          {/* 束ね方のチップと隣り合うので、どちらの並びかを言う */}
-          <span className="chip-label">Span</span>
-          {GANTT_WINDOWS.map((preset) => (
-            <button
-              key={preset.label}
-              type="button"
-              className={`fchip ${gantt === preset.key ? 'on' : ''}`}
-              aria-pressed={gantt === preset.key}
-              title={preset.title}
-              onClick={() => onGantt(preset.key)}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </span>
-      )}
+      {/* タイムラインの幅は、そのタイムラインが在るときだけ選ばせる。**ブランチにも依存グラフにも
+          時間軸は無い** —— 押しても何も動かないチップが並ぶと、効かない操作を覚えることになる。
+          マイルストーンの一覧は自分でこのチップを出すので、ここには出さない */}
+      {unit === null && !graph && <SpanChips gantt={gantt} onGantt={onGantt} />}
       {/* 読み方の凡例はここに出さない。**凡例は画面の下** —— 一覧もグラフも同じ場所に在る */}
       <LayoutSwitch graph={graph} onGraph={onGraph} />
     </div>
+  );
+}
+
+/* タイムラインの幅を選ぶチップ。**課題の一覧とマイルストーンの一覧が同じものを使う** ——
+   2 つの表は同じ軸の上に在るので、幅の選び方まで別にすると、行き来した人が別の並びを覚える。 */
+export function SpanChips({
+  gantt,
+  onGantt,
+}: {
+  gantt: GanttWindow;
+  onGantt: (gantt: GanttWindow) => void;
+}) {
+  return (
+    <span className="scale-chips">
+      {/* 束ね方のチップと隣り合うので、どちらの並びかを言う */}
+      <span className="chip-label">Span</span>
+      {GANTT_WINDOWS.map((preset) => (
+        <button
+          key={preset.label}
+          type="button"
+          className={`fchip ${gantt === preset.key ? 'on' : ''}`}
+          aria-pressed={gantt === preset.key}
+          title={preset.title}
+          onClick={() => onGantt(preset.key)}
+        >
+          {preset.label}
+        </button>
+      ))}
+    </span>
   );
 }

@@ -5,6 +5,7 @@ import {
   EVENT_SLOTS,
   type EventLog,
   eventLogOf,
+  groupTrack,
   openMarkOf,
   trackEndsOf,
   trackLineOf,
@@ -723,5 +724,109 @@ describe('作られた時刻の輪', () => {
   it('読めなかった時刻には輪を置かない', () => {
     expect(openMarkOf(null, AXIS), '読めない時刻を端に置くと、観測に化ける').toBe(null);
     expect(openMarkOf(Number.NaN, AXIS)).toBe(null);
+  });
+});
+
+/* 課題をいくつか束ねた 1 本のトラック。マイルストーンの行が使う。
+
+   **新しい観測ではない。** 束に起きたことは、その課題たちに起きたことを合わせたものである。
+   だから見るのは 2 つ —— 合わせた並びの上で近すぎる点が 1 つになること、そして束の中に
+   読めていない課題が在ることを黙らないこと。 */
+describe('課題を束ねたトラック', () => {
+  const at = (daysAgo: number): number => NOW - daysAgo * DAY_MS;
+
+  it('別々の課題のイベントが、1 本の並びの上でまとまる', () => {
+    const issues = [issue('#1'), issue('#2')];
+    const log = logOf([
+      entry('#1', [
+        { at: at(10), kind: 'comment' },
+        { at: at(4), kind: 'closed' },
+      ]),
+      entry('#2', [{ at: at(10) + SLOT / 4, kind: 'labeled' }]),
+    ]);
+    const { track } = groupTrack(issues, log, AXIS);
+    if (track.kind !== 'read') throw new Error('read ではない');
+
+    expect(track.count, '束の件数は合わせた件数である。課題ごとに数え落とさない').toBe(3);
+    expect(track.marks.length, '課題ごとにまとめてから重ねると、同じ時刻に 2 つの点が並ぶ').toBe(2);
+    expect(track.marks[0]?.count).toBe(2);
+    expect(track.marks[0]?.kinds).toEqual(['comment', 'labeled']);
+    expect(track.marks[1]?.kinds).toEqual(['closed']);
+  });
+
+  /* 束の中の 1 件だけが記録に居ないことは在る。**線はもう束の全部を語っていない** ——
+     黙って束ねると、読めた課題だけの絵が束の絵として出る。 */
+  it('記録に居なかった課題の数を、別に持って返す', () => {
+    const issues = [issue('#1'), issue('#2'), issue('#3')];
+    const log = logOf([entry('#1', [{ at: at(10), kind: 'comment' }])]);
+    const { track, unread } = groupTrack(issues, log, AXIS);
+
+    expect(unread, '2 件ぶんの起きたことは、この線に入っていない').toBe(2);
+    expect(track.kind, '読めた 1 件は読めているので、束ごと読めなかったことにしない').toBe('read');
+  });
+
+  it('1 件も記録に居なければ、読めなかった束として返す', () => {
+    const issues = [issue('#1'), issue('#2')];
+    const { track, unread } = groupTrack(issues, logOf([entry('#9', [])]), AXIS);
+
+    expect(unread).toBe(2);
+    expect(track.kind, '点の無いトラックは「起きなかった」という別の答えである').toBe('unread');
+    expect(track.kind === 'unread' ? track.why : null).toBe('row');
+  });
+
+  /* **束の記録は、その課題たちの記録を合わせたものである。** だから読み切れなかったか
+     どうかは、束のどれか 1 件でも切れていれば切れている。 */
+  it('1 件でも読み切れていなければ、束も読み切れていない', () => {
+    const issues = [issue('#1'), issue('#2')];
+    const log = logOf([
+      entry('#1', [{ at: at(12), kind: 'comment' }], true),
+      entry('#2', [{ at: at(10), kind: 'comment' }]),
+    ]);
+    const { track } = groupTrack(issues, log, AXIS);
+
+    expect(
+      track.kind === 'read' ? track.cut !== null : false,
+      '後から見た 1 件で上書きすると、先に見た切れ目がどこにも残らない',
+    ).toBe(true);
+  });
+
+  /* 束の始まりは、いちばん早く作られた課題である。読み残しの区間はそこから引く —— 後から
+     作られた課題を始まりにすると、区間が短く出て読み残しが少なく見える。 */
+  it('束の始まりは、いちばん早く作られた課題である', () => {
+    const issues = [
+      issue('#1', { created_at: iso(at(25)) }),
+      issue('#2', { created_at: iso(at(9)) }),
+    ];
+    const log = logOf([
+      entry('#1', [{ at: at(8), kind: 'comment' }], true),
+      entry('#2', [{ at: at(8), kind: 'comment' }]),
+    ]);
+    const { track } = groupTrack(issues, log, AXIS);
+
+    expect(track.kind === 'read' ? track.cut?.fromMs : null).toBe(at(25));
+  });
+
+  /* 課題が閉じた 1 回は、束にとっては起きたことの 1 つである。**フラグへは移さない** ——
+     移すと、束の中で片付いた 1 件が、束の上からは何も起きなかったように見える。 */
+  it('課題の閉じた 1 回も、点として残る', () => {
+    const issues = [issue('#1', { status: 'closed', closed_at: iso(at(6)) })];
+    const log = logOf([entry('#1', [{ at: at(6), kind: 'closed' }])]);
+    const { track } = groupTrack(issues, log, AXIS);
+
+    expect(
+      track.kind === 'read' ? track.marks.flatMap((mark) => mark.kinds) : null,
+      '束は閉じないので、落とす先のフラグがそもそも無い',
+    ).toEqual(['closed']);
+  });
+
+  it('読んでいる最中と、記録が無いことは、そのまま束にも伝わる', () => {
+    const issues = [issue('#1')];
+
+    expect(groupTrack(issues, { kind: 'reading' }, AXIS)).toEqual({
+      track: { kind: 'reading' },
+      unread: 0,
+      openedMs: null,
+    });
+    expect(groupTrack(issues, { kind: 'absent' }, AXIS).track.kind).toBe('nolog');
   });
 });

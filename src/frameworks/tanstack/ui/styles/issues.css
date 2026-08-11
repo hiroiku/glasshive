@@ -606,12 +606,18 @@
    絶対配置のままなので、`static` にすると位置の基準が `#content` まで上がり、内容の全面を
    覆う箱になってポインターを飲む。`relative` と `inset: auto` なら、基準は見本自身に戻り、
    ずれもしない。 */
-.legend-bar .lg-gt i {
+.legend-bar .lg-gt i,
+.legend-bar .lg-gt b {
   position: relative;
   inset: auto;
   transform: none;
   margin: 0;
   flex: none;
+}
+/* 期日の見本。**回転だけは残す** —— 位置の基準を外すために `transform` を落としているが、
+   落としたままだと見本が四角になり、行に出る形と別のものになる */
+.legend-bar .lg-gt .gt-due {
+  transform: rotate(45deg);
 }
 /* 線と読み残しの区間は、行では `left` と `width` で置いている。見本のときだけ幅を持たせる */
 .legend-bar .lg-gt .gt-line,
@@ -1553,9 +1559,13 @@
 /* 3 つ目の単位。列は 7 本で、課題の一覧とは別の物差しを並べる */
 #ms-list {
   display: grid;
+  /* いちばん右は課題の一覧と同じ時間軸。同じ `1.1fr` で取って、2 つの表で軸の密度を揃える */
   grid-template-columns:
     minmax(200px, 1.4fr) max-content max-content max-content max-content
-    minmax(120px, 1fr) minmax(120px, 1fr);
+    minmax(110px, 0.8fr) minmax(110px, 0.8fr) minmax(160px, 1.1fr);
+  /* 期日と現在の縦線。**背景の 1 枚として一覧が持ち、8 列目の各セルが塗る。** React が組んだ
+     値をここへ差し替えるので、既定を宣言しておかないと差し替わる前が無効になる */
+  --gt-grid: none;
   column-gap: 18px;
   align-content: start;
   overflow: auto;
@@ -1572,6 +1582,26 @@
   padding: 6px 8px;
   border-radius: 6px;
   border-left: 3px solid transparent;
+}
+/* 縦の線は行の高さいっぱいに引く。`.ms-row` の padding のぶんだけ外へ出しておかないと、
+   行と行の間で線が切れて、同じ 1 本の期日が行ごとに途切れて見える */
+.ms-row .gt {
+  margin: -6px 0;
+}
+/* 目盛りの行。見出しの padding の下まで覆って、目盛りとその下の線を繋ぐ */
+.ms-row.head .gt-head {
+  height: 22px;
+  margin: -6px 0 -6px;
+}
+/* 期日。**閉じた時刻のフラグと同じ形にしない** —— あちらは観測した時刻で、こちらは GitHub が
+   言う唯一の先の日付である。縦の線と同じ色を使って、同じものだと言う */
+.gt-due {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  background: var(--gt-guide);
+  transform: translate(-50%, -50%) rotate(45deg);
 }
 .ms-row.head {
   color: var(--dim);

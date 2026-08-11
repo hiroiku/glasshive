@@ -301,6 +301,69 @@ export function unlistedTrack(log: EventLog): RowTrack {
   };
 }
 
+/** 束ねたトラックと、束ねられなかった課題の数 */
+export interface GroupTrack {
+  readonly track: RowTrack;
+  /** この束の課題のうち、記録の並びに居なかったものの数。**黙って束ねない** ——
+      1 件でも読めていなければ、この線は束の全部を語ってはいない */
+  readonly unread: number;
+  /** いちばん早く作られた課題の `created_at`。**軸を持たない** —— 束の始まりである */
+  readonly openedMs: number | null;
+}
+
+/* いくつかの課題を 1 本のトラックに束ねる。**新しい観測ではない** —— 束に起きたことは、
+   その課題たちに起きたことを合わせたものである。
+
+   まとめるのは合わせた並びの上でやる。課題ごとにまとめてから重ねると、同じ時刻に 2 つの点が
+   並んで、近すぎる点を 1 つにする決まりが束の上では効かなくなる。
+
+   束の始まりは、いちばん早く作られた課題の `created_at` である。読み切れなかったかどうかは
+   1 件でも切れていれば切れている —— 束の記録は、その課題たちの記録を合わせたものだからである。
+
+   閉じた時刻は渡さない。**束は閉じない** —— 課題が閉じた 1 回は束にとっては起きたことの 1 つ
+   なので、点のまま残す。 */
+export function groupTrack(
+  issues: readonly IssueSummaryJson[],
+  log: EventLog,
+  axis: GanttAxis,
+): GroupTrack {
+  if (log.kind !== 'observed') return { track: unlistedTrack(log), unread: 0, openedMs: null };
+
+  const events: GithubIssueEventsJson['events'][number][] = [];
+  let truncated = false;
+  let unread = 0;
+  let openedMs: number | null = null;
+  for (const issue of issues) {
+    const opened = openedAt(issue);
+    if (opened !== null && (openedMs === null || opened < openedMs)) openedMs = opened;
+
+    const entry = log.byId.get(issue.id ?? '');
+    if (entry === undefined) {
+      unread += 1;
+      continue;
+    }
+    events.push(...entry.events);
+    if (entry.truncated) truncated = true;
+  }
+
+  /* 1 件も読めていない束。**読んで何も起きていなかった束と同じ絵にしない** —— どちらも
+     点の無いトラックになるが、片方は「起きなかった」で、もう片方は「読めていない」である。 */
+  if (unread === issues.length) return { track: unlistedTrack(log), unread, openedMs };
+
+  const slot = (axis.t1 - axis.t0) / EVENT_SLOTS;
+  return {
+    track: readTrack(openedMs, { id: '', events, truncated }, null, axis, slot),
+    unread,
+    openedMs,
+  };
+}
+
+/** 読めた `created_at`。読めなければ `null` —— 読めない時刻を軸の左端として使わない */
+const openedAt = (issue: IssueSummaryJson): number | null => {
+  const at = Date.parse(issue.created_at ?? '');
+  return Number.isFinite(at) ? at : null;
+};
+
 /** 時刻を読めたイベントだけ。読めなかったものは件数として `readTrack` が数える */
 function parseEvents(entry: GithubIssueEventsJson): Parsed[] {
   const parsed: Parsed[] = [];
@@ -333,14 +396,14 @@ export function buildTracks(
       id,
       entry === undefined
         ? unlistedTrack(log)
-        : readTrack(issue, entry, closes.get(id) ?? null, axis, slot),
+        : readTrack(openedAt(issue), entry, closes.get(id) ?? null, axis, slot),
     );
   }
   return tracks;
 }
 
 function readTrack(
-  issue: IssueSummaryJson,
+  createdMs: number | null,
   entry: GithubIssueEventsJson,
   close: CloseInstant | null,
   axis: GanttAxis,
@@ -426,7 +489,7 @@ function readTrack(
     dropped,
     firstAt: Number.isFinite(oldestHeldMs) ? oldestHeldMs : null,
     lastAt: Number.isFinite(lastAt) ? lastAt : null,
-    cut: cutOf(issue, entry, axis, count === 0 ? null : oldestHeldMs, before !== null),
+    cut: cutOf(createdMs, entry, axis, count === 0 ? null : oldestHeldMs, before !== null),
     before,
     after: offAxisOf(held, axis, 'after', false),
   };
@@ -462,7 +525,7 @@ function offAxisOf(
    幅が 0 になっても返す。**幅の無い区間を落とさない** —— 区間の右端は「ここから先が
    手元に在る」という切れ目そのものなので、幅が無くても言うことは残っている。 */
 function cutOf(
-  issue: IssueSummaryJson,
+  createdMs: number | null,
   entry: GithubIssueEventsJson,
   axis: GanttAxis,
   oldestHeldMs: number | null,
@@ -477,8 +540,7 @@ function cutOf(
   const rightRaw = atPct(oldestHeldMs, axis);
   if (rightRaw < 0 && countedBefore) return null;
 
-  const created = Date.parse(issue.created_at ?? '');
-  const fromMs = Number.isFinite(created) ? created : null;
+  const fromMs = createdMs;
   const leftRaw = atPct(fromMs ?? axis.t0, axis);
   const right = clampPct(rightRaw);
   const left = Math.min(clampPct(leftRaw), right);

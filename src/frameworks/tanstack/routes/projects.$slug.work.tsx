@@ -18,7 +18,7 @@ import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
 import { SearchInput } from '../ui/components/primitives/SearchInput.tsx';
 import { Milestones } from '../ui/components/work/Milestones.tsx';
 import { UnitSwitch } from '../ui/components/work/UnitSwitch.tsx';
-import { WorkToolbar } from '../ui/components/work/WorkToolbar.tsx';
+import { SpanChips, WorkToolbar } from '../ui/components/work/WorkToolbar.tsx';
 import type { TipSortKey } from '../ui/derive/gitGraph.ts';
 import { eventLogOf } from '../ui/derive/issueEvents.ts';
 import { DEFAULT_GANTT_WINDOW, GANTT_WINDOWS, type GanttWindow } from '../ui/derive/issueGantt.ts';
@@ -267,9 +267,12 @@ function WorkView() {
               onChange={onQuery}
               placeholder="Search milestones…"
             />
+            <SpanChips gantt={ganttWindow} onGantt={onGantt} />
           </div>
         }
         query={search.q ?? ''}
+        ganttWindow={ganttWindow}
+        eventLog={eventLog}
         nowMs={nowMs}
       />
     );

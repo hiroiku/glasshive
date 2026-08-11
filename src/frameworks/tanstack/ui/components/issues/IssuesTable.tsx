@@ -21,8 +21,6 @@ import {
   type CloseInstant,
   closeFlagOf,
   type EventLog,
-  type EventMark,
-  type OffAxis,
   type OpenMark,
   openMarkOf,
   type RowTrack,
@@ -73,6 +71,7 @@ import { AvatarStack } from '../primitives/Avatar.tsx';
 import { Icon } from '../primitives/Icon.tsx';
 import { SubjectText } from '../text/SubjectText.tsx';
 import { EdgeGutter } from './EdgeGutter.tsx';
+import { countOf, stateClass, TrackMarks } from './EventTrack.tsx';
 
 /* 課題の一覧。依存の弧・親子の階層・着手の順・観測した時刻のタイムライン。
 
@@ -124,9 +123,6 @@ interface RowWait {
   /** 終わり —— この課題が作られた時刻 —— が軸の外に在って、軸の端で止めているとき */
   readonly softTo: boolean;
 }
-
-/** まとまった点に添える種類の並びの長さ。これより長いと `title` が画面からはみ出す */
-const MAX_KIND_TEXT = 40;
 
 export type IssueSortKey =
   | 'start'
@@ -699,15 +695,6 @@ function bandForLog(
   return { title: 'Some issues were not read', note: notes.join(' · ') };
 }
 
-/* トラックの状態を class にする。**4 つの状態がそれぞれ別の絵になる** —— 読んでいる最中と、
-   読み終えて何も無かったのと、読めなかったのと、読むものが無かったのは、別の答えである。 */
-function stateClass(track: RowTrack): string {
-  if (track.kind === 'reading') return ' reading';
-  if (track.kind === 'unread') return ' unread';
-  if (track.kind === 'nolog') return ' nolog';
-  return '';
-}
-
 /* トラック全体の説明。点にホバーしたときは、点の側の説明が勝つ。
 
    **「読めなかった」を「何も起きなかった」と言わない。** 読めていない行は、なぜ読めていない
@@ -735,23 +722,6 @@ function trackTitle(track: RowTrack, openedAt: boolean): string {
       : `No events on record for this issue${missed}`;
   }
   return `${countOf(track.count, 'event')} read, the last on ${absTime(track.lastAt)}${missed}`;
-}
-
-/** 件数と、その数に合う単数・複数。1 件を `1 events` と言うと、数えていないように読める */
-function countOf(count: number, noun: string): string {
-  return `${count} ${noun}${count === 1 ? '' : 's'}`;
-}
-
-/* 軸の外に落ちたイベントの説明。**件数だけでは、何を見損ねたのか分からない** ——
-   いちばん近いものの時刻を添えて、幅を広げれば見えることまで言う。 */
-function offEventTitle(off: OffAxis, side: 'before' | 'beyond'): string {
-  const what = `${countOf(off.count, 'event')} ${off.count === 1 ? 'is' : 'are'}`;
-  const nearest = side === 'before' ? 'the most recent' : 'the earliest';
-  const cut =
-    off.cut && side === 'before'
-      ? ' The event log was also cut short, so what is missing lies out there too.'
-      : '';
-  return `${what} ${side} this span, ${nearest} on ${absTime(off.at)} — widen the span to see them.${cut}`;
 }
 
 /* 輪の置き方。軸の端に立つ輪は列の中へ収める。**端に寄せた輪も同じところに立つ** ——
@@ -811,16 +781,6 @@ function lineTitle(ends: TrackEnds, line: TrackLine): string {
   return `${from} — ${to}. The line stops at the edge of this span: ${stopped.join(
     ' and ',
   )} — widen the span to see all of it.`;
-}
-
-/* 点の説明。**まとまった点は件数と両端の時刻を言う** —— 形は「2 つ以上が近すぎる」としか
-   言えないので、いくつがいつからいつまでなのかは言葉で持つ。 */
-function markTitle(mark: EventMark): string {
-  if (mark.count === 1) return `${mark.kinds[0] ?? 'event'} — ${absTime(mark.at)}`;
-  return `${mark.count} events between ${absTime(mark.at)} and ${absTime(mark.lastAt)} · ${cut(
-    mark.kinds.join(', '),
-    MAX_KIND_TEXT,
-  )}`;
 }
 
 /** 期日を読めたマイルストーンだけを、置ける形にして取り出す */
@@ -947,7 +907,6 @@ const IssueRow = memo(function IssueRow({
           softTo: createdMs > axis.t1,
         };
   const cutRegion = track.kind === 'read' ? track.cut : null;
-  const off = track.kind === 'read' ? track : null;
 
   /* 観測した時刻を結ぶ線。**軸の上に置けるかどうかだけが幅で変わる** —— どの時刻とどの
      時刻を結ぶのかは軸を知らないところで決まっている。読み終えた行にしか両端は出ないので、
@@ -1196,30 +1155,7 @@ const IssueRow = memo(function IssueRow({
         {open !== null && (
           <i className={openClass(open)} style={{ left: `${open.pct}%` }} title={openTitle(open)} />
         )}
-        {track.kind === 'read' &&
-          track.marks.map((mark) => (
-            <i
-              key={mark.at}
-              className={`gt-ev${mark.count > 1 ? ' many' : ''}`}
-              style={{ left: `${mark.pct}%` }}
-              title={markTitle(mark)}
-            />
-          ))}
-        {/* 軸の外に落ちたイベント。**黙って落とさない** —— 幅を狭めると点は全部消えるので、
-            何も言わないと「何度も動いた課題」と「何も起きていない課題」が同じ絵になる */}
-        {off?.before != null && (
-          <b
-            className={`gt-off left${off.before.cut ? ' cut' : ''}`}
-            title={offEventTitle(off.before, 'before')}
-          >
-            ‹{off.before.count}
-          </b>
-        )}
-        {off?.after != null && (
-          <b className="gt-off right" title={offEventTitle(off.after, 'beyond')}>
-            {off.after.count}›
-          </b>
-        )}
+        <TrackMarks track={track} />
         {/* 置ける時刻が 1 つも無い行。**黙って空にしない** —— 読んで何も起きていなかった行と、
             開いた時刻を読めなかった行が、同じ空のトラックになる */}
         {unplacedOpening && (
