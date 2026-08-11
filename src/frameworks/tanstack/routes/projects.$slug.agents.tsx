@@ -92,6 +92,7 @@ function AgentsView() {
       <AgentsTable
         project={project}
         showAll={prefs.showAll}
+        onShowAll={(showAll) => prefs.set({ showAll })}
         nowMs={nowMs}
         selectedFile={selectedFile}
         firstPaint={firstPaint}

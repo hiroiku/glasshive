@@ -88,11 +88,9 @@
 #counts b.ended {
   color: var(--ended);
 }
-#filter-toggle {
+/* 数の右に余白を作って、ここから右のボタンと変更通知の点を右端へ寄せる */
+#notify-toggle {
   margin-left: auto;
-  color: var(--dim);
-  cursor: pointer;
-  user-select: none;
 }
 
 /* 検索欄(部分一致) */

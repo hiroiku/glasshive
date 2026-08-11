@@ -42,6 +42,12 @@ export interface AgentsToolbarProps {
   } | null;
   readonly attention: boolean;
   readonly onAttention: (attention: boolean) => void;
+  /* 終わったものも出すか。**この画面の絞り込みであって、設定ではない。**
+     隣の `⚠ attention` と同じ `.fchip` で、押されているかは `aria-pressed` が言う。 */
+  readonly showAll: boolean;
+  readonly onShowAll: (showAll: boolean) => void;
+  /** 押したときに増える行の数。増える先が無ければ数を出さない */
+  readonly endedHidden: number;
   readonly scale: Scale;
   readonly onScale: (scale: Scale) => void;
   /** 時間帯を手で選んでいるか。選んでいる間はプリセットのチップを光らせない */
@@ -61,6 +67,9 @@ export function AgentsToolbar({
   talkNote,
   attention,
   onAttention,
+  showAll,
+  onShowAll,
+  endedHidden,
   scale,
   onScale,
   picked,
@@ -136,6 +145,17 @@ export function AgentsToolbar({
         onClick={() => onAttention(!attention)}
       >
         ⚠ attention
+      </button>
+      {/* 終わったものを足す。Work の `+ closed` と同じ形にしてある —— 同じ「隠してあるものを
+          足す」操作なので、単位が違っても押し方と読み方は変えない */}
+      <button
+        type="button"
+        className={`fchip ${showAll ? 'on' : ''}`}
+        aria-pressed={showAll}
+        title="Also show sessions that ended more than a day ago, and every subagent that ended"
+        onClick={() => onShowAll(!showAll)}
+      >
+        {endedHidden > 0 ? `+ ended ${endedHidden}` : '+ ended'}
       </button>
       <span className="scale-chips">
         {WINDOWS.map((preset) => (

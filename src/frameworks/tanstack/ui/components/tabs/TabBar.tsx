@@ -51,11 +51,14 @@ interface TabCount {
    読む前は数そのものをまだ持っていないので `?` だけを出す。空欄にすると、届いたばかりの
    スタブが「ここでは何も動いていない」と言うことになる。数え上げられなかったときは、
    見えた数が下限でしかないことを `+?` で言う。 */
-function countOf(project: ProjectJson | undefined, showAll: boolean, nowMs: number): TabCount {
+function countOf(project: ProjectJson | undefined, nowMs: number): TabCount {
   // 木そのものがまだ届いていない。プロジェクトが在るかどうかも観測していない
   if (project === undefined) return { text: '', note: undefined, wide: false };
   if (!project.read) return { text: '?', note: NOT_READ, wide: false };
-  const shown = visibleSessions(project, showAll, nowMs).length;
+  /* 終わったものは数えない。**タブの数は「ここで何が動いているか」である。**
+     Agents の絞り込みに追随させると、そちらを押した人のタブ行が全部書き換わり、
+     どのプロジェクトを開くかを決める手掛かりが、絞り込みの都合で動く。 */
+  const shown = visibleSessions(project, false, nowMs).length;
   if (!counted(project)) return { text: `${shown}+?`, note: SHORT, wide: true };
   return { text: shown === 0 ? '' : String(shown), note: undefined, wide: false };
 }
@@ -82,8 +85,6 @@ export interface TabBarProps {
      出さないと、ピン留めしていないプロジェクトを見ているあいだ、自分がどこに居るかが
      タブ行から消える。 */
   readonly current: string | null;
-  /** 終わったものも数に入れるか。表に出ている件数とタブの件数を揃える */
-  readonly showAll: boolean;
 }
 
 export function TabBar({
@@ -94,7 +95,6 @@ export function TabBar({
   onPin,
   onMove,
   current,
-  showAll,
 }: TabBarProps) {
   const byId = new Map((projects ?? []).map((project) => [project.id, project]));
   /* 木が届いているか。**届く前と、届いた上で見つからないのは別である。**
@@ -194,7 +194,7 @@ export function TabBar({
            ここでタブごと落とすと、ピン留めしたプロジェクトを直に開いたユーザーには、
            いまどこに居るかがどこにも出ない画面になる(アドレスバーを読むしか手が無くなる)。 */
         const name = project?.name ?? id;
-        const count = countOf(project, showAll, nowMs);
+        const count = countOf(project, nowMs);
         const dot = dotOf(project);
         return (
           // biome-ignore lint/a11y/noStaticElementInteractions: 掴むのは並べ替えの手立てで、開くのは中の `Link` が受ける

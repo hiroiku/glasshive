@@ -23,6 +23,9 @@ const mount = (overrides: Partial<AgentsToolbarProps> = {}) => {
     talkNote: null,
     attention: false,
     onAttention: vi.fn(),
+    showAll: false,
+    onShowAll: vi.fn(),
+    endedHidden: 0,
     scale: 'auto',
     onScale: vi.fn(),
     picked: false,
@@ -60,6 +63,12 @@ describe('入り切りするチップは、押されているかどうかを名�
     ).toBe('false');
   });
 
+  it('終わったものを足すチップ', () => {
+    const { container } = mount({ showAll: true });
+
+    expect(chipOf(container, '+ ended').getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('タイムラインの倍率は、選んでいる 1 つだけが押されている', () => {
     const { container } = mount({ scale: 'auto', picked: false });
     const chips = [...container.querySelectorAll('.scale-chips .fchip')];
@@ -73,6 +82,41 @@ describe('入り切りするチップは、押されているかどうかを名�
     const chips = [...container.querySelectorAll('.scale-chips .fchip')];
 
     expect(chips.filter((chip) => chip.getAttribute('aria-pressed') === 'true')).toEqual([]);
+  });
+});
+
+/* 終わったものを足す操作は、この画面の絞り込みである。**上端のバーの設定ではない** ——
+   隣のチップと同じ形・同じ押し方にして、押した先で何が増えるかを押す前に言う。 */
+describe('終わったものを足すチップ', () => {
+  it('増える行の数を、押す前に出す', () => {
+    const { container } = mount({ endedHidden: 12 });
+
+    expect(chipOf(container, '+ ended').textContent).toContain('12');
+  });
+
+  it('増える先が無ければ、数を出さない', () => {
+    const { container } = mount({ endedHidden: 0 });
+
+    expect(
+      chipOf(container, '+ ended').textContent,
+      '押しても何も増えないところに数を出すと、その数が在るものとして読まれる',
+    ).toBe('+ ended');
+  });
+
+  it('押すと切り替わる', () => {
+    const onShowAll = vi.fn();
+    const { container } = mount({ showAll: false, onShowAll });
+
+    chipOf(container, '+ ended').click();
+
+    expect(onShowAll).toHaveBeenCalledWith(true);
+  });
+
+  /* 動詞のラベルはここだけだった。隣の `⚠ attention` も Work の `+ closed` も名詞である。 */
+  it('名前は名詞にする', () => {
+    const { container } = mount();
+
+    expect(chipOf(container, '+ ended').textContent).not.toContain('Show');
   });
 });
 

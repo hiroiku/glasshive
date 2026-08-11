@@ -205,14 +205,6 @@ function Chrome() {
           / ended <b className="ended">{counts.ended}</b>
           {partialMark}
         </span>
-        <label id="filter-toggle">
-          <input
-            type="checkbox"
-            checked={prefs.showAll}
-            onChange={(event) => prefs.set({ showAll: event.target.checked })}
-          />{' '}
-          Show all ended
-        </label>
         <button
           type="button"
           id="notify-toggle"
@@ -243,7 +235,6 @@ function Chrome() {
         onPin={tabs.togglePin}
         onMove={tabs.movePin}
         current={current}
-        showAll={prefs.showAll}
       />
 
       <Outlet />

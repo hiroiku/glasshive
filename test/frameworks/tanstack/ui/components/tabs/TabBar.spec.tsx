@@ -111,7 +111,6 @@ function draw(props: Partial<TabBarProps> = {}) {
       onPin={() => undefined}
       onMove={() => undefined}
       current={null}
-      showAll={false}
       {...props}
     />,
   );
@@ -193,6 +192,36 @@ describe('ピン留めのタブと、まだ届いていない木', () => {
    **タブの件数は、そのプロジェクトを開くかどうかを決める最初の手掛かりである。**
    数え終えた数として出すと、歩けなかったディレクトリを持つプロジェクトが、
    本当に静かなプロジェクトと同じ見た目になる。 */
+/* タブの数は「ここで何が動いているか」である。Agents の絞り込みに追随させると、
+   そちらを押した人のタブ行が全部書き換わり、どのプロジェクトを開くかを決める
+   手掛かりが、絞り込みの都合で動く。 */
+describe('タブの件数は、Agents の絞り込みに追随しない', () => {
+  const withOldEnded = (): ProjectJson => {
+    const found = project('-w-alpha', 'alpha');
+    const live = found.sessions[0];
+    if (live === undefined) throw new Error('セッションが無い');
+    return {
+      ...found,
+      sessions: [
+        live,
+        {
+          ...live,
+          id: 's2',
+          file: '/x/old.jsonl',
+          state: 'ended',
+          last_activity: new Date(NOW - 3 * 86_400_000).toISOString(),
+        },
+      ],
+    };
+  };
+
+  it('ずっと前に終わったセッションは数に入らない', () => {
+    const { pinned } = draw({ projects: [withOldEnded()] });
+
+    expect(pinned.count, '動いている 1 本だけがここで起きていることである').toBe('1');
+  });
+});
+
 describe('数え上げられなかったプロジェクトのタブ', () => {
   const unwalked = (): ProjectJson => ({
     ...project('-w-alpha', 'alpha'),
@@ -340,7 +369,6 @@ describe('タブを掴んで並べ替える', () => {
         onPin={() => undefined}
         onMove={onMove}
         current={null}
-        showAll={false}
       />,
     );
     widths(container);
@@ -363,7 +391,6 @@ describe('タブを掴んで並べ替える', () => {
         onPin={() => undefined}
         onMove={onMove}
         current={null}
-        showAll={false}
       />,
     );
     widths(container);
@@ -393,7 +420,6 @@ describe('暫定タブを留める', () => {
         onPin={onPin}
         onMove={() => undefined}
         current="-w-gamma"
-        showAll={false}
       />,
     );
     const seat = container.querySelector('.tab.provisional');
@@ -415,7 +441,6 @@ describe('暫定タブを留める', () => {
         onPin={onPin}
         onMove={() => undefined}
         current="-w-gamma"
-        showAll={false}
       />,
     );
     const seat = container.querySelector('.tab.provisional');

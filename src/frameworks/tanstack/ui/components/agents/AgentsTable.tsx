@@ -244,6 +244,7 @@ const hits = (query: string, haystack: readonly (string | null | undefined)[]): 
 export interface AgentsTableProps {
   readonly project: ProjectJson;
   readonly showAll: boolean;
+  readonly onShowAll: (showAll: boolean) => void;
   readonly nowMs: number;
   /** いま会話パネルに出ている `transcript`。行をハイライトするためだけに使う */
   readonly selectedFile: string | null;
@@ -260,6 +261,7 @@ export interface AgentsTableProps {
 export function AgentsTable({
   project,
   showAll,
+  onShowAll,
   nowMs,
   selectedFile,
   firstPaint,
@@ -356,6 +358,15 @@ export function AgentsTable({
     }
     return rows;
   }, [project, showAll, nowMs, attention, trimmed, deepFiles]);
+
+  /* `+ ended` を押したときに増えるセッションの数。**押した先で何が起きるかを、押す前に言う。**
+     数えるのは行そのもので、絞り込みの前の数である —— 検索語で消えている行まで数に入れると、
+     押しても増えない数を出すことになる。 */
+  const endedHidden = useMemo(
+    () =>
+      visibleSessions(project, true, nowMs).length - visibleSessions(project, false, nowMs).length,
+    [project, nowMs],
+  );
 
   /* 変わった行を拾うのは、**絞り込みで見えていない行も含めて**である。
      見えている行だけを見比べると、絞り込みを切り替えただけで全部が「変わった」ことになる。 */
@@ -786,6 +797,9 @@ export function AgentsTable({
             ? { scanned: deep.scanned, total: deep.total, unreadable: deep.unreadable }
             : null
         }
+        showAll={showAll}
+        onShowAll={onShowAll}
+        endedHidden={endedHidden}
         talk={talk}
         onTalk={setTalk}
         talkNote={

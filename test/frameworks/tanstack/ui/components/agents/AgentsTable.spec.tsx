@@ -124,6 +124,7 @@ function mount(overrides: Partial<AgentsTableProps> = {}) {
   const props: AgentsTableProps = {
     project: project([]),
     showAll: true,
+    onShowAll: vi.fn(),
     nowMs: NOW,
     selectedFile: null,
     firstPaint: true,
