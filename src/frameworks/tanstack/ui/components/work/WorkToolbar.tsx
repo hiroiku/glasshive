@@ -2,7 +2,7 @@ import type React from 'react';
 import { GANTT_WINDOWS, type GanttWindow } from '../../derive/issueGantt.ts';
 import type { IssueGroup, WorkUnit } from '../../nav/search.ts';
 import { SearchInput } from '../primitives/SearchInput.tsx';
-import { LayoutSwitch, UnitSwitch } from './UnitSwitch.tsx';
+import { LayoutSwitch, type UnitCount, UnitSwitch } from './UnitSwitch.tsx';
 
 /* 課題を見ているときのツールバー。
 
@@ -12,9 +12,9 @@ import { LayoutSwitch, UnitSwitch } from './UnitSwitch.tsx';
 export interface WorkToolbarProps {
   readonly unit: WorkUnit | null;
   readonly onUnit: (unit: WorkUnit | null) => void;
-  readonly issueCount: number;
-  readonly branchCount: number;
-  readonly milestoneCount: number;
+  readonly issueCount: UnitCount;
+  readonly branchCount: UnitCount;
+  readonly milestoneCount: UnitCount;
   readonly graph: boolean;
   readonly onGraph: (graph: boolean) => void;
   /** 一覧の右のタイムラインが一度に見せる幅 */

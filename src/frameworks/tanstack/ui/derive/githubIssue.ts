@@ -48,7 +48,9 @@ export function issueTypeColor(issue: IssueSummaryJson): string | null {
 
    **開いているものを先に採る。** 課題を閉じた PR は既に済んだ話で、いま読みたいのは
    「この課題は誰の手で進んでいるか」である。開いたものが無ければ、直近に閉じたものを出す。 */
-export function leadPullRequest(issue: IssueSummaryJson): GithubPullRequestJson | null {
+export function leadPullRequest(
+  issue: Pick<IssueSummaryJson, 'github'>,
+): GithubPullRequestJson | null {
   const pulls = issue.github?.pull_requests ?? [];
   return pulls.find((pull) => pull.state === 'OPEN') ?? pulls[0] ?? null;
 }

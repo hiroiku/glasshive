@@ -60,7 +60,7 @@ import {
   type WorkerIndex,
   workersOn,
 } from '../../derive/workers.ts';
-import { type BranchState, branchStateOf, type WorkJoin } from '../../derive/workJoin.ts';
+import { type IssueBranch, issueBranchOf, type WorkJoin } from '../../derive/workJoin.ts';
 import { absTime, cut, formatDue, formatSinceIso } from '../../format.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import type { IssueGroup } from '../../nav/search.ts';
@@ -361,12 +361,12 @@ export function IssuesTable({
   const derived = useMemo(() => {
     const index = new Map<
       string,
-      { found: readonly MatchedWorker[]; branch: BranchState | null }
+      { found: readonly MatchedWorker[]; branch: IssueBranch | null }
     >();
     for (const row of rows) {
       index.set(row.issue.id ?? '', {
         found: workersOn(workers, row.issue),
-        branch: join === undefined ? null : branchStateOf(row.issue, join.tips, join.conflicts),
+        branch: join === undefined ? null : issueBranchOf(row.issue, join),
       });
     }
     return index;
@@ -820,7 +820,7 @@ interface IssueRowProps {
   /* 触っているエージェントと、PR のブランチ。**行の外で組んで渡す** —— 行の中で組むと、
      どれか 1 行にホバーしただけで 200 行ぶんの突き合わせがやり直される。 */
   readonly found: readonly MatchedWorker[];
-  readonly branch: BranchState | null;
+  readonly branch: IssueBranch | null;
   /** これを終わらせると着手できるようになる数。着手順で並べているときだけ */
   readonly unlocks: number | null;
   readonly progress: ReadonlyMap<string, { total: number; closed: number }>;
@@ -842,6 +842,61 @@ interface IssueRowProps {
   readonly onHot: (id: string | null, index: number) => void;
   readonly onLabel: (label: string) => void;
   readonly onOpen: (id: string) => void;
+}
+
+/* PR が乗っているブランチの、手元での状態。**課題の欄に git を持ち込む唯一の場所** ——
+   繋いでいるのは PR で、推測ではない。
+
+   名前を出して、押せるようにしてある。遅れの数だけでは、どのブランチの話なのかが分からない
+   —— 課題からブランチへ渡れて初めて、2 つの単位が繋がる。
+
+   手元の git を観測できていないときも、名前だけは出す。名前は GitHub の PR から読めていて、
+   読めていないのは遅れと衝突のほうである。ここを空欄にすると、衝突しているブランチが
+   衝突していないものとして読まれる。 */
+function Branch({ branch }: { branch: IssueBranch }) {
+  const nav = useNav();
+  const open = (name: string) => nav.openRef(name, name);
+
+  if (branch.kind === 'unread') {
+    return (
+      <button
+        type="button"
+        className="brstate unread"
+        title={`${branch.name} — ${
+          branch.reach === 'pending'
+            ? 'still reading the local git'
+            : 'the local git could not be read, so how far ahead or behind it is, and whether it conflicts, are unknown'
+        }`}
+        aria-label={`Open branch ${branch.name}`}
+        {...pressable(() => open(branch.name), { stopPropagation: true })}
+      >
+        <Icon path={mdiSourceBranch} size={10} />
+        <span className="brname">{cut(branch.name, 22)}</span>
+        <b>{branch.reach === 'pending' ? '—' : '?'}</b>
+      </button>
+    );
+  }
+
+  const { name, ahead, behind, worktree, conflictsWith } = branch.branch;
+  return (
+    <button
+      type="button"
+      className={`brstate${conflictsWith.length > 0 ? ' warn' : ''}`}
+      title={`${name} — ${ahead} ahead, ${behind} behind${
+        worktree === null ? '' : ` · worktree ${worktree}`
+      }${
+        conflictsWith.length === 0 ? '' : ` · touches the same files as ${conflictsWith.join(', ')}`
+      }`}
+      aria-label={`Open branch ${name}`}
+      {...pressable(() => open(name), { stopPropagation: true })}
+    >
+      <Icon path={mdiSourceBranch} size={10} />
+      <span className="brname">{cut(name, 22)}</span>
+      {ahead > 0 && <b>↑{ahead}</b>}
+      {behind > 0 && <i>↓{behind}</i>}
+      {conflictsWith.length > 0 && <Icon path={mdiAlertOutline} size={10} />}
+    </button>
+  );
 }
 
 /* 行は覚えさせる。**200 行の一覧で、ホバーのたびに全行を描き直さない** ——
@@ -993,32 +1048,7 @@ const IssueRow = memo(function IssueRow({
             {cut(milestone.title, 18)}
           </button>
         )}
-        {/* PR が乗っているブランチの、手元での状態。**課題の欄に git を持ち込む唯一の場所** —
-            繋いでいるのは PR で、推測ではない。
-
-            名前を出して、押せるようにしてある。**遅れの数だけでは、どのブランチの話なのかが
-            分からない** —— 課題からブランチへ渡れて初めて、2 つの単位が繋がる。 */}
-        {branch !== null && (
-          <button
-            type="button"
-            className={`brstate${branch.conflictsWith.length > 0 ? ' warn' : ''}`}
-            title={`${branch.name} — ${branch.ahead} ahead, ${branch.behind} behind${
-              branch.worktree === null ? '' : ` · worktree ${branch.worktree}`
-            }${
-              branch.conflictsWith.length === 0
-                ? ''
-                : ` · touches the same files as ${branch.conflictsWith.join(', ')}`
-            }`}
-            aria-label={`Open branch ${branch.name}`}
-            {...pressable(() => nav.openRef(branch.name, branch.name), { stopPropagation: true })}
-          >
-            <Icon path={mdiSourceBranch} size={10} />
-            <span className="brname">{cut(branch.name, 22)}</span>
-            {branch.ahead > 0 && <b>↑{branch.ahead}</b>}
-            {branch.behind > 0 && <i>↓{branch.behind}</i>}
-            {branch.conflictsWith.length > 0 && <Icon path={mdiAlertOutline} size={10} />}
-          </button>
-        )}
+        {branch !== null && <Branch branch={branch} />}
         {/* 着手順で並べているときだけ、これを終わらせると何件が空くかを出す */}
         {unlocks !== null && unlocks > 0 && (
           <span className="iunlock" title={`Finishing this frees ${unlocks}`}>

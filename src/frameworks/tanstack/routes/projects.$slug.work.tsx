@@ -17,6 +17,7 @@ import { NotObserved } from '../ui/components/primitives/NotObserved.tsx';
 import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
 import { SearchInput } from '../ui/components/primitives/SearchInput.tsx';
 import { Milestones } from '../ui/components/work/Milestones.tsx';
+import type { UnitCount } from '../ui/components/work/UnitSwitch.tsx';
 import { UnitSwitch } from '../ui/components/work/UnitSwitch.tsx';
 import { SpanChips, WorkToolbar } from '../ui/components/work/WorkToolbar.tsx';
 import type { TipSortKey } from '../ui/derive/gitGraph.ts';
@@ -26,7 +27,7 @@ import { withoutClosed } from '../ui/derive/issueStatus.ts';
 import { milestoneOf } from '../ui/derive/milestones.ts';
 import { githubTrouble, gitTrouble, transportTrouble } from '../ui/derive/trouble.ts';
 import { workerIndex } from '../ui/derive/workers.ts';
-import { buildWorkJoin, type WorkJoin } from '../ui/derive/workJoin.ts';
+import { buildWorkJoin, type GitReach, type WorkJoin } from '../ui/derive/workJoin.ts';
 import { useNowMs } from '../ui/hooks/useNowMs.ts';
 import { useNav } from '../ui/nav/NavContext.tsx';
 import type { ProjectSearch, WorkUnit } from '../ui/nav/search.ts';
@@ -117,18 +118,49 @@ function WorkView() {
   const page =
     issues.data?.ok === true && issues.data.body.state === 'observed' ? issues.data.body : null;
   const all = page?.issues ?? [];
+
+  /* 手元の git をどこまで観測できたか。**`absent` はここでは観測できたほうに入る** ——
+     git のリポジトリでないディレクトリにブランチが 0 本なのは、観測して言える事実である。
+     観測できなかったことは 200 では返らないので、`overview` が無いことがそれに当たる。 */
+  const gitReach: GitReach =
+    git.error !== null
+      ? 'unobservable'
+      : git.data === undefined
+        ? 'pending'
+        : overview === null
+          ? 'unobservable'
+          : 'observed';
+
   const join = useMemo(
-    () => buildWorkJoin(overview?.state === 'observed' ? overview : null, all),
-    [overview, all],
+    () => buildWorkJoin(overview?.state === 'observed' ? overview : null, gitReach, all),
+    [overview, gitReach, all],
   );
 
-  const branchCount = overview?.state === 'observed' ? overview.tips.length : 0;
-  const issueCount = useMemo(() => withoutClosed(all).length, [all]);
+  /* 切り替えに添える件数。**数えられていないことを 0 で表さない** —— 0 は「向こうに 1 件も
+     無い」という断定なので、読めていないときに出すと、切り替える必要が無いように読める。 */
+  const branchCount: UnitCount =
+    gitReach === 'observed'
+      ? overview?.state === 'observed'
+        ? overview.tips.length
+        : 0
+      : gitReach;
+  const issuePresence: UnitCount | null =
+    issues.error !== null
+      ? 'unobservable'
+      : issues.data === undefined
+        ? 'pending'
+        : !issues.data.ok || issues.data.body.state === 'unobservable'
+          ? 'unobservable'
+          : null;
+  const issueCount = useMemo<UnitCount>(
+    () => issuePresence ?? withoutClosed(all).length,
+    [issuePresence, all],
+  );
   /* マイルストーンは取ってきた課題を束ね直しただけで、`gh` を余分に走らせない。
      数えるのは名前の付いているものだけ —— 付いていない課題の束は区切りではない。 */
-  const milestoneCount = useMemo(
-    () => new Set(all.map(milestoneOf).filter((title) => title !== null)).size,
-    [all],
+  const milestoneCount = useMemo<UnitCount>(
+    () => issuePresence ?? new Set(all.map(milestoneOf).filter((title) => title !== null)).size,
+    [issuePresence, all],
   );
 
   const unitSwitch = (

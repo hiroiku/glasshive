@@ -67,6 +67,15 @@ export function IssuesLegend({
         </b>{' '}
         its branch is n ahead and n behind the base
       </span>
+      {/* 手元の git を読めていないブランチ。**読めなかったことにも見本が要る** —— `?` の意味が
+          `title` の中にしか無いと、触れる人にしか読めない */}
+      <span>
+        <b className="brstate unread">
+          <Icon path={mdiSourceBranch} size={10} />
+          <b>?</b>
+        </b>{' '}
+        it has a branch, but the local git could not be read
+      </span>
       <span>
         <b className="prchip open">#n</b> the pull request that closes it
       </span>

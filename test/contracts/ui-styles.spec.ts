@@ -127,3 +127,40 @@ describe('アイコンの色は、状態の色の表から採る', () => {
     }
   });
 });
+
+/* 数えられていない件数の代わりに出す文字。
+
+   `.ubtn.on .n` と詳細度が同点なので、**勝ち負けを決めるのは書いた順だけである。** 前へ
+   動かすと、選ばれているボタンでだけ数と同じ色になる —— クラスは付いていて宣言も在るのに
+   効かないので、DOM を見るテストからは何も見えない。
+
+   綴りは画面の側から採る。ここに書き写すと、`UnitSwitch` が別のクラスを付けるようになった
+   ときに、誰も使っていない規則をここだけが確かめ続けることになる。 */
+describe('件数の代わりの文字は、選ばれているボタンでも色を譲らない', () => {
+  const work = fs.readFileSync(path.join(STYLES, 'work.css'), 'utf8');
+  const switchSource = fs.readFileSync(
+    path.join(ROOT, 'src', 'frameworks', 'tanstack', 'ui', 'components', 'work', 'UnitSwitch.tsx'),
+    'utf8',
+  );
+
+  /** 数の代わりに付けるクラス。画面が組み立てている綴りをそのまま採る */
+  const marks = [...switchSource.matchAll(/'([a-z]+)' : '([a-z]+)'/g)].flatMap((hit) => [
+    hit[1],
+    hit[2],
+  ]);
+
+  it('画面が付けるクラスを、そのまま見張っている', () => {
+    expect(marks, 'クラスを 1 つも拾えていないと、この後の照合は何も見ていない').toEqual([
+      'counting',
+      'unread',
+    ]);
+  });
+
+  it.each(['counting', 'unread'])('%s の色は、選ばれている側の規則より後に書いてある', (mark) => {
+    const selected = work.indexOf('.ubtn.on .n {');
+    const at = work.indexOf(`.ubtn .n.${mark} {`);
+
+    expect(at, `.ubtn .n.${mark} の規則が無い`).toBeGreaterThan(-1);
+    expect(at, '前に書くと、選ばれているボタンでだけ効かない').toBeGreaterThan(selected);
+  });
+});

@@ -14,12 +14,34 @@ import { Icon } from '../primitives/Icon.tsx';
    持つことになる。件数を添えてあるのは、切り替える前に向こう側に何件あるかを
    読めるようにするためである。 */
 
+/* 向こう側の件数。**数えられなかったことを 0 で表さない** —— 0 は「1 件も無い」という
+   断定で、読みに行けていないときにそれを出すと、切り替える必要が無いように読める。 */
+export type UnitCount = number | 'pending' | 'unobservable';
+
 export interface UnitSwitchProps {
   readonly unit: WorkUnit | null;
   readonly onUnit: (unit: WorkUnit | null) => void;
-  readonly issueCount: number;
-  readonly branchCount: number;
-  readonly milestoneCount: number;
+  readonly issueCount: UnitCount;
+  readonly branchCount: UnitCount;
+  readonly milestoneCount: UnitCount;
+}
+
+/* 数えられていない件数の出し方。まだ来ていないなら `—`、読めなかったなら `?` にする ——
+   Overview の表が既にこの 2 つを使い分けているので、同じ意味に同じ絵を当てる。 */
+function Count({ count, unit }: { count: UnitCount; unit: string }) {
+  if (typeof count === 'number') return <span className="n">{count}</span>;
+  return (
+    <span
+      className={`n ${count === 'pending' ? 'counting' : 'unread'}`}
+      title={
+        count === 'pending'
+          ? `Still counting the ${unit}`
+          : `The ${unit} could not be read — this is not zero`
+      }
+    >
+      {count === 'pending' ? '—' : '?'}
+    </span>
+  );
 }
 
 export function UnitSwitch({
@@ -39,7 +61,7 @@ export function UnitSwitch({
       >
         <Icon path={mdiSitemapOutline} size={11} />
         Issues
-        <span className="n">{issueCount}</span>
+        <Count count={issueCount} unit="issues" />
       </button>
       <button
         type="button"
@@ -49,7 +71,7 @@ export function UnitSwitch({
       >
         <Icon path={mdiSourceBranch} size={11} />
         Branches
-        <span className="n">{branchCount}</span>
+        <Count count={branchCount} unit="branches" />
       </button>
       <button
         type="button"
@@ -59,7 +81,7 @@ export function UnitSwitch({
       >
         <Icon path={mdiFlagOutline} size={11} />
         Milestones
-        <span className="n">{milestoneCount}</span>
+        <Count count={milestoneCount} unit="milestones" />
       </button>
     </span>
   );

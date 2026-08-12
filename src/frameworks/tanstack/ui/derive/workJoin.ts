@@ -3,6 +3,7 @@ import type {
   GithubPullRequestJson,
   IssueSummaryJson,
 } from '~/interface/presenters/issues/issues.presenter.ts';
+import { leadPullRequest } from './githubIssue.ts';
 
 /* 課題とブランチを結ぶ。
 
@@ -111,8 +112,16 @@ export function pullsByBranch(
   return index;
 }
 
+/* 手元の git をどこまで観測できたか。**空の `tips` が何を指すかは、これでしか決まらない。**
+
+   `absent` はここに要らない —— git のリポジトリでないディレクトリにブランチが 0 本なのは、
+   観測して言える事実である。分けるのは、まだ読んでいない(`pending`)のと、読みに行って
+   読めなかった(`unobservable`)の 2 つで、どちらも 0 本と言ってはいけない。 */
+export type GitReach = 'observed' | 'pending' | 'unobservable';
+
 /** 課題の側から見た PR とブランチをまとめて引くためのインデックス一式 */
 export interface WorkJoin {
+  readonly reach: GitReach;
   readonly tips: ReadonlyMap<string, GitTipJson>;
   readonly conflicts: ReadonlyMap<string, string[]>;
   readonly byBranch: ReadonlyMap<string, readonly IssueSummaryJson[]>;
@@ -121,12 +130,46 @@ export interface WorkJoin {
 
 export function buildWorkJoin(
   git: GitOverviewJson | null,
+  reach: GitReach,
   issues: readonly IssueSummaryJson[],
 ): WorkJoin {
   return {
+    reach,
     tips: tipIndex(git),
     conflicts: conflictIndex(git),
     byBranch: issuesByBranch(issues),
     pullByBranch: pullsByBranch(issues),
   };
+}
+
+/* 課題 1 件に付くブランチ。**PR が名指しているのに手元を観測できていないことを、
+   ブランチが無いことにしない。**
+
+   PR そのものは GitHub から読めているので、ブランチの名前は分かっている。分からないのは手元での
+   遅れと衝突のほうである。ここを `null` に潰すと、衝突しているブランチが衝突していない
+   ものとして読まれ、行からは何も消えていないように見える。
+
+   観測できていないときに名指すのは、開いている PR のブランチだけである。`tips` が無いので
+   `branchStateOf` の「手元に在るものを選ぶ」が使えず、代わりに行の PR のチップと同じ
+   `leadPullRequest` を見る —— 同じ行の 2 つのチップが別の PR を名指すと、どちらの話なのかが
+   読めない。閉じた PR のブランチはたいてい手元にも残っていないので、そこには何も出さない。 */
+export type IssueBranch =
+  | { readonly kind: 'observed'; readonly branch: BranchState }
+  | {
+      readonly kind: 'unread';
+      readonly name: string;
+      readonly reach: Exclude<GitReach, 'observed'>;
+    };
+
+export function issueBranchOf(
+  issue: Pick<IssueSummaryJson, 'github'>,
+  join: WorkJoin,
+): IssueBranch | null {
+  if (join.reach !== 'observed') {
+    const pull = leadPullRequest(issue);
+    const name = pull?.state === 'OPEN' ? pull.head_ref_name : null;
+    return name === null ? null : { kind: 'unread', name, reach: join.reach };
+  }
+  const branch = branchStateOf(issue, join.tips, join.conflicts);
+  return branch === null ? null : { kind: 'observed', branch };
 }

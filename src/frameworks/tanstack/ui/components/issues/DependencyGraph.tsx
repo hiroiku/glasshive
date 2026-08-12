@@ -16,7 +16,7 @@ import {
   type WorkerIndex,
   workersOn,
 } from '../../derive/workers.ts';
-import { branchStateOf, type WorkJoin } from '../../derive/workJoin.ts';
+import { issueBranchOf, type WorkJoin } from '../../derive/workJoin.ts';
 import { cut } from '../../format.ts';
 import { pressable } from '../../pressable.ts';
 import { AvatarStack } from '../primitives/Avatar.tsx';
@@ -394,7 +394,7 @@ function CardFace({ node, workers, join }: CardFaceProps) {
   const labels = issue.labels ?? [];
   const pull = leadPullRequest(issue);
   const beat = leadWorker(workersOn(workers, issue));
-  const branch = join === undefined ? null : branchStateOf(issue, join.tips, join.conflicts);
+  const branch = join === undefined ? null : issueBranchOf(issue, join);
 
   const progress = subProgress(issue, undefined);
   /* 親。堰き止めではないので `layer` には出ないが、この課題がどこに属するかは言う */
@@ -460,21 +460,39 @@ function CardFace({ node, workers, join }: CardFaceProps) {
             {comments}
           </span>
         )}
-        {/* PR のブランチが手元でどうなっているか。**この 1 つだけを持ち込む** —
-            カードは 2 行しか無いので、遅れと衝突だけに絞る */}
-        {branch !== null && (branch.behind > 0 || branch.conflictsWith.length > 0) && (
+        {/* 手元の git を観測できていないカード。**遅れも衝突も出ないことを、無いことにしない**
+            —— このカードだけチップが消えると、遅れていないカードとして読まれる */}
+        {branch?.kind === 'unread' && (
           <span
-            className={`dg-br${branch.conflictsWith.length > 0 ? ' warn' : ''}`}
-            title={`${branch.name} — ${branch.ahead} ahead, ${branch.behind} behind${
-              branch.conflictsWith.length === 0
-                ? ''
-                : ` · touches the same files as ${branch.conflictsWith.join(', ')}`
+            className="dg-br unread"
+            title={`${branch.name} — ${
+              branch.reach === 'pending'
+                ? 'still reading the local git'
+                : 'the local git could not be read, so how far behind it is, and whether it conflicts, are unknown'
             }`}
           >
             <Icon path={mdiSourceBranch} size={9} />
-            {branch.behind > 0 ? `↓${branch.behind}` : '⚠'}
+            {branch.reach === 'pending' ? '—' : '?'}
           </span>
         )}
+        {/* PR のブランチが手元でどうなっているか。**この 1 つだけを持ち込む** ——
+            カードは 2 行しか無いので、遅れと衝突だけに絞る */}
+        {branch?.kind === 'observed' &&
+          (branch.branch.behind > 0 || branch.branch.conflictsWith.length > 0) && (
+            <span
+              className={`dg-br${branch.branch.conflictsWith.length > 0 ? ' warn' : ''}`}
+              title={`${branch.branch.name} — ${branch.branch.ahead} ahead, ${
+                branch.branch.behind
+              } behind${
+                branch.branch.conflictsWith.length === 0
+                  ? ''
+                  : ` · touches the same files as ${branch.branch.conflictsWith.join(', ')}`
+              }`}
+            >
+              <Icon path={mdiSourceBranch} size={9} />
+              {branch.branch.behind > 0 ? `↓${branch.branch.behind}` : '⚠'}
+            </span>
+          )}
         {pull !== null && (
           <span
             className={`prchip ${pull.is_draft ? 'draft' : pull.state.toLowerCase()}`}

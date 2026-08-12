@@ -71,16 +71,21 @@ const issuesBody = (over: Record<string, unknown> = {}) => ({
 /** `~/.claude/projects` の走査。既定は歩けたことにする */
 const treeSources = (state: string, reason: string | null = null) => ({ state, reason });
 
+/** 手元の git の答え。渡さなければ、まだ届いていないことになる */
+type GitAnswer = { ok: boolean; body?: Record<string, unknown> };
+
 function draw(
   body: ReturnType<typeof issuesBody>,
   sources = treeSources('observed'),
   search: ProjectSearch = {},
+  gitAnswer?: GitAnswer,
 ) {
   probe.search = search;
   const client = new QueryClient({
     // 問い合わせは走らせない。ここで見るのは、届いた答えを画面がどう読むかだけである
     defaultOptions: { queries: { enabled: false, retry: false } },
   });
+  if (gitAnswer !== undefined) client.setQueryData(['git', probe.slug], gitAnswer);
   client.setQueryData(['tree'], {
     generated_at: '2026-08-09T12:00:00Z',
     active_threshold_secs: 300,
@@ -157,5 +162,78 @@ describe('エージェントの欄が空である理由', () => {
     });
 
     expect(said).toContain('the transcripts could not be read');
+  });
+});
+
+/* 切り替えに添える件数。**読みに行けていないことを 0 で表さない。**
+
+   0 は「向こうに 1 件も無い」という断定である。手元の git を読めていないときにそれを出すと、
+   ブランチが 1 本も無いプロジェクトと同じ画面になり、切り替える理由が消える。
+   git のリポジトリでないディレクトリの 0 は、観測して言える事実なので 0 のままにする。 */
+describe('ブランチの件数', () => {
+  const countsOf = (said: string) =>
+    said.slice(said.indexOf('Branches'), said.indexOf('Branches') + 12);
+
+  it('観測できていれば、その本数を出す', () => {
+    const said = draw(
+      issuesBody(),
+      treeSources('observed'),
+      {},
+      {
+        ok: true,
+        body: {
+          state: 'observed',
+          reason: null,
+          base: 'main',
+          worktrees: [],
+          branches: [],
+          mainline: [],
+          mainline_truncated: false,
+          tips: [{ name: 'feat/x', kind: 'branch', ahead: 0, behind: 0, worktree: null }],
+          conflicts: [],
+        },
+      },
+    );
+
+    expect(countsOf(said)).toContain('1');
+  });
+
+  it('git のリポジトリでなければ、0 と言い切る', () => {
+    const said = draw(
+      issuesBody(),
+      treeSources('observed'),
+      {},
+      {
+        ok: true,
+        body: {
+          state: 'absent',
+          reason: 'no-source',
+          base: '',
+          worktrees: [],
+          branches: [],
+          mainline: [],
+          mainline_truncated: false,
+          tips: [],
+          conflicts: [],
+        },
+      },
+    );
+
+    expect(countsOf(said), '観測して言える 0 まで隠すと、言えることが言えなくなる').toContain('0');
+  });
+
+  it('読めなかったなら、0 ではなく読めなかったと言う', () => {
+    const said = draw(issuesBody(), treeSources('observed'), {}, { ok: false });
+
+    expect(
+      countsOf(said),
+      '0 と出すと、ブランチが 1 本も無いプロジェクトと同じ画面になる',
+    ).toContain('?');
+  });
+
+  it('まだ届いていないなら、読めなかったのとは別の絵で出す', () => {
+    const said = draw(issuesBody());
+
+    expect(countsOf(said), '待てば揃うのと、待っても揃わないのを同じ絵にしない').toContain('—');
   });
 });

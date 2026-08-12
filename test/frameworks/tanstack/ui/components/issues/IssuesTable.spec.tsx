@@ -10,6 +10,7 @@ import {
   GANTT_WINDOWS,
   MONTH_MS,
 } from '~/frameworks/tanstack/ui/derive/issueGantt.ts';
+import { buildWorkJoin } from '~/frameworks/tanstack/ui/derive/workJoin.ts';
 import { absTime } from '~/frameworks/tanstack/ui/format.ts';
 
 /* 一覧は「次に何を取るか」を答える表である。
@@ -1690,5 +1691,113 @@ describe('マイルストーンで束ねる', () => {
       '束の見出しが既に言っているので、行ごとに繰り返すと同じことが 2 度並ぶ',
     ).toBeNull();
     expect(flat.container.querySelector('.mschip')).not.toBeNull();
+  });
+});
+
+/* 課題の行に出る、PR のブランチ。**手元の git を読めていないことを、空欄で表さない** ——
+   空欄は「このブランチは遅れても衝突してもいない」と同じ絵で、衝突しているブランチが
+   その顔で並ぶ。 */
+describe('PR のブランチの、手元での状態', () => {
+  const withPull = issue('#1', {
+    github: {
+      ...issue('#1').github,
+      pull_requests: [
+        {
+          number: 7,
+          state: 'OPEN',
+          is_draft: false,
+          review_decision: null,
+          head_ref_name: 'feat/x',
+        },
+      ],
+    },
+  } as Partial<Issue>);
+
+  const join = (reach: 'observed' | 'pending' | 'unobservable', tips: unknown[] = []) =>
+    buildWorkJoin(tips.length === 0 ? null : ({ tips, conflicts: [] } as never), reach, [withPull]);
+
+  it('観測できていれば、遅れの数を出す', () => {
+    const { container } = draw([withPull], {
+      join: join('observed', [
+        { name: 'feat/x', kind: 'branch', ahead: 2, behind: 1, worktree: null },
+      ]),
+    });
+    const chip = container.querySelector('.brstate');
+
+    expect(chip?.classList.contains('unread')).toBe(false);
+    expect(chip?.textContent).toContain('↓1');
+  });
+
+  it.each([
+    ['unobservable', '?'],
+    ['pending', '—'],
+  ] as const)('%s なら、名前を出して数の代わりに %s を立てる', (reach, mark) => {
+    const { container } = draw([withPull], { join: join(reach) });
+    const chip = container.querySelector('.brstate');
+
+    expect(chip?.classList.contains('unread'), '読めていないことが見た目に残らない').toBe(true);
+    expect(chip?.textContent).toContain('feat/x');
+    expect(chip?.textContent).toContain(mark);
+  });
+
+  /* git のリポジトリでないディレクトリにブランチが無いのは、観測して言える事実である */
+  it('観測できていてブランチが無ければ、何も出さない', () => {
+    const { container } = draw([withPull], { join: join('observed') });
+
+    expect(container.querySelector('.brstate')).toBe(null);
+  });
+
+  /* 閉じた PR のブランチは、たいてい手元にも残っていない。ここに出すと、片付いた課題の行が
+     読めなかったことの文字で埋まる */
+  it('閉じた PR しか持たない課題には、読めなくても何も出さない', () => {
+    const merged = issue('#2', {
+      github: {
+        ...issue('#2').github,
+        pull_requests: [
+          {
+            number: 9,
+            state: 'MERGED',
+            is_draft: false,
+            review_decision: null,
+            head_ref_name: 'feat/gone',
+          },
+        ],
+      },
+    } as Partial<Issue>);
+    const { container } = draw([merged], {
+      join: buildWorkJoin(null, 'unobservable', [merged]),
+    });
+
+    expect(container.querySelector('.brstate')).toBe(null);
+  });
+
+  /* 同じ行の PR のチップと別の PR を名指すと、どちらの話なのかが読めない */
+  it('名指すのは、行の PR のチップと同じ PR である', () => {
+    const twice = issue('#3', {
+      github: {
+        ...issue('#3').github,
+        pull_requests: [
+          {
+            number: 1,
+            state: 'CLOSED',
+            is_draft: false,
+            review_decision: null,
+            head_ref_name: 'feat/old',
+          },
+          {
+            number: 2,
+            state: 'OPEN',
+            is_draft: false,
+            review_decision: null,
+            head_ref_name: 'feat/new',
+          },
+        ],
+      },
+    } as Partial<Issue>);
+    const { container } = draw([twice], {
+      join: buildWorkJoin(null, 'unobservable', [twice]),
+    });
+
+    expect(container.querySelector('.brstate')?.textContent).toContain('feat/new');
   });
 });

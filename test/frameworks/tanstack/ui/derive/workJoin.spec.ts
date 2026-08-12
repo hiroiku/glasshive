@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   branchStateOf,
   buildWorkJoin,
+  issueBranchOf,
   issuesByBranch,
   tipIndex,
 } from '~/frameworks/tanstack/ui/derive/workJoin.ts';
@@ -81,7 +82,7 @@ const issue = (id: string, branches: readonly (string | null)[] = []): Issue => 
 /* 衝突のインデックスは外へ出ていないので、まとめて組む側から取る。
    課題の側から見える形は、こう組んだときのものだけである。 */
 const stateOf = (overview: GitOverview | null, target: Issue, others: readonly Issue[] = []) => {
-  const join = buildWorkJoin(overview, [target, ...others]);
+  const join = buildWorkJoin(overview, 'observed', [target, ...others]);
   return branchStateOf(target, join.tips, join.conflicts);
 };
 
@@ -245,7 +246,7 @@ describe('ブランチ名から課題を引く', () => {
 
 describe('突き合わせのインデックスをまとめて組む', () => {
   it('`git` を観測できていなくても、課題の側は引ける', () => {
-    const join = buildWorkJoin(null, [issue('#1', ['feat/x'])]);
+    const join = buildWorkJoin(null, 'observed', [issue('#1', ['feat/x'])]);
 
     expect(join.tips.size).toBe(0);
     expect(join.conflicts.size).toBe(0);
@@ -280,7 +281,7 @@ describe('ブランチ名から PR を引く', () => {
   };
 
   it('開いている PR を先に採る', () => {
-    const join = buildWorkJoin(null, [
+    const join = buildWorkJoin(null, 'observed', [
       withPulls(
         '#1',
         [
@@ -298,7 +299,7 @@ describe('ブランチ名から PR を引く', () => {
   });
 
   it('開いているものが無ければ、最初に見つけたものを出す', () => {
-    const join = buildWorkJoin(null, [
+    const join = buildWorkJoin(null, 'observed', [
       withPulls(
         '#1',
         [
@@ -313,8 +314,49 @@ describe('ブランチ名から PR を引く', () => {
   });
 
   it('ブランチ名の無い PR は、どのブランチにも結ばない', () => {
-    const join = buildWorkJoin(null, [issue('#1', [null])]);
+    const join = buildWorkJoin(null, 'observed', [issue('#1', [null])]);
 
     expect(join.pullByBranch.size, '名前が無いものを推測で結ばない').toBe(0);
+  });
+});
+
+/* 手元の git を観測できていないとき。**PR が名指しているブランチを、無いことにしない。**
+
+   PR は GitHub から読めているので、ブランチの名前は分かっている。分からないのは手元での遅れと
+   衝突のほうで、そこを `null` に潰すと、行からは何も消えていないように見える。 */
+describe('手元の git を観測できていないとき', () => {
+  const withPull = issue('#1', ['feat/x']);
+  const withoutPull = issue('#2', []);
+
+  it.each(['pending', 'unobservable'] as const)('%s なら、名前だけを運ぶ', (reach) => {
+    const found = issueBranchOf(withPull, buildWorkJoin(null, reach, [withPull]));
+
+    expect(found, '観測できていないことを、ブランチが無いことにしない').toEqual({
+      kind: 'unread',
+      name: 'feat/x',
+      reach,
+    });
+  });
+
+  /* PR が 1 つも無い課題には、そもそもブランチの欄が出ない。ここでチップを出すと、
+     観測できていないことが、全部の行に付く飾りになる */
+  it('PR を持たない課題には、何も運ばない', () => {
+    expect(issueBranchOf(withoutPull, buildWorkJoin(null, 'unobservable', [withoutPull]))).toBe(
+      null,
+    );
+  });
+
+  it('観測できていれば、これまで通り手元の状態を運ぶ', () => {
+    const overview = git({ tips: [tip('feat/x', { ahead: 2, behind: 1 })] });
+    const found = issueBranchOf(withPull, buildWorkJoin(overview, 'observed', [withPull]));
+
+    expect(found?.kind).toBe('observed');
+    expect(found?.kind === 'observed' && found.branch.behind).toBe(1);
+  });
+
+  /* git のリポジトリでないディレクトリにブランチが 0 本なのは、観測して言える事実である。
+     ここまで `unread` にすると、言えることまで言えないことになる */
+  it('git のリポジトリでなければ、ブランチが無いと言い切る', () => {
+    expect(issueBranchOf(withPull, buildWorkJoin(null, 'observed', [withPull]))).toBe(null);
   });
 });
