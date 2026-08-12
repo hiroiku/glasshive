@@ -17,6 +17,7 @@ import {
 import type { ReactNode } from 'react';
 import type { ApiResponse } from '~/interface/presenters/api-error.presenter.ts';
 import type {
+  GithubActorJson,
   GithubIssueDiscussionEntryJson,
   GithubIssueDiscussionJson,
   GithubIssueReferenceJson,
@@ -66,7 +67,7 @@ function subjectOf(entry: GithubIssueDiscussionEntryJson): string {
       return entry.label.name;
     case 'assigned':
     case 'unassigned':
-      return entry.assignee ?? '';
+      return entry.assignee?.login ?? '';
     case 'milestoned':
     case 'demilestoned':
       return entry.milestone_title ?? '';
@@ -88,12 +89,23 @@ function subjectOf(entry: GithubIssueDiscussionEntryJson): string {
    GitHub は項目に id を振って返さないので、区別の付くものを繋いで作る。同じ人が同じ秒に
    同じ種類のイベントを同じ相手へ起こすことは無い。 */
 const entryKey = (entry: GithubIssueDiscussionEntryJson): string =>
-  `${entry.at}:${entry.kind}:${entry.actor ?? ''}:${subjectOf(entry)}`;
+  `${entry.at}:${entry.kind}:${entry.actor?.login ?? ''}:${subjectOf(entry)}`;
 
-/** 起こした人。読めなかった `login` を、誰かの名前で埋めない */
-function Who({ actor }: { actor: string | null }) {
+/* 起こした人。**名指されているなら、いつも顔と名前の両方を出す。**
+
+   顔を引けない人には頭文字だけの `.av` が残る。誰も名指されていない項目には `.av` そのものを
+   出さない —— GitHub は消えたユーザーやアプリの起こしたイベントに `actor: null` を返すので、
+   「顔が無い人」と「名指されていない」を同じ絵にすると、読めなかったことが誰かの不在に化ける。
+
+   顔は `decorative` で伏せる。名前がすぐ隣に文字で並んでいるので、伏せないと 2 回読まれる。 */
+function Who({ actor }: { actor: GithubActorJson | null }) {
   if (actor === null) return <span className="dimtxt">unknown</span>;
-  return <span className="disc-who">{actor}</span>;
+  return (
+    <span className="disc-who">
+      <Avatar actor={actor} decorative />
+      {actor.login}
+    </span>
+  );
 }
 
 /** イベントが名指す題。GitHub が題を返さなかったことを、無題として出さない */
@@ -133,15 +145,25 @@ function Label({ label }: { label: GithubLabelJson }) {
 /** コメント以外の項目。コメントは本文を持つので、1 行のイベントとは別の姿で描く */
 type DiscussionEventJson = Exclude<GithubIssueDiscussionEntryJson, { kind: 'comment' }>;
 
-/* イベント 1 件の、アイコンと言い分。
+/* イベント 1 件の、アイコンと言い分と、アイコンの色。
 
    **種類を網羅した `switch` にする。** `default` でまとめると、種類を足したときに
-   「何かが起きた」としか出ない行が黙って混ざる。 */
-function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode } {
+   「何かが起きた」としか出ない行が黙って混ざる。
+
+   色が付くのは、閉じた・開き直した・堰き止めたと言う行と、マイルストーンを付け外しした行
+   だけである。前者は一覧がその状態に使っている `st-*` をそのまま渡すので、色を決める表は
+   1 つのままになる。これは行が何をしたかの色であって、この課題がいま一覧でどう並ぶかでは
+   ない —— 閉じた課題に堰き止めが足されることも在る。後者の `ev-ms` は、ガントの期日の
+   縦線と同じ `--input` から採る。それ以外の行は色を持たない。 */
+function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; tone?: string } {
   switch (entry.kind) {
     case 'closed':
       return {
         icon: mdiCheckCircleOutline,
+        /* 「やり終えた」と「やらないことにした」で色が違う。一覧のチップがそう分けている。
+           `reason` は GitHub の `stateReason` をそのまま運ぶので、一覧の状態を組み立てる
+           `statusOf` と同じ綴りで見る */
+        tone: (entry.reason ?? '').toUpperCase() === 'NOT_PLANNED' ? 'st-not_planned' : 'st-closed',
         what: (
           <>
             closed this
@@ -150,7 +172,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode } 
         ),
       };
     case 'reopened':
-      return { icon: mdiRestart, what: 'reopened this' };
+      return { icon: mdiRestart, tone: 'st-open', what: 'reopened this' };
     case 'labeled':
       return {
         icon: mdiLabelOutline,
@@ -190,6 +212,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode } 
     case 'milestoned':
       return {
         icon: mdiFlagOutline,
+        tone: 'ev-ms',
         what: (
           <>
             added this to <Named title={entry.milestone_title} />
@@ -199,6 +222,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode } 
     case 'demilestoned':
       return {
         icon: mdiFlagOffOutline,
+        tone: 'ev-ms',
         what: (
           <>
             removed this from <Named title={entry.milestone_title} />
@@ -228,6 +252,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode } 
     case 'blocked-by-added':
       return {
         icon: mdiCancel,
+        tone: 'st-blocked',
         what: (
           <>
             marked this blocked by <Reference reference={entry.blocking_issue} />
@@ -272,10 +297,7 @@ function Entry({
     return (
       <div className="cmt">
         <div className="cmt-h">
-          {/* 隣の `Who` が同じ名前を文字で出す。顔にも名乗らせると 2 回読まれる */}
-          {entry.actor !== null && (
-            <Avatar actor={{ login: entry.actor, avatar: null }} decorative />
-          )}
+          <i className="disc-dot" />
           <Who actor={entry.actor} />
           <span className="disc-when">{since}</span>
         </div>
@@ -283,16 +305,21 @@ function Entry({
         {entry.body === null ? (
           <span className="dimtxt">The text of this comment did not come back</span>
         ) : (
-          entry.body !== '' && <MdView text={entry.body} project={project} />
+          entry.body !== '' && <MdView text={entry.body} source="github" project={project} />
         )}
       </div>
     );
   }
 
-  const { icon, what } = eventOf(entry);
+  const { icon, what, tone } = eventOf(entry);
   return (
     <div className="disc-ev">
-      <Icon path={icon} size={11} className="disc-ico" />
+      <i className="disc-dot" />
+      <Icon
+        path={icon}
+        size={11}
+        className={tone === undefined ? 'disc-ico' : `disc-ico ${tone}`}
+      />
       <span className="disc-say">
         <Who actor={entry.actor} /> {what}
       </span>

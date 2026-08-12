@@ -64,7 +64,8 @@ export function highlight(code: string, language?: string): string {
 
    `html: false` — `transcript` の中の生のタグ(`<system-reminder>` など)は文字列として
    見せる。ツールの内部のやりとりを画面の構造として解釈させない、という意味と、
-   人の言葉として届いたタグを実行させないという意味の両方がある。
+   人の言葉として届いたタグを実行させないという意味の両方がある。GitHub の本文だけは
+   下の `inert_html` が一部を通すので、出どころを呼ぶ側から受け取る。
 
    `breaks: true` — 会話文の 1 つの改行は改行として扱う。段落としてまとめると、
    箇条書きのつもりで書かれた行が 1 行に繋がる。
@@ -82,6 +83,31 @@ const md = new MarkdownIt({
   },
 }).use(cjkFriendly);
 
+/* `html: false` の下でも、GitHub の本文でだけ、文字の見た目のタグを通す。
+
+   GitHub の課題の本文とコメントは GitHub 自身がこれらを描くので、通さないと `<sub>` が
+   そのまま文字として並ぶ。**通すのは、下の綴りにぴたりと合う形だけである** —— 属性が
+   1 つでも付いていれば合わないので、`href` も `src` も `on...` も画面へ出られない。
+   `<details>` を挙げていないのは、既定で中身を畳むタグだからである —— 観測したものを
+   画面から隠すタグを、glasshive が置く理由が無い。
+
+   合った形は、綴りを揃えて 1 通りに直して出す。`<BR />` も `<br>` として出るので、
+   書かれ方の違いが後ろの処理へ流れていかない。 */
+const INERT_HTML = /^<(?:(br)\s*\/?|(\/?)(b|i|s|em|strong|del|ins|sub|sup|kbd))>/i;
+
+md.inline.ruler.before('html_inline', 'inert_html', (state, silent) => {
+  if (state.env?.github !== true || state.src.charCodeAt(state.pos) !== 0x3c) return false;
+  const found = INERT_HTML.exec(state.src.slice(state.pos, state.posMax));
+  if (found === null) return false;
+  if (!silent) {
+    const [, lineBreak, closing, name] = found;
+    state.push('html_inline', '', 0).content =
+      lineBreak === undefined ? `<${closing}${name?.toLowerCase()}>` : '<br>';
+  }
+  state.pos += found[0].length;
+  return true;
+});
+
 /* 外部リンクは別のタブで開く。いま見ているタブは観測の途中なので、
    踏んだ拍子にいま見ている画面が置き換わると、そこまでの文脈が消える。 */
 const defaultLinkOpen =
@@ -94,4 +120,9 @@ md.renderer.rules.link_open = (tokens, index, options, env, self) => {
   return defaultLinkOpen(tokens, index, options, env, self);
 };
 
-export const mdToHtml = (text: string): string => md.render(text);
+/* 本文の出どころ。**既定を置かない** —— 置くと、新しく足された呼び出しが、どちらの
+   決まりで描かれるのかを言わないまま通ってしまう。 */
+export type MarkdownSource = 'transcript' | 'github';
+
+export const mdToHtml = (text: string, source: MarkdownSource): string =>
+  md.render(text, { github: source === 'github' });

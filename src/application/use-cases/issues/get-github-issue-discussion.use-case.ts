@@ -2,8 +2,9 @@ import { absent, type Observation, observed } from '~/app-kernel/observation.ts'
 import { ok, type Result } from '~/app-kernel/result.ts';
 import type { GitCommandIntegration } from '~/application/ports/integrations/git/git-command.integration.ts';
 import type { IssueTrackerIntegration } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
+import type { AvatarCacheService } from '~/application/services/issues/avatar-cache.service.ts';
 import { locateGithubRepository } from '~/application/services/issues/github-repository.service.ts';
-import type { GithubLabel } from '~/domain/entities/issues/github-issue.entity.ts';
+import type { GithubActor, GithubLabel } from '~/domain/entities/issues/github-issue.entity.ts';
 import type {
   GithubIssueDiscussion,
   GithubIssueDiscussionEntry,
@@ -45,9 +46,25 @@ export interface GetGithubIssueDiscussionUseCase {
   ): Promise<Result<Observation<GithubIssueDiscussion>, never>>;
 }
 
+/* やり取りで名指された人。**顔を引ける先を、観た通りに覚えるためだけに集める。**
+
+   一覧に出てくるのは担当と書いた人だけなので、ラベルを付けた人も改題した人も一覧には居ない。
+   ここで覚えておかないと、その人の顔だけがどのプロジェクトからも引けない。 */
+function actorsIn(entries: readonly GithubIssueDiscussionEntry[]): readonly GithubActor[] {
+  const found: GithubActor[] = [];
+  for (const entry of entries) {
+    if (entry.actor !== null) found.push(entry.actor);
+    if ((entry.kind === 'assigned' || entry.kind === 'unassigned') && entry.assignee !== null) {
+      found.push(entry.assignee);
+    }
+  }
+  return found;
+}
+
 export function createGetGithubIssueDiscussion(deps: {
   readonly git: GitCommandIntegration;
   readonly tracker: IssueTrackerIntegration;
+  readonly avatars: AvatarCacheService;
 }): GetGithubIssueDiscussionUseCase {
   return {
     async execute({ projectPath, number }) {
@@ -90,6 +107,10 @@ export function createGetGithubIssueDiscussion(deps: {
         // 次の周回に入れないなら、その先は読んでいない
         if (page === MAX_PAGES - 1) truncated = true;
       }
+
+      /* 名指された人の顔を引ける先を覚える。**読めたぶんだけ覚える** —— 途中で切れた
+         やり取りでも、そこまでに出てきた人の顔は引けるべきである。 */
+      deps.avatars.rememberActors(actorsIn(entries));
 
       /* 誰も何も言っていない課題は、空の並びとして観測できている。`absent` にすると
          「まだ誰も書いていない」と「読みに行けなかった」が同じ画面になる。 */

@@ -1,6 +1,7 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { MdView } from '~/frameworks/tanstack/ui/components/text/MdView.tsx';
+import type { MarkdownSource } from '~/frameworks/tanstack/ui/markdown.ts';
 
 /* 会話の本文に出てくる既知の id はチップになる。**引用の中でもチップになる。**
 
@@ -52,8 +53,8 @@ vi.mock('~/frameworks/tanstack/ui/hooks/useTokenIndex.ts', async () => {
   return { useTokenIndex: () => dict };
 });
 
-const view = (text: string) => {
-  const { container } = render(<MdView text={text} project={undefined} />);
+const view = (text: string, source: MarkdownSource = 'transcript') => {
+  const { container } = render(<MdView text={text} source={source} project={undefined} />);
   return container;
 };
 

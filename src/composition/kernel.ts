@@ -177,7 +177,7 @@ function assemble(): Kernel {
     }),
     listGithubIssues: createListGithubIssues({ git, tracker, avatars }),
     githubIssueBody: createGetGithubIssueBody({ git, tracker }),
-    githubIssueDiscussion: createGetGithubIssueDiscussion({ git, tracker }),
+    githubIssueDiscussion: createGetGithubIssueDiscussion({ git, tracker, avatars }),
     githubIssueEvents: createListGithubIssueEvents({ git, tracker }),
     avatars,
     gitOverview: createObserveRepository({ git, conflicts: createConflictCache() }),

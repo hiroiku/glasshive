@@ -392,12 +392,32 @@ body.dragging #drawer-grip {
   padding-left: 12px;
   min-width: 0;
 }
+/* 線の上に点を置く。**点が線を切ってはいけない** —— 絶対配置で載せるだけなので、項目の
+   間隔は padding のまま変わらない。点が無いと、項目は罫線を共有しているだけの引用の並びに
+   見えて、時刻の並びとして読めない。
+
+   縦は、イベントなら項目の真ん中で、アイコンの `align-self: center` と同じ位置に来る。
+   コメントは見出しの行に置く —— 本文の高さの真ん中に置くと、点が誰の発言かから離れる。
+
+   横は、項目が自分の `border-left` で引いている線の真上に来る値を入れる。基準にする箱が
+   項目そのものか、項目の中の 1 行かで、線までの距離が `padding-left` のぶんだけ変わる。 */
+.disc-dot {
+  position: absolute;
+  left: -3px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--dim) 70%, transparent);
+  transform: translateY(-50%);
+}
 /* コメントは本文を持つので、上下に息を入れる */
 .cmt {
   padding-top: 4px;
   padding-bottom: 8px;
 }
 .cmt-h {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -405,8 +425,20 @@ body.dragging #drawer-grip {
   font-size: 10.5px;
   margin-bottom: 3px;
 }
+/* 見出しの行に置く点は、`.cmt` の `padding-left` を挟んだ内側から数える */
+.cmt-h .disc-dot {
+  left: -15px;
+}
+/* 顔と名前で 1 人を指す。間を `margin` ではなく `gap` で空けるのは、名前が折り返して
+   次の行へ回ったときに、顔と名前の間だけが空いたままにならないようにするためである */
+.disc-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 /* イベントは [アイコン][言い分][いつ] の 1 行 */
 .disc-ev {
+  position: relative;
   display: flex;
   align-items: baseline;
   gap: 6px;
@@ -415,10 +447,35 @@ body.dragging #drawer-grip {
   color: var(--dim);
   font-size: 11px;
 }
+/* イベントの行の顔は小さくする。**行の高さを顔が決めてはいけない** —— 1 行に畳んだ
+   イベントが、顔のぶんだけコメントと同じ高さになると、畳んである意味が消える。
+
+   小さくするだけでは足りない。`.disc-ev` の `baseline` に並べると顔の下端がベースラインへ
+   揃って行が伸びるので、真ん中で並べる。顔を引けた人と引けなかった人とで、行の高さが
+   変わらなくなる。 */
+.disc-ev .av {
+  --av-size: 14px;
+}
+.disc-ev .disc-who {
+  vertical-align: middle;
+}
 .disc-ico {
   flex: none;
   align-self: center;
   opacity: 0.7;
+}
+/* 色の付いたアイコンは沈めない。0.7 で薄めると、どの色なのかが読めなくなる */
+.disc-ico.st-open,
+.disc-ico.st-closed,
+.disc-ico.st-blocked,
+.disc-ico.st-not_planned {
+  color: var(--st);
+  opacity: 1;
+}
+/* マイルストーンを付け外しした行。ガントの期日の縦線と同じ `--input` から採る */
+.disc-ico.ev-ms {
+  color: var(--input);
+  opacity: 1;
 }
 /* 言い分は行の中で折り返す。長い題が来ても、パネルそのものを横に広げない */
 .disc-say {

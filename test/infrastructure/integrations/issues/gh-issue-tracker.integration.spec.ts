@@ -292,6 +292,30 @@ describe('gh に課題 1 件のやり取りを尋ねる', () => {
     expect(query).toContain('willCloseTarget');
   });
 
+  /* やり取りで名指された人の顔は、この 1 回で一緒に取る。**後から login だけで引き直せない**
+     —— 顔の URL は GitHub にしか無く、glasshive が外へつながる先は `gh` のここ 1 か所である。 */
+  it('名指された人の顔の URL も、同じ 1 回で求める', async () => {
+    let query = '';
+    const tracker = createGhIssueTrackerIntegration({
+      run: async (args) => {
+        query = queryOf(args);
+        return '{}';
+      },
+    });
+
+    await tracker.fetchIssueDiscussion(one);
+
+    const named = [...query.matchAll(/(?:author|actor|assignee)\s*\{[^}]*\}/g)].map(
+      (hit) => hit[0],
+    );
+
+    expect(named.length, '人を名指す欄が 1 つも見付からない読み方になっている').toBeGreaterThan(13);
+    expect(
+      named.filter((field) => !field.includes('avatarUrl(size:48)')),
+      '顔を求めない欄が 1 つでも在ると、その種類の行だけ顔が抜ける',
+    ).toEqual([]);
+  });
+
   it('総数は求めない', async () => {
     let query = '';
     const tracker = createGhIssueTrackerIntegration({

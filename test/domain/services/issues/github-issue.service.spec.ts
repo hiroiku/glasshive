@@ -452,7 +452,7 @@ describe('課題 1 件のやり取りを読む', () => {
     expect(page?.entries[1]).toEqual({
       kind: 'comment',
       at: '2026-08-01T01:00:00Z',
-      actor: 'octocat',
+      actor: { login: 'octocat', avatarUrl: null },
       body: '書いた本文',
     });
   });
@@ -474,7 +474,7 @@ describe('課題 1 件のやり取りを読む', () => {
       ]),
     );
 
-    expect(page?.entries.map((entry) => entry.actor)).toEqual(['octocat', 'hiroiku']);
+    expect(page?.entries.map((entry) => entry.actor?.login)).toEqual(['octocat', 'hiroiku']);
   });
 
   it('誰が起こしたか読めなくても、起きたことは残す', () => {
@@ -487,6 +487,42 @@ describe('課題 1 件のやり取りを読む', () => {
     expect(page?.entries, '消えたユーザーの操作を、起きなかったことにしない').toEqual([
       { kind: 'reopened', at: '2026-08-01T00:00:00Z', actor: null },
     ]);
+  });
+
+  /* やり取りに出てくる人の顔も、一覧の担当と同じ読み方で採る。**採らないと、ラベルを
+     付けた人や改題した人の顔だけがどこからも引けない** —— 一覧に出るのは担当と書いた人だけ
+     だからである。顔を引けないことと、誰も名指されていないことは別のままにする。 */
+  it('やり取りで名指された人の顔の URL も採る', () => {
+    const page = parseIssueDiscussion(
+      discussionOf([
+        {
+          __typename: 'LabeledEvent',
+          createdAt: '2026-08-01T00:00:00Z',
+          actor: { login: 'hiroiku', avatarUrl: 'https://avatars.githubusercontent.com/u/1?s=48' },
+          label: { name: 'ui', color: 'd73a4a' },
+        },
+        {
+          __typename: 'AssignedEvent',
+          createdAt: '2026-08-02T00:00:00Z',
+          actor: { login: 'octocat' },
+          assignee: { login: 'rin', avatarUrl: 'https://avatars.githubusercontent.com/u/2?s=48' },
+        },
+      ]),
+    );
+    const [labeled, assigned] = page?.entries ?? [];
+
+    expect(labeled?.actor).toEqual({
+      login: 'hiroiku',
+      avatarUrl: 'https://avatars.githubusercontent.com/u/1?s=48',
+    });
+    expect(assigned?.actor, 'URL を返さない相手も居る。名指されていないことにはしない').toEqual({
+      login: 'octocat',
+      avatarUrl: null,
+    });
+    expect(
+      assigned?.kind === 'assigned' ? assigned.assignee : null,
+      '担当にされた人も名指された 1 人である',
+    ).toEqual({ login: 'rin', avatarUrl: 'https://avatars.githubusercontent.com/u/2?s=48' });
   });
 
   it('本文の無いコメントと、本文を読めなかったコメントを分ける', () => {
@@ -522,7 +558,7 @@ describe('課題 1 件のやり取りを読む', () => {
     expect(page?.entries[0], 'やらないことにしたのと、やり終えたのは別である').toEqual({
       kind: 'closed',
       at: '2026-08-01T00:00:00Z',
-      actor: 'hiroiku',
+      actor: { login: 'hiroiku', avatarUrl: null },
       reason: 'NOT_PLANNED',
     });
   });
@@ -542,7 +578,7 @@ describe('課題 1 件のやり取りを読む', () => {
     expect(page?.entries[0]).toEqual({
       kind: 'unlabeled',
       at: '2026-08-01T00:00:00Z',
-      actor: 'hiroiku',
+      actor: { login: 'hiroiku', avatarUrl: null },
       label: { name: 'bug', color: null },
     });
   });
@@ -569,13 +605,13 @@ describe('課題 1 件のやり取りを読む', () => {
       {
         kind: 'blocked-by-added',
         at: '2026-08-01T00:00:00Z',
-        actor: 'hiroiku',
+        actor: { login: 'hiroiku', avatarUrl: null },
         blockingIssue: { number: 9, title: '先に片付ける課題' },
       },
       {
         kind: 'marked-as-duplicate',
         at: '2026-08-01T01:00:00Z',
-        actor: 'hiroiku',
+        actor: { login: 'hiroiku', avatarUrl: null },
         canonical: { number: 4, title: '元の課題' },
       },
     ]);

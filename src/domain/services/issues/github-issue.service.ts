@@ -306,9 +306,11 @@ export interface GithubIssueDiscussionPage {
   readonly hasNextPage: boolean;
 }
 
-/** `login` の欄を 1 つ読む。GitHub は消えたユーザーや権限の無い相手に `null` を返す */
-const loginAt = (node: JsonRecord, key: string): string | null =>
-  asString(asRecord(node, key), 'login') ?? null;
+/* 人を名指す欄を 1 つ読む。GitHub は消えたユーザーや権限の無い相手に `null` を返す。
+
+   顔の URL も一緒に採る。**採るのは `actorOf` である** —— 一覧の担当と同じ読み方でなければ、
+   同じ人が場所によって顔を持ったり持たなかったりする。 */
+const actorAt = (node: JsonRecord, key: string): GithubActor | null => actorOf(asRecord(node, key));
 
 /** 名指された課題か PR。番号が読めなければ、何を指したのか言えない */
 function referenceAt(node: JsonRecord, key: string): GithubIssueReference | null {
@@ -334,7 +336,7 @@ function labelAt(node: JsonRecord, key: string): GithubLabel | null {
 function entryOf(node: JsonRecord): GithubIssueDiscussionEntry | null {
   const at = asString(node, 'createdAt');
   if (at === undefined) return null;
-  const actor = loginAt(node, 'actor');
+  const actor = actorAt(node, 'actor');
 
   switch (asString(node, '__typename')) {
     case 'IssueComment':
@@ -342,7 +344,7 @@ function entryOf(node: JsonRecord): GithubIssueDiscussionEntry | null {
         kind: 'comment',
         at,
         // コメントを書いた人は `actor` ではなく `author` に入る
-        actor: loginAt(node, 'author'),
+        actor: actorAt(node, 'author'),
         body: asString(node, 'body') ?? null,
       };
     case 'ClosedEvent':
@@ -358,9 +360,9 @@ function entryOf(node: JsonRecord): GithubIssueDiscussionEntry | null {
       return label === null ? null : { kind: 'unlabeled', at, actor, label };
     }
     case 'AssignedEvent':
-      return { kind: 'assigned', at, actor, assignee: loginAt(node, 'assignee') };
+      return { kind: 'assigned', at, actor, assignee: actorAt(node, 'assignee') };
     case 'UnassignedEvent':
-      return { kind: 'unassigned', at, actor, assignee: loginAt(node, 'assignee') };
+      return { kind: 'unassigned', at, actor, assignee: actorAt(node, 'assignee') };
     case 'MilestonedEvent':
       return {
         kind: 'milestoned',

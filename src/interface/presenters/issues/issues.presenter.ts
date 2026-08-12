@@ -151,7 +151,9 @@ export interface GithubIssueReferenceJson {
 interface DiscussionEntryBaseJson {
   /** GitHub の `createdAt` をそのまま運ぶ ISO 8601 の文字列 */
   at: string;
-  actor: string | null;
+  /* 起こした人。**顔を引けないことと、誰も名指されていないことは別である** —— 前者は
+     `actor.avatar` が `null` で、後者はこの欄そのものが `null` になる。 */
+  actor: GithubActorJson | null;
 }
 
 /* やり取りの 1 項目。**内側と同じ直和のまま外へ出す。**
@@ -171,8 +173,8 @@ export type GithubIssueDiscussionEntryJson =
   | (DiscussionEntryBaseJson & { kind: 'reopened' })
   | (DiscussionEntryBaseJson & { kind: 'labeled'; label: GithubLabelJson })
   | (DiscussionEntryBaseJson & { kind: 'unlabeled'; label: GithubLabelJson })
-  | (DiscussionEntryBaseJson & { kind: 'assigned'; assignee: string | null })
-  | (DiscussionEntryBaseJson & { kind: 'unassigned'; assignee: string | null })
+  | (DiscussionEntryBaseJson & { kind: 'assigned'; assignee: GithubActorJson | null })
+  | (DiscussionEntryBaseJson & { kind: 'unassigned'; assignee: GithubActorJson | null })
   | (DiscussionEntryBaseJson & { kind: 'milestoned'; milestone_title: string | null })
   | (DiscussionEntryBaseJson & { kind: 'demilestoned'; milestone_title: string | null })
   | (DiscussionEntryBaseJson & {
@@ -307,7 +309,10 @@ const presentReference = (reference: GithubIssueReference): GithubIssueReference
    **種類を網羅した `switch` にする。** `default` でまとめて写すと、名前の違う欄を持つ種類が
    欄の抜けたまま外へ出る。ここで写し損ねたものは、画面には最初から無かったことになる。 */
 function presentDiscussionEntry(entry: GithubIssueDiscussionEntry): GithubIssueDiscussionEntryJson {
-  const base = { at: entry.at, actor: entry.actor };
+  const base = {
+    at: entry.at,
+    actor: entry.actor === null ? null : presentActor(entry.actor),
+  };
   switch (entry.kind) {
     case 'comment':
       return { ...base, kind: 'comment', body: entry.body };
@@ -320,9 +325,17 @@ function presentDiscussionEntry(entry: GithubIssueDiscussionEntry): GithubIssueD
     case 'unlabeled':
       return { ...base, kind: 'unlabeled', label: { ...entry.label } };
     case 'assigned':
-      return { ...base, kind: 'assigned', assignee: entry.assignee };
+      return {
+        ...base,
+        kind: 'assigned',
+        assignee: entry.assignee === null ? null : presentActor(entry.assignee),
+      };
     case 'unassigned':
-      return { ...base, kind: 'unassigned', assignee: entry.assignee };
+      return {
+        ...base,
+        kind: 'unassigned',
+        assignee: entry.assignee === null ? null : presentActor(entry.assignee),
+      };
     case 'milestoned':
       return { ...base, kind: 'milestoned', milestone_title: entry.milestoneTitle };
     case 'demilestoned':

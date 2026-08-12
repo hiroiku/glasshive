@@ -1,4 +1,4 @@
-import type { GithubLabel } from './github-issue.entity.ts';
+import type { GithubActor, GithubLabel } from './github-issue.entity.ts';
 
 /* 課題 1 件のやり取り。コメントと、GitHub の `timeline` に並ぶイベントを 1 つの並びで持つ。
 
@@ -20,8 +20,11 @@ export interface GithubIssueReference {
 interface DiscussionEntryBase {
   /** GitHub の `createdAt` をそのまま持つ ISO 8601 の文字列 */
   readonly at: string;
-  /** 起こした人の `login`。消えたユーザーや `null` を返す相手もいるので、無いことがある */
-  readonly actor: string | null;
+  /* 起こした人。消えたユーザーや `null` を返す相手もいるので、無いことがある。
+
+     **顔を引けないことと、誰も名指されていないことは別である。** 前者は `actor.avatarUrl`
+     が `null` で、後者はこの欄そのものが `null` になる。 */
+  readonly actor: GithubActor | null;
 }
 
 export type GithubIssueDiscussionEntry =
@@ -39,8 +42,8 @@ export type GithubIssueDiscussionEntry =
   | (DiscussionEntryBase & { readonly kind: 'reopened' })
   | (DiscussionEntryBase & { readonly kind: 'labeled'; readonly label: GithubLabel })
   | (DiscussionEntryBase & { readonly kind: 'unlabeled'; readonly label: GithubLabel })
-  | (DiscussionEntryBase & { readonly kind: 'assigned'; readonly assignee: string | null })
-  | (DiscussionEntryBase & { readonly kind: 'unassigned'; readonly assignee: string | null })
+  | (DiscussionEntryBase & { readonly kind: 'assigned'; readonly assignee: GithubActor | null })
+  | (DiscussionEntryBase & { readonly kind: 'unassigned'; readonly assignee: GithubActor | null })
   | (DiscussionEntryBase & {
       readonly kind: 'milestoned';
       /** GitHub が返すのはマイルストーンの題だけで、期限もオブジェクトも付いてこない */

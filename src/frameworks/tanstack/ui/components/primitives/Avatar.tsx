@@ -13,8 +13,9 @@ import { monogram } from '../../derive/githubIssue.ts';
    区別が付かなくなる。`title` は名前の代わりにならない —— 触って使う画面では出ない。
    名前が隣に文字で並んでいる呼び出しだけ `decorative` で伏せて、二重に読ませない。 */
 
-/** 顔を出す大きさ。取ってくるのは倍の 48px 1 枚だけで、縮めて描く */
-const SIZE = 18;
+/* 取ってくる画像の大きさ。どの大きさで描くかは呼ぶ側が `--av-size` で決めるので、この値は
+   `img` に縦横比を先に伝えるためだけに置く。1 枚を縮めて描き、大きさごとには取りに行かない。 */
+const FETCHED_SIZE = 48;
 
 export function Avatar({
   actor,
@@ -38,8 +39,8 @@ export function Avatar({
         <img
           src={`/api/avatar/${encodeURIComponent(actor.avatar)}`}
           alt=""
-          width={SIZE}
-          height={SIZE}
+          width={FETCHED_SIZE}
+          height={FETCHED_SIZE}
           loading="lazy"
           decoding="async"
         />

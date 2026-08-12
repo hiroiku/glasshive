@@ -76,3 +76,54 @@ describe('見た目の決まりは 1 本の入口から辿れる', () => {
     ]);
   });
 });
+
+/* 課題のやり取りの縦線。**点は線の上に載るだけで、線を切ってはいけない。**
+
+   項目の間隔は `padding` で取ってあるので、点が流れの中に入ると、そのぶん行が押し広がって
+   間隔が種類ごとに変わる。ここで見えるのは宣言が在ることだけで、点が線の真上に来ているか
+   —— `left` の値が正しいか —— は、描かれた画面でしか確かめられない。 */
+describe('やり取りの点は、線を切らない', () => {
+  const panel = fs.readFileSync(path.join(STYLES, 'panel.css'), 'utf8');
+
+  /** 宣言の並びを、その 1 つ分だけ切り出す */
+  const ruleOf = (selector: string): string => {
+    const at = panel.indexOf(`${selector} {`);
+    return at === -1 ? '' : panel.slice(at, panel.indexOf('}', at));
+  };
+
+  it('点は流れの外に置く', () => {
+    expect(ruleOf('.disc-dot'), '流れの中に入れると、点のぶんだけ項目の間隔が広がる').toContain(
+      'position: absolute',
+    );
+  });
+
+  it('点を載せる項目が、点の基準になっている', () => {
+    for (const selector of ['.cmt-h', '.disc-ev']) {
+      expect(ruleOf(selector), `${selector} が基準でないと、点は panel の左上まで飛ぶ`).toContain(
+        'position: relative',
+      );
+    }
+  });
+});
+
+/* 状態の色は 1 か所で決める、という決まりを跨いで確かめる。
+
+   `--st` を置いているのは `issues.css` の `.st-*` で、それを読むのは `panel.css` の
+   `.disc-ico` である。**読む側だけを直しても、色は静かに消える** —— `var(--st)` が解けない
+   `color` は無効な値として捨てられ、アイコンは行の文字色を継いだまま、壊れているようには
+   見えない姿で出る。 */
+describe('アイコンの色は、状態の色の表から採る', () => {
+  const issues = fs.readFileSync(path.join(STYLES, 'issues.css'), 'utf8');
+  const panel = fs.readFileSync(path.join(STYLES, 'panel.css'), 'utf8');
+
+  /** `.disc-ico` に足してある状態のクラス */
+  const tones = [...panel.matchAll(/\.disc-ico\.(st-[\w_]+)/g)].map((hit) => hit[1]);
+
+  it('読む側と置く側が、同じ綴りを指している', () => {
+    expect(tones.length, '`.disc-ico` に状態の色が 1 つも足されていない').toBeGreaterThan(0);
+
+    for (const tone of tones) {
+      expect(issues, `${tone} に --st を置く規則が無い`).toContain(`.${tone} {\n  --st:`);
+    }
+  });
+});

@@ -8,6 +8,7 @@ import type {
 import {
   AVATAR_MAX_AGE_MS,
   createAvatarCache,
+  MAX_DISCUSSED_LOGINS,
   MAX_REMEMBERED_PROJECTS,
 } from '~/application/services/issues/avatar-cache.service.ts';
 
@@ -268,5 +269,68 @@ describe('顔が取れなかったとき', () => {
       (await scene.cache.read('hiroiku')).kind,
       '取れなかったことを「そんな顔は無い」に潰さない',
     ).toBe('unobservable');
+  });
+});
+
+/* やり取りを開いたときに名指された人。**一覧には居ない** —— 一覧が持つのは担当と書いた人
+   だけなので、ラベルを付けた人も改題した人もここでしか観測できない。
+
+   一覧と違って観測し直す機会が無いので、プロジェクトごとに入れ替える代わりに古いものから
+   落とす。入れ替えないからといって、宛先の決まりが緩むわけではない。 */
+describe('やり取りで観た顔も引ける', () => {
+  it('一覧に居ない人でも、やり取りで観たなら引ける', async () => {
+    const scene = sceneOf();
+    scene.cache.rememberActors([{ login: 'octocat', avatarUrl: `${GITHUB}/u/7?s=48` }]);
+
+    const answer = await scene.cache.read('octocat');
+
+    expect(answer.kind, '一覧に居ないだけで顔が出ないと、イベントの行だけ顔が抜ける').toBe(
+      'observed',
+    );
+    expect(scene.asked[0]?.url).toBe(`${GITHUB}/u/7?s=48`);
+  });
+
+  it('一覧を取り直しても、やり取りで観た顔は消えない', async () => {
+    const scene = sceneOf();
+    scene.cache.rememberActors([{ login: 'octocat', avatarUrl: `${GITHUB}/u/7` }]);
+    scene.cache.remember('/work/glasshive', ledgerOf([]));
+
+    expect(
+      (await scene.cache.read('octocat')).kind,
+      'プロジェクトごとの入れ替えは、一覧で観たぶんの話である',
+    ).toBe('observed');
+  });
+
+  /* 宛先の決まりは、どこで観たかで変わらない。**観測した値であっても宛先は確かめる** ——
+     確かめなければ、この画面は任意の宛先へ代わりに取りに行く踏み台になる。 */
+  it('GitHub の外を指す URL は、やり取りで観ても引かない', async () => {
+    const scene = sceneOf();
+    scene.cache.rememberActors([
+      { login: 'evil', avatarUrl: 'https://example.com/u/1' },
+      { login: 'plain', avatarUrl: 'http://avatars.githubusercontent.com/u/2' },
+      { login: 'faceless', avatarUrl: null },
+    ]);
+
+    expect((await scene.cache.read('evil')).kind).toBe('absent');
+    expect((await scene.cache.read('plain')).kind, 'https でなければ引かない').toBe('absent');
+    expect((await scene.cache.read('faceless')).kind).toBe('absent');
+    expect(scene.asked, '1 つでも尋ねていれば、そこが踏み台である').toEqual([]);
+  });
+
+  it('覚える数に上限が在り、古いものから落ちる', async () => {
+    const scene = sceneOf();
+    scene.cache.rememberActors([{ login: 'first', avatarUrl: `${GITHUB}/u/0` }]);
+    scene.cache.rememberActors(
+      Array.from({ length: MAX_DISCUSSED_LOGINS }, (_, index) => ({
+        login: `later${index}`,
+        avatarUrl: `${GITHUB}/u/${index + 1}`,
+      })),
+    );
+
+    expect(
+      (await scene.cache.read('first')).kind,
+      '上限が無いと、一度開いた課題の人がいつまでも引ける',
+    ).toBe('absent');
+    expect((await scene.cache.read('later0')).kind).toBe('observed');
   });
 });

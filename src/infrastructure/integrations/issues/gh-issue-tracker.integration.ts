@@ -134,21 +134,21 @@ query($owner:String!,$name:String!,$number:Int!,$cursor:String){
         pageInfo{ hasNextPage endCursor }
         nodes{
           __typename
-          ... on IssueComment { createdAt author{login} body }
-          ... on ClosedEvent { createdAt actor{login} stateReason }
-          ... on ReopenedEvent { createdAt actor{login} }
-          ... on LabeledEvent { createdAt actor{login} label{name color} }
-          ... on UnlabeledEvent { createdAt actor{login} label{name color} }
-          ... on AssignedEvent { createdAt actor{login} assignee{ ... on User { login } } }
-          ... on UnassignedEvent { createdAt actor{login} assignee{ ... on User { login } } }
-          ... on MilestonedEvent { createdAt actor{login} milestoneTitle }
-          ... on DemilestonedEvent { createdAt actor{login} milestoneTitle }
-          ... on RenamedTitleEvent { createdAt actor{login} previousTitle currentTitle }
-          ... on ParentIssueAddedEvent { createdAt actor{login} parent{number title} }
-          ... on BlockedByAddedEvent { createdAt actor{login} blockingIssue{number title} }
-          ... on MarkedAsDuplicateEvent { createdAt actor{login} canonical{ ... on Issue { number title } } }
+          ... on IssueComment { createdAt author{login avatarUrl(size:48)} body }
+          ... on ClosedEvent { createdAt actor{login avatarUrl(size:48)} stateReason }
+          ... on ReopenedEvent { createdAt actor{login avatarUrl(size:48)} }
+          ... on LabeledEvent { createdAt actor{login avatarUrl(size:48)} label{name color} }
+          ... on UnlabeledEvent { createdAt actor{login avatarUrl(size:48)} label{name color} }
+          ... on AssignedEvent { createdAt actor{login avatarUrl(size:48)} assignee{ ... on User { login avatarUrl(size:48) } } }
+          ... on UnassignedEvent { createdAt actor{login avatarUrl(size:48)} assignee{ ... on User { login avatarUrl(size:48) } } }
+          ... on MilestonedEvent { createdAt actor{login avatarUrl(size:48)} milestoneTitle }
+          ... on DemilestonedEvent { createdAt actor{login avatarUrl(size:48)} milestoneTitle }
+          ... on RenamedTitleEvent { createdAt actor{login avatarUrl(size:48)} previousTitle currentTitle }
+          ... on ParentIssueAddedEvent { createdAt actor{login avatarUrl(size:48)} parent{number title} }
+          ... on BlockedByAddedEvent { createdAt actor{login avatarUrl(size:48)} blockingIssue{number title} }
+          ... on MarkedAsDuplicateEvent { createdAt actor{login avatarUrl(size:48)} canonical{ ... on Issue { number title } } }
           ... on CrossReferencedEvent {
-            createdAt actor{login} willCloseTarget
+            createdAt actor{login avatarUrl(size:48)} willCloseTarget
             source{ ... on PullRequest { number title } ... on Issue { number title } }
           }
         }

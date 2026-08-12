@@ -53,7 +53,13 @@ export function EventView({
         const key = `${index}:${block.kind}`;
         if (block.kind === 'text') {
           return (
-            <MdView key={key} className="bubble speech md" text={block.text} project={project} />
+            <MdView
+              key={key}
+              className="bubble speech md"
+              text={block.text}
+              source="transcript"
+              project={project}
+            />
           );
         }
 

@@ -4,7 +4,7 @@ import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter
 import { commitToken, type TokenDict } from '../../derive/tokens.ts';
 import { useTokenIndex } from '../../hooks/useTokenIndex.ts';
 import { hoverTok } from '../../hoverTok.ts';
-import { mdToHtml } from '../../markdown.ts';
+import { type MarkdownSource, mdToHtml } from '../../markdown.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import { iconHtml } from '../primitives/Icon.tsx';
 
@@ -14,7 +14,9 @@ import { iconHtml } from '../primitives/Icon.tsx';
    ので、チップも文字列として組み、ハンドラは外側の 1 つで受ける。
 
    `mdToHtml` の出す HTML は `html: false` で組まれているので、元の本文に在ったタグは
-   既にエスケープされている。ここで足すのは自分で組んだチップだけである。 */
+   既にエスケープされている。GitHub の本文でだけ、文字の見た目のタグがそのまま残る ——
+   どれも属性を持たない形に限ってあるので、下の走査が属性の中を触ることは無い。
+   ここで足すのは自分で組んだチップだけである。 */
 
 /* 語の切り出し。課題の id は `#209` の形なので、`#` から始まる語も切る。
 
@@ -122,16 +124,19 @@ function linkifyTokens(html: string, dict: TokenDict): string {
 
 export function MdView({
   text,
+  source,
   project,
   className = 'md',
 }: {
   text: string;
+  /** この本文がどこから来たか。GitHub のものだけ、文字の見た目のタグが通る */
+  source: MarkdownSource;
   project: ProjectJson | undefined;
   className?: string;
 }) {
   const nav = useNav();
   const dict = useTokenIndex(project);
-  const html = useMemo(() => linkifyTokens(mdToHtml(text), dict), [text, dict]);
+  const html = useMemo(() => linkifyTokens(mdToHtml(text, source), dict), [text, source, dict]);
 
   const closestChip = (target: EventTarget | null): HTMLElement | null =>
     (target as HTMLElement | null)?.closest('.ichip, .agchip, .refchip, .tokref') ?? null;

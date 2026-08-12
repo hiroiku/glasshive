@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { AppError } from '~/app-kernel/error.ts';
-import { observed, unobservable } from '~/app-kernel/observation.ts';
+import { absent, observed, unobservable } from '~/app-kernel/observation.ts';
 import type { GitCommandIntegration } from '~/application/ports/integrations/git/git-command.integration.ts';
 import type {
   IssueDiscussionRequest,
   IssueTrackerIntegration,
 } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
+import type { AvatarCacheService } from '~/application/services/issues/avatar-cache.service.ts';
 import { createGetGithubIssueDiscussion } from '~/application/use-cases/issues/get-github-issue-discussion.use-case.ts';
 
 /* 課題 1 件のやり取りは、本文と同じく 1 件を開いたときにだけ引く。
@@ -77,10 +78,26 @@ function fakeTracker(pages: readonly string[]) {
   return { tracker, asked };
 }
 
+/* 顔を引ける先を覚えさせた相手。**やり取りで名指された人は一覧に居ないことが在る** ——
+   覚えさせていないと、その人の顔だけがどこからも引けない */
+function fakeAvatars() {
+  const learned: string[] = [];
+  const avatars: AvatarCacheService = {
+    remember: () => undefined,
+    rememberActors: (actors) => {
+      for (const actor of actors) learned.push(actor.login);
+    },
+    warm: () => undefined,
+    read: async () => absent('no-source'),
+  };
+  return { avatars, learned };
+}
+
 const useCaseWith = (
   tracker: IssueTrackerIntegration,
   git = gitWithRemote('git@github.com:hiroiku/glasshive.git'),
-) => createGetGithubIssueDiscussion({ git, tracker });
+  avatars: AvatarCacheService = fakeAvatars().avatars,
+) => createGetGithubIssueDiscussion({ git, tracker, avatars });
 
 describe('GitHub の課題 1 件のやり取り', () => {
   it('remote が指すリポジトリの、その番号を尋ねる', async () => {
@@ -235,5 +252,65 @@ describe('GitHub の課題 1 件のやり取り', () => {
     } else {
       expect.unreachable('1 ページ目は観えている');
     }
+  });
+});
+
+/* やり取りに出てくる人の顔。**一覧に居るのは担当と書いた人だけである** —— ラベルを付けた人も
+   改題した人も一覧には居ないので、ここで覚えさせておかないと、その人の顔だけが引けない。 */
+describe('やり取りで名指された人の顔', () => {
+  const labeledBy = (login: string) => ({
+    __typename: 'LabeledEvent',
+    createdAt: '2026-08-01T00:00:00Z',
+    actor: { login, avatarUrl: `https://avatars.githubusercontent.com/u/1?s=48` },
+    label: { name: 'ui', color: 'd73a4a' },
+  });
+
+  it('読めた人を、顔を引ける先として覚えさせる', async () => {
+    const { tracker } = fakeTracker([pageOf([labeledBy('octocat')], null)]);
+    const { avatars, learned } = fakeAvatars();
+
+    await useCaseWith(tracker, undefined, avatars).execute({
+      projectPath: '/work/glasshive',
+      number: 13,
+    });
+
+    expect(learned, '覚えさせないと、イベントの行だけ顔が抜ける').toEqual(['octocat']);
+  });
+
+  /* 担当にされた人は、そのイベントを起こした人ではない。**起こした人しか覚えないと、
+     自分では何もしていない担当の顔だけが引けない。** */
+  it('担当にされた人も、起こした人と一緒に覚えさせる', async () => {
+    const assigned = {
+      __typename: 'AssignedEvent',
+      createdAt: '2026-08-01T00:00:00Z',
+      actor: { login: 'rin_sato', avatarUrl: 'https://avatars.githubusercontent.com/u/1?s=48' },
+      assignee: { login: 'octocat', avatarUrl: 'https://avatars.githubusercontent.com/u/2?s=48' },
+    };
+    const { tracker } = fakeTracker([pageOf([assigned], null)]);
+    const { avatars, learned } = fakeAvatars();
+
+    await useCaseWith(tracker, undefined, avatars).execute({
+      projectPath: '/work/glasshive',
+      number: 13,
+    });
+
+    expect(learned).toEqual(['rin_sato', 'octocat']);
+  });
+
+  /* 途中で `gh` が答えなくなっても、そこまでは観えている。**観えたぶんの顔は引けるべきである**
+     —— 覚えさせないと、読めたやり取りの中で顔だけが出ない行が混ざる。 */
+  it('途中で切れても、そこまでに読めた人は覚えさせる', async () => {
+    const { tracker } = fakeTracker([pageOf([labeledBy('octocat')], 'CURSOR')]);
+    const { avatars, learned } = fakeAvatars();
+
+    const result = await useCaseWith(tracker, undefined, avatars).execute({
+      projectPath: '/work/glasshive',
+      number: 13,
+    });
+
+    expect(result.ok && result.value.kind === 'observed' && result.value.value.truncated).toBe(
+      true,
+    );
+    expect(learned).toEqual(['octocat']);
   });
 });

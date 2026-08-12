@@ -19,6 +19,7 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47]);
 
 const cacheOf = (answer: Awaited<ReturnType<Avatars['read']>>): Avatars => ({
   remember: () => undefined,
+  rememberActors: () => undefined,
   warm: () => undefined,
   read: async () => answer,
 });

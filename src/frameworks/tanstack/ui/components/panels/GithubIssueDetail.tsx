@@ -303,7 +303,7 @@ export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDet
         {/* 本文。**読めなかったことを黙らない** —— 空のまま出すと、本文の無い課題に見える。
             尋ねている最中も黙る。まだ答えが返っていないだけで、読めなかったのではない。 */}
         {text !== null ? (
-          text !== '' && <MdView text={text} project={project} />
+          text !== '' && <MdView text={text} source="github" project={project} />
         ) : body.isPending && askable ? null : (
           <NotObserved
             partial

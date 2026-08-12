@@ -3,6 +3,7 @@ import type {
   AvatarImage,
   AvatarIntegration,
 } from '~/application/ports/integrations/issues/avatar.integration.ts';
+import type { GithubActor } from '~/domain/entities/issues/github-issue.entity.ts';
 import type { IssueLedger } from '~/domain/entities/issues/issue.entity.ts';
 
 /* 顔を、こちらで読んで、こちらから返す。
@@ -29,6 +30,10 @@ const MAX_REMEMBERED = 200;
    いつまでも引けることになる。 */
 export const MAX_REMEMBERED_PROJECTS = 8;
 
+/* 一覧の外で観た宛先を覚えておく数。やり取り 1 件には多くても数十人しか出てこないので、
+   これで何件ぶんかは残る。上限を置かないと、開いたことのある課題の人がいつまでも引ける。 */
+export const MAX_DISCUSSED_LOGINS = 300;
+
 /** 覚えた顔をもう一度確かめに行くまでの間。ブラウザーに言う `max-age` と同じにする */
 export const AVATAR_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -44,6 +49,11 @@ export interface AvatarCacheService {
      プロジェクトごとに入れ替える。このキャッシュは glasshive 全体で 1 つなので、1 枚の表を
      一覧のたびに入れ替えると、2 つのプロジェクトを開いた画面が互いの顔を消し合う。 */
   remember(projectPath: string, ledger: IssueLedger): void;
+  /* 一覧の外で観た人を覚える。やり取りを開いたときに名指された人はここにしか居ない。
+
+     **プロジェクトごとに入れ替えられない。** 一覧と違って観測し直す機会が無いので、
+     入れ替える代わりに古いものから落とす。ここに入るのも、自分で観測した URL だけである。 */
+  rememberActors(actors: readonly GithubActor[]): void;
   /** login 1 つぶんの顔。引けない login は `absent` */
   read(login: string): Promise<Observation<AvatarImage>>;
   /** 一覧に出てきた顔を、待たずに先に読んでおく */
@@ -83,6 +93,8 @@ export function createAvatarCache(deps: {
      入れ替える。** 足し続けると、もう観測していない顔がいつまでも引けることになる。
      引くときは持っているプロジェクトの和を見るので、隣のプロジェクトの顔は消えない。 */
   const knownByProject = new Map<string, ReadonlyMap<string, string>>();
+  /** 一覧の外 —— やり取りを開いたとき —— に観た宛先。古いものから落とす */
+  const knownFromDiscussion = new Map<string, string>();
   const remembered = new Map<string, Remembered>();
   /* 同じ顔への求めを 1 本にまとめる。まとめないと、30 枚のカードが 30 回上流を叩く */
   const inFlight = new Map<string, Promise<Observation<AvatarImage>>>();
@@ -131,7 +143,7 @@ export function createAvatarCache(deps: {
       const url = known.get(login);
       if (url !== undefined) return url;
     }
-    return undefined;
+    return knownFromDiscussion.get(login);
   };
 
   const read = (login: string): Promise<Observation<AvatarImage>> => {
@@ -153,6 +165,19 @@ export function createAvatarCache(deps: {
   };
 
   return {
+    rememberActors(actors) {
+      for (const actor of actors) {
+        if (actor.avatarUrl === null || !isAllowed(actor.avatarUrl)) continue;
+        // 触ったものを末尾へ寄せる。落とすときは先頭から
+        knownFromDiscussion.delete(actor.login);
+        knownFromDiscussion.set(actor.login, actor.avatarUrl);
+      }
+      while (knownFromDiscussion.size > MAX_DISCUSSED_LOGINS) {
+        const oldest = knownFromDiscussion.keys().next();
+        if (oldest.done === true) break;
+        knownFromDiscussion.delete(oldest.value);
+      }
+    },
     remember(projectPath, ledger) {
       // 触ったものを末尾へ寄せる。落とすときは先頭から
       knownByProject.delete(projectPath);

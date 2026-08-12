@@ -76,6 +76,7 @@ function fakeAvatars() {
   const avatars: AvatarCacheService = {
     remember: (projectPath, ledger) =>
       remembered.push({ projectPath, issues: ledger.issues.length }),
+    rememberActors: () => undefined,
     warm: () => undefined,
     read: async () => absent('no-source'),
   };

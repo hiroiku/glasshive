@@ -853,18 +853,21 @@
   margin-left: -6px;
 }
 
+/* 顔の大きさは呼ぶ側が `--av-size` で決める。**画像は 1 枚だけ取ってくる** —— 取るのは
+   48px の 1 枚で、縮めて描く。頭文字も同じ割合で縮める */
 .av {
+  --av-size: 18px;
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: var(--av-size);
+  height: var(--av-size);
   border-radius: 50%;
   flex: none;
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--dim);
-  font-size: 8.5px;
+  font-size: calc(var(--av-size) * 0.47);
   font-weight: 600;
   letter-spacing: 0;
   overflow: hidden;
