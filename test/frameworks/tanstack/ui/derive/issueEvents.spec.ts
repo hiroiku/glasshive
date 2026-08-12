@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCloses,
   buildTracks,
+  closeFlagOf,
   EVENT_SLOTS,
   type EventLog,
   eventLogOf,
@@ -71,14 +72,14 @@ const logOf = (issues: readonly ReturnType<typeof entry>[], complete = true): Ev
 const closeOf = (issues: readonly Issue[], log: EventLog, id: string) =>
   buildCloses(issues, log).get(id) ?? null;
 
-const trackOf = (issues: readonly Issue[], log: EventLog, id: string) => {
-  const found = buildTracks(issues, log, buildCloses(issues, log), AXIS).get(id);
+const trackOf = (issues: readonly Issue[], log: EventLog, id: string, axis = AXIS) => {
+  const found = buildTracks(issues, log, buildCloses(issues, log), axis).get(id);
   if (found === undefined) throw new Error(`${id} のトラックが無い`);
   return found;
 };
 
-const readOf = (issues: readonly Issue[], log: EventLog, id: string) => {
-  const track = trackOf(issues, log, id);
+const readOf = (issues: readonly Issue[], log: EventLog, id: string, axis = AXIS) => {
+  const track = trackOf(issues, log, id, axis);
   if (track.kind !== 'read') throw new Error(`${id} は read ではない`);
   return track;
 };
@@ -291,6 +292,156 @@ describe('いつ閉じたか', () => {
     ).toBeNull();
     expect(readOf(issues, log, '#1').marks.length).toBe(1);
   });
+
+  /* 記録に `closed` が 2 つ在るなら、いま閉じている状態が始まったのは後のほうである。先に
+     閉じた 1 回はその後の `reopened` で解かれている。**開き直しが打ち消すのは、その前の
+     `closed` だけである** —— 後の `closed` まで捨てると、閉じた時刻を観測できているのに
+     代用へ落ちる。 */
+  it('開き直した後にまた閉じたなら、その最後の `closed` を採る', () => {
+    const first = NOW - 20 * DAY_MS;
+    const again = NOW - 4 * DAY_MS;
+    const issues = [issue('#1', { status: 'closed', closed_at: null, updated_at: null })];
+    const log = logOf([
+      entry('#1', [
+        { at: first, kind: 'closed' },
+        { at: first + DAY_MS, kind: 'reopened' },
+        { at: again, kind: 'closed' },
+      ]),
+    ]);
+
+    expect(closeOf(issues, log, '#1'), '開き直しの後の 1 回は、まだ解かれていない').toEqual({
+      at: again,
+      approx: false,
+    });
+  });
+
+  /* 落とすのはフラグが指している 1 回である。**近いだけの別の 1 回ではない** —— 閉じて
+     すぐ開き直してまた閉じた課題で近いほうを落とすと、最後の閉じるがフラグと点の 2 つの形で
+     並び、途中の 1 回は消える。2 つの `closed` はどちらも、同じ 1 回として扱う幅の中に在る。 */
+  it('落ちるのはフラグと同じ 1 回で、近くの別の 1 回ではない', () => {
+    const first = NOW - 6 * DAY_MS;
+    const again = first + 2_000;
+    const issues = [
+      issue('#1', { status: 'closed', closed_at: iso(again), updated_at: iso(again) }),
+    ];
+    const log = logOf([
+      entry('#1', [
+        { at: first, kind: 'closed' },
+        { at: first + 1_000, kind: 'reopened' },
+        { at: again, kind: 'closed' },
+      ]),
+    ]);
+    const marks = readOf(issues, log, '#1').marks;
+
+    expect(marks.length, '残る 2 つは 1 スロットの中に在るので、1 つの点にまとまる').toBe(1);
+    expect(marks[0]?.at, '落とす相手を間違えると、点の置かれる時刻が動く').toBe(first);
+    expect(marks[0]?.kinds, '途中の 1 回を落とすと、経緯が減って見える').toEqual([
+      'closed',
+      'reopened',
+    ]);
+  });
+
+  /* 代用の時刻が、観測した `closed` と同じ時刻に落ちることは在る。**同じ時刻でも、代用と
+     観測した 1 回は別である** —— 落とすと、観測できていた 1 回が画面から消えて、残るのは
+     観測できていない時刻のフラグだけになる。 */
+  it('代用の時刻のフラグでは、`closed` の点を落とさない', () => {
+    const at = NOW - 5 * DAY_MS;
+    const issues = [issue('#1', { status: 'closed', closed_at: null, updated_at: iso(at) })];
+    // 記録のいちばん後が `reopened` なので、閉じた時刻は記録から採れず代用のままになる
+    const log = logOf([
+      entry('#1', [
+        { at, kind: 'closed' },
+        { at: at + 2 * DAY_MS, kind: 'reopened' },
+      ]),
+    ]);
+
+    expect(
+      closeOf(issues, log, '#1'),
+      '記録から採れないので、閉じた時刻は代用のままである',
+    ).toEqual({ at, approx: true });
+    expect(
+      readOf(issues, log, '#1').marks.flatMap((mark) => mark.kinds),
+      '代用の時刻と観測した `closed` は別の 1 回である',
+    ).toEqual(['closed', 'reopened']);
+  });
+
+  /* 落とす幅を軸から採ると、同じ記録を別の幅で見たときに、点として残るイベントが変わる。
+     **幅は見る人が選ぶもので、どのイベントを観測したかは記録の側の事実である。**
+
+     見ているのは、フラグの立つ 1 回を落とした後に何が残るかである。まとめ方は幅で変わってよい
+     ——`EVENT_SLOTS` は見分けの付く間隔を決めるものなので、そちらは軸から採るのが正しい。 */
+  it('軸の幅を変えても、点として残るイベントは変わらない', () => {
+    const closedMs = NOW - 2 * DAY_MS;
+    // フラグは `closed_at`、点はその 8 時間前の `closed` —— 1 か月の幅なら 1 スロットの中に入る
+    const observedMs = closedMs - 8 * 60 * 60_000;
+    const issues = [
+      issue('#1', {
+        status: 'closed',
+        created_at: iso(NOW - 300 * DAY_MS),
+        closed_at: iso(closedMs),
+        updated_at: iso(closedMs),
+      }),
+    ];
+    const log = logOf([entry('#1', [{ at: observedMs, kind: 'closed' }])]);
+    const drawnOn = (axis: { t0: number; t1: number }) =>
+      readOf(issues, log, '#1', axis).marks.map((mark) => mark.at);
+
+    expect(drawnOn(AXIS), '8 時間離れた `closed` は、フラグの指す 1 回ではない').toEqual([
+      observedMs,
+    ]);
+    expect(
+      drawnOn({ t0: NOW - 7 * DAY_MS, t1: NOW }),
+      '幅を切り替えただけで残る点が変わるなら、決めているのは記録ではなく幅である',
+    ).toEqual([observedMs]);
+  });
+
+  /* 一覧の `closed_at` と記録の `ClosedEvent` は、同じ 1 回を別々の欄に書いたものである。
+     GitHub の返す時刻はその 2 つで 1 秒ずれることが在るので、**そこまでは同じ 1 回として
+     扱う** —— 扱わないと、閉じた課題の 6 件に 1 件ほどで、フラグのすぐ下に同じ 1 回の点が並ぶ。
+     1 分も離れていれば、それは別の 1 回である。 */
+  it('1 秒ずれて書かれた同じ 1 回は、フラグと点に分かれない', () => {
+    const flagged = NOW - 7 * DAY_MS;
+    const near = issue('#1', { status: 'closed', closed_at: iso(flagged), updated_at: null });
+    const far = issue('#2', { status: 'closed', closed_at: iso(flagged), updated_at: null });
+    const log = logOf([
+      entry('#1', [{ at: flagged - 1_000, kind: 'closed' }]),
+      entry('#2', [{ at: flagged - 60_000, kind: 'closed' }]),
+    ]);
+
+    expect(readOf([near, far], log, '#1').marks.length, '同じ 1 回を 2 つの形で並べない').toBe(0);
+    expect(
+      readOf([near, far], log, '#2').marks.length,
+      '離れた `closed` は別の 1 回なので、点として残る',
+    ).toBe(1);
+  });
+});
+
+/* フラグが立つかどうかは、その時刻を軸の上に置けるかどうかだけで決まる。**両端とも同じ扱い
+   である** —— 片側だけを見ていると、軸の外の時刻にフラグが立つ。位置は `atPct` がそのまま
+   返すので、軸の外に立てば列の外へ出る。 */
+describe('閉じた時刻を軸の上に置く', () => {
+  it('軸より前に閉じた課題には、フラグを立てない', () => {
+    expect(
+      closeFlagOf({ at: AXIS.t0 - DAY_MS, approx: false }, AXIS),
+      '軸の外の時刻に立てたフラグは、置けるところを持たない',
+    ).toBeNull();
+  });
+
+  /* `nowMs` は決まった間隔でしか進まないので、軸の右端より後に閉じた課題を読むことは在る。 */
+  it('軸より後に閉じた課題にも、フラグを立てない', () => {
+    expect(
+      closeFlagOf({ at: AXIS.t1 + DAY_MS, approx: false }, AXIS),
+      '左の外だけを断ると、右の外の時刻にはフラグが立つ',
+    ).toBeNull();
+  });
+
+  it('軸の端ちょうどで閉じたなら、フラグは立つ', () => {
+    expect(
+      closeFlagOf({ at: AXIS.t0, approx: false }, AXIS)?.pct,
+      '端ちょうどは軸の中である。落とすと、幅を狭めた人がフラグを 1 本消したことになる',
+    ).toBe(0);
+    expect(closeFlagOf({ at: AXIS.t1, approx: false }, AXIS)?.pct).toBe(100);
+  });
 });
 
 describe('読み切れなかった区間', () => {
@@ -355,14 +506,16 @@ describe('読み切れなかった区間', () => {
     expect(whole.cut, '切れていない行と同じ絵にすると、読み残しがどこにも残らない').toBeNull();
   });
 
+  /* 一覧の `closed_at` と記録の `closed` は、同じ 1 回を 1 秒ずれて書くことが在る。軸の左端が
+     その 1 秒の間に落ちると、フラグは軸の中に立ち、フラグが指す 1 回は軸の外に残る。 */
   it('フラグへ移した `closed` が軸の外でも、切れていたことを言う', () => {
-    const closedAt = NOW - MONTH_MS + DAY_MS / 4;
+    const closedAt = NOW - MONTH_MS;
     const one = issue('#1', {
       status: 'closed',
       closed_at: iso(closedAt),
       updated_at: iso(closedAt),
     });
-    const events = [{ at: closedAt - DAY_MS / 2, kind: 'closed' }];
+    const events = [{ at: closedAt - 1_000, kind: 'closed' }];
     const cutting = readOf([one], logOf([entry('#1', events, true)]), '#1');
 
     expect(
@@ -682,6 +835,25 @@ describe('線が結ぶ両端', () => {
       '終わりが軸の端ちょうどでも、置ける時刻は 1 つに潰れている',
     ).toBe(null);
     expect(trackLineOf(ends, AXIS)?.softFrom, '軸の中に収まる端をぼかさない').toBe(false);
+  });
+
+  /* 終わりが軸の先に在る行。**代用でなくてもぼかす** —— `nowMs` は決まった間隔でしか進まない
+     ので軸の右端より後のイベントを読むことは在り、そこを硬い端で描くと、軸の右端で最後に
+     動いたことになる。 */
+  it('最後に観測した時刻が軸の先なら、終わりの端をぼかす', () => {
+    const line = trackLineOf(
+      {
+        fromMs: NOW - 10 * DAY_MS,
+        toMs: NOW + DAY_MS,
+        opened: true,
+        closed: false,
+        approxTo: false,
+      },
+      AXIS,
+    );
+
+    expect(line?.softTo, '軸の端で止めた位置は、誰も観測していない時刻である').toBe(true);
+    expect(line?.softFrom, '軸の中に収まる端はぼかさない').toBe(false);
   });
 });
 

@@ -21,6 +21,15 @@ import { closedAt, isClosedStatus } from './issueStatus.ts';
    同じ repository を別の画面で見た人に別の絵が出る。 */
 export const EVENT_SLOTS = 30;
 
+/* フラグの時刻と、それが指す `closed` の時刻の差の上限。**軸の幅から採らない** —— 採ると、
+   同じ記録を別の幅で見たときに、点として残るイベントが変わる。
+
+   同じ 1 回の閉じるを、一覧は `closed_at` に、記録は `ClosedEvent` の時刻に書く。GitHub は
+   その 2 つを別々に書き込んでいて、返ってくる時刻が 1 秒ずれることが在る(この repository の
+   閉じた課題 75 件では 12 件が 1 秒差で、それより大きい差は 1 件も無かった)。ここが吸うのは
+   その 1 秒だけで、離れた `closed` は別の 1 回として点のまま残る。 */
+const CLOSE_MATCH_MS = 5_000;
+
 export type EventLog =
   | { readonly kind: 'reading' }
   | { readonly kind: 'absent' }
@@ -432,18 +441,19 @@ function readTrack(
     if (event.at > lastAt) lastAt = event.at;
   }
 
-  /* フラグの立つ `closed` を 1 つだけ落とす。**それより前の `closed` は点のまま残す** ——
-     閉じて開き直してまた閉じた課題の、途中の 1 回まで消すと、起きたことが減って見える。
+  /* フラグの立つ `closed` を 1 つだけ落とす。**同じ 1 回を、フラグと点の 2 つの形で並べない
+     ためだけの操作である。** それより前の `closed` は点のまま残す —— 閉じて開き直してまた
+     閉じた課題の、途中の 1 回まで消すと、起きたことが減って見える。
 
-     落とすのは、その時刻にフラグが実際に立つときだけである。**立たないフラグのために点を
-     消さない** —— 軸の外の `closed` は端の件数が数えているので、消すとその 1 件がどこにも
-     残らない。代用の時刻のフラグでも消さない —— 代用の時刻と観測した `closed` は別の 1 回で
-     あり、点として並んだ `closed` と `reopened` のほうが経緯を語る。 */
+     落とすのは、その時刻にフラグが実際に立つときだけである。立たないフラグのために点を
+     消さない —— 軸の外で閉じた課題にフラグは無く、その `closed` を消すと、端の件数からも
+     漏れて 1 件がどこにも残らない。代用の時刻のフラグでも消さない —— 代用の時刻と観測した
+     `closed` は別の 1 回であり、点として並んだ `closed` と `reopened` のほうが経緯を語る。 */
   const held = [...parsed].sort((a, b) => a.at - b.at);
   const flag = closeFlagOf(close, axis);
   if (flag !== null && !flag.approx) {
     const found = held.findLastIndex(
-      (event) => event.kind === 'closed' && Math.abs(event.at - flag.at) < slot,
+      (event) => event.kind === 'closed' && Math.abs(event.at - flag.at) <= CLOSE_MATCH_MS,
     );
     if (found >= 0) held.splice(found, 1);
   }
@@ -473,9 +483,11 @@ function readTrack(
 
   /* 記録が始まるのは、手元に在るいちばん古いイベントの時刻である。それが軸の左の外なら、
      読み切れなかった区間は軸の上に置けない。**そのときも黙らない** —— 軸の外のイベントを
-     数えているならその件数が言い、数えるものが 1 つも無いときは `cutOf` が左端に幅の無い区間を置く。 */
-  const startsOffAxis = count > 0 && oldestHeldMs < axis.t0;
-  const before = offAxisOf(held, axis, 'before', entry.truncated && startsOffAxis);
+     数えているならその件数が言い、数えるものが 1 つも無いときは `cutOf` が左端に幅の無い区間を置く。
+
+     読み残しが在ると言えるのは左だけである。`timelineItems(last: 30)` が落とすのは古いほうな
+     ので、`entry.truncated` を渡すのはこちらだけで、右端には渡さない。 */
+  const before = offAxisOf(held, axis, 'before', entry.truncated);
   return {
     kind: 'read',
     marks: groups.map((group) => ({

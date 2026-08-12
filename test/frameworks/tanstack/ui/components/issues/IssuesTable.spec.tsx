@@ -427,17 +427,22 @@ describe('右のトラック', () => {
 
   it('区間の端が観測した時刻かどうかを、class が持つ', () => {
     /* `#3` は記録の始まりが軸の左の外に在る行である。`closed` はフラグへ移して並びから
-       外れるので端の件数も出ず、区間の右端だけが読み残しの在りかを言う。 */
+       外れるので端の件数も出ず、区間の右端だけが読み残しの在りかを言う。
+
+       一覧の `closed_at` と記録の `closed` が同じ 1 回を 1 秒ずれて書くのは、GitHub の返す
+       時刻でそのまま起きる。ここでは軸の左端がその 1 秒の間に落ちていて、`closed_at`
+       (30 日前ちょうど)は軸の中、記録の `closed`(その 1 秒前)は軸の外に在る。 */
+    const SECOND_IN_DAYS = 1 / 86_400;
     const { container } = drawGantt(
       [
         issue('#1', { created_at: iso(20) }),
         issue('#2', { created_at: 'yesterday' }),
-        issue('#3', { status: 'closed', created_at: iso(60), closed_at: iso(29.8) }),
+        issue('#3', { status: 'closed', created_at: iso(60), closed_at: iso(30) }),
       ],
       read([
         { id: '#1', at: [8], truncated: true },
         { id: '#2', at: [8], truncated: true },
-        { id: '#3', at: [30.5], kind: 'closed', truncated: true },
+        { id: '#3', at: [30 + SECOND_IN_DAYS], kind: 'closed', truncated: true },
       ]),
     );
 
@@ -461,6 +466,20 @@ describe('右のトラック', () => {
 
     expect(off?.textContent, '数えないと、軸の先のイベントが起きていないことになる').toBe('1›');
     expect(off?.getAttribute('title')).toContain('beyond this span');
+  });
+
+  /* 読み残しが在るのは古いほうだけである。`timelineItems(last: 30)` が落とすのはそこなので、
+   **軸の先で数えたイベントに読み残しを添えると、読めているものを読めていないと言う。** */
+  it('軸の先で数えたイベントには、読み残しの在りかを添えない', () => {
+    const { container } = drawGantt(
+      [issue('#1', { created_at: iso(20) })],
+      read([{ id: '#1', at: [-5, 10], truncated: true }]),
+    );
+
+    expect(
+      gtOf(container, '#1').querySelector('.gt-off.right')?.getAttribute('title'),
+      '落ちているのは古いほうなので、先の側にはもう読めないものは無い',
+    ).not.toContain('also cut short');
   });
 
   /* 軸の外で作られた課題。**輪は置き、置いた位置が時刻ではないことを見た目で言う** ——
@@ -725,7 +744,7 @@ describe('右のトラック', () => {
     ).toBe('gt-lag');
   });
 
-  it('相手がこの課題より後に終わるなら、待ちの線を引かない', () => {
+  it('まだ閉じていない相手を待つ行には、待ちの線を引かない', () => {
     const { container } = drawGantt([
       issue('#1', { created_at: iso(20) }),
       issue('#2', { created_at: iso(10), deps: [blocks('#1')] }),
@@ -733,7 +752,7 @@ describe('右のトラック', () => {
 
     expect(
       gtOf(container, '#2').querySelector('.gt-lag'),
-      '逆向きの線は、待っていない期間を待ったと描く',
+      'まだ塞いでいる相手を、もう空いたことにしない',
     ).toBe(null);
   });
 
@@ -781,6 +800,74 @@ describe('右のトラック', () => {
     expect(
       gtOf(container, '#2').querySelector('.gt-lag'),
       'いつ解けたのかを観測できていない相手を、塞いでいなかったことにしない',
+    ).toBe(null);
+  });
+
+  /* 閉じた時刻は、表に渡された課題ではなく全件から組む。**既定の一覧は閉じた課題を落とすので、
+     堰き止めていた相手はたいてい表に渡ってこない** —— 渡された課題だけで組むと、既定の画面で
+     待ちの線が 1 本も出ない。 */
+  it('一覧から外れた相手の閉じた時刻も、全件から引く', () => {
+    const blocker = issue('#1', { status: 'closed', created_at: iso(28), closed_at: iso(16) });
+    const dependent = issue('#2', { created_at: iso(10), deps: [blocks('#1')] });
+    const { container } = drawGantt([dependent], NOT_IN_LOG, { all: [blocker, dependent] });
+
+    expect(rowsOf(container).length, '出ているのは待っていた行だけである').toBe(1);
+    expect(
+      pctOf(gtOf(container, '#2').querySelector('.gt-lag'), 'left'),
+      '16 日前は 30 日の軸の 14 日目である',
+    ).toBeCloseTo((14 / 30) * 100, 5);
+  });
+
+  /* 自分を指す依存は、自分がまだ閉じていないかぎり「いつ解けたか分からない相手」になる。
+   **それで待ちを黙らせると、本当に堰き止めていた相手の線まで消える。** */
+  it('自分を指す依存は、待ちの相手として数えない', () => {
+    const { container } = drawGantt([
+      issue('#1', { status: 'closed', created_at: iso(28), closed_at: iso(16) }),
+      issue('#2', { created_at: iso(10), deps: [blocks('#1'), blocks('#2')] }),
+    ]);
+
+    expect(
+      gtOf(container, '#2').querySelector('.gt-lag')?.getAttribute('title'),
+      '自分が閉じるのを自分で待っていたことにしない',
+    ).toBe('Waiting on #1 — 6d from #1 ending to this issue being created');
+  });
+
+  it('相手が閉じたのがこの課題より後なら、待ちの線を引かない', () => {
+    const { container } = drawGantt([
+      issue('#1', { status: 'closed', created_at: iso(28), closed_at: iso(6) }),
+      issue('#2', { created_at: iso(10), deps: [blocks('#1')] }),
+    ]);
+
+    expect(
+      gtOf(container, '#2').querySelector('.gt-lag'),
+      '逆向きの線は、待っていない期間を待ったと描く',
+    ).toBe(null);
+  });
+
+  /* 待ちは軸と重なるところにしか引けない。**丸ごと軸の外に在る待ちを端で止めると、置ける
+     ものは幅の無い線だけになる** —— 待った長さがそこに残らないのに、線だけが端に立つ。
+     左右のどちらへ外れても同じで、右へ外れるのは `nowMs` が決まった間隔でしか進まないためである。 */
+  it('軸の先で解けた堰き止めからは、待ちの線を引かない', () => {
+    const { container } = drawGantt([
+      issue('#1', { status: 'closed', created_at: iso(20), closed_at: iso(-1) }),
+      issue('#2', { created_at: iso(-2), deps: [blocks('#1')] }),
+    ]);
+
+    expect(
+      gtOf(container, '#2').querySelector('.gt-lag'),
+      '軸の右端で止めて引くと、まだ塞がれていた時間を待ちの終わりとして描く',
+    ).toBe(null);
+  });
+
+  it('軸より前に作られた課題には、待ちの線を引かない', () => {
+    const { container } = drawGantt([
+      issue('#1', { status: 'closed', created_at: iso(60), closed_at: iso(50) }),
+      issue('#2', { created_at: iso(40), deps: [blocks('#1')] }),
+    ]);
+
+    expect(
+      gtOf(container, '#2').querySelector('.gt-lag'),
+      '両端とも軸の左の外なら、置けるのは幅の無い線だけである',
     ).toBe(null);
   });
 

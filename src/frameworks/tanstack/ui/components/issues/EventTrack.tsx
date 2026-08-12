@@ -38,14 +38,16 @@ export function markTitle(mark: EventMark): string {
 }
 
 /* 軸の外に落ちたイベントの説明。**件数だけでは、何を見損ねたのか分からない** ——
-   いちばん近いものの時刻を添えて、幅を広げれば見えることまで言う。 */
+   いちばん近いものの時刻を添えて、幅を広げれば見えることまで言う。
+
+   読み残しがこちら側に在るかどうかは `off.cut` が持っている。ここで側を見て判じ直すと、
+   同じことを決めるところが 2 つになり、片方だけを直したときに食い違う。 */
 export function offEventTitle(off: OffAxis, side: 'before' | 'beyond'): string {
   const what = `${countOf(off.count, 'event')} ${off.count === 1 ? 'is' : 'are'}`;
   const nearest = side === 'before' ? 'the most recent' : 'the earliest';
-  const cutShort =
-    off.cut && side === 'before'
-      ? ' The event log was also cut short, so what is missing lies out there too.'
-      : '';
+  const cutShort = off.cut
+    ? ' The event log was also cut short, so what is missing lies out there too.'
+    : '';
   return `${what} ${side} this span, ${nearest} on ${absTime(off.at)} — widen the span to see them.${cutShort}`;
 }
 
@@ -75,6 +77,8 @@ export function TrackMarks({ track }: { track: RowTrack }) {
           ‹{track.before.count}
         </b>
       )}
+      {/* 右端は読み残しを言わない。`readTrack` が `cut` に `false` を渡すのがその決まりで、
+          ここで側を見て決め直すと、同じことを決めるところが 2 つになる */}
       {track.after !== null && (
         <b className="gt-off right" title={offEventTitle(track.after, 'beyond')}>
           {track.after.count}›
