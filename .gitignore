@@ -39,6 +39,9 @@ old/
 
 # ブラウザーで確かめたときの写し
 .playwright-mcp/
+# 落ちた `visual` のテストが残す写し。読むためのもので、正解として持つものではない
+test/visual/__screenshots__/
+.vitest-attachments/
 
 # 作業場所。枝ごとに切り出して使う
 .worktrees/

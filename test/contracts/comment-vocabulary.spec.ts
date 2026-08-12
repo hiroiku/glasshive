@@ -100,11 +100,16 @@ const BANNED: readonly { readonly term: string; readonly use: string; readonly a
     },
   ];
 
+/* 落ちた `visual` のテストが残す写し。**中身は PNG である** —— 文字として読むと、たまたま
+   禁じた語のバイト列に当たった写しが、コメントの違反として出てくる。 */
+const ARTIFACTS = '__screenshots__';
+
 function walk(dir: string, found: string[]): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, found);
-    else if (entry.isFile()) found.push(full);
+    if (entry.isDirectory()) {
+      if (entry.name !== ARTIFACTS) walk(full, found);
+    } else if (entry.isFile()) found.push(full);
   }
   return found;
 }

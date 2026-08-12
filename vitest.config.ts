@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import viteReact from '@vitejs/plugin-react';
+import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
 const alias = { '~': fileURLToPath(new URL('./src', import.meta.url)) };
@@ -58,6 +59,30 @@ export default defineConfig({
           include: ['test/frameworks/tanstack/**/*.spec.{ts,tsx}'],
           setupFiles: ['test/setup-ui.ts'],
           css: false,
+        },
+        resolve: { alias },
+      },
+      {
+        /* 見た目の決まりが実際に何を塗るか。**本物のブラウザーでしか答えられない。**
+
+           `happy-dom` はレイアウトもカスケードも持たないので、`ui` の側から見えるのは
+           「その class が付いているか」までである。宣言が在って効いていない規則は、そこを
+           すり抜ける —— 観測を語る規則がそうなると、画面は観測と逆のことを言う。
+
+           `css: true` にしてあるのがこの構成の要である。落とすと `index.css` が届かず、
+           何も塗られていないことを「規則が効いていない」と読んでしまう。 */
+        plugins: [viteReact()],
+        test: {
+          name: 'visual',
+          include: ['test/visual/**/*.spec.tsx'],
+          css: true,
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright(),
+            instances: [{ browser: 'chromium' }],
+            viewport: { width: 1280, height: 800 },
+          },
         },
         resolve: { alias },
       },

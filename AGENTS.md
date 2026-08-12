@@ -9,14 +9,22 @@ It reads `~/.claude/projects/**/*.jsonl`, `git`, and GitHub issues through the `
 
 ```sh
 npm install
-npm run dev       # http://127.0.0.1:4483 (falls through to the next free port if taken)
-npm run check     # biome ci + layer boundaries + types (8 tsconfigs) + tests
-npm run build     # vite build + launcher tsc + external verification
-npm start         # http://127.0.0.1:4483 — what users actually get
+npm run dev          # http://127.0.0.1:4483 (falls through to the next free port if taken)
+npm run check        # biome ci + layer boundaries + types (8 tsconfigs) + tests
+npm run build        # vite build + launcher tsc + external verification
+npm start            # http://127.0.0.1:4483 — what users actually get
+npm run test:visual  # what the CSS actually paints, in a real browser
 ```
 
 `npm run check` is the gate. Run it before saying anything is done. Bun works as-is —
 swap `npm` for `bun` (composite scripts use `$npm_execpath`).
+
+**`check` cannot see CSS.** It runs on happy-dom, which has no layout and no cascade, so a rule
+that is written but paints nothing passes it. The rules that carry an `Observation` claim — the
+hatch for "we could not read this", the dashed flag for "this time is a substitute", the dotted
+line for "still reading" — are pinned in `test/visual/`, which renders the real components with
+the real stylesheet in Chromium and counts pixels. **Run `npm run test:visual` whenever you touch
+those rules.** It needs a browser once: `npx playwright install chromium`.
 
 ## Architecture
 

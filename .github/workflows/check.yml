@@ -55,3 +55,19 @@ jobs:
         run: npm run test:smoke
         env:
           GLASSHIVE_SMOKE_ROOT: ${{ runner.temp }}/packed/package
+
+  # 見た目の決まりが実際に何を塗るか。Node のバージョンでは答えが変わらないので、matrix には載せない。
+  # ブラウザーを 1 つ落としてくるぶん、こちらだけ別のジョブにしてある
+  visual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # `npm run build` を挟まない。この構成が読むのは画面のコンポーネントと `index.css` だけで、
+      # ルートの一覧(routeTree.gen.ts)には触らない
+      - run: npm run test:visual

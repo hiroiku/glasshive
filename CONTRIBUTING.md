@@ -101,7 +101,20 @@ Beyond the layers, three ideas carry most of the design:
 | --- | --- | --- |
 | `unit` | node | Pure domain services, use cases against in-memory ports, presenters, contracts |
 | `ui` | happy-dom | Components and route components, rendered and inspected |
+| `visual` | Chromium | What the CSS rules that carry an `Observation` claim actually paint |
 | `smoke` | node | The built `dist/`, launched for real and fetched over HTTP |
+
+`visual` exists because `ui` cannot see CSS at all. happy-dom has no layout and no cascade, so a
+rule can be written, matched, and inert, and every DOM assertion still passes — which matters here
+because several rules *are* the observation. The hatch is how a row says "we could not read this";
+the dashed flag is how a close time says "this is a substitute for one we never saw". When one of
+those silently does nothing, the screen does not degrade, it states the opposite of what we saw.
+
+So `visual` renders the real components with the real `index.css` in a real browser, screenshots an
+element with and without the rule applied, and counts the pixels that changed. It is `npm run
+test:visual`, not part of `check`, because it needs a browser: `npx playwright install chromium`
+once, and CI installs it in its own job. Keep it to rules that carry a claim — this is not a
+screenshot suite, and a diff of a whole screen would be noise.
 
 Two rules are absolute:
 
@@ -131,7 +144,8 @@ titles, branch names — is shown verbatim in whatever language it was written i
 
 ## Pull requests
 
-- Keep `npm run check` and `npm run test:smoke` green.
+- Keep `npm run check` and `npm run test:smoke` green. If you touched a rule under
+  `src/frameworks/tanstack/ui/styles/`, `npm run test:visual` too.
 - Match the surrounding code: same comment density, naming, and idiom.
 - If behaviour changes, say so in the PR body. If it changes what users see, update the README and
   the translations under `docs/`.

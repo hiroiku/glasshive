@@ -16,8 +16,10 @@ export function countOf(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
-/* トラックの状態を class にする。**4 つの状態がそれぞれ別の絵になる** —— 読んでいる最中と、
-   読み終えて何も無かったのと、読めなかったのと、読むものが無かったのは、別の答えである。 */
+/* トラックの状態を class にする。4 つの答えに対して、絵は 3 つである —— 読んでいる最中は
+   点線、読めなかったのはハッチ、記録が無かったのと読み終えて何も無かったのは、どちらも空の
+   トラックで、どちらの「無かった」かは `title` が言う。**読めなかったのだけは、空と同じ絵に
+   してはいけない。** */
 export function stateClass(track: RowTrack): string {
   if (track.kind === 'reading') return ' reading';
   if (track.kind === 'unread') return ' unread';
