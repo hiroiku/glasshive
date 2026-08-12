@@ -6,7 +6,10 @@ import type {
   IssueEventsRequest,
   IssueTrackerIntegration,
 } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
-import { createListGithubIssueEvents } from '~/application/use-cases/issues/list-github-issue-events.use-case.ts';
+import {
+  createListGithubIssueEvents,
+  type GithubIssueEvents,
+} from '~/application/use-cases/issues/list-github-issue-events.use-case.ts';
 
 /* 一覧に出ている課題に起きたことは、一覧とは別に引く。
 
@@ -71,10 +74,24 @@ function fakeTracker(pages: readonly string[]) {
   return { tracker, asked };
 }
 
+/* 配られたチャンクを、そのまま 1 つに集める。**`Observation` に組み直さない** ——
+   組み直すと、その組み直し方をここで確かめることになる。 */
 const run = async (
   tracker: IssueTrackerIntegration,
   git = gitWithRemote('git@github.com:a/b.git'),
-) => createListGithubIssueEvents({ git, tracker }).execute({ projectPath: '/w' });
+) => {
+  const walk = createListGithubIssueEvents({ git, tracker }).stream({ projectPath: '/w' });
+  let kind = 'missing';
+  const issues: GithubIssueEvents[] = [];
+  let complete = false;
+
+  for await (const chunk of walk) {
+    if (chunk.kind === 'head') kind = chunk.head.kind;
+    else if (chunk.kind === 'complete') complete = chunk.complete;
+    else issues.push(...chunk.issues);
+  }
+  return { kind, issues, complete };
+};
 
 describe('一覧に出ている課題のイベントを引く', () => {
   it('一覧と同じ件数で、解決した owner と名前を尋ねる', async () => {
@@ -86,7 +103,7 @@ describe('一覧に出ている課題のイベントを引く', () => {
     expect(asked[0]?.name).toBe('b');
     expect(asked[0]?.pageSize, '一覧と違う件数で尋ねると、返る課題が一覧とずれる').toBe(100);
     expect(asked[0]?.cursor).toBeNull();
-    expect(answer.ok && answer.value.kind).toBe('observed');
+    expect(answer.kind).toBe('observed');
   });
 
   it('課題ごとのイベントを、一覧の行と突き合わせる鍵ごと持ち帰る', async () => {
@@ -94,7 +111,7 @@ describe('一覧に出ている課題のイベントを引く', () => {
 
     const answer = await run(tracker);
 
-    expect(answer.ok && answer.value.kind === 'observed' && answer.value.value.issues).toEqual([
+    expect(answer.issues).toEqual([
       { id: '#101', events: [{ at: '2026-08-01T00:00:00Z', kind: 'closed' }], truncated: false },
       { id: '#102', events: [{ at: '2026-08-01T00:00:00Z', kind: 'closed' }], truncated: false },
     ]);
@@ -106,7 +123,26 @@ describe('一覧に出ている課題のイベントを引く', () => {
     const answer = await run(tracker);
 
     expect(asked[1]?.cursor).toBe('Y3Vyc29y');
-    expect(answer.ok && answer.value.kind === 'observed' && answer.value.value.complete).toBe(true);
+    expect(answer.complete).toBe(true);
+  });
+
+  /* 一覧と同じ上限で止まる。**`list-github-issues.use-case.ts` と同じ値でなければならない**
+     —— 片方だけ深く辿ると、一覧に出ていない課題のイベントを運び、一覧に出ている課題の点が
+     消える。止まったことは `complete` が言う —— 黙ると、上限より後ろの課題の点の無い行が
+     「何も起きていない行」になる。 */
+  it('際限なく辿らず、止まったことを言う', async () => {
+    const { tracker, asked } = fakeTracker(
+      Array.from({ length: 9 }, (_unused, index) => pageOf([100 + index], `cur${index}`)),
+    );
+
+    const answer = await run(tracker);
+
+    expect(asked.length, '際限なく辿らない').toBe(5);
+    expect(
+      answer.complete,
+      '黙って止まると、上限より後ろの課題の点の無い行が「何も起きていない行」になる',
+    ).toBe(false);
+    expect(answer.issues, '止まる前に読めた 5 ページぶんを捨てない').toHaveLength(5);
   });
 
   it('2 ページ目で読めなくなっても、読めたぶんは捨てない', async () => {
@@ -114,11 +150,10 @@ describe('一覧に出ている課題のイベントを引く', () => {
     const { tracker } = fakeTracker([pageOf([101], 'Y3Vyc29y')]);
 
     const answer = await run(tracker);
-    const value = answer.ok && answer.value.kind === 'observed' ? answer.value.value : null;
 
-    expect(value?.issues.map((issue) => issue.id)).toEqual(['#101']);
+    expect(answer.issues.map((issue) => issue.id)).toEqual(['#101']);
     expect(
-      value?.complete,
+      answer.complete,
       '全部は辿れなかったことを言わないと、点の無い行の意味が決まらない',
     ).toBe(false);
   });
@@ -128,20 +163,19 @@ describe('一覧に出ている課題のイベントを引く', () => {
 
     const answer = await run(tracker);
 
-    expect(
-      answer.ok && answer.value.kind,
-      '空の一覧を返すと、読めなかったことが「何も起きていない」に化ける',
-    ).toBe('unobservable');
+    expect(answer.kind, '空の一覧を返すと、読めなかったことが「何も起きていない」に化ける').toBe(
+      'unobservable',
+    );
   });
 
   it('1 ページ目が読めない形なら、全部を辿れなかったものとして返す', async () => {
     const { tracker } = fakeTracker(['{']);
 
     const answer = await run(tracker);
-    const value = answer.ok && answer.value.kind === 'observed' ? answer.value.value : null;
 
-    expect(value?.issues).toEqual([]);
-    expect(value?.complete).toBe(false);
+    expect(answer.kind).toBe('observed');
+    expect(answer.issues).toEqual([]);
+    expect(answer.complete).toBe(false);
   });
 
   it('GitHub を指していないプロジェクトは、読めなかったのではない', async () => {
@@ -149,6 +183,6 @@ describe('一覧に出ている課題のイベントを引く', () => {
 
     const answer = await run(tracker, gitWithoutRemote());
 
-    expect(answer.ok && answer.value.kind).toBe('absent');
+    expect(answer.kind).toBe('absent');
   });
 });

@@ -1,21 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { absent, observed } from '~/app-kernel/observation.ts';
 import { ok } from '~/app-kernel/result.ts';
-import {
-  getGithubIssueDiscussion,
-  streamGithubIssueDiscussion,
-} from '~/interface/controllers/issues/issues.controller.ts';
+import { streamGithubIssueDiscussion } from '~/interface/controllers/issues/issues.controller.ts';
 
 /* 届いたリクエストを、やり取りへの問いとして読めるときだけ受ける。
 
    ここで見るのは 2 つである。**プロジェクトはこちらの索引から引く**こと、そして
    **番号は一覧に出る形のものだけを通す**こと。どちらもここでしか止められない。 */
 
-/* 相手の形は、検証する `getGithubIssueDiscussion` 自身から引く。書き写して持てば、
+/* 相手の形は、検証する `streamGithubIssueDiscussion` 自身から引く。書き写して持てば、
    形が変わったときに片方だけ古いまま残る。 */
-type Deps = Parameters<typeof getGithubIssueDiscussion>[0];
+type Deps = Parameters<typeof streamGithubIssueDiscussion>[0];
 type DiscussionUseCase = Deps['discussion'];
-type DiscussionInput = Parameters<DiscussionUseCase['execute']>[0];
+type DiscussionInput = Parameters<DiscussionUseCase['stream']>[0];
 
 const PROJECT_PATH = '/nest/glasshive';
 
@@ -49,11 +46,8 @@ const index: Deps['index'] = {
   },
 };
 
-/** 一覧と本文は、やり取りの検証では起こさない */
+/** 一覧・本文・記録は、やり取りの検証では起こさない */
 const unusedList: Deps['list'] = {
-  async execute() {
-    throw new Error('not called');
-  },
   stream() {
     throw new Error('not called');
   },
@@ -63,26 +57,7 @@ const unusedBody: Deps['body'] = {
     throw new Error('not called');
   },
 };
-
-/** 内側へ渡った問いを控える偽のユースケース */
-function spyDiscussion(): DiscussionUseCase & { readonly seen: DiscussionInput[] } {
-  const seen: DiscussionInput[] = [];
-  return {
-    seen,
-    async execute(input) {
-      seen.push(input);
-      return ok(observed({ entries: [], truncated: false }));
-    },
-    stream() {
-      throw new Error('not called');
-    },
-  };
-}
-
 const unusedEvents: Deps['events'] = {
-  async execute() {
-    throw new Error('not called');
-  },
   stream() {
     throw new Error('not called');
   },
@@ -96,86 +71,11 @@ const depsWith = (discussion: DiscussionUseCase): Deps => ({
   index,
 });
 
-describe('やり取りのリクエストを検証する', () => {
-  it('索引から引いたパスと、受け取った番号を渡す', async () => {
-    const discussion = spyDiscussion();
+/* 断れるのは最初のチャンクより前だけである。1 つでも配った後は HTTP のステータスが既に
+   決まっているので、そこで投げてもエラーコードから引いた status にはならない。
 
-    const response = await getGithubIssueDiscussion(depsWith(discussion), {
-      projectId: 'glasshive',
-      number: 13,
-    });
-
-    expect(response.ok).toBe(true);
-    expect(
-      discussion.seen,
-      'パスを受け取ると、画像 1 枚を読み込ませるだけでローカルのどこを尋ねるかを外から決められる',
-    ).toEqual([{ projectPath: PROJECT_PATH, number: 13 }]);
-  });
-
-  it.each([
-    ['番号が無い', undefined],
-    ['番号が文字列', '13'],
-    ['番号が小数', 1.5],
-    ['番号が 0', 0],
-    ['番号が負', -1],
-    ['番号が安全な整数を超える', Number.MAX_SAFE_INTEGER + 2],
-  ])('%s なら、gh を起こす前に断る', async (_name, number) => {
-    const discussion = spyDiscussion();
-
-    const response = await getGithubIssueDiscussion(depsWith(discussion), {
-      projectId: 'glasshive',
-      number,
-    });
-
-    expect(response.ok).toBe(false);
-    expect(discussion.seen).toEqual([]);
-  });
-
-  it('一覧に無い id は断る', async () => {
-    const discussion = spyDiscussion();
-
-    const response = await getGithubIssueDiscussion(depsWith(discussion), {
-      projectId: '../etc',
-      number: 13,
-    });
-
-    expect(response.ok).toBe(false);
-    expect(
-      discussion.seen,
-      '尋ね先を決めるのは観測したプロジェクトであって、尋ねてきた側ではない',
-    ).toEqual([]);
-  });
-
-  it('尋ねる先が無かったことを、応答の state で言う', async () => {
-    const noRepository: DiscussionUseCase = {
-      async execute() {
-        return ok(absent('no-source'));
-      },
-      stream() {
-        throw new Error('not called');
-      },
-    };
-
-    const response = await getGithubIssueDiscussion(depsWith(noRepository), {
-      projectId: 'glasshive',
-      number: 13,
-    });
-
-    expect(response.ok && response.body).toEqual({
-      state: 'absent',
-      reason: 'no-source',
-      entries: [],
-      truncated: false,
-      walked: true,
-    });
-  });
-});
-
-/* ページごとに配る経路も、同じ検証を通る。**そして断れるのは最初のチャンクより前だけである。**
-
-   1 つでも配った後は HTTP のステータスが既に決まっているので、そこで投げてもエラーコードから
-   引いた status にはならない。逆に、ページが読めなかったことはここでは断らない —— それは
-   観測の結果なので、最初の 1 枚が `state` として運ぶ。 */
+   逆に、ページが読めなかったことはここでは断らない —— それは観測の結果なので、最初の 1 枚が
+   `state` として運ぶ。 */
 describe('やり取りを、読めたページから配る', () => {
   /** 配ったチャンク。投げられたなら、そこまでに配れたものと一緒に返す */
   async function drain(input: unknown, discussion: DiscussionUseCase) {
@@ -194,9 +94,6 @@ describe('やり取りを、読めたページから配る', () => {
   function spyStream(chunks: readonly unknown[] = []) {
     const seen: DiscussionInput[] = [];
     const useCase: DiscussionUseCase = {
-      async execute() {
-        throw new Error('not called');
-      },
       async *stream(input) {
         seen.push(input);
         for (const chunk of chunks) yield chunk as never;
@@ -205,10 +102,29 @@ describe('やり取りを、読めたページから配る', () => {
     return { useCase, seen };
   }
 
-  it('番号の形が違えば、`gh` を起こす前に断る', async () => {
+  it('索引から引いたパスと、受け取った番号を渡す', async () => {
     const { useCase, seen } = spyStream();
 
-    const { chunks, threw } = await drain({ projectId: 'glasshive', number: 0 }, useCase);
+    const { threw } = await drain({ projectId: 'glasshive', number: 13 }, useCase);
+
+    expect(threw).toBe(false);
+    expect(
+      seen,
+      'パスを受け取ると、画像 1 枚を読み込ませるだけでローカルのどこを尋ねるかを外から決められる',
+    ).toEqual([{ projectPath: PROJECT_PATH, number: 13 }]);
+  });
+
+  it.each([
+    ['番号が無い', undefined],
+    ['番号が文字列', '13'],
+    ['番号が小数', 1.5],
+    ['番号が 0', 0],
+    ['番号が負', -1],
+    ['番号が安全な整数を超える', Number.MAX_SAFE_INTEGER + 2],
+  ])('%s なら、`gh` を起こす前に断る', async (_name, number) => {
+    const { useCase, seen } = spyStream();
+
+    const { chunks, threw } = await drain({ projectId: 'glasshive', number }, useCase);
 
     expect(threw, '受理していないことを、配り始めた後で言うことになる').toBe(true);
     expect(chunks, '1 つでも配った後の断りは、エラーコードから引いた status にならない').toEqual(
@@ -217,10 +133,10 @@ describe('やり取りを、読めたページから配る', () => {
     expect(seen, '一覧に出ない番号で `gh` を起こしている').toEqual([]);
   });
 
-  it('一覧に無いプロジェクトも、配り始める前に断る', async () => {
+  it('一覧に無い id も、配り始める前に断る', async () => {
     const { useCase, seen } = spyStream();
 
-    const { chunks, threw } = await drain({ projectId: 'not-observed', number: 13 }, useCase);
+    const { chunks, threw } = await drain({ projectId: '../etc', number: 13 }, useCase);
 
     expect(threw).toBe(true);
     expect(chunks).toEqual([]);

@@ -1,7 +1,5 @@
 import type { Observation } from '~/app-kernel/observation.ts';
-import { observed, unobservable } from '~/app-kernel/observation.ts';
-import { ok, type Result } from '~/app-kernel/result.ts';
-import { TrackerResponseUnreadableError } from '~/application/errors/issues/tracker-response.error.ts';
+import { observed } from '~/app-kernel/observation.ts';
 import type { GitCommandIntegration } from '~/application/ports/integrations/git/git-command.integration.ts';
 import type { IssueTrackerIntegration } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
 import { locateGithubRepository } from '~/application/services/issues/github-repository.service.ts';
@@ -51,10 +49,8 @@ export type GithubIssueEventsChunk =
   | { readonly kind: 'complete'; readonly complete: boolean };
 
 export interface ListGithubIssueEventsUseCase {
-  execute(
-    input: ListGithubIssueEventsInput,
-  ): Promise<Result<Observation<GithubIssueEventLog>, never>>;
-  /** 読めたページから順に配る。`execute` はこれを汲み尽くしたものである */
+  /** 読めたページから順に配る。**まとめて 1 枚で返すメソッドは持たない** —— 待たせる形を
+      残すと、そちらを呼んだ画面だけが、全ページぶんの往復が終わるまで点の無いトラックを出す */
   stream(input: ListGithubIssueEventsInput): AsyncGenerator<GithubIssueEventsChunk, void, void>;
 }
 
@@ -124,30 +120,5 @@ export function createListGithubIssueEvents(deps: {
     yield { kind: 'complete', complete };
   }
 
-  return {
-    stream: walk,
-    async execute(input) {
-      let head: Observation<null> | null = null;
-      const issues: GithubIssueEvents[] = [];
-      let complete = false;
-
-      for await (const chunk of walk(input)) {
-        if (chunk.kind === 'head') head = chunk.head;
-        else if (chunk.kind === 'complete') complete = chunk.complete;
-        else issues.push(...chunk.issues);
-      }
-
-      /* 配り終える前に `head` が来ないことは無い。それでも観測が成り立たなかった側へ倒すのは、
-         成り立ったことにすると、1 件も観ていない記録が「何も起きていなかった」として出るからである。 */
-      if (head === null || head.kind !== 'observed') {
-        return ok(
-          head ??
-            unobservable(
-              new TrackerResponseUnreadableError('the event walk ended without an answer'),
-            ),
-        );
-      }
-      return ok(observed({ issues, complete }));
-    },
-  };
+  return { stream: walk };
 }

@@ -1,18 +1,13 @@
 import type { Observation } from '~/app-kernel/observation.ts';
 import type {
-  GithubIssueDiscussion,
   GithubIssueDiscussionEntry,
   GithubIssueReference,
 } from '~/application/use-cases/issues/get-github-issue-discussion.use-case.ts';
-import type {
-  GithubIssueEventLog,
-  GithubIssueEvents,
-} from '~/application/use-cases/issues/list-github-issue-events.use-case.ts';
+import type { GithubIssueEvents } from '~/application/use-cases/issues/list-github-issue-events.use-case.ts';
 import type {
   GithubActor,
   GithubIssueExtra,
   IssueLedger,
-  IssueListing,
   IssueListingHead,
   IssueSummary,
 } from '~/application/use-cases/issues/list-github-issues.use-case.ts';
@@ -301,31 +296,12 @@ const presentSummary = (issue: IssueSummary): IssueSummaryJson => ({
   github: presentGithub(issue.github),
 });
 
-/* 観測できなかったときも、この形で言える。
-
-   API の側は `unobservable` を 503 へ写す(`api-error.presenter.ts` の `tracker.*`)ので、
-   ふつうここへは `observed` と `absent` しか来ない。それでも三つとも写せるようにしてあるのは、
-   `gh` が答えなかったプロジェクトを、うっかり「課題が 1 件も無いプロジェクト」として
-   出さないためである。 */
-export function presentIssues(observation: Observation<IssueListing>): IssuesJson {
-  const listing = observation.kind === 'observed' ? observation.value : null;
-  return {
-    state: observation.kind,
-    reason: reasonOf(observation),
-    issues: listing === null ? [] : listing.ledger.issues.map(presentSummary),
-    counts: listing === null ? {} : { ...listing.ledger.counts },
-    truncated: listing?.ledger.truncated ?? false,
-    // 1 枚で返す経路は、返した時点で歩き終えている
-    walked: true,
-    repository:
-      listing === null
-        ? null
-        : `${listing.source.repository.owner}/${listing.source.repository.name}`,
-    other_repositories: listing?.source.others ?? 0,
-  };
-}
-
 /* 一覧の最初の 1 枚。**行はまだ 1 つも無い。**
+
+   観測できなかったときも、この形で言える。API の側は `unobservable` を 503 へ写す
+   (`api-error.presenter.ts` の `tracker.*`)ので、ふつうここへは `observed` と `absent` しか
+   来ない。それでも三つとも写せるようにしてあるのは、`gh` が答えなかったプロジェクトを、
+   うっかり「課題が 1 件も無いプロジェクト」として出さないためである。
 
    `truncated` はここでは `false` である。上限に当たったかどうかが分かるのは読み終えたときで、
    読み始めに `true` を置くと、切れた先が在るとまだ言えないうちから言うことになる。 */
@@ -432,20 +408,6 @@ function presentDiscussionEntry(entry: GithubIssueDiscussionEntry): GithubIssueD
   }
 }
 
-/* 一覧ぶんのイベントを外の形にする。中身は写すだけで、順序も切られたことも触らない */
-export function presentGithubIssueEvents(
-  log: Observation<GithubIssueEventLog>,
-): GithubIssueEventLogJson {
-  return {
-    state: log.kind,
-    reason: reasonOf(log),
-    issues: log.kind === 'observed' ? presentGithubIssueEventsPage(log.value.issues) : [],
-    complete: log.kind === 'observed' && log.value.complete,
-    // 1 枚で返す経路は、返した時点で歩き終えている
-    walked: true,
-  };
-}
-
 /* ストリームに流れる 1 つ。一覧と同じ形である。
 
    `complete` を決めるのは最後の 1 つだけである。**読んでいる途中を `complete: false` で
@@ -473,33 +435,17 @@ export const presentGithubIssueEventsPage = (
     truncated: issue.truncated,
   }));
 
-/* 観測できなかったときも、この形で言える。
-
-   `entries` を空にするのは `observed` でなかったときだけで、そのときは `state` と `reason` が
-   なぜ空なのかを言う。**空の並びだけを返してはいけない** —— 誰も何も言っていない課題と、
-   `gh` が答えなかった課題が同じ画面になる。 */
-export function presentGithubIssueDiscussion(
-  discussion: Observation<GithubIssueDiscussion>,
-): GithubIssueDiscussionJson {
-  return {
-    state: discussion.kind,
-    reason: reasonOf(discussion),
-    entries:
-      discussion.kind === 'observed' ? discussion.value.entries.map(presentDiscussionEntry) : [],
-    truncated: discussion.kind === 'observed' && discussion.value.truncated,
-    // 1 枚で返す経路は、返した時点で歩き終えている
-    walked: true,
-  };
-}
-
 /* やり取りをページごとに配るときの形。一覧と同じく、最初の 1 枚が観測の成否を運ぶ */
 export type GithubIssueDiscussionChunkJson =
   | { kind: 'head'; head: GithubIssueDiscussionJson }
   | { kind: 'page'; entries: GithubIssueDiscussionEntryJson[] }
   | { kind: 'complete'; truncated: boolean };
 
-/* 最初の 1 枚。**行はまだ 1 つも無い。** ここで `walked` を立てないのは、立てると
-   1 件目が届く前の画面が「まだ誰も書いていない課題」として出るからである。 */
+/* やり取りの最初の 1 枚。**行はまだ 1 つも無い。** ここで `walked` を立てないのは、立てると
+   1 件目が届く前の画面が「まだ誰も書いていない課題」として出るからである。
+
+   観測できなかったときも、この形で言える。**空の並びだけを返してはいけない** —— 誰も何も
+   言っていない課題と、`gh` が答えなかった課題が同じ画面になる。 */
 export function presentGithubIssueDiscussionHead(
   head: Observation<null>,
 ): GithubIssueDiscussionJson {

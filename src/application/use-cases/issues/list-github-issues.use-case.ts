@@ -1,7 +1,6 @@
 import type { JsonRecord } from '~/app-kernel/json.ts';
 import type { Observation } from '~/app-kernel/observation.ts';
 import { observed, unobservable } from '~/app-kernel/observation.ts';
-import { ok, type Result } from '~/app-kernel/result.ts';
 import { TrackerResponseUnreadableError } from '~/application/errors/issues/tracker-response.error.ts';
 import type { GitCommandIntegration } from '~/application/ports/integrations/git/git-command.integration.ts';
 import type { IssueTrackerIntegration } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
@@ -74,8 +73,8 @@ export interface IssueListingHead {
 }
 
 export interface ListGithubIssuesUseCase {
-  execute(input: ListGithubIssuesInput): Promise<Result<Observation<IssueListing>, never>>;
-  /** 読めたページから順に配る。`execute` はこれを汲み尽くしたものである */
+  /** 読めたページから順に配る。**まとめて 1 枚で返すメソッドは持たない** —— ページ 1 の
+      100 件にページ 5 を待つ理由が無く、待たせる形を残すと、そちらを呼んだ画面だけが待つ */
   stream(input: ListGithubIssuesInput): AsyncGenerator<IssueListingChunk, void, void>;
 }
 
@@ -183,36 +182,5 @@ export function createListGithubIssues(deps: {
     yield { kind: 'complete', truncated };
   }
 
-  return {
-    stream: walk,
-    async execute(input) {
-      let head: Observation<IssueListingHead> | null = null;
-      const issues: IssueSummary[] = [];
-      const counts: Record<string, number> = Object.create(null);
-      let truncated = false;
-
-      for await (const chunk of walk(input)) {
-        if (chunk.kind === 'head') head = chunk.head;
-        else if (chunk.kind === 'complete') truncated = chunk.truncated;
-        else {
-          issues.push(...chunk.ledger.issues);
-          for (const [status, count] of Object.entries(chunk.ledger.counts)) {
-            counts[status] = (counts[status] ?? 0) + count;
-          }
-        }
-      }
-
-      /* 配り終える前に `head` が来ないことは無い。それでも観測が成り立たなかった側へ倒すのは、
-         成り立ったことにすると、1 件も観ていない一覧が「課題が 1 件も無い」として出るからである。 */
-      if (head === null || head.kind !== 'observed') {
-        return ok(
-          head ??
-            unobservable(
-              new TrackerResponseUnreadableError('the issue walk ended without an answer'),
-            ),
-        );
-      }
-      return ok(observed({ ledger: { issues, counts, truncated }, source: head.value.source }));
-    },
-  };
+  return { stream: walk };
 }

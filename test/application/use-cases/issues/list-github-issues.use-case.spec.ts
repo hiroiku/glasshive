@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AppError } from '~/app-kernel/error.ts';
-import { absent, observed, unobservable } from '~/app-kernel/observation.ts';
+import { absent, type Observation, observed, unobservable } from '~/app-kernel/observation.ts';
 import { TrackerResponseUnreadableError } from '~/application/errors/issues/tracker-response.error.ts';
 import type { GitCommandIntegration } from '~/application/ports/integrations/git/git-command.integration.ts';
 import type { IssueTrackerIntegration } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
@@ -8,6 +8,8 @@ import type { AvatarCacheService } from '~/application/services/issues/avatar-ca
 import {
   createListGithubIssues,
   type IssueListingChunk,
+  type IssueListingHead,
+  type IssueSummary,
 } from '~/application/use-cases/issues/list-github-issues.use-case.ts';
 
 class TrackerUnreachable extends AppError {
@@ -86,6 +88,22 @@ function fakeAvatars() {
   return { avatars, remembered };
 }
 
+/* 配られたチャンクを、そのまま 1 つに集める。**`Observation` に組み直さない** ——
+   組み直すと、その組み直し方をここで確かめることになる。 */
+async function collect(useCase: ReturnType<typeof createListGithubIssues>, projectPath: string) {
+  const walk = useCase.stream({ projectPath, includeClosed: false });
+  let head: Observation<IssueListingHead> | null = null;
+  const issues: IssueSummary[] = [];
+  let truncated = false;
+
+  for await (const chunk of walk) {
+    if (chunk.kind === 'head') head = chunk.head;
+    else if (chunk.kind === 'complete') truncated = chunk.truncated;
+    else issues.push(...chunk.ledger.issues);
+  }
+  return { kind: head?.kind ?? 'missing', head, issues, truncated };
+}
+
 describe('GitHub の課題を一覧にする', () => {
   it('remote から owner とリポジトリ名を引いて尋ねる', async () => {
     const { tracker, asked } = fakeTracker([pageOf([1], null)]);
@@ -95,7 +113,7 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+    await collect(useCase, '/work/glasshive');
 
     expect(asked[0], '尋ねる先を決めるのは remote であって、呼んできた側ではない').toEqual({
       owner: 'hiroiku',
@@ -112,7 +130,7 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    await useCase.execute({ projectPath: '/work/kuden-os', includeClosed: false });
+    await collect(useCase, '/work/kuden-os');
 
     expect(
       asked[0],
@@ -133,7 +151,7 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    await useCase.execute({ projectPath: '/work/the-tool', includeClosed: false });
+    await collect(useCase, '/work/the-tool');
 
     expect(
       asked[0],
@@ -155,7 +173,7 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    await useCase.execute({ projectPath: '/work/the-tool', includeClosed: false });
+    await collect(useCase, '/work/the-tool');
 
     expect(
       asked[0],
@@ -171,9 +189,9 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    const result = await useCase.execute({ projectPath: '/work/tool', includeClosed: false });
+    const result = await collect(useCase, '/work/tool');
 
-    expect(result.ok && result.value.kind).toBe('absent');
+    expect(result.kind).toBe('absent');
     expect(asked, 'GitHub でない相手に尋ねに行かない').toHaveLength(0);
   });
 
@@ -185,10 +203,10 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    const result = await useCase.execute({ projectPath: '/work/local', includeClosed: false });
+    const result = await collect(useCase, '/work/local');
 
     expect(
-      result.ok && result.value.kind,
+      result.kind,
       '手元だけのリポジトリで赤い画面を出すと、ほとんどのプロジェクトがそう見える',
     ).toBe('absent');
   });
@@ -201,12 +219,10 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+    const result = await collect(useCase, '/work/glasshive');
 
     expect(asked[1]?.cursor, '前のページが答えた続きの位置から尋ねる').toBe('cur1');
-    expect(
-      result.ok && result.value.kind === 'observed' && result.value.value.ledger.issues,
-    ).toHaveLength(3);
+    expect(result.issues).toHaveLength(3);
   });
 
   it('上限に当たったら、そう言う', async () => {
@@ -219,13 +235,10 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+    const result = await collect(useCase, '/work/glasshive');
 
     expect(asked.length, '際限なく辿らない').toBe(5);
-    expect(
-      result.ok && result.value.kind === 'observed' && result.value.value.ledger.truncated,
-      '黙って切ると、上限より後ろの課題が「無かった」ことになる',
-    ).toBe(true);
+    expect(result.truncated, '黙って切ると、上限より後ろの課題が「無かった」ことになる').toBe(true);
   });
 
   it('1 ページ目で尋ねられなければ、観測できなかったと言う', async () => {
@@ -251,12 +264,11 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+    const result = await collect(useCase, '/work/glasshive');
 
-    expect(
-      result.ok && result.value.kind,
-      '空の一覧にすると、課題が 1 件も無いリポジトリに見える',
-    ).toBe('unobservable');
+    expect(result.kind, '空の一覧にすると、課題が 1 件も無いリポジトリに見える').toBe(
+      'unobservable',
+    );
   });
 
   it('1 ページ目の応答を歩けなければ、観測できなかったと言う', async () => {
@@ -268,19 +280,18 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+    const result = await collect(useCase, '/work/glasshive');
 
     expect(
-      result.ok && result.value.kind,
+      result.kind,
       '歩けなかった応答を空の一覧にすると、課題が 1 件も無いリポジトリに見える',
     ).toBe('unobservable');
-    if (result.ok && result.value.kind === 'unobservable') {
-      expect(
-        result.value.error,
-        '`gh` に尋ねられなかったのではない。エラーコードを分けておかないと、画面は入り直しを勧められない',
-      ).toBeInstanceOf(TrackerResponseUnreadableError);
-      expect(result.value.error.code).toBe('tracker.unreadable_response');
-    }
+    const error = result.head?.kind === 'unobservable' ? result.head.error : null;
+    expect(
+      error,
+      '`gh` に尋ねられなかったのではない。エラーコードを分けておかないと、画面は入り直しを勧められない',
+    ).toBeInstanceOf(TrackerResponseUnreadableError);
+    expect(error?.code).toBe('tracker.unreadable_response');
   });
 
   /* `gh` が 0 で終わり、`data.repository.issues` までは在るのに、課題の並びだけが無い。
@@ -296,15 +307,12 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+    const result = await collect(useCase, '/work/glasshive');
 
-    expect(
-      result.ok && result.value.kind,
-      '課題の並びを辿れなかったのだから、1 件も観ていない',
-    ).toBe('unobservable');
-    if (result.ok && result.value.kind === 'unobservable') {
-      expect(result.value.error).toBeInstanceOf(TrackerResponseUnreadableError);
-    }
+    expect(result.kind, '課題の並びを辿れなかったのだから、1 件も観ていない').toBe('unobservable');
+    expect(result.head?.kind === 'unobservable' ? result.head.error : null).toBeInstanceOf(
+      TrackerResponseUnreadableError,
+    );
   });
 
   it('課題の並びの無いページに当たったら、その先は読んでいないと言って止まる', async () => {
@@ -322,20 +330,15 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+    const result = await collect(useCase, '/work/glasshive');
 
     expect(asked, '辿れなかったページの続きを、読めたページとして辿り続けない').toHaveLength(2);
-    expect(result.ok && result.value.kind).toBe('observed');
-    if (result.ok && result.value.kind === 'observed') {
-      expect(
-        result.value.value.ledger.issues,
-        '観えた 2 件を捨てると、一覧が空になる',
-      ).toHaveLength(2);
-      expect(
-        result.value.value.ledger.truncated,
-        '黙って切ると、辿れなかったページより後ろの課題が「無かった」ことになる',
-      ).toBe(true);
-    }
+    expect(result.kind).toBe('observed');
+    expect(result.issues, '観えた 2 件を捨てると、一覧が空になる').toHaveLength(2);
+    expect(
+      result.truncated,
+      '黙って切ると、辿れなかったページより後ろの課題が「無かった」ことになる',
+    ).toBe(true);
   });
 
   it('途中のページを歩けなくなっても、観えたぶんは捨てず、その先は読んでいないと言う', async () => {
@@ -346,19 +349,14 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+    const result = await collect(useCase, '/work/glasshive');
 
-    expect(result.ok && result.value.kind).toBe('observed');
-    if (result.ok && result.value.kind === 'observed') {
-      expect(
-        result.value.value.ledger.issues,
-        '観えた 2 件を捨てると、一覧が空になる',
-      ).toHaveLength(2);
-      expect(
-        result.value.value.ledger.truncated,
-        '黙って切ると、歩けなかったページより後ろの課題が「無かった」ことになる',
-      ).toBe(true);
-    }
+    expect(result.kind).toBe('observed');
+    expect(result.issues, '観えた 2 件を捨てると、一覧が空になる').toHaveLength(2);
+    expect(
+      result.truncated,
+      '黙って切ると、歩けなかったページより後ろの課題が「無かった」ことになる',
+    ).toBe(true);
   });
 
   it('続きが在ると言われたのに位置を答えないページで止まったら、そう言う', async () => {
@@ -379,13 +377,12 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+    const result = await collect(useCase, '/work/glasshive');
 
     expect(asked, '続きの位置が無ければ、次を尋ねようが無い').toHaveLength(1);
-    expect(
-      result.ok && result.value.kind === 'observed' && result.value.value.ledger.truncated,
-      '続きが在ると言われたまま止まったのだから、全部は読んでいない',
-    ).toBe(true);
+    expect(result.truncated, '続きが在ると言われたまま止まったのだから、全部は読んでいない').toBe(
+      true,
+    );
   });
 
   it('どのプロジェクトの一覧かを添えて顔を覚えさせる', async () => {
@@ -397,7 +394,7 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+    await collect(useCase, '/work/glasshive');
 
     expect(
       remembered,
@@ -431,16 +428,11 @@ describe('GitHub の課題を一覧にする', () => {
       tracker,
     });
 
-    const result = await useCase.execute({ projectPath: '/work/glasshive', includeClosed: false });
+    const result = await collect(useCase, '/work/glasshive');
 
-    expect(result.ok && result.value.kind).toBe('observed');
-    if (result.ok && result.value.kind === 'observed') {
-      expect(
-        result.value.value.ledger.issues,
-        '観えた 2 件を捨てると、一覧が空になる',
-      ).toHaveLength(2);
-      expect(result.value.value.ledger.truncated, 'その先を読んでいないことは言う').toBe(true);
-    }
+    expect(result.kind).toBe('observed');
+    expect(result.issues, '観えた 2 件を捨てると、一覧が空になる').toHaveLength(2);
+    expect(result.truncated, 'その先を読んでいないことは言う').toBe(true);
   });
 });
 

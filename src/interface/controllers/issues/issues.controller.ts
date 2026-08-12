@@ -14,20 +14,14 @@ import { type ApiResponse, presentError } from '~/interface/presenters/api-error
 import {
   type GithubIssueBodyJson,
   type GithubIssueDiscussionChunkJson,
-  type GithubIssueDiscussionJson,
-  type GithubIssueEventLogJson,
   type GithubIssueEventsChunkJson,
   type IssuesChunkJson,
-  type IssuesJson,
   presentGithubIssueBody,
-  presentGithubIssueDiscussion,
   presentGithubIssueDiscussionHead,
   presentGithubIssueDiscussionPage,
-  presentGithubIssueEvents,
   presentGithubIssueEventsHead,
   presentGithubIssueEventsPage,
   presentIssuePage,
-  presentIssues,
   presentIssuesHead,
 } from '~/interface/presenters/issues/issues.presenter.ts';
 
@@ -37,10 +31,7 @@ import {
    パスはこちらが自分の観測から引く。ここで任意の絶対パスを受けると、画像を 1 枚
    読み込ませるだけで、ローカルのどこを尋ねるかを外から決められることになる。 */
 
-export type IssuesResponse = ApiResponse<IssuesJson>;
 export type GithubIssueBodyResponse = ApiResponse<GithubIssueBodyJson>;
-export type GithubIssueDiscussionResponse = ApiResponse<GithubIssueDiscussionJson>;
-export type GithubIssueEventsResponse = ApiResponse<GithubIssueEventLogJson>;
 
 export interface GithubIssuesDeps {
   readonly list: ListGithubIssuesUseCase;
@@ -78,22 +69,6 @@ function issueNumberOf(input: unknown): Result<number> {
     return err(new InvalidSessionsRequestError('No issue number to fetch'));
   }
   return ok(number);
-}
-
-/* GitHub の課題を一覧にする。**受け取るのはプロジェクトの id だけである。**
-   どのリポジトリを尋ねるかは、観測したプロジェクトの remote が決める。 */
-export async function listGithubIssues(
-  deps: GithubIssuesDeps,
-  input: unknown,
-): Promise<IssuesResponse> {
-  const path = await locate(deps.index, input);
-  if (!path.ok) return { ok: false, ...presentError(path.error) };
-
-  // 載せるかどうかだけの指定なので、読めない値は「載せない」に倒してよい
-  const includeClosed = own(input, 'includeClosed') === true;
-  const issues = await deps.list.execute({ projectPath: path.value, includeClosed });
-  if (!issues.ok) return { ok: false, ...presentError(issues.error) };
-  return { ok: true, body: presentIssues(issues.value) };
 }
 
 /* GitHub の課題を、読めたページから順に返す。
@@ -141,29 +116,6 @@ export async function getGithubIssueBody(
   return { ok: true, body: presentGithubIssueBody(body.value) };
 }
 
-/* GitHub の課題 1 件のやり取り。コメントと `timeline` のイベントを 1 本の並びで返す。
-
-   本文と同じく、プロジェクトの id と番号だけを受け取る。**本文とは別の呼び出しである** ——
-   やり取りは何ページにもなることがあり、本文と一緒に運ぶと、本文だけを見たい人まで
-   全ページぶんを待つことになる。 */
-export async function getGithubIssueDiscussion(
-  deps: GithubIssuesDeps,
-  input: unknown,
-): Promise<GithubIssueDiscussionResponse> {
-  const path = await locate(deps.index, input);
-  if (!path.ok) return { ok: false, ...presentError(path.error) };
-
-  const number = issueNumberOf(input);
-  if (!number.ok) return { ok: false, ...presentError(number.error) };
-
-  const discussion = await deps.discussion.execute({
-    projectPath: path.value,
-    number: number.value,
-  });
-  if (!discussion.ok) return { ok: false, ...presentError(discussion.error) };
-  return { ok: true, body: presentGithubIssueDiscussion(discussion.value) };
-}
-
 /* GitHub の課題 1 件のやり取りを、読めたページから順に返す。
 
    **断りは最初のチャンクより前にしか投げられない。** プロジェクトを名指せなかったことと、
@@ -190,22 +142,6 @@ export async function* streamGithubIssueDiscussion(
       yield { kind: 'page', entries: presentGithubIssueDiscussionPage(chunk.entries) };
     } else yield { kind: 'complete', truncated: chunk.truncated };
   }
-}
-
-/* 一覧に出ている課題に起きたこと。
-
-   **一覧とは別の呼び出しである。** 一緒に運ぶと Work の画面が開くまでが倍になる。番号は
-   受け取らない —— 尋ねるのは一覧そのものであって、その中の 1 件ではない。 */
-export async function getGithubIssueEvents(
-  deps: GithubIssuesDeps,
-  input: unknown,
-): Promise<GithubIssueEventsResponse> {
-  const path = await locate(deps.index, input);
-  if (!path.ok) return { ok: false, ...presentError(path.error) };
-
-  const events = await deps.events.execute({ projectPath: path.value });
-  if (!events.ok) return { ok: false, ...presentError(events.error) };
-  return { ok: true, body: presentGithubIssueEvents(events.value) };
 }
 
 /* 一覧に出ている課題に起きたことを、読めたページから順に返す。
