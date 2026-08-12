@@ -128,7 +128,7 @@ export function AgentsToolbar({
             ? 'transcripts could not be read'
             : deepNote.total === 0
               ? 'reading transcripts…'
-              : `${deepNote.scanned} / ${deepNote.total} transcripts`}
+              : `${deepNote.scanned} of ${deepNote.total} transcripts read`}
         </span>
       )}
       <button

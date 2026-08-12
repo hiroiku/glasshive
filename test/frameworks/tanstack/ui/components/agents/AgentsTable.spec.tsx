@@ -308,7 +308,8 @@ describe('見出しの一致と、`transcript` の中身の一致を足し合わ
     mount({ project: three, query: 'needle' });
 
     await waitFor(
-      () => expect(document.querySelector('.deep-note')?.textContent).toBe('8 / 40 transcripts'),
+      () =>
+        expect(document.querySelector('.deep-note')?.textContent).toBe('8 of 40 transcripts read'),
       { timeout: 2000 },
     );
   });

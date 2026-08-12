@@ -82,6 +82,28 @@ export function formatMinutes(ms: number): string {
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h${pad(minutes % 60)}m` : `${minutes}m`;
 }
 
+/** バイトの単位。`transcript` は KiB から始まり、長いものは MiB を超える */
+const BYTE_UNITS = ['B', 'KiB', 'MiB', 'GiB'] as const;
+
+/* 読めた量と総量を 1 行にする。**単位を選ぶのは総量のほうである** —— 2 つを別々に丸めると
+   `900.0 of 1.2 MiB` のように、大きいほうが小さく見える並びになる。1 つの関数にしてあるのは
+   そのためで、分けると片方だけ別の単位で丸める呼び方が書ける。
+
+   B は整数、それより上は小数第 1 位まで。読み終えるまで動き続ける数なので、桁は揃える。 */
+export function formatByteRange(done: number, total: number): string {
+  let step = 0;
+  let left = Math.max(0, total);
+  while (left >= 1024 && step < BYTE_UNITS.length - 1) {
+    left /= 1024;
+    step += 1;
+  }
+  const scale = (bytes: number) => {
+    const value = Math.max(0, bytes) / 1024 ** step;
+    return step === 0 ? `${Math.round(value)}` : value.toFixed(1);
+  };
+  return `${scale(done)} of ${scale(total)} ${BYTE_UNITS[step]}`;
+}
+
 /** 長すぎる文字列を切る。切り詰めたことが分かる省略記号を添える */
 export const cut = (text: string | null | undefined, max: number): string =>
   text !== null && text !== undefined && text.length > max

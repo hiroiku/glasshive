@@ -1,7 +1,9 @@
 /* ---------- 読んでいる最中の表示 ---------- */
 
-/* 親は縦に積む flex なので、`margin: auto` だけで縦横とも中央に来る。
-   包む要素を足さないのは、`#view-pane` の子として置かれるからである。 */
+/* `margin: auto` は余った場所を外側へ均等に配る。**縦に効くのは、親に余りが在るときだけ**
+   —— `#view-pane` の子なら縦横とも中央に来るが、`#conversation` は行の高さを中身ぴったりに
+   取るので、そこで効くのは横だけである。どちらでも横は中央に来る。
+   包む要素は足さない。どちらの親も、直接の子として置かれることを前提に列と向きを決めている。 */
 .rp {
   margin: auto;
   display: flex;
@@ -14,8 +16,10 @@
   text-align: center;
 }
 
-/* 塗る要素を持たないバー。輪郭だけで「読んでいる最中である」を言う。
-   中を走る光は `::after` で描く — 要素を足すと、割合を持つバーと見分けが付かなくなる。 */
+/* バーの輪郭。**寸法は塗るかどうかで変えない** — 分母を観測できた瞬間にバーの大きさが
+   動くと、同じ 1 回の読み取りが途中で別のものに見える。
+   中を走る光は、分母を観測できていないときだけ `::after` で描く。要素で描くと、割合を
+   塗ったバーとの違いが「`.rp-fill` が在るか」から読めなくなる。 */
 .rp-track {
   width: 220px;
   height: 3px;
@@ -24,7 +28,7 @@
   overflow: hidden;
   position: relative;
 }
-.rp-track::after {
+.rp-track:not(.measured)::after {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
@@ -34,8 +38,23 @@
   animation: rp-sweep 1.4s ease-in-out infinite;
 }
 
-/* 端から端へ 1 本だけ走らせる。**光の位置は進み具合ではない** —
-   左端から右端まで同じ速さで動くので、どこに在っても読み取れる量は増えない。 */
+/* 割合を観測できたバー。**塗った幅は観測した量である** — 走る光を止めるのは、動きが
+   量を言わないからで、同じバーに両方が出ると、どちらが進み具合なのか読めなくなる。 */
+.rp-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rp-fill {
+    transition: none;
+  }
+}
+
+/* 端から端へ 1 本だけ走らせる。**光の位置は進み具合ではない** — 左から入って右へ抜けるのを
+   繰り返すだけで、どこに在っても読み取れた量とは関係が無い。 */
 @keyframes rp-sweep {
   0% {
     transform: translateX(-100%);
@@ -52,12 +71,62 @@
   color: var(--dim);
 }
 
+/* 何を数えているか。桁を揃えるのは、数が増えていくあいだ幅が動かないようにするためである */
+.rp-scan {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
 /* 動きを減らす設定のとき。**言葉は消さない** — 待っていることを伝えているのは
    動きではなく言葉のほうで、動きだけが飾りである。 */
 @media (prefers-reduced-motion: reduce) {
-  .rp-track::after {
+  .rp-track:not(.measured)::after {
     animation: none;
     width: 100%;
     opacity: 0.35;
+  }
+}
+
+/* ---------- 中身が来る場所を先に取る ---------- */
+
+/* 中身が来る場所を、文章の形で取る。**空けておくのではなく、埋めておく** — 空けると、そこに
+   何も無いのか、まだ来ていないのかが画面から読めない。
+   届く中身とぴったり同じ高さにはならない(`.md` の行はここより高い)。合わせているのは寸法
+   ではなく、文章が来るという読み方のほうである。 */
+.rl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+}
+.rl-line {
+  height: 0.85em;
+  border-radius: 3px;
+  background: var(--border);
+  animation: rl-pulse 1.4s ease-in-out infinite;
+}
+
+/* 最後の行だけ短くする。段落の終わりはたいてい行の途中で終わるので、全部同じ長さだと
+   文章ではなく表が来ると読める */
+.rl-line:last-child {
+  width: 62%;
+}
+
+/* 明るさだけを動かす。**位置は動かさない** — 場所を取るのがこの表示の仕事なので、
+   動いて幅や高さが変わると、取っておいた場所そのものが揺れる。 */
+@keyframes rl-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rl-line {
+    animation: none;
+    opacity: 0.75;
   }
 }

@@ -22,9 +22,10 @@ swap `npm` for `bun` (composite scripts use `$npm_execpath`).
 **`check` cannot see CSS.** It runs on happy-dom, which has no layout and no cascade, so a rule
 that is written but paints nothing passes it. The rules that carry an `Observation` claim — the
 hatch for "we could not read this", the dashed flag for "this time is a substitute", the dotted
-line for "still reading" — are pinned in `test/visual/`, which renders the real components with
-the real stylesheet in Chromium and counts pixels. **Run `npm run test:visual` whenever you touch
-those rules.** It needs a browser once: `npx playwright install chromium`.
+line for "still reading", the filled bar for "this much of the source has been read", the held
+lines for "content is coming here" — are pinned in `test/visual/`, which renders the real
+components with the real stylesheet in Chromium and counts pixels. **Run `npm run test:visual`
+whenever you touch those rules.** It needs a browser once: `npx playwright install chromium`.
 
 ## Architecture
 

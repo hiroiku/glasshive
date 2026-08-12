@@ -30,6 +30,7 @@ import { IssueChip } from '../chips/Chips.tsx';
 import { Avatar } from '../primitives/Avatar.tsx';
 import { Icon } from '../primitives/Icon.tsx';
 import { NotObserved } from '../primitives/NotObserved.tsx';
+import { ReadingLines } from '../primitives/ReadingLines.tsx';
 import { MdView } from '../text/MdView.tsx';
 
 /* 課題 1 件のやり取り。コメントと `timeline` のイベントを 1 本のタイムラインに並べる。
@@ -331,9 +332,17 @@ function Entry({
 export function IssueDiscussion({ answer, pending, project, nowMs, url }: IssueDiscussionProps) {
   const discussion = answer?.ok === true ? answer.body : null;
 
-  /* 尋ねている最中は何も出さない。まだ答えが返っていないだけで、読めなかったのではない。
-     ここで空の一覧を出すと、これから届くやり取りが「無かった」ものとして画面に出る。 */
-  if (discussion === null && pending) return null;
+  /* 尋ねている最中。**空の一覧も、何も無い画面も出さない** —— どちらも、これから届く
+     やり取りが「まだ何も言われていない」ものとして画面に出る。見出しは先に置く ——
+     やり取りがここに来ることは、届く前から分かっている。 */
+  if (discussion === null && pending) {
+    return (
+      <>
+        <div className="sec-h">Discussion</div>
+        <ReadingLines lines={4} label="Reading the discussion" />
+      </>
+    );
+  }
 
   if (discussion === null || discussion.state !== 'observed') {
     /* 読めなかった理由。`gh` が入っていないのか、認証が切れたのか、その番号が無かったのかは

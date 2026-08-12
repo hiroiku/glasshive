@@ -4,10 +4,11 @@ import type {
   SubagentJson,
 } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { conversationTrouble } from '../../derive/trouble.ts';
-import { cut, worktreeName } from '../../format.ts';
-import { useTranscriptWindow } from '../../hooks/useTranscriptWindow.ts';
+import { cut, formatByteRange, worktreeName } from '../../format.ts';
+import { type TranscriptWindowHeld, useTranscriptWindow } from '../../hooks/useTranscriptWindow.ts';
 import { AgentChip, RefChip } from '../chips/Chips.tsx';
 import { NotObserved } from '../primitives/NotObserved.tsx';
+import { ReadProgress, type ReadScan } from '../primitives/ReadProgress.tsx';
 import { EventView } from './EventView.tsx';
 
 /* 会話パネル。ヘッダーに「誰の会話か」、下に会話そのもの。
@@ -159,6 +160,24 @@ export function ConvPanel({
   );
 }
 
+/* 遡りの進み具合。**測っているのは会話ではなく `transcript` の読み取りである。**
+
+   `transcript` を丸ごと読み終えても、画面に並ぶイベントの数はそこから決まらない —— 1 つの
+   イベントが数十 KiB のこともあれば、数百バイトのこともある。
+
+   だから数えているものを文のほうで名指す。1 回押して遡るのは 2 MiB までで、バーが指すのは
+   その 1 回ではなく `transcript` 全体のどこまでが画面に在るかである。名指さないと、押した
+   1 回が進んでいないように読める。大きさを観測できていないうちは `null` を返し、バーは
+   輪郭だけで出る。 */
+function olderScan(held: TranscriptWindowHeld | null): ReadScan | null {
+  if (held === null) return null;
+  return {
+    done: held.bytes,
+    total: held.size,
+    text: `${formatByteRange(held.bytes, held.size)} read from this transcript`,
+  };
+}
+
 function Conversation({
   file,
   project,
@@ -178,16 +197,40 @@ function Conversation({
 
   const failed = window.failed;
 
+  /* まだ 1 行も出ていない画面。**空の会話にしない** —— 何も置かないと、これから届く会話が
+     「何も話されていないセッション」として画面に出る。読めなかったのとも別の絵である。
+
+     `boxRef` はここでも渡す。**待ちを解く更新と、末尾へ落とす `requestAnimationFrame` は
+     同じ続きで並ぶ。** どちらが先に走るかは React の側が決めるので、待っているあいだから
+     箱を掴んでおく。掴めていなければ、会話は先頭から開く。 */
+  if (window.reading.initial) {
+    return (
+      <div id="conversation" ref={window.boxRef}>
+        <ReadProgress
+          label="Reading the conversation"
+          slowNote="glasshive reads the end of the transcript first. A long one takes a moment."
+        />
+      </div>
+    );
+  }
+
   return (
     <div id="conversation" ref={window.boxRef}>
       {/* 読み込みに失敗したことを、空の会話で表さない。遡りの失敗は「もっと前」の側で言う */}
       {(failed.initial || failed.older) && (
         <NotObserved {...conversationTrouble()} partial={failed.older} />
       )}
-      {window.hasOlder && (
-        <button type="button" id="older" onClick={window.loadOlder}>
-          Load older
-        </button>
+      {/* 遡りが返るのを待っているあいだは、押したボタンのところで言う。**ボタンと入れ替える**
+          —— 押した後もボタンが残ると、まだ届いていないのか、もう前が無いのかが読めない。
+          1 回で 8 歩まで遡るので、ここは見える長さの待ちになる。 */}
+      {window.reading.older ? (
+        <ReadProgress label="Reading older messages" scan={olderScan(window.held)} />
+      ) : (
+        window.hasOlder && (
+          <button type="button" id="older" onClick={window.loadOlder}>
+            Load older
+          </button>
+        )
       )}
       {window.events.map((entry) => (
         <EventView key={entry.key} event={entry.event} project={project} />

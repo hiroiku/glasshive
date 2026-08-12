@@ -232,11 +232,31 @@ describe('課題のやり取り', () => {
     expect(title(absent)).not.toBe(title(unobservable));
   });
 
-  /* 尋ねている最中に空の一覧を出すと、これから届くやり取りが「無かった」ことになる。 */
-  it('尋ねている最中は何も出さない', () => {
+  /* 尋ねている最中に空の一覧を出すと、これから届くやり取りが「無かった」ことになる。
+   **何も出さないのも同じことである** —— 静かな課題と、まだ届いていない課題が同じ絵になる。 */
+  it('尋ねている最中は、読んでいることを言う', () => {
     const container = view(undefined, true);
 
-    expect(container.textContent).toBe('');
+    expect(
+      container.querySelector('[role="progressbar"]')?.getAttribute('aria-label'),
+      '読み上げの側にも、読んでいる最中であることを渡す',
+    ).toBe('Reading the discussion');
+    expect(
+      container.textContent,
+      '「まだ何も言われていない」と言えるのは、読み終えた課題だけである',
+    ).not.toContain('Nothing has been said');
+    expect(
+      container.querySelector('.no-title'),
+      'まだ答えが返っていないだけで、読めなかったのではない',
+    ).toBe(null);
+  });
+
+  /* 届く中身の場所は先に取っておく。**取らないと、届いた瞬間に下の中身が押し下げられる** ——
+     読んでいた行が視界から飛ぶうえ、そこに何も無かったのが在ったことに変わって見える。 */
+  it('尋ねている最中も、中身の来る場所を取っておく', () => {
+    const container = view(undefined, true);
+
+    expect(container.querySelectorAll('.rl-line').length).toBeGreaterThan(0);
   });
 
   it('読み切っていないことを黙らない', () => {

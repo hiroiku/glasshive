@@ -41,9 +41,15 @@ const OTHER = '/nest/other.jsonl';
 /** 中身は問わない。何かが読めたことだけを言えればよい */
 const event = { role: 'user' as const, ts: null, blocks: [] };
 
-const page = (start: number, next: number, events: readonly (typeof event)[]) => ({
+/** `size` を渡せるようにしてあるのは、読んでいるあいだに `transcript` が伸びるときのためである */
+const page = (
+  start: number,
+  next: number,
+  events: readonly (typeof event)[],
+  size = 4_000_000,
+) => ({
   ok: true,
-  body: { state: 'observed', reason: null, start, next, eof: false, size: 4_000_000, events },
+  body: { state: 'observed', reason: null, start, next, eof: false, size, events },
 });
 
 /** 観測できなかったページ。**無かったページではない** */
@@ -74,13 +80,15 @@ const refused = () => ({
 /** 呼ばれた順に (from, to) を並べる */
 const asked = () => fetchConversation.mock.calls.map(([, from, to]) => [from, to]);
 
-/** 好きなときに答えを返せる求め */
+/** 好きなときに答えを返すか、投げさせられる求め */
 const held = () => {
   let settle: (value: unknown) => void = () => {};
-  const answer = new Promise((resolve) => {
+  let fail: (error: unknown) => void = () => {};
+  const answer = new Promise((resolve, reject) => {
     settle = resolve;
+    fail = reject;
   });
-  return { answer, settle };
+  return { answer, settle, fail };
 };
 
 /** 走っている求めの続きを流し切る */
@@ -317,6 +325,78 @@ describe('末尾を追う', () => {
   });
 });
 
+/* 求めそのものが例外で終わることも在る。`getConversation` はサーバーへの往復なので、
+   繋がりが切れれば `Promise` は答えではなく例外で終わる。**受けそこねると、読んでいる最中の
+   表示がそのまま残る** —— 読めなかったことが、いつまでも読んでいる最中として画面に出る。 */
+describe('求めが例外で終わる', () => {
+  it('開いたときの求めが投げたら、読み終えたうえで読めなかったと言う', async () => {
+    fetchConversation.mockRejectedValueOnce(new Error('offline'));
+
+    const { result } = renderHook(() => useTranscriptWindow(FILE));
+
+    await waitFor(() => expect(result.current.failed.initial).toBe(true));
+    expect(result.current.reading.initial, '待ちが残ると、読めなかったことが画面から消える').toBe(
+      false,
+    );
+  });
+
+  it('遡りの求めが投げたら、「もう前は無い」ではなく読めなかったと言う', async () => {
+    fetchConversation
+      .mockResolvedValueOnce(page(1_000_000, 1_000_100, [event]))
+      .mockRejectedValueOnce(new Error('offline'));
+
+    const { result } = renderHook(() => useTranscriptWindow(FILE));
+    await waitFor(() => expect(result.current.hasOlder).toBe(true));
+
+    result.current.loadOlder();
+
+    await waitFor(() => expect(result.current.failed.older).toBe(true));
+    expect(result.current.reading.older).toBe(false);
+  });
+
+  it('追いかけの求めが投げたら、末尾が返らなかったと言う', async () => {
+    fetchConversation
+      .mockResolvedValueOnce(page(0, 100, [event]))
+      .mockRejectedValueOnce(new Error('offline'));
+
+    const { result } = renderHook(() => useTranscriptWindow(FILE));
+    await waitFor(() => expect(result.current.events).toHaveLength(1));
+
+    notify(FILE);
+
+    await waitFor(() => expect(result.current.failed.follow).toBe(true));
+    expect(result.current.events, '読めた分は消さない').toHaveLength(1);
+  });
+
+  /* 投げるのは、開き直した後のことが在る。**前のファイルの失敗を、いま開いている会話の
+     ものとして出さない** —— 尋ねてすらいない末尾について「返ってこなかった」と言うのは、
+     観測していないものを観測できなかったことにするのと同じである。 */
+  it('別の `transcript` へ移った後に投げた求めを、いまの会話の失敗にしない', async () => {
+    const following = held();
+    fetchConversation
+      .mockResolvedValueOnce(page(0, 100, [event]))
+      .mockReturnValueOnce(following.answer)
+      .mockResolvedValueOnce(page(0, 50, [event]));
+
+    const { result, rerender } = renderHook(({ file }) => useTranscriptWindow(file), {
+      initialProps: { file: FILE },
+    });
+    await waitFor(() => expect(result.current.events).toHaveLength(1));
+
+    notify(FILE);
+    await waitFor(() => expect(fetchConversation).toHaveBeenCalledTimes(2));
+
+    rerender({ file: OTHER });
+    following.fail(new Error('offline'));
+    await settled();
+
+    expect(
+      result.current.failed.follow,
+      '尋ねていない末尾について、返ってこなかったと言っている',
+    ).toBe(false);
+  });
+});
+
 describe('別の `transcript` へ移る', () => {
   it('前の読み取り範囲の先頭を持ち越さない', async () => {
     fetchConversation
@@ -359,5 +439,156 @@ describe('別の `transcript` へ移る', () => {
     expect(result.current.hasOlder, '前のファイルの位置が読み取り範囲の先頭になっている').toBe(
       false,
     );
+  });
+});
+
+/* 読んでいる最中であることは、読めなかったことや、何も話されていないことと別である。
+
+   **末尾の追いかけだけは待ちの表示を出さない。** 追っているのは既に画面に出ている会話の続きで、
+   そこに出すと、変更通知が届くたびに読めている会話の上へ待ちの表示が出る。 */
+describe('読んでいる最中', () => {
+  it('開いてから最初のページが返るまで、読んでいると言う', async () => {
+    const first = held();
+    fetchConversation.mockReturnValueOnce(first.answer);
+
+    const { result } = renderHook(() => useTranscriptWindow(FILE));
+
+    await waitFor(() => expect(result.current.reading.initial).toBe(true));
+    expect(result.current.events, 'まだ 1 行も出ていない').toHaveLength(0);
+
+    first.settle(page(1_000_000, 1_000_100, [event]));
+    await waitFor(() => expect(result.current.events).toHaveLength(1));
+    expect(result.current.reading.initial).toBe(false);
+  });
+
+  /* 観測できなかったときも待ちは畳む。**畳まないと、読めなかった画面が読み込み中の顔で残る。** */
+  it('最初のページが読めなくても、読んでいる最中ではなくなる', async () => {
+    fetchConversation.mockResolvedValueOnce(refused());
+
+    const { result } = renderHook(() => useTranscriptWindow(FILE));
+
+    await waitFor(() => expect(result.current.failed.initial).toBe(true));
+    expect(result.current.reading.initial).toBe(false);
+  });
+
+  it('「もっと前」を押しているあいだ、遡っていると言う', async () => {
+    const older = held();
+    fetchConversation
+      .mockResolvedValueOnce(page(1_000_000, 1_000_100, [event]))
+      .mockReturnValueOnce(older.answer);
+
+    const { result } = renderHook(() => useTranscriptWindow(FILE));
+    await waitFor(() => expect(result.current.hasOlder).toBe(true));
+
+    act(() => result.current.loadOlder());
+    await waitFor(() => expect(result.current.reading.older).toBe(true));
+
+    older.settle(page(500_000, 600_000, [event]));
+    await waitFor(() => expect(result.current.reading.older).toBe(false));
+  });
+
+  it('末尾の追いかけでは、読んでいると言わない', async () => {
+    const follow = held();
+    fetchConversation
+      .mockResolvedValueOnce(page(1_000_000, 1_000_100, [event]))
+      .mockReturnValueOnce(follow.answer);
+
+    const { result } = renderHook(() => useTranscriptWindow(FILE));
+    await waitFor(() => expect(result.current.events).toHaveLength(1));
+
+    act(() => notify(FILE));
+    await settled();
+
+    expect(
+      result.current.reading,
+      '既に画面に出ている会話の上に待ちの表示を出すと、読めているものが読めていないように見える',
+    ).toEqual({ initial: false, older: false });
+
+    follow.settle(page(1_000_100, 1_000_200, [event]));
+    await settled();
+  });
+});
+
+/* 手元に在る範囲。**分母は読めたページが持ってくる** —— 大きさを観測する前に割合を出すと、
+   分母の無い数が割合の顔で画面に出る。 */
+describe('手元に在るバイトの範囲', () => {
+  it('1 ページも読めていないうちは、何も言わない', async () => {
+    const first = held();
+    fetchConversation.mockReturnValueOnce(first.answer);
+
+    const { result } = renderHook(() => useTranscriptWindow(FILE));
+
+    await waitFor(() => expect(result.current.reading.initial).toBe(true));
+    expect(result.current.held, '大きさを観測していないうちは分母が無い').toBeNull();
+
+    first.settle(page(1_000_000, 1_000_100, [event]));
+    await waitFor(() => expect(result.current.held).not.toBeNull());
+  });
+
+  it('読み取り範囲の先頭から読み切れたところまでを、大きさとともに持つ', async () => {
+    fetchConversation.mockResolvedValueOnce(page(1_000_000, 1_000_100, [event]));
+
+    const { result } = renderHook(() => useTranscriptWindow(FILE));
+
+    await waitFor(() => expect(result.current.held).toEqual({ bytes: 100, size: 4_000_000 }));
+  });
+
+  it('遡ったぶんだけ、手元に在る範囲が広がる', async () => {
+    /* 「もっと前」が 1 歩で遡る量。読み取り範囲の先頭は、**頼んだ位置**へ動く ——
+       読み始めた位置ではないことは、この上の describe が確かめている。 */
+    const STEP = 256 * 1024;
+    fetchConversation
+      .mockResolvedValueOnce(page(1_000_000, 1_000_100, [event]))
+      .mockResolvedValueOnce(page(900_000, 1_000_000, [event]));
+
+    const { result } = renderHook(() => useTranscriptWindow(FILE));
+    await waitFor(() => expect(result.current.hasOlder).toBe(true));
+
+    act(() => result.current.loadOlder());
+
+    await waitFor(() =>
+      expect(result.current.held?.bytes, '手元に在る範囲は、遡ったぶんだけ前へ伸びる').toBe(
+        1_000_100 - (1_000_000 - STEP),
+      ),
+    );
+  });
+
+  /* 分母は読んでいるあいだにも動く。エージェントが話し続けている `transcript` は追記され
+     続けるので、開いたときの大きさのままにすると、読めた量がそれを追い越して割合が
+     100% を超える。 */
+  it('末尾を追いかけたら、大きさも読み直す', async () => {
+    fetchConversation
+      .mockResolvedValueOnce(page(1_000_000, 1_000_100, [event]))
+      .mockResolvedValueOnce(page(1_000_100, 1_000_200, [event], 5_000_000));
+
+    const { result } = renderHook(() => useTranscriptWindow(FILE));
+    await waitFor(() => expect(result.current.held).not.toBeNull());
+
+    act(() => notify(FILE));
+
+    await waitFor(() =>
+      expect(result.current.held, '伸びた `transcript` を、開いたときの大きさで割る').toEqual({
+        bytes: 200,
+        size: 5_000_000,
+      }),
+    );
+  });
+
+  it('別の `transcript` を開いたら、前の大きさを持ち越さない', async () => {
+    const second = held();
+    fetchConversation
+      .mockResolvedValueOnce(page(1_000_000, 1_000_100, [event]))
+      .mockReturnValueOnce(second.answer);
+
+    const { result, rerender } = renderHook(({ file }) => useTranscriptWindow(file), {
+      initialProps: { file: FILE },
+    });
+    await waitFor(() => expect(result.current.held).not.toBeNull());
+
+    rerender({ file: OTHER });
+
+    expect(result.current.held, '前のファイルの大きさを分母にした割合が出る').toBeNull();
+    second.settle(page(0, 50, [event]));
+    await settled();
   });
 });

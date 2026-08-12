@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDue, formatSince } from '~/frameworks/tanstack/ui/format.ts';
+import { formatByteRange, formatDue, formatSince } from '~/frameworks/tanstack/ui/format.ts';
 
 /* 過ぎた時刻と、これから来る時刻は別の読み方をする。
 
@@ -41,5 +41,37 @@ describe('期日', () => {
   it('読めない時刻と、無い期日は空にする', () => {
     expect(formatDue(null, NOW)).toBe('');
     expect(formatDue('not a time', NOW)).toBe('');
+  });
+});
+
+/* 読めた量と総量を 1 行にする。**単位は総量のほうで決める** —— 読めた量で決めると、
+   読み進むたびに単位が変わって、同じバーの下で数が飛ぶ。 */
+describe('読めた量と総量', () => {
+  it('総量の大きさに合う単位を選ぶ', () => {
+    expect(formatByteRange(0, 512)).toBe('0 of 512 B');
+    expect(formatByteRange(512, 1024)).toBe('0.5 of 1.0 KiB');
+    expect(formatByteRange(2_000_000, 4_000_000)).toBe('1.9 of 3.8 MiB');
+    expect(formatByteRange(1024 ** 3, 8 * 1024 ** 3)).toBe('1.0 of 8.0 GiB');
+  });
+
+  it('これ以上の単位は持たないので、いちばん上で止める', () => {
+    expect(formatByteRange(0, 9 * 1024 ** 5), '知らない単位を名乗るより、大きな数を出す').toBe(
+      '0.0 of 9437184.0 GiB',
+    );
+  });
+
+  /* 小さいほうが自分の単位で丸まると `900.0 of 1.2 MiB` のように、大きいほうが小さく
+     見える並びになる。総量が MiB なら、読めた量も MiB で丸める。 */
+  it('読めた量が小さくても、総量と同じ単位で出す', () => {
+    expect(formatByteRange(100, 4_000_000)).toBe('0.0 of 3.8 MiB');
+  });
+
+  it('B のときだけ小数を出さない', () => {
+    expect(formatByteRange(300, 512), '512.0 B は在りもしない精度を出す').toBe('300 of 512 B');
+  });
+
+  it('負の量は 0 として出す', () => {
+    expect(formatByteRange(-5, 2048)).toBe('0.0 of 2.0 KiB');
+    expect(formatByteRange(-5, -5)).toBe('0 of 0 B');
   });
 });

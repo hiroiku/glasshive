@@ -212,9 +212,12 @@ body.dragging #drawer-grip {
   column-gap: 8px;
   align-content: start;
 }
+/* 会話そのもの以外は、列を跨いで置く。**跨がせないと、いちばん左の列の中に置かれる** ——
+   会話の時刻の真下に、待ちのバーや読めなかった板が左寄せで並ぶことになる。 */
 #conversation > #older,
 #conversation > #placeholder,
 #conversation > .not-observed,
+#conversation > .rp,
 #conversation > .conv-tail {
   grid-column: 1 / -1;
 }

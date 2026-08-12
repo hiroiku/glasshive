@@ -215,3 +215,70 @@ describe('ヘッダーの `working on`', () => {
     expect(container.querySelector('.ichip')).toBeNull();
   });
 });
+
+/* 待っていることを言わない画面は、「ここには何も無い」と読める。**まだ読んでいないことと、
+   読んで無かったことを混ぜない** —— glasshive の決まりを、画面の側でも崩さない。 */
+describe('読んでいる最中の会話', () => {
+  /** 好きなときに答えを返せる求め */
+  const held = () => {
+    let settle: (value: unknown) => void = () => {};
+    const answer = new Promise((resolve) => {
+      settle = resolve;
+    });
+    return { answer, settle };
+  };
+
+  it('最初のページが返るまで、読んでいることを言う', async () => {
+    const first = held();
+    fetchConversation.mockReturnValueOnce(first.answer);
+
+    const { container } = render(<ConvPanel file={FILE} project={project([])} />);
+
+    await waitFor(() =>
+      expect(
+        container.querySelector('[role="progressbar"]')?.getAttribute('aria-label'),
+        '空の会話にすると、これから届く会話が「何も話されていないセッション」になる',
+      ).toBe('Reading the conversation'),
+    );
+    expect(container.querySelector('#older'), '読み取り範囲をまだ持たない').toBeNull();
+
+    first.settle(page(1_000_000, 1_000_100));
+    await waitFor(() => expect(container.querySelectorAll('.ev')).toHaveLength(1));
+    expect(container.querySelector('[role="progressbar"]')).toBeNull();
+  });
+
+  /* 遡っているあいだ、押したボタンをそのまま残すと、押しても何も変わらないボタンが居座る。
+     **届いていないのか、もう前が無いのかが読めない。**
+
+     入れ替えた先が数えているのは `transcript` のバイトであって、画面に並ぶイベントではない。
+     何を数えているかを言わないと、その割合が会話の進み具合として読まれる。 */
+  it('遡っているあいだは、ボタンを読めたバイトと入れ替える', async () => {
+    const older = held();
+    fetchConversation
+      .mockResolvedValueOnce(page(1_000_000, 1_000_100))
+      .mockReturnValueOnce(older.answer);
+
+    const { container } = render(<ConvPanel file={FILE} project={project([])} />);
+    await waitFor(() => expect(container.querySelector('#older')).not.toBeNull());
+
+    (container.querySelector('#older') as HTMLButtonElement).click();
+
+    await waitFor(() =>
+      expect(container.querySelector('[role="progressbar"]')?.getAttribute('aria-label')).toBe(
+        'Reading older messages',
+      ),
+    );
+    expect(container.querySelector('#older'), '押しても何も変わらないボタンを残さない').toBeNull();
+    expect(
+      container.querySelector('.rp-scan')?.textContent,
+      '裸の割合は、会話のどこまでが出たかとして読まれる',
+    ).toBe('0.0 of 3.8 MiB read from this transcript');
+    expect(
+      (container.querySelector('.rp-fill') as HTMLElement | null)?.style.width,
+      '塗る幅は、読めたバイトと `transcript` の大きさからしか決まらない',
+    ).toBe('0.0025%');
+
+    older.settle(page(500_000, 600_000));
+    await waitFor(() => expect(container.querySelector('#older')).not.toBeNull());
+  });
+});

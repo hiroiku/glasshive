@@ -107,8 +107,10 @@ Beyond the layers, three ideas carry most of the design:
 `visual` exists because `ui` cannot see CSS at all. happy-dom has no layout and no cascade, so a
 rule can be written, matched, and inert, and every DOM assertion still passes — which matters here
 because several rules *are* the observation. The hatch is how a row says "we could not read this";
-the dashed flag is how a close time says "this is a substitute for one we never saw". When one of
-those silently does nothing, the screen does not degrade, it states the opposite of what we saw.
+the dashed flag is how a close time says "this is a substitute for one we never saw"; the filled
+bar is how a wait says "this much of the source has been read, and we know the rest"; the held
+lines are how a panel says "content is coming here" rather than "there is nothing here". When one
+of those silently does nothing, the screen does not degrade, it states the opposite of what we saw.
 
 So `visual` renders the real components with the real `index.css` in a real browser, screenshots an
 element with and without the rule applied, and counts the pixels that changed. It is `npm run

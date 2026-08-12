@@ -14,6 +14,7 @@ import { type GraphNode, MiniGraph } from '../issues/MiniGraph.tsx';
 import { AvatarStack } from '../primitives/Avatar.tsx';
 import { Icon } from '../primitives/Icon.tsx';
 import { NotObserved } from '../primitives/NotObserved.tsx';
+import { ReadingLines } from '../primitives/ReadingLines.tsx';
 import { MdView } from '../text/MdView.tsx';
 import { SubjectText } from '../text/SubjectText.tsx';
 import { IssueDiscussion } from './IssueDiscussion.tsx';
@@ -300,11 +301,13 @@ export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDet
           </>
         )}
 
-        {/* 本文。**読めなかったことを黙らない** —— 空のまま出すと、本文の無い課題に見える。
-            尋ねている最中も黙る。まだ答えが返っていないだけで、読めなかったのではない。 */}
+        {/* 本文。**読めなかったことも、尋ねている最中であることも黙らない** —— どちらを
+            黙っても、本文の無い課題として画面に出る。この 2 つは別の絵でなければならない。 */}
         {text !== null ? (
           text !== '' && <MdView text={text} source="github" project={project} />
-        ) : body.isPending && askable ? null : (
+        ) : body.isPending && askable ? (
+          <ReadingLines lines={3} label="Reading the description" />
+        ) : (
           <NotObserved
             partial
             icon={mdiGithub}

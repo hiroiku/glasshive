@@ -129,7 +129,7 @@ describe('勝手に変わる進み具合を、読み上げる', () => {
 
     expect(note?.getAttribute('role')).toBe('status');
     expect(note?.getAttribute('aria-live')).toBe('polite');
-    expect(note?.textContent).toBe('8 / 40 transcripts');
+    expect(note?.textContent).toBe('8 of 40 transcripts read');
   });
 });
 

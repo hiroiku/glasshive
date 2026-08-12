@@ -83,6 +83,7 @@ const BANNED: readonly { readonly term: string; readonly use: string; readonly a
     },
     { term: '筋', use: 'トラック', allow: ['筋道'] },
     { term: '札', use: 'チップ / ラベル / エラーコード / タグ / 件数', allow: [] },
+    { term: '釦', use: 'ボタン', allow: [] },
     {
       term: '印',
       use: '検索パラメータ / ピン留め / 省略記号 / タグ / アイコン',

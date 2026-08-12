@@ -35,7 +35,16 @@ export function getRouter() {
        **これを置かないと、シェルは空のままビルドされる。** ブラウザーは hydrate のときに
        ルートの中身を描くので、空のシェルと食い違い、React が DOM を丸ごと作り直す。
        同じものを両側で描かせておけば、hydrate は静かに済む。 */
-    defaultPendingComponent: () => <ReadProgress label="Starting glasshive" />,
+    /* 何を待っているのかまで言う。**割合は出せない** —— ここはまだ何も読めていない時点で、
+       分母を持たない。8 秒を過ぎてから足す 1 行が食い違いにならないのは、それを出すのが
+       `useEffect` のタイマーだからである。シェルを描くときには走らないので、hydrate する
+       その瞬間はどちらの側にもこの 1 行が無い。 */
+    defaultPendingComponent: () => (
+      <ReadProgress
+        label="Starting glasshive"
+        slowNote="The first read of ~/.claude/projects takes a moment."
+      />
+    ),
     /* 待ちの表示を、間を置いてからではなく最初から出す。HTML シェルには既に描かれて
        いるので、ここで間を置くと、その間だけブラウザー側が空になって食い違う。 */
     defaultPendingMs: 0,
