@@ -76,9 +76,9 @@ describe('1.2.0 より前のリンクを Work へ送る', () => {
     expect(options.to).toBe('/projects/$slug/work');
     expect(options.params).toEqual({ slug: 'demo' });
     expect(
-      options.search.unit,
-      'Beads の画面が見せていたのは課題である。Work の既定の単位もそれである',
-    ).toBeUndefined();
+      options.search,
+      'Beads の画面が見せていたのは課題である。Work の既定の単位もそれなので、何も足さない',
+    ).toEqual({});
     expect(options.replace).toBe(true);
   });
 

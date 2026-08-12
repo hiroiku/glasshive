@@ -14,8 +14,8 @@ import { TranscriptWatchError } from '~/infrastructure/errors/sessions/transcrip
 /** 根がまだ歩けるかを確かめ直す間隔 */
 const RECHECK_MS = 30_000;
 
-/* 根を歩けるかを確かめる。無い・ディレクトリでない・読めないが、どれも例外で分かる。
-   `fs.stat` では「何かが在る」までしか分からず、ファイルを根にしたときに素通りする。 */
+/* 根を歩けるかを確かめる。無い・ディレクトリでない・読めないは、どれも例外で分かる。
+   `fs.stat` だけでは「何かが在る」までしか分からず、ファイルを根にしたときに素通りする。 */
 const openTree = (root: string): void => fs.opendirSync(root).closeSync();
 
 export function createFsWatchTranscript(root: string): TranscriptWatchIntegration {
