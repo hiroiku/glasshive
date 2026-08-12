@@ -790,6 +790,47 @@ describe('線が結ぶ両端', () => {
     );
   });
 
+  /* 線の左端が作られた時刻かどうかは、**「作られた時刻を読めた」とは別のことである。**
+
+     線は観測した時刻のいちばん古いところから始まる。読めていても、それより古いイベントが
+     記録に在れば、線が始まるのはそのイベントである。そこを「開いた時刻から始まる」と言うと、
+     線の左端が観測した開始時刻に化ける。 */
+  it('作られた時刻を読めなければ、いちばん古いイベントから始まる', () => {
+    const issues = [issue('#1')];
+    const log = logOf([
+      entry('#1', [
+        { at: NOW - 12 * DAY_MS, kind: 'comment' },
+        { at: NOW - 8 * DAY_MS, kind: 'comment' },
+      ]),
+    ]);
+
+    const ends = trackEndsOf(null, trackOf(issues, log, '#1'), null);
+
+    expect(ends?.fromMs).toBe(NOW - 12 * DAY_MS);
+    expect(ends?.opened, '読めなかった時刻が、線の左端として観測に化ける').toBe(false);
+  });
+
+  /* 記録のほうが古いことは在る。**そのときも線はイベントから始まる** —— 作られた時刻まで
+     戻すと、誰も観測していない区間を線が跨ぐ。 */
+  it('作られた時刻より古いイベントが在れば、そのイベントから始まる', () => {
+    const issues = [issue('#1')];
+    const log = logOf([
+      entry('#1', [
+        { at: NOW - 12 * DAY_MS, kind: 'comment' },
+        { at: NOW - 8 * DAY_MS, kind: 'comment' },
+      ]),
+    ]);
+
+    const ends = trackEndsOf(NOW - 10 * DAY_MS, trackOf(issues, log, '#1'), null);
+
+    expect(ends?.fromMs, '作られた時刻まで戻すと、線が観測していない区間を跨ぐ').toBe(
+      NOW - 12 * DAY_MS,
+    );
+    expect(ends?.opened, '左端はイベントなのに、作られた時刻から始まると言うことになる').toBe(
+      false,
+    );
+  });
+
   it('観測した時刻が 1 つしか無いなら、結ぶ相手が居ないので線は無い', () => {
     const issues = [issue('#1')];
     const log = logOf([entry('#1', [])]);

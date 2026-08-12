@@ -762,12 +762,16 @@ function lagTitle(wait: RowWait): string {
 /* 線の説明。**線が結ぶ 2 つの時刻を言う。長さは言わない** —— 端を軸で止めているときは
    描いた長さが本当の間隔ではないうえ、そもそもこの 2 つの時刻の間を観測したわけではない。
 
-   開いた時刻を読めていないなら、線が始まるのは最初のイベントである。**そこを「開いた」と
-   語らない** —— 語れば、読めなかった時刻が観測に化ける。 */
-function lineTitle(ends: TrackEnds, line: TrackLine): string {
+   線が作られた時刻から始まらないのは 2 つの場合である。開いた時刻を読めなかったときと、それより
+   古いイベントが記録に在ったときである。**同じ言葉で言わない** —— 後者で「読めなかった」と
+   言えば、読めている時刻を読めなかったことにする。どちらでも「開いた」とは語らない ——
+   語れば、線の左端が観測した開始時刻に化ける。 */
+function lineTitle(ends: TrackEnds, line: TrackLine, openedAt: boolean): string {
   const from = ends.opened
     ? `Opened ${absTime(ends.fromMs)}`
-    : `First event ${absTime(ends.fromMs)} — when this issue was opened could not be read`;
+    : openedAt
+      ? `First event ${absTime(ends.fromMs)} — earlier than the time this issue was opened`
+      : `First event ${absTime(ends.fromMs)} — when this issue was opened could not be read`;
   const to = !ends.closed
     ? `last event ${absTime(ends.toMs)}`
     : ends.approxTo
@@ -948,9 +952,12 @@ const IssueRow = memo(function IssueRow({
      片方だけが残ると、まだ読んでいない行が待った長さを主張することになる。
 
      端が軸の外に在るなら、軸の端で止めて**その端をぼかす** —— `clampPct` が置いた位置は
-     誰も観測していない時刻なので、硬い端で描くとそこで待ちが始まった(終わった)ことになる。 */
+     誰も観測していない時刻なので、硬い端で描くとそこで待ちが始まった(終わった)ことになる。
+
+     待ちの右端は、この課題が作られた時刻そのものである。その時刻を読めない行に `lag` は
+     組まれないので、ここで読めたかどうかを判じ直さない。 */
   const wait: RowWait | null =
-    quiet || lag === null || !Number.isFinite(createdMs) || lag.at > axis.t1 || createdMs < axis.t0
+    quiet || lag === null || lag.at > axis.t1 || createdMs < axis.t0
       ? null
       : {
           left: clampPct(atPct(lag.at, axis)),
@@ -1154,7 +1161,7 @@ const IssueRow = memo(function IssueRow({
           <i
             className={`gt-line${line.softFrom ? ' soft-from' : ''}${line.softTo ? ' soft-to' : ''}`}
             style={{ left: `${line.left}%`, width: `${line.width}%` }}
-            title={lineTitle(ends, line)}
+            title={lineTitle(ends, line, Number.isFinite(createdMs))}
           />
         )}
         {cutRegion !== null && (

@@ -306,6 +306,33 @@ describe('右のトラック', () => {
     );
   });
 
+  /* 線が作られた時刻から始まらないのは 2 つの場合である。読めなかったときと、それより古いイベントが
+     記録に在ったときである。**同じ言葉で言わない** —— 後者で「読めなかった」と言えば、
+     読めている時刻を読めなかったことにする。どちらでも「開いた」とは語らない。 */
+  it('作られた時刻を読めなければ、線の左端をそう言う', () => {
+    const { container } = drawGantt(
+      [issue('#1', { created_at: null })],
+      read([{ id: '#1', at: [12, 8] }]),
+    );
+    const line = gtOf(container, '#1').querySelector('.gt-line');
+
+    expect(line?.getAttribute('title'), '読めなかった時刻が、開いた時刻として語られる').toBe(
+      `First event ${absTime(NOW - 12 * DAY)} — when this issue was opened could not be read — last event ${absTime(NOW - 8 * DAY)}`,
+    );
+  });
+
+  it('作られた時刻より古いイベントが在れば、読めなかったとは言わない', () => {
+    const { container } = drawGantt(
+      [issue('#1', { created_at: iso(10) })],
+      read([{ id: '#1', at: [12, 8] }]),
+    );
+    const line = gtOf(container, '#1').querySelector('.gt-line');
+
+    expect(line?.getAttribute('title'), '読めている時刻を、読めなかったことにしている').toBe(
+      `First event ${absTime(NOW - 12 * DAY)} — earlier than the time this issue was opened — last event ${absTime(NOW - 8 * DAY)}`,
+    );
+  });
+
   /* 観測した時刻が 1 つしか無い行は、線を持たない。**輪 1 つが完全な答えである** ——
      長さの無い線を引くと、観測していない何かがそこに在ることになる。 */
   it('イベントの無い開いた課題には、線を引かず、輪だけを置く', () => {
@@ -847,6 +874,20 @@ describe('右のトラック', () => {
     expect(
       gtOf(container, '#2').querySelector('.gt-lag'),
       '逆向きの線は、待っていない期間を待ったと描く',
+    ).toBe(null);
+  });
+
+  /* 相手が閉じたのとこの課題が作られたのが同じ時刻なら、待った長さは 0 である。**幅の無い線を
+     引かない** —— 観測できたのは 2 つの時刻が同じだったことだけで、そこに待った期間は無い。 */
+  it('相手が閉じたのとちょうど同じ時刻に作られた課題には、待ちの線を引かない', () => {
+    const { container } = drawGantt([
+      issue('#1', { status: 'closed', created_at: iso(28), closed_at: iso(10) }),
+      issue('#2', { created_at: iso(10), deps: [blocks('#1')] }),
+    ]);
+
+    expect(
+      gtOf(container, '#2').querySelector('.gt-lag'),
+      '長さの無い線が、待った期間が在ったことにする',
     ).toBe(null);
   });
 
