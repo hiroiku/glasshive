@@ -63,6 +63,8 @@ const issuesBody = (over: Record<string, unknown> = {}) => ({
   issues: [],
   counts: { open: 0 },
   truncated: false,
+  // 既定は歩き終えたことにする。届いている途中の画面を見る回は、そこで `false` を渡す
+  walked: true,
   repository: 'hiroiku/glasshive',
   other_repositories: 0,
   ...over,
@@ -103,6 +105,7 @@ function draw(
     reason: null,
     issues: [],
     complete: true,
+    walked: true,
   });
 
   const { container } = render(

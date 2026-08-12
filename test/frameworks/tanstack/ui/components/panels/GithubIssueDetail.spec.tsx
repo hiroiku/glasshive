@@ -106,13 +106,14 @@ const quiet = {
 /** 返さないまま置いておく答え。尋ねている最中の画面は、これで留める */
 const never = () => new Promise(() => {});
 
-const draw = (over: { issue?: Issue; project?: Project } = {}) => {
+const draw = (over: { issue?: Issue; project?: Project; walked?: boolean } = {}) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <GithubIssueDetail
         issue={over.issue ?? issue()}
         all={[issue()]}
+        walked={over.walked ?? true}
         project={'project' in over ? over.project : project}
         nowMs={Date.parse('2026-08-11T12:00:00Z')}
       />
@@ -216,5 +217,26 @@ describe('尋ね先が分からない課題', () => {
     const { container } = draw({ issue: issue('bd-7') });
 
     expect(labelsOf(container), '尋ねていない求めの待ちは、いつまでも終わらない').toEqual([]);
+  });
+});
+
+/* 下流(この課題を待っている側)は、取ってきた一覧からしか引けない。一覧はページごとに届くので、
+   歩き終える前は、まだ届いていないページに居る課題が下流に出ない。**そこを黙らない** ——
+   黙ると、誰も待っていない課題として読める。 */
+describe('下流が揃っていないこと', () => {
+  const NOTE = 'anything waiting on this one may not be listed yet';
+
+  it('歩き終える前は、下流が足りないことを言う', () => {
+    const { container } = draw({ walked: false });
+
+    expect(container.textContent, '足りない下流が、下流の全部として読まれる').toContain(NOTE);
+  });
+
+  it('歩き終えたら、もう言わない', () => {
+    const { container } = draw();
+
+    expect(container.textContent, '読み終えた一覧の下に、足りないという断りが残る').not.toContain(
+      NOTE,
+    );
   });
 });

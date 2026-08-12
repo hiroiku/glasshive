@@ -113,7 +113,7 @@ export async function* streamGithubIssues(
   const includeClosed = own(input, 'includeClosed') === true;
 
   for await (const chunk of deps.list.stream({ projectPath: path.value, includeClosed })) {
-    if (chunk.kind === 'head') yield { kind: 'issues', issues: presentIssuesHead(chunk.head) };
+    if (chunk.kind === 'head') yield { kind: 'head', head: presentIssuesHead(chunk.head) };
     else if (chunk.kind === 'page') yield { kind: 'page', ...presentIssuePage(chunk.ledger) };
     else yield { kind: 'complete', truncated: chunk.truncated };
   }
@@ -189,7 +189,8 @@ export async function* streamGithubIssueEvents(
   if (!path.ok) throw path.error;
 
   for await (const chunk of deps.events.stream({ projectPath: path.value })) {
-    if (chunk.kind === 'head') yield { kind: 'log', log: presentGithubIssueEventsHead(chunk.head) };
+    if (chunk.kind === 'head')
+      yield { kind: 'head', head: presentGithubIssueEventsHead(chunk.head) };
     else if (chunk.kind === 'page') {
       yield { kind: 'page', issues: presentGithubIssueEventsPage(chunk.issues) };
     } else yield { kind: 'complete', complete: chunk.complete };

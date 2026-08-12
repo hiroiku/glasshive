@@ -28,6 +28,7 @@ const EMPTY: IssuesJson = {
   issues: [],
   counts: {},
   truncated: false,
+  walked: false,
   repository: null,
   other_repositories: 0,
 };
@@ -37,9 +38,11 @@ const EMPTY: IssuesJson = {
    **足すのであって、置き換えない。** ページは前のページを含まないので、行も件数も積み上げる。
    最初の 1 枚だけは丸ごと置き換わる —— そこに `state` と尋ね先が入っている。 */
 export function reduceIssues(current: IssuesJson, chunk: IssuesChunkJson): IssuesJson {
-  if (chunk.kind === 'issues') return chunk.issues;
-  if (chunk.kind === 'complete') return { ...current, truncated: chunk.truncated };
-  const counts = { ...current.counts };
+  if (chunk.kind === 'head') return chunk.head;
+  if (chunk.kind === 'complete') return { ...current, truncated: chunk.truncated, walked: true };
+  /* 状態の名前は GitHub から来る。素のオブジェクトに足すと `__proto__` という名前の状態が
+     件数ではなくプロトタイプを動かすので、台帳と同じく prototype の無い入れ物に足す。 */
+  const counts: Record<string, number> = Object.assign(Object.create(null), current.counts);
   for (const [status, count] of Object.entries(chunk.counts)) {
     counts[status] = (counts[status] ?? 0) + count;
   }
@@ -100,6 +103,7 @@ const NO_EVENTS: GithubIssueEventLogJson = {
   reason: 'no-source',
   issues: [],
   complete: false,
+  walked: false,
 };
 
 /* チャンクを 1 枚の記録へ畳む。**足すのであって、置き換えない。**
@@ -110,8 +114,8 @@ export function reduceIssueEvents(
   current: GithubIssueEventLogJson,
   chunk: GithubIssueEventsChunkJson,
 ): GithubIssueEventLogJson {
-  if (chunk.kind === 'log') return chunk.log;
-  if (chunk.kind === 'complete') return { ...current, complete: chunk.complete };
+  if (chunk.kind === 'head') return chunk.head;
+  if (chunk.kind === 'complete') return { ...current, complete: chunk.complete, walked: true };
   return { ...current, issues: [...current.issues, ...chunk.issues] };
 }
 

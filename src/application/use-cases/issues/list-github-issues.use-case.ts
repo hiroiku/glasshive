@@ -52,12 +52,12 @@ export interface IssueListing {
   readonly source: GithubSource;
 }
 
-/* 一覧の届き方。**ページ 1 の 100 件に、ページ 5 を待つ理由は無い。**
+/* 一覧の届き方。ページ 1 の 100 件に、ページ 5 を待つ理由は無い。
 
    最初に来るのは `head` 1 つで、そこに観測が成り立ったかどうかが入る。成り立っていなければ
-   それが答えの全部で、`page` は 1 つも来ない。**`head` を配れるのはページ 1 を読んだ後である**
-   —— 尋ね先が引けても、ページ 1 が読めなければ課題を 1 件も観ていないので、そこは
-   `unobservable` である。
+   それが答えの全部で、`page` は 1 つも来ない。**`observed` の `head` を配れるのは、ページ 1 を
+   読めた後だけである** —— 尋ね先が引けても、ページ 1 が読めなければ課題を 1 件も観ていない
+   ので、そこは `unobservable` である。
 
    `page` はページ 1 つぶんの一覧で、前のページを参照しない。`buildLedger` がページを
    またいで何も見ないので、ページごとの一覧を並べたものと、全部をまとめて数えたものは同じに
@@ -68,7 +68,7 @@ export type IssueListingChunk =
   /** 読み終えた。上限に当たったか、途中で読めなくなったなら `truncated` */
   | { readonly kind: 'complete'; readonly truncated: boolean };
 
-/** 一覧より先に分かること。尋ね先はページを 1 枚も読まなくても決まっている */
+/** `head` が運ぶもの。中身は尋ね先だけで、行はまだ 1 つも無い */
 export interface IssueListingHead {
   readonly source: GithubSource;
 }

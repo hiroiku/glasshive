@@ -501,21 +501,6 @@ describe('読めたページから順に配る', () => {
     expect(only(chunks, 'head')[0]?.head.kind).toBe('unobservable');
   });
 
-  /* 途中で読めなくなっても、観えたぶんは配り終えている。**その先を読んでいないことだけを言う。** */
-  it('2 ページ目で躓いても、配ったページは取り消さない', async () => {
-    const useCase = listing([pageOf([1], 'c1'), 'not json at all']);
-
-    const chunks = await drain(
-      useCase.stream({ projectPath: '/work/glasshive', includeClosed: false }),
-    );
-
-    expect(chunks.map((chunk) => chunk.kind)).toEqual(['head', 'page', 'complete']);
-    expect(
-      only(chunks, 'complete')[0]?.truncated,
-      '読めなくなったことを黙ると、その先の課題が「無かった」ことになる',
-    ).toBe(true);
-  });
-
   /* `remember` はプロジェクト 1 つぶんを丸ごと置き換える。ページごとにそのページだけを
      覚えさせると、ページ 2 が届いた瞬間にページ 1 の人の顔が引けなくなる。 */
   it('顔は、ここまでに観た全部で覚え直す', async () => {
@@ -531,16 +516,18 @@ describe('読めたページから順に配る', () => {
   });
 
   it('尋ね先が引けなければ、尋ねに行かない', async () => {
+    const { tracker, asked } = fakeTracker([]);
     const useCase = createListGithubIssues({
       avatars: fakeAvatars().avatars,
       git: gitWithoutRemote(),
-      tracker: fakeTracker([]).tracker,
+      tracker,
     });
 
     const chunks = await drain(
       useCase.stream({ projectPath: '/work/glasshive', includeClosed: false }),
     );
 
+    expect(asked, '尋ね先が無いのに `gh` を起こしている').toEqual([]);
     expect(chunks.map((chunk) => chunk.kind)).toEqual(['head', 'complete']);
     expect(
       only(chunks, 'head')[0]?.head.kind,

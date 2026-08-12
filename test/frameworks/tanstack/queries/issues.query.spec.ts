@@ -15,6 +15,7 @@ const EMPTY: IssuesJson = {
   issues: [],
   counts: {},
   truncated: false,
+  walked: false,
   repository: null,
   other_repositories: 0,
 };
@@ -23,8 +24,8 @@ const EMPTY: IssuesJson = {
 const issue = (id: string) => ({ id }) as IssuesJson['issues'][number];
 
 const head = (over: Partial<IssuesJson> = {}): Chunk => ({
-  kind: 'issues',
-  issues: { ...EMPTY, state: 'observed', reason: null, repository: 'hiroiku/glasshive', ...over },
+  kind: 'head',
+  head: { ...EMPTY, state: 'observed', reason: null, repository: 'hiroiku/glasshive', ...over },
 });
 
 const page = (ids: readonly string[], counts: Record<string, number>): Chunk => ({
@@ -35,10 +36,17 @@ const page = (ids: readonly string[], counts: Record<string, number>): Chunk => 
 
 describe('ページを 1 枚の一覧へ畳む', () => {
   it('最初の 1 枚が、尋ね先と `state` を決める', () => {
-    const folded = reduceIssues(EMPTY, head());
+    const observed = reduceIssues(EMPTY, head());
+    const refused = reduceIssues(
+      EMPTY,
+      head({ state: 'unobservable', reason: 'tracker.timeout', repository: null }),
+    );
 
-    expect(folded.state, 'まだ尋ねてもいない `absent` が、答えとして残る').toBe('observed');
-    expect(folded.repository).toBe('hiroiku/glasshive');
+    expect(observed.state, 'まだ尋ねてもいない `absent` が、答えとして残る').toBe('observed');
+    expect(observed.repository).toBe('hiroiku/glasshive');
+    expect(refused.state, '観測が成り立たなければ、その 1 枚が答えの全部である').toBe(
+      'unobservable',
+    );
   });
 
   it('ページの行は、前のページの後ろに足す', () => {
@@ -77,14 +85,32 @@ describe('ページを 1 枚の一覧へ畳む', () => {
     expect(folded.issues, '読み終えたことを言うだけで、行は動かさない').toHaveLength(1);
   });
 
-  it('観測が成り立たなければ、その 1 枚がそのまま答えになる', () => {
-    const folded = reduceIssues(
-      EMPTY,
-      head({ state: 'unobservable', reason: 'tracker.timeout', repository: null }),
-    );
+  /* 歩き終えたかを言うのも最後の 1 つだけである。**`truncated` とは別のものである** ——
+     あちらは「上限に当たって、その先を読んでいない」で、こちらは「まだ届いている途中」である。
+     ここが言わないと、届いたぶんの件数がそのまま全部の件数として画面に出る。 */
+  it('歩き終えたことは、最後の 1 つが言う', () => {
+    let folded = reduceIssues(EMPTY, head());
+    folded = reduceIssues(folded, page(['#1'], { open: 1 }));
 
-    expect(folded.state).toBe('unobservable');
-    expect(folded.issues, '読めなかった一覧に行を残すと、読めた顔で出る').toEqual([]);
+    expect(folded.walked, '届いたぶんの件数が、全部の件数として出る').toBe(false);
+
+    folded = reduceIssues(folded, { kind: 'complete', truncated: false });
+
+    expect(folded.walked).toBe(true);
+  });
+
+  /* 状態の名前は GitHub から来る。**素のオブジェクトに足さない** —— `__proto__` という名前の
+     状態が来ると、その件数はプロトタイプへの代入として黙って捨てられる。台帳の側と同じく、
+     prototype の無い入れ物に足す。 */
+  it('状態の名前が何であれ、件数を落とさない', () => {
+    const counts = JSON.parse('{"__proto__": 2}') as Record<string, number>;
+    let folded = reduceIssues(EMPTY, head());
+    folded = reduceIssues(folded, { kind: 'page', issues: [], counts });
+
+    expect(
+      Object.getOwnPropertyDescriptor(folded.counts, '__proto__')?.value,
+      '数えた 2 件が、どこにも残らずに消えている',
+    ).toBe(2);
   });
 });
 
@@ -100,11 +126,12 @@ const NO_EVENTS: EventLogJson = {
   reason: 'no-source',
   issues: [],
   complete: false,
+  walked: false,
 };
 
 const logHead: EventChunk = {
-  kind: 'log',
-  log: { state: 'observed', reason: null, issues: [], complete: false },
+  kind: 'head',
+  head: { state: 'observed', reason: null, issues: [], complete: false, walked: false },
 };
 
 const eventsOf = (ids: readonly string[]): EventChunk => ({
@@ -134,5 +161,19 @@ describe('記録のページを 1 枚へ畳む', () => {
 
     expect(folded.complete).toBe(true);
     expect(folded.issues, '読み終えたことを言うだけで、行は動かさない').toHaveLength(1);
+  });
+
+  /* 歩き終えたかも最後の 1 つが言う。**`complete` とは別に持つ** —— あちらは「読みに行って、
+     そこまでしか辿れなかった」で、こちらは「まだ届いている途中」である。ここが言わないと、
+     まだ届いていない行にハッチが掛かり、読めなかった行として画面に出る。 */
+  it('歩き終えたことは、最後の 1 つが言う', () => {
+    let folded = reduceIssueEvents(NO_EVENTS, logHead);
+    folded = reduceIssueEvents(folded, eventsOf(['#1']));
+
+    expect(folded.walked, 'まだ届いていない行に、読めなかった行のハッチが掛かる').toBe(false);
+
+    folded = reduceIssueEvents(folded, { kind: 'complete', complete: true });
+
+    expect(folded.walked).toBe(true);
   });
 });

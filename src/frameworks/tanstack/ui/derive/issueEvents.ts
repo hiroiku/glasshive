@@ -49,20 +49,26 @@ export type EventLog =
    分ける** —— 混ぜると、失敗が永久に読み込み中の顔で残る。
 
    記録はページごとに届く。1 枚も届いていないあいだが `reading` で、届き始めた後は
-   `observed` に移り、まだ途中であることは `reading` の欄が持つ。 */
+   `observed` に移り、まだ途中であることは `reading` の欄が持つ。
+
+   途中かどうかは受け取った値の `walked` が決める。**問い合わせが取得中かどうかから採らない**
+   —— 取り直しの間も前の答えを出したままにしてあるので、読み終えた記録の上で取得中になる。
+   そこを読んでいる最中とすると、本当に読めなかった行のハッチが点線に戻る。
+
+   `pending` が答えるのは、まだ 1 つも受け取っていないときだけである。 */
 export function eventLogOf(
-  reading: boolean,
+  pending: boolean,
   failed: boolean,
   body: GithubIssueEventLogJson | null,
 ): EventLog {
   if (failed) return { kind: 'unobservable', reason: null };
-  if (body === null) return reading ? { kind: 'reading' } : { kind: 'unobservable', reason: null };
-  if (body.state === 'absent') return reading ? { kind: 'reading' } : { kind: 'absent' };
+  if (body === null) return pending ? { kind: 'reading' } : { kind: 'unobservable', reason: null };
+  if (body.state === 'absent') return body.walked ? { kind: 'absent' } : { kind: 'reading' };
   if (body.state === 'unobservable') return { kind: 'unobservable', reason: body.reason };
 
   const byId = new Map<string, GithubIssueEventsJson>();
   for (const entry of body.issues) byId.set(entry.id, entry);
-  return { kind: 'observed', complete: body.complete, reading, byId };
+  return { kind: 'observed', complete: body.complete, reading: !body.walked, byId };
 }
 
 export interface EventMark {

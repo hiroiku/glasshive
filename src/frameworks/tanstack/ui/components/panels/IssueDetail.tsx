@@ -23,7 +23,17 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
   const tracked = answer?.state === 'observed' ? answer.issues : [];
   const issue = tracked.find((candidate) => candidate.id === id);
   if (issue !== undefined) {
-    return <GithubIssueDetail issue={issue} all={tracked} project={project} nowMs={Date.now()} />;
+    /* 下流(この課題を待っている側)は一覧の全部から引く。**まだ歩き終えていないことを渡す**
+       —— 届いていない課題は下流に出ないので、黙ると「誰も待っていない」として読まれる。 */
+    return (
+      <GithubIssueDetail
+        issue={issue}
+        all={tracked}
+        walked={answer?.walked === true}
+        project={project}
+        nowMs={Date.now()}
+      />
+    );
   }
 
   /* 断りも「無かった」も `.detail` の中に出す。外に出すと余白も中央寄せも無い素の文字が
@@ -36,8 +46,9 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
     );
   }
   /* まだ読んでいる最中。**「この id は無かった」と言えるのは読み終えてからである** ——
-     まだ届いていないページに在るかもしれない。 */
-  if (answer === undefined || tracker.isFetching) {
+     まだ届いていないページに在るかもしれない。歩き終えたかは値そのものが持っている ——
+     取り直しの間も前の一覧を出したままにしてあるので、`isFetching` は答えにならない。 */
+  if (answer === undefined || !answer.walked) {
     return <ReadProgress label="Reading the issue" />;
   }
   /* 観測できなかったのと、一覧にこの id が無かったのは別である。**理由を持っているのは

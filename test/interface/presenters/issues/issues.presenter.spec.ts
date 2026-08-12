@@ -4,7 +4,9 @@ import { absent, observed, unobservable } from '~/app-kernel/observation.ts';
 import {
   presentGithubIssueDiscussion,
   presentGithubIssueEvents,
+  presentGithubIssueEventsHead,
   presentIssues,
+  presentIssuesHead,
 } from '~/interface/presenters/issues/issues.presenter.ts';
 
 /* 写す側はエラーコードしか見ない。エラー型を持ち込まずに、エラーコードだけを与えて確かめる。 */
@@ -114,6 +116,7 @@ describe('一覧を外の形へ写す', () => {
       ],
       counts: { open: 1, closed: 1 },
       truncated: false,
+      walked: true,
       repository: 'hiroiku/glasshive',
       other_repositories: 0,
     });
@@ -211,6 +214,7 @@ describe('一覧を外の形へ写す', () => {
       issues: [],
       counts: {},
       truncated: false,
+      walked: true,
       repository: null,
       other_repositories: 0,
     });
@@ -223,6 +227,7 @@ describe('一覧を外の形へ写す', () => {
     ).toEqual({
       state: 'unobservable',
       truncated: false,
+      walked: true,
       reason: 'tracker.not_installed',
       issues: [],
       counts: {},
@@ -538,6 +543,7 @@ describe('一覧ぶんのイベントを外の形へ写す', () => {
         { id: '#102', events: [], truncated: true },
       ],
       complete: true,
+      walked: true,
     });
   });
 
@@ -556,5 +562,31 @@ describe('一覧ぶんのイベントを外の形へ写す', () => {
       blind.complete,
       '読めなかった一覧を「全部辿れた」と言うと、点の無い行が静かな課題に見える',
     ).toBe(false);
+  });
+});
+
+/* ページごとに配るときの最初の 1 枚。**そこに歩き終えたと書かない** —— 書くと、行が 1 つも
+   届いていないところで一覧が読み終えたことになり、件数が 0 として出て、依存の絵が空で描かれる。
+
+   1 枚で返す経路はその逆である。返した時点で歩き終えているので、そう書かなければ、画面が
+   永久に読んでいる最中の顔で待つ。 */
+describe('歩き終えたかどうかを、届き方が言う', () => {
+  it('最初の 1 枚は、まだ歩き終えていない', () => {
+    expect(
+      presentIssuesHead(observed({ source: listing(LEDGER).source })).walked,
+      '行が 1 つも届いていないところで、一覧が読み終えたことになる',
+    ).toBe(false);
+    expect(
+      presentGithubIssueEventsHead(observed(null)).walked,
+      '点が 1 つも届いていないところで、記録が読み終えたことになる',
+    ).toBe(false);
+  });
+
+  it('1 枚で返す経路は、返した時点で歩き終えている', () => {
+    expect(
+      presentIssues(observed(listing(LEDGER))).walked,
+      '歩き終えたと言わないと、画面が永久に読んでいる最中の顔で待つ',
+    ).toBe(true);
+    expect(presentGithubIssueEvents(observed({ issues: [], complete: true })).walked).toBe(true);
   });
 });

@@ -44,11 +44,13 @@ export interface GithubIssueDetailProps {
   readonly issue: IssueSummaryJson;
   /** 取ってきた課題の全部。下流(この課題を待っている側)はここから引く */
   readonly all: readonly IssueSummaryJson[];
+  /** `all` が一覧の全部か。ページを歩いている途中なら、下流はまだ揃っていない */
+  readonly walked: boolean;
   readonly project: ProjectJson | undefined;
   readonly nowMs: number;
 }
 
-export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDetailProps) {
+export function GithubIssueDetail({ issue, all, walked, project, nowMs }: GithubIssueDetailProps) {
   const nav = useNav();
   const workers = useMemo(() => workerIndex(project), [project]);
   const id = issue.id ?? '';
@@ -285,6 +287,13 @@ export function GithubIssueDetail({ issue, all, project, nowMs }: GithubIssueDet
         )}
 
         <MiniGraph selfId={id} selfStatus={issue.status} left={left} right={right} />
+        {/* 下流は取ってきた一覧からしか引けない。**足りないことを黙らない** —— 黙ると、
+            まだ届いていないページに在る課題が「この課題を待っていない」ことになる */}
+        {!walked && (
+          <div className="mg-more">
+            Still fetching issues — anything waiting on this one may not be listed yet
+          </div>
+        )}
         {(upstream.length > MAX_GRAPH_NODES || downstream.length > MAX_GRAPH_NODES) && (
           <div className="mg-more">
             {upstream.length > MAX_GRAPH_NODES &&

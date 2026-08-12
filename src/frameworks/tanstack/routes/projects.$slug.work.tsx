@@ -82,9 +82,12 @@ function WorkView() {
      待ってから開く一覧は、待った価値のあるものにならない。右のトラックは答えが返ってきた
      ときに埋まり、それまでは「読んでいる最中」を描く。 */
   const events = useQuery(githubIssueEventsQuery(slug));
+  /* 読んでいる最中かどうかは、届いた記録の `walked` が言う。**`isFetching` から採らない**
+     —— 取り直しの間も前の記録を出したままにしてあるので、読み終えた記録の上で取得中になる。
+     `isPending` が答えるのは、まだ 1 枚も受け取っていないときだけである。 */
   const eventLog = useMemo(
-    () => eventLogOf(events.isFetching, events.error !== null, events.data ?? null),
-    [events.isFetching, events.error, events.data],
+    () => eventLogOf(events.isPending, events.error !== null, events.data ?? null),
+    [events.isPending, events.error, events.data],
   );
 
   const project = tree.data?.projects.find((candidate) => candidate.id === slug);
@@ -116,7 +119,7 @@ function WorkView() {
 
   const overview = git.data?.ok === true ? git.data.body : null;
   /* 届いたページまでの一覧。**読み終えるのを待たない** —— ページ 1 の 100 件を出さずに
-     置いておく理由が無い。まだ途中であることは `issues.isFetching` が言う。 */
+     置いておく理由が無い。まだ途中であることは、値そのものが持つ `walked` が言う。 */
   const page = issues.data?.state === 'observed' ? issues.data : null;
   const all = page?.issues ?? [];
 
@@ -150,7 +153,7 @@ function WorkView() {
   const issuePresence: UnitCount | null =
     issues.error !== null
       ? 'unobservable'
-      : issues.data === undefined || issues.isFetching
+      : issues.data === undefined || !issues.data.walked
         ? 'pending'
         : issues.data.state === 'unobservable'
           ? 'unobservable'
@@ -268,7 +271,7 @@ function WorkView() {
   }
   /* 1 ページも届いていないあいだだけ、バーで待つ。**1 件でも届いたら行を出す** ——
      ページ 1 の 100 件を隠して置いておく理由が無い。まだ途中であることは、行の下で言う。 */
-  if (issues.data === undefined || (issues.isFetching && issues.data.issues.length === 0)) {
+  if (issues.data === undefined || (!issues.data.walked && issues.data.issues.length === 0)) {
     return (
       <>
         {toolbar()}
@@ -298,8 +301,24 @@ function WorkView() {
     );
   }
 
-  /* **取り終えてから束ねる。** 取りに行っている最中に束ねると、まだ 1 件も届いていない
-     ところで「マイルストーンは 1 つも無い」と書くことになる。 */
+  /* 行は届いたぶんから出せるが、全件が揃って初めて成り立つ導出はそうはいかない。**依存の弧も、
+     着手順の束も、マイルストーンの束も、まだ届いていない課題のぶんが黙って落ちる** —— 堰き
+     止められている課題が `Ready now` に並び、まだ届いていないマイルストーンが「無い」になる。 */
+  if (
+    !body.walked &&
+    (search.view === 'graph' || search.unit === 'milestones' || order.key === 'start')
+  ) {
+    return (
+      <>
+        {toolbar()}
+        <ReadProgress
+          label="Fetching the rest of the issues from GitHub"
+          slowNote="this view needs every issue — the dependencies and milestones are read from the whole list"
+        />
+      </>
+    );
+  }
+
   if (search.unit === 'milestones') {
     return (
       <Milestones
@@ -366,7 +385,7 @@ function WorkView() {
             aria-pressed={search.status === name}
             onClick={() => patch({ status: search.status === name ? undefined : name })}
           >
-            {name} {issues.isFetching ? '—' : count}
+            {name} {body.walked ? count : '—'}
           </button>
         ))}
       <button
@@ -375,7 +394,7 @@ function WorkView() {
         aria-pressed={includeClosed}
         onClick={() => patch({ closed: includeClosed ? undefined : true })}
       >
-        + closed {issues.isFetching ? '—' : (body.counts.closed ?? 0)}
+        + closed {body.walked ? (body.counts.closed ?? 0) : '—'}
       </button>
     </>
   );
@@ -425,12 +444,19 @@ function WorkView() {
 
       {/* 一覧のときだけ、弧とチップの読み方を下に出す。グラフは自分の凡例を持っている */}
       {search.view !== 'graph' && (
-        <IssuesLegend complete={shown.every((issue) => issue.deps_complete)} events={eventLog} />
+        <IssuesLegend
+          complete={body.walked && shown.every((issue) => issue.deps_complete)}
+          events={eventLog}
+        />
       )}
 
       {/* 累積フローは常にここに在る。押して出すものにすると、押さない限り
           「増えているのか減っているのか」が誰にも見えない */}
-      <FlowChart issues={body.issues} nowMs={nowMs} />
+      {body.walked ? (
+        <FlowChart issues={body.issues} nowMs={nowMs} />
+      ) : (
+        <ReadProgress label="Fetching the rest of the issues — the cumulative flow counts all of them" />
+      )}
     </>
   );
 }

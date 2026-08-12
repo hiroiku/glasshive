@@ -1,6 +1,7 @@
 import type { Observation } from '~/app-kernel/observation.ts';
-import { observed } from '~/app-kernel/observation.ts';
+import { observed, unobservable } from '~/app-kernel/observation.ts';
 import { ok, type Result } from '~/app-kernel/result.ts';
+import { TrackerResponseUnreadableError } from '~/application/errors/issues/tracker-response.error.ts';
 import type { GitCommandIntegration } from '~/application/ports/integrations/git/git-command.integration.ts';
 import type { IssueTrackerIntegration } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
 import { locateGithubRepository } from '~/application/services/issues/github-repository.service.ts';
@@ -37,7 +38,7 @@ export interface ListGithubIssueEventsInput {
   readonly projectPath: string;
 }
 
-/* 記録の届き方。**一覧と同じく、ページ 1 にページ 5 を待つ理由は無い。**
+/* 記録の届き方。一覧と同じく、ページ 1 にページ 5 を待つ理由は無い。
 
    最初に来るのは `head` 1 つで、そこに観測が成り立ったかどうかが入る。成り立っていなければ
    それが答えの全部である。`page` はページ 1 つぶんで、前のページを含まない。
@@ -136,8 +137,16 @@ export function createListGithubIssueEvents(deps: {
         else issues.push(...chunk.issues);
       }
 
-      if (head === null || head.kind !== 'observed')
-        return ok(head ?? observed({ issues, complete }));
+      /* 配り終える前に `head` が来ないことは無い。それでも観測が成り立たなかった側へ倒すのは、
+         成り立ったことにすると、1 件も観ていない記録が「何も起きていなかった」として出るからである。 */
+      if (head === null || head.kind !== 'observed') {
+        return ok(
+          head ??
+            unobservable(
+              new TrackerResponseUnreadableError('the event walk ended without an answer'),
+            ),
+        );
+      }
       return ok(observed({ issues, complete }));
     },
   };

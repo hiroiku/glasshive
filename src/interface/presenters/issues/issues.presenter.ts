@@ -120,6 +120,10 @@ export interface GithubIssueEventLogJson {
   issues: GithubIssueEventsJson[];
   /** 一覧の課題を全部辿れたか。読めなかったときは `false` */
   complete: boolean;
+  /* 歩き終えたか。**`complete` とは別のものである** —— あちらは「歩いて、そこまでしか
+     辿れなかった」で、こちらは「まだページが届いている途中」である。混ぜると、届く前の行が
+     読みに行って読めなかった行として画面に出る。 */
+  walked: boolean;
 }
 
 export interface IssuesJson {
@@ -135,18 +139,24 @@ export interface IssuesJson {
   repository: string | null;
   /** 尋ねなかった GitHub のリポジトリの数。glasshive が選んでいなければ `0` */
   other_repositories: number;
+  /* 歩き終えたか。**`truncated` とは別のものである** —— あちらは「上限に当たって、その先を
+     読んでいない」で、こちらは「まだページが届いている途中」である。
+
+     読んでいる最中かどうかを問い合わせの `isFetching` から採ってはいけない。取り直しの間は
+     前の答えを出したままにしてあるので、**読み終えた一覧の上で `isFetching` が真になる。** */
+  walked: boolean;
 }
 
 /* ストリームに流れる 1 つ。
 
-   **`issues` が必ず先に来る。** そこに `state` と尋ね先が入っているので、後から届くページは
+   **`head` が必ず先に来る。** そこに `state` と尋ね先が入っているので、後から届くページは
    行を足すだけになり、どこの課題を見ているのかは 1 件目より先に決まっている。観測が
    成り立たなかったときは、その 1 枚だけで終わる。
 
    `page` が運ぶのはそのページぶんだけである。`counts` も同じで、足し合わせるのは受け取る側の
    仕事になる —— 積み上げたものを配ると、同じ課題を 5 回運ぶことになる。 */
 export type IssuesChunkJson =
-  | { kind: 'issues'; issues: IssuesJson }
+  | { kind: 'head'; head: IssuesJson }
   | { kind: 'page'; issues: IssueSummaryJson[]; counts: Record<string, number> }
   | { kind: 'complete'; truncated: boolean };
 
@@ -301,6 +311,8 @@ export function presentIssues(observation: Observation<IssueListing>): IssuesJso
     issues: listing === null ? [] : listing.ledger.issues.map(presentSummary),
     counts: listing === null ? {} : { ...listing.ledger.counts },
     truncated: listing?.ledger.truncated ?? false,
+    // 1 枚で返す経路は、返した時点で歩き終えている
+    walked: true,
     repository:
       listing === null
         ? null
@@ -321,6 +333,7 @@ export function presentIssuesHead(observation: Observation<IssueListingHead>): I
     issues: [],
     counts: {},
     truncated: false,
+    walked: false,
     repository:
       head === null ? null : `${head.source.repository.owner}/${head.source.repository.name}`,
     other_repositories: head?.source.others ?? 0,
@@ -424,16 +437,17 @@ export function presentGithubIssueEvents(
     reason: reasonOf(log),
     issues: log.kind === 'observed' ? presentGithubIssueEventsPage(log.value.issues) : [],
     complete: log.kind === 'observed' && log.value.complete,
+    // 1 枚で返す経路は、返した時点で歩き終えている
+    walked: true,
   };
 }
 
-/* ストリームに流れる 1 つ。
+/* ストリームに流れる 1 つ。一覧と同じ形である。
 
-   **`log` が必ず先に来る。** そこに `state` が入っているので、後から届くページは行を足すだけに
-   なる。`complete` は最後の 1 つが決める —— 読んでいる途中を `complete: false` で表すと、
-   まだ届いていない行が「読みに行って辿れなかった行」として画面に出る。 */
+   `complete` を決めるのは最後の 1 つだけである。**読んでいる途中を `complete: false` で
+   表さない** —— まだ届いていない行が「読みに行って辿れなかった行」として画面に出る。 */
 export type GithubIssueEventsChunkJson =
-  | { kind: 'log'; log: GithubIssueEventLogJson }
+  | { kind: 'head'; head: GithubIssueEventLogJson }
   | { kind: 'page'; issues: GithubIssueEventsJson[] }
   | { kind: 'complete'; complete: boolean };
 
@@ -442,7 +456,7 @@ export type GithubIssueEventsChunkJson =
    `complete` は `false` である。全部を辿れたかどうかが分かるのは読み終えたときで、
    読み始めに `true` を置くと、辿れていない先が無いとまだ言えないうちから言うことになる。 */
 export function presentGithubIssueEventsHead(head: Observation<null>): GithubIssueEventLogJson {
-  return { state: head.kind, reason: reasonOf(head), issues: [], complete: false };
+  return { state: head.kind, reason: reasonOf(head), issues: [], complete: false, walked: false };
 }
 
 /** ページ 1 つぶん。中身は写すだけで、順序も切られたことも触らない */

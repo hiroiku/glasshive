@@ -125,8 +125,10 @@ export function IssuesLegend({
           some dependencies were not fetched — arcs may be missing
         </span>
       )}
-      {/* 全部を読めていないなら黙らない。**どこで読むのをやめたかは画面に出ている** ——
-          読まなかった行はハッチが掛かるので、言うべきなのはその見分け方である */}
+      {/* 読み終えていて、なお全部を読めていないなら黙らない。**どこで読むのをやめたかは
+          画面に出ている** —— 読まなかった行はハッチが掛かるので、言うべきなのはその見分け方
+          である。読んでいる途中は言わない。届く前の行はハッチではなく点線で、読み残しが
+          在るかどうかはまだ分かっていない */}
       {events.kind === 'observed' && !events.complete && !events.reading && (
         <span className="dg-cut">
           some issues were not read — those rows are hatched, not empty

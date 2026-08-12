@@ -69,6 +69,7 @@ const logOf = (issues: readonly ReturnType<typeof entry>[], complete = true): Ev
     reason: null,
     issues: [...issues],
     complete,
+    walked: true,
   } as Answer);
 
 const closeOf = (issues: readonly Issue[], log: EventLog, id: string) =>
@@ -660,12 +661,28 @@ describe('4 つの状態は、どれも別の答えである', () => {
     expect(trackOf([issue('#1')], { kind: 'reading' }, '#1')).toEqual({ kind: 'reading' });
   });
 
+  /* 記録そのものが無いことも、歩き終えて初めて言える。**最初の 1 枚が届く前は `absent` で
+     ある** —— そこを「無かった」とすると、これから点が出る行が空のトラックとして出る。 */
+  it('読むものが無かったことも、歩き終えてから言う', () => {
+    const log = eventLogOf(false, false, {
+      state: 'absent',
+      reason: null,
+      issues: [],
+      complete: false,
+      walked: false,
+    } as Answer);
+
+    expect(log.kind, 'まだ尋ねてもいない `absent` が、記録が無いという答えになる').toBe('reading');
+    expect(trackOf([issue('#1')], log, '#1')).toEqual({ kind: 'reading' });
+  });
+
   it('読むものが無かった', () => {
     const log = eventLogOf(false, false, {
       state: 'absent',
       reason: null,
       issues: [],
       complete: false,
+      walked: true,
     } as Answer);
 
     expect(log.kind).toBe('absent');
@@ -678,6 +695,7 @@ describe('4 つの状態は、どれも別の答えである', () => {
       reason: 'gh exited 1',
       issues: [],
       complete: false,
+      walked: true,
     } as Answer);
 
     expect(log).toEqual({ kind: 'unobservable', reason: 'gh exited 1' });
@@ -1013,11 +1031,12 @@ describe('課題を束ねたトラック', () => {
    「読んで、居なかった」という観測になる。 */
 describe('ページが届いている途中', () => {
   const walking = (issues: readonly ReturnType<typeof entry>[]): EventLog =>
-    eventLogOf(true, false, {
+    eventLogOf(false, false, {
       state: 'observed',
       reason: null,
       issues: [...issues],
       complete: false,
+      walked: false,
     } as Answer);
 
   it('届いた行には点を置く', () => {
@@ -1044,13 +1063,44 @@ describe('ページが届いている途中', () => {
     ).toBe('unread');
   });
 
+  /* 読んでいる最中かどうかは、届いた記録そのものが持っている。`complete` は「読みに行って、
+     そこまでしか辿れなかった」で、まだ届いていないことではない。 */
   it('読んでいる最中であることは、辿り切れなかったこととは別に持つ', () => {
-    const log = walking([]);
+    const halfway = walking([]);
+    const done = logOf([], false);
 
-    expect(log.kind === 'observed' && log.reading).toBe(true);
     expect(
-      log.kind === 'observed' && log.complete,
-      '読み終える前に辿り切ったと言うと、次のページが無かったことになる',
+      halfway.kind === 'observed' && halfway.reading,
+      '読んでいる最中かどうかを `complete` から採っている',
+    ).toBe(true);
+    expect(
+      trackOf([issue('#1')], halfway, '#1'),
+      '歩いている途中の行に、読めなかった行のハッチが掛かる',
+    ).toEqual({ kind: 'reading' });
+    expect(
+      trackOf([issue('#1')], done, '#1').kind,
+      '歩き終えた記録の下で、居なかった行が読み込み中のまま残る',
+    ).toBe('unread');
+  });
+
+  /* 取り直しの間も前の記録を出したままにしてあるので、そこで取得中になる。**そちらを読んで
+     いる最中とすると、本当に読めなかった行のハッチが点線に戻る。** */
+  it('取り直しの取得中を、読んでいる最中にしない', () => {
+    const log = eventLogOf(true, false, {
+      state: 'observed',
+      reason: null,
+      issues: [],
+      complete: false,
+      walked: true,
+    } as Answer);
+
+    expect(
+      log.kind === 'observed' && log.reading,
+      '読んでいる最中かどうかを、問い合わせの取得中から採っている',
     ).toBe(false);
+    expect(
+      trackOf([issue('#1')], log, '#1').kind,
+      '取り直しのたびに、読めなかった行のハッチが消える',
+    ).toBe('unread');
   });
 });
