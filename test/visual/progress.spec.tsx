@@ -98,6 +98,28 @@ describe('読んでいる最中のバー', () => {
       'none',
     );
   });
+
+  /* 同じ待ちを、画面いっぱいの場所にも一覧の下の細い場所にも置く。**自分で余白を持つと、
+     細い場所ではその余白のぶんだけ枠が広がる。** 空ける必要が在るかどうかを知っているのは
+     置く側なので、余白は置く側が持つ。 */
+  it('バーと言葉のぶんしか高さを取らない', () => {
+    const host = box();
+    const { container } = render(<ReadProgress label="Fetching issues from GitHub" />, {
+      container: host,
+    });
+    const rect = (selector: string) =>
+      (container.querySelector(selector) as HTMLElement).getBoundingClientRect();
+    const waiting = rect('.rp');
+
+    expect(
+      rect('.rp-track').top - waiting.top,
+      'バーの上に空きが在るなら、待ちが自分で場所を広げている',
+    ).toBeCloseTo(0, 0);
+    expect(
+      waiting.bottom - rect('.rp-label').bottom,
+      '言葉の下に空きが在るなら、細い場所に置いたときに枠がそのぶん広がる',
+    ).toBeCloseTo(0, 0);
+  });
 });
 
 /* 届く中身の場所を先に取る行。**取った場所は、目に見えていなければ取ったことにならない。** */

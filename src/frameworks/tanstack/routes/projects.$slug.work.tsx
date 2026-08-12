@@ -480,10 +480,14 @@ function WorkView() {
       {body.walked ? (
         <FlowChart issues={body.issues} nowMs={nowMs} />
       ) : (
-        <ReadProgress
-          label={t('Fetching the rest of the issues — the cumulative flow counts all of them')}
-          scan={issuesScan(t, body)}
-        />
+        /* 待ちも図と同じ枠に入れる。**枠ごと入れ替えない** —— 一覧の下のこの場所は図が
+           届く前から在るもので、余白と区切り線を持っているのは待ちではなくこの枠である */
+        <div className="flow-chart">
+          <ReadProgress
+            label={t('Fetching the rest of the issues — the cumulative flow counts all of them')}
+            scan={issuesScan(t, body)}
+          />
+        </div>
       )}
     </>
   );
