@@ -863,6 +863,10 @@ export function AgentsTable({
                 complete: talkHops.complete,
               }
         }
+        /* 読んでいる最中を、押していないときと同じ顔にしない。**押した人から見て何も変わらない
+           間が在ってはいけない** —— `transcript` を読みに行くので、ここは見える長さの待ちになる。
+           矢が既に出ているなら言わない。取り直しの間は前の答えをそのまま出しておく。 */
+        talkReading={talk && talkHops === null && talkQuery.isFetching}
         attention={attention}
         onAttention={onAttention}
         scale={scale}

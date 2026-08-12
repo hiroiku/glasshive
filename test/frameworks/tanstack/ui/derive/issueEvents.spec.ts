@@ -715,6 +715,56 @@ describe('4 つの状態は、どれも別の答えである', () => {
     ).toEqual({ kind: 'unobservable', reason: null });
   });
 
+  /* 取り直しが落ちたときに手元に在るのは、前に読めた記録である。**捨てて「観測できなかった」に
+     しない** —— 捨てれば、点の出ていた行が読めなかった行のハッチに変わる。読めていたものを
+     読めなかったことにするのは、glasshive が言ってはいけない嘘そのものである。 */
+  it('取り直しが落ちても、届いていた記録は捨てない', () => {
+    const log = eventLogOf(false, true, {
+      state: 'observed',
+      reason: null,
+      issues: [
+        { id: '#1', events: [{ at: iso(NOW - 3 * DAY_MS), kind: 'comment' }], truncated: false },
+      ],
+      complete: true,
+      walked: true,
+    } as Answer);
+
+    expect(log.kind, '読めていた記録を、読めなかったことにしている').toBe('observed');
+    if (log.kind !== 'observed') throw new Error('読めたと言うはずだった');
+    expect(log.stale, '取り直す前のものだと言わないと、いま読んだ絵として出る').toBe(true);
+    expect(log.byId.get('#1')?.events).toHaveLength(1);
+  });
+
+  /* 落ちたなら続きは来ない。**読んでいる最中のままにしない** —— 点線が永久に残る。 */
+  it('歩き終える前に落ちたら、届いていたぶんを出して、読んでいる最中はやめる', () => {
+    const log = eventLogOf(false, true, {
+      state: 'observed',
+      reason: null,
+      issues: [
+        { id: '#1', events: [{ at: iso(NOW - 3 * DAY_MS), kind: 'comment' }], truncated: false },
+      ],
+      complete: false,
+      walked: false,
+    } as Answer);
+
+    if (log.kind !== 'observed') throw new Error('読めたと言うはずだった');
+    expect(log.reading, '来ない続きを待ち続ける絵になる').toBe(false);
+    expect(log.stale).toBe(true);
+  });
+
+  /* 「無い」は既に読めている答えである。その後で取り直しが落ちても、無いことは変わらない。 */
+  it('無いと答えた後で落ちたなら、読んでいる最中には戻らない', () => {
+    const log = eventLogOf(false, true, {
+      state: 'absent',
+      reason: null,
+      issues: [],
+      complete: false,
+      walked: false,
+    } as Answer);
+
+    expect(log.kind, '読み終えた `absent` が、永久に読み込み中の顔で残る').toBe('absent');
+  });
+
   it('読んでイベントが 0 件だった', () => {
     const track = trackOf([issue('#1')], logOf([entry('#1', [])]), '#1');
 

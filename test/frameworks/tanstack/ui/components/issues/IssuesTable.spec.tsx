@@ -215,6 +215,7 @@ describe('右のトラック', () => {
     kind: 'observed',
     complete: true,
     reading: false,
+    stale: false,
     byId: new Map(),
   };
 
@@ -232,6 +233,7 @@ describe('右のトラック', () => {
     kind: 'observed',
     complete,
     reading: false,
+    stale: false,
     byId: new Map(
       entries.map((entry) => [
         entry.id,
@@ -1358,6 +1360,7 @@ describe('マイルストーンのグリッド', () => {
     kind: 'observed',
     complete: true,
     reading: false,
+    stale: false,
     byId: new Map(ids.map((id) => [id, { id, events: [], truncated: false }])),
   });
 
@@ -1453,6 +1456,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
     kind: 'observed',
     complete,
     reading: false,
+    stale: false,
     byId: new Map(
       entries.map((entry) => [
         entry.id,
@@ -1565,6 +1569,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
       kind: 'observed',
       complete: true,
       reading: false,
+      stale: false,
       byId: new Map([
         ['#1', { id: '#1', events: [{ at: 'soon', kind: 'comment' }], truncated: false }],
       ]),
@@ -1573,7 +1578,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
       { kind: 'reading' },
       { kind: 'absent' },
       { kind: 'unobservable', reason: 'gh exited 1' },
-      { kind: 'observed', complete: true, reading: false, byId: new Map() },
+      { kind: 'observed', complete: true, reading: false, stale: false, byId: new Map() },
       observed([{ id: '#1', truncated: true }]),
       unreadable,
     ];
@@ -1604,6 +1609,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
       kind: 'observed',
       complete: true,
       reading: false,
+      stale: false,
       byId: new Map([
         [
           '#1',
@@ -1630,6 +1636,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
       kind: 'observed',
       complete: true,
       reading: false,
+      stale: false,
       byId: new Map([
         ['#1', { id: '#1', events: [{ at: 'soon', kind: 'comment' }], truncated: true }],
       ]),
@@ -1648,6 +1655,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
       kind: 'observed',
       complete: true,
       reading: false,
+      stale: false,
       byId: new Map([
         ['#1', { id: '#1', events: [], truncated: true }],
         ['#3', { id: '#3', events: [{ at: 'soon', kind: 'comment' }], truncated: false }],
@@ -1707,6 +1715,33 @@ describe('4 つの状態は、どれも別の絵になる', () => {
     expect(container.querySelector('.iband.cut em')?.textContent).toBe(
       'the event log was cut short',
     );
+  });
+
+  /* 取り直しが読めなかったとき、手元に在るのは前に読めた記録である。**行はそのまま残す**
+     —— 消せば、点の出ていた行が読めなかった行のハッチに変わる。言うのは、絵が古いことである。 */
+  it('取り直しが読めなかったら、点は残したまま、絵が取り直す前のものだと言う', () => {
+    const stale: EventLog = {
+      kind: 'observed',
+      complete: true,
+      reading: false,
+      stale: true,
+      byId: new Map([
+        ['#1', { id: '#1', events: [{ at: iso(8), kind: 'comment' }], truncated: false }],
+      ]),
+    };
+    const { container } = drawLog(stale);
+
+    expect(gt(container).className, '読めていた行が、読めなかった行の絵になっている').not.toContain(
+      'unread',
+    );
+    expect(container.querySelectorAll('.gt-ev').length, '読めていた点まで消えている').toBe(1);
+    expect(container.querySelector('.iband.cut .iband-t span')?.textContent).toBe(
+      'The issue events could not be refreshed',
+    );
+    expect(
+      container.querySelector('.iband.cut em')?.textContent,
+      '黙ると、取り直す前の絵がいま読んだ絵として出る',
+    ).toBe('these are the events read before the last attempt');
   });
 });
 

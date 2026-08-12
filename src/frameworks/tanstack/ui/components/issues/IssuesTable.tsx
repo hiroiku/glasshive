@@ -686,13 +686,20 @@ function bandForLog(
   if (log.kind !== 'observed') return null;
 
   const notes: string[] = [];
+  /* 取り直しが読めなかったなら、いま出ているのは前に読めた記録である。**行を消して
+     「読めなかった」の絵にしない** —— 消せば、読めていた観測が無かったことになる。
+     ここで言うのは、絵が取り直す前のものだということである。 */
+  if (log.stale) notes.push('these are the events read before the last attempt');
   // 記録そのものが途中で切れているなら、並びに居ない行はそれで説明が付く
   if (!log.complete) notes.push('the event log was cut short');
   else if (unread.row) notes.push('they were not in the event log');
   if (unread.cut) notes.push('for some, it stopped before any of their events');
   if (unread.unreadable) notes.push('for some, no event time could be read');
   if (notes.length === 0) return null;
-  return { title: 'Some issues were not read', note: notes.join(' · ') };
+  return {
+    title: log.stale ? 'The issue events could not be refreshed' : 'Some issues were not read',
+    note: notes.join(' · '),
+  };
 }
 
 /* トラック全体の説明。点にホバーしたときは、点の側の説明が勝つ。

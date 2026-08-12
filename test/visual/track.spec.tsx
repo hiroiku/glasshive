@@ -74,6 +74,7 @@ const readLog = (
   kind: 'observed',
   complete: true,
   reading: false,
+  stale: false,
   byId: new Map(
     entries.map((entry) => [
       entry.id,

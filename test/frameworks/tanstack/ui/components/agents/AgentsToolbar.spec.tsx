@@ -21,6 +21,7 @@ const mount = (overrides: Partial<AgentsToolbarProps> = {}) => {
     talk: false,
     onTalk: vi.fn(),
     talkNote: null,
+    talkReading: false,
     attention: false,
     onAttention: vi.fn(),
     showAll: false,
@@ -163,6 +164,18 @@ describe('メッセージの数が、何を言っているのかを分ける', (
     peers: 0,
     complete: true,
     ...over,
+  });
+
+  /* 押してから `transcript` を読み終えるまでは見える長さの待ちである。**押していないときと
+     同じ顔にしない** —— 押した人から見て何も変わらない間が在ると、この画面ではやり取りが
+     無かったのだと読める。読めなかった `?` とも別の顔にする。 */
+  it('読んでいる最中は、押していないときとも読めなかったときとも別の顔を出す', () => {
+    const { container } = mount({ talk: true, talkNote: null, talkReading: true });
+
+    expect(chipOf(container, '⇄').textContent, '押しても何も変わらない間が在ってはいけない').toBe(
+      '⇄ …',
+    );
+    expect(chipOf(container, '⇄').getAttribute('title')).toContain('Reading the open session');
   });
 
   it('観測できなかった回は、数を名乗らない', () => {

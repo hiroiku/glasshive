@@ -43,6 +43,9 @@ export interface AgentsToolbarProps {
        数に入っていない。 */
     readonly complete: boolean;
   } | null;
+  /* まだ `transcript` を読んでいる最中か。**押していないときと同じ顔にしない** —— 押した人から
+     見て何も変わらない間が在ると、この画面ではやり取りが無かったのだと読める。 */
+  readonly talkReading: boolean;
   readonly attention: boolean;
   readonly onAttention: (attention: boolean) => void;
   /* 終わったものも出すか。**この画面の絞り込みであって、設定ではない。**
@@ -68,6 +71,7 @@ export function AgentsToolbar({
   talk,
   onTalk,
   talkNote,
+  talkReading,
   attention,
   onAttention,
   showAll,
@@ -84,6 +88,9 @@ export function AgentsToolbar({
   /* メッセージのチップに添える説明。**観測できなかったことと、届かなかった古いぶんを、
      どちらも言葉にする。** 数字だけでは、どちらも「そうだった」ようにしか読めない。 */
   const talkTitle = (): string => {
+    if (talkReading) {
+      return "Reading the open session's transcripts for messages agents sent each other";
+    }
     if (talkNote === null) {
       return "Draw arrows for messages agents sent each other (reads the open session's transcripts)";
     }
@@ -138,14 +145,16 @@ export function AgentsToolbar({
         title={talkTitle()}
         onClick={() => onTalk(!talk)}
       >
-        {/* 読めなかった回は `?`、先頭まで届かなかった回は `≥` を添えて、数の意味を変える。
-            **数えるのは矢の中身だけではない** —— 片端しか置けていないやり取りもメッセージで、
-            外すと隣のセッションと 21 通交わした画面が `0` と名乗る */}
-        {talkNote === null
-          ? '⇄ messages'
-          : !talkNote.readable
-            ? '⇄ ?'
-            : `⇄ ${talkNote.complete ? '' : '≥'}${talkNote.messages + talkNote.peers}`}
+        {/* 読んでいる最中は `…`、読めなかった回は `?`、先頭まで届かなかった回は `≥` を添えて、
+            数の意味を変える。**数えるのは矢の中身だけではない** —— 片端しか置けていないやり取りも
+            メッセージで、外すと隣のセッションと 21 通交わした画面が `0` と名乗る */}
+        {talkReading
+          ? '⇄ …'
+          : talkNote === null
+            ? '⇄ messages'
+            : !talkNote.readable
+              ? '⇄ ?'
+              : `⇄ ${talkNote.complete ? '' : '≥'}${talkNote.messages + talkNote.peers}`}
         {talkNote?.readable === true && talkNote.dropped > 0 && (
           <span className="n">+{talkNote.dropped}</span>
         )}

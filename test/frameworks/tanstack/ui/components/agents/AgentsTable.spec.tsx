@@ -416,6 +416,70 @@ describe('メッセージを観測できなかったことを、0 通と言わ�
 
     await waitFor(() => expect(chipOf('⇄').textContent).toBe('⇄ 0'));
   });
+
+  /* 押してから返るまで `transcript` を読みに行くので、ここは見える長さの待ちである。 */
+  const READ = {
+    ok: true,
+    body: { state: 'observed', reason: null, complete: true, unplaced: 0, peers: [], hops: [] },
+  };
+
+  /** 1 回目だけすぐ返す返事。2 回目は `settle()` を呼ぶまで返らない */
+  const heldMessages = () => {
+    let asked = 0;
+    let settle: () => void = () => undefined;
+    messagesQuery.mockReturnValue({
+      queryKey: ['messages', 'held'],
+      queryFn: () => {
+        asked += 1;
+        if (asked === 1) return Promise.resolve(READ);
+        return new Promise((resolve) => {
+          settle = () => resolve(READ);
+        });
+      },
+    });
+    return { settle: () => settle() };
+  };
+
+  /* 押していないときと同じ顔で待たない。**押した人から見て何も変わらない間が在ると、
+     この画面ではやり取りが無かったのだと読める。** */
+  it('押してから答えが返るまで、読んでいる最中だと言う', async () => {
+    let settle: (answer: unknown) => void = () => undefined;
+    messagesQuery.mockReturnValue({
+      queryKey: ['messages', 'slow'],
+      queryFn: () =>
+        new Promise((resolve) => {
+          settle = resolve;
+        }),
+    });
+    mount({ project: three });
+
+    fireEvent.click(chipOf('⇄ messages'));
+
+    expect(chipOf('⇄').textContent, '押しても何も変わらない間が在ってはいけない').toBe('⇄ …');
+
+    settle(READ);
+
+    await waitFor(() => expect(chipOf('⇄').textContent).toBe('⇄ 0'));
+  });
+
+  /* 変更通知のたびに同じ問い合わせを取り直す。**出ている答えを、取り直しのあいだだけ伏せない**
+     —— 伏せると、静かな画面で数が数秒おきに消えては戻る。 */
+  it('取り直しのあいだは、出ている数をそのまま出す', async () => {
+    const held = heldMessages();
+    mount({ project: three });
+
+    fireEvent.click(chipOf('⇄ messages'));
+    await waitFor(() => expect(chipOf('⇄').textContent).toBe('⇄ 0'));
+
+    // 押し直すと、手元の答えはそのままで取り直しだけが走る
+    fireEvent.click(chipOf('⇄ 0'));
+    fireEvent.click(chipOf('⇄ messages'));
+
+    expect(chipOf('⇄').textContent, '手元に在る答えを、取り直しのあいだだけ伏せている').toBe('⇄ 0');
+
+    held.settle();
+    await waitFor(() => expect(chipOf('⇄').textContent).toBe('⇄ 0'));
+  });
 });
 
 /* 目盛りは列の中に収まらなければならない。中央寄せのままだと、左端のラベルは

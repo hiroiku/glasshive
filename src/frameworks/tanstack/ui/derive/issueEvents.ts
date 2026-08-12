@@ -40,6 +40,9 @@ export type EventLog =
          そこまでしか辿れなかった」で、こちらは「まだ届いていない」である。混ぜると、
          届く前の行にハッチが掛かり、読めなかった行として画面に出る。 */
       readonly reading: boolean;
+      /* 取り直しが読めなかった。出ているのは、その前に読めた記録である。**行は消さない** ——
+         消せば、点の出ていた行が読めなかった行の絵になる。古いことだけを言う。 */
+      readonly stale: boolean;
       /** 読めた課題だけが鍵を持つ。**`events: []` の課題も鍵を持つ** —— この Map に居ることが
           「この課題は読んだ」という観測そのものである */
       readonly byId: ReadonlyMap<string, GithubIssueEventsJson>;
@@ -55,20 +58,33 @@ export type EventLog =
    —— 取り直しの間も前の答えを出したままにしてあるので、読み終えた記録の上で取得中になる。
    そこを読んでいる最中とすると、本当に読めなかった行のハッチが点線に戻る。
 
-   `pending` が答えるのは、まだ 1 つも受け取っていないときだけである。 */
+   `pending` が答えるのは、まだ 1 つも受け取っていないときだけである。
+
+   取り直しが落ちても、届いていた記録は捨てない。**手元に在る観測を、読めなかったことに
+   しない** —— 捨てると、点の出ていた行がハッチに変わる。捨てずに `stale` で古いと言う。
+   続きはもう来ないので、読んでいる最中でもなくなる。 */
 export function eventLogOf(
   pending: boolean,
   failed: boolean,
   body: GithubIssueEventLogJson | null,
 ): EventLog {
-  if (failed) return { kind: 'unobservable', reason: null };
-  if (body === null) return pending ? { kind: 'reading' } : { kind: 'unobservable', reason: null };
-  if (body.state === 'absent') return body.walked ? { kind: 'absent' } : { kind: 'reading' };
+  if (body === null) {
+    return pending && !failed ? { kind: 'reading' } : { kind: 'unobservable', reason: null };
+  }
+  /* 相手が「無い」と答えた後で落ちたなら、無いことは既に読めている */
+  if (body.state === 'absent')
+    return body.walked || failed ? { kind: 'absent' } : { kind: 'reading' };
   if (body.state === 'unobservable') return { kind: 'unobservable', reason: body.reason };
 
   const byId = new Map<string, GithubIssueEventsJson>();
   for (const entry of body.issues) byId.set(entry.id, entry);
-  return { kind: 'observed', complete: body.complete, reading: !body.walked, byId };
+  return {
+    kind: 'observed',
+    complete: body.complete,
+    reading: !body.walked && !failed,
+    stale: failed,
+    byId,
+  };
 }
 
 export interface EventMark {
