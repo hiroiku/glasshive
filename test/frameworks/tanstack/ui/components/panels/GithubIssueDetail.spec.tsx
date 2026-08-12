@@ -12,16 +12,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
    出せなければならない —— 差し替えるのは `gh` を起こす関数だけにして、鍵の組み立ても
    `enabled` の判断も本物を通す。 */
 
-const { getGithubIssueBody, getGithubIssueDiscussion } = vi.hoisted(() => ({
+const { getGithubIssueBody, getGithubIssueDiscussionStream } = vi.hoisted(() => ({
   getGithubIssueBody: vi.fn(),
-  getGithubIssueDiscussion: vi.fn(),
+  getGithubIssueDiscussionStream: vi.fn(),
 }));
 
+/* **差し替える名前を 1 つでも落とさない。** 落とすと、その名前を `import` した瞬間に
+   問い合わせが `error` へ落ち、この画面のその経路が丸ごと試されないまま緑になる。 */
 vi.mock('~/frameworks/tanstack/functions/issues.ts', () => ({
   getGithubIssueBody,
-  getGithubIssueDiscussion,
+  getGithubIssueDiscussionStream,
+  getGithubIssueDiscussion: vi.fn(),
   getGithubIssueEvents: vi.fn(),
+  getGithubIssueEventsStream: vi.fn(),
   getGithubIssues: vi.fn(),
+  getGithubIssuesStream: vi.fn(),
 }));
 
 vi.mock('~/frameworks/tanstack/ui/nav/NavContext.tsx', () => ({
@@ -98,10 +103,13 @@ const project = {
 const unreadable = { ok: true, body: { state: 'unobservable', reason: 'tracker.timeout' } };
 
 /** 読み終えて、何も言われていなかったやり取り */
-const quiet = {
-  ok: true,
-  body: { state: 'observed', reason: null, entries: [], truncated: false },
-};
+async function* quiet() {
+  yield {
+    kind: 'head',
+    head: { state: 'observed', reason: null, entries: [], truncated: false, walked: false },
+  };
+  yield { kind: 'complete', truncated: false };
+}
 
 /** 返さないまま置いておく答え。尋ねている最中の画面は、これで留める */
 const never = () => new Promise(() => {});
@@ -129,8 +137,8 @@ const labelsOf = (container: HTMLElement) =>
 beforeEach(() => {
   getGithubIssueBody.mockReset();
   getGithubIssueBody.mockImplementation(never);
-  getGithubIssueDiscussion.mockReset();
-  getGithubIssueDiscussion.mockImplementation(never);
+  getGithubIssueDiscussionStream.mockReset();
+  getGithubIssueDiscussionStream.mockImplementation(never);
 });
 
 describe('課題の本文', () => {
@@ -153,7 +161,7 @@ describe('課題の本文', () => {
 
   it('読めなかったなら、そう言う', async () => {
     getGithubIssueBody.mockResolvedValue(unreadable);
-    getGithubIssueDiscussion.mockResolvedValue(quiet);
+    getGithubIssueDiscussionStream.mockImplementation(quiet);
 
     const { container } = draw();
 
@@ -168,7 +176,7 @@ describe('課題の本文', () => {
       ok: true,
       body: { state: 'observed', reason: null, body: 'hello' },
     });
-    getGithubIssueDiscussion.mockResolvedValue(quiet);
+    getGithubIssueDiscussionStream.mockImplementation(quiet);
 
     const { container } = draw();
 
@@ -201,7 +209,7 @@ describe('尋ね先が分からない課題', () => {
     draw({ issue: issue('bd-7') });
 
     expect(getGithubIssueBody, '番号の分からない課題の本文は、どこにも無い').not.toHaveBeenCalled();
-    expect(getGithubIssueDiscussion).not.toHaveBeenCalled();
+    expect(getGithubIssueDiscussionStream).not.toHaveBeenCalled();
   });
 
   it('プロジェクトを観測していなければ、`gh` を起こさない', () => {

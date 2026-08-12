@@ -25,8 +25,7 @@ vi.mock('~/frameworks/tanstack/ui/hooks/useTokenIndex.ts', async () => {
 
 /* 形は画面のものをそのまま借りる。写して持つと、外へ出す形が変わったときに
    ここだけ古いまま緑になる。 */
-type Answer = IssueDiscussionProps['answer'];
-type Discussion = Extract<Answer, { ok: true }>['body'];
+type Discussion = NonNullable<IssueDiscussionProps['answer']>;
 type Entries = Discussion['entries'];
 
 /** 名指された人。顔を引けたかどうかは `avatar` が持つ —— 引けない人は `null` になる */
@@ -35,15 +34,22 @@ const who = (login: string, face = true) => ({ login, avatar: face ? login : nul
 const NOW = Date.parse('2026-08-11T12:00:00Z');
 const AT = '2026-08-11T11:00:00Z';
 
-const answered = (entries: Entries, truncated = false): Answer => ({
-  ok: true,
-  body: { state: 'observed', reason: null, entries, truncated },
+const answered = (entries: Entries, truncated = false): Discussion => ({
+  state: 'observed',
+  reason: null,
+  entries,
+  truncated,
+  walked: true,
 });
 
-const view = (answer: Answer, pending = false) =>
+/** 届いている途中のやり取り。歩き終えていないので、下に続きの行が残る */
+const arriving = (entries: Entries): Discussion => ({ ...answered(entries), walked: false });
+
+const view = (answer: Discussion | undefined, pending = false, failed = false) =>
   render(
     <IssueDiscussion
       answer={answer}
+      failed={failed}
       pending={pending}
       project={undefined}
       nowMs={NOW}
@@ -192,13 +198,11 @@ describe('課題のやり取り', () => {
 
   it('観測できなかったやり取りは `NotObserved` を出す', () => {
     const container = view({
-      ok: true,
-      body: {
-        state: 'unobservable',
-        reason: 'tracker.timeout',
-        entries: [],
-        truncated: false,
-      },
+      state: 'unobservable',
+      reason: 'tracker.timeout',
+      entries: [],
+      truncated: false,
+      walked: true,
     });
 
     expect(container.querySelector('.not-observed')).not.toBeNull();
@@ -206,26 +210,31 @@ describe('課題のやり取り', () => {
     expect(container.querySelector('.no-code')?.textContent).toBe('tracker.timeout');
   });
 
+  /* 取りに行けなかったのは、`gh` が答えなかったのとは別の失敗である。**答えの中に理由が
+     無い** —— それでも読めなかったことは言う。 */
   it('呼び出しが届かなかったときも `NotObserved` を出す', () => {
-    const container = view({
-      ok: false,
-      status: 503,
-      body: { state: 'unobservable', code: 'tracker.denied', message: 'gh refused' },
-    });
+    const container = view(undefined, false, true);
 
-    expect(container.querySelector('.no-code')?.textContent).toBe('tracker.denied');
+    expect(container.querySelector('.not-observed')).not.toBeNull();
+    expect(container.querySelector('.disc-quiet'), '静かな課題の画面は出さない').toBeNull();
   });
 
   /* 「その番号が無かった」と「読みに行けなかった」を同じ文言にすると、
      `gh` が答えたのかどうかが画面から消える。 */
   it('その番号が無かったことと、読めなかったことを別の文言で言う', () => {
     const absent = view({
-      ok: true,
-      body: { state: 'absent', reason: 'empty', entries: [], truncated: false },
+      state: 'absent',
+      reason: 'empty',
+      entries: [],
+      truncated: false,
+      walked: true,
     });
     const unobservable = view({
-      ok: true,
-      body: { state: 'unobservable', reason: 'tracker.timeout', entries: [], truncated: false },
+      state: 'unobservable',
+      reason: 'tracker.timeout',
+      entries: [],
+      truncated: false,
+      walked: true,
     });
 
     const title = (container: HTMLElement) => container.querySelector('.no-title')?.textContent;
@@ -413,5 +422,101 @@ describe('イベントのアイコンの色', () => {
         },
       ]),
     ).toEqual(Array.from({ length: 8 }, () => 'mdi disc-ico'));
+  });
+});
+
+/* やり取りはページごとに届く。**届いたぶんから描く** —— 何百も続いた課題の最初の 10 件を、
+   5 ページぶんの往復が終わるまで隠しておく理由が無い。
+
+   ここで見るのは、届いた発言がその場で出ることと、まだ続きが在ることを黙らないことと、
+   1 枚も届いていないうちを静かな課題にしないことである。 */
+describe('ページが届いている途中', () => {
+  const said = (body: string) => ({
+    kind: 'comment' as const,
+    at: AT,
+    actor: who('rin_sato'),
+    body,
+  });
+
+  it('届いた発言は、読み終える前に出す', () => {
+    const container = view(arriving([said('first')]));
+
+    expect(
+      container.querySelector('.disc')?.textContent,
+      '届いた発言を隠して待たせると、ページ 1 の 100 件が読み終えるまで無いことになる',
+    ).toContain('first');
+  });
+
+  /* 発言の下で画面が止まって見えると、そこがやり取りの終わりとして読める。**続きの来る場所を
+     取っておく** —— 取らないと、届いた瞬間に読んでいた行が押し下げられる。 */
+  it('続きが在ることを、発言の下で言う', () => {
+    const arrivingView = view(arriving([said('first')]));
+    const done = view(answered([said('first')]));
+
+    expect(
+      arrivingView.querySelector('[role="progressbar"]')?.getAttribute('aria-label'),
+      '続きが在ることを黙ると、途中の並びが全部として読める',
+    ).toBe('Reading more of the discussion');
+    expect(
+      done.querySelector('[role="progressbar"]'),
+      '読み終えた並びの下に、続きを待つ行が残る',
+    ).toBeNull();
+  });
+
+  /* **1 枚も届いていないうちを、静かな課題にしない。** どちらも発言の無い画面になるが、
+     片方は「まだ誰も書いていない」で、もう片方は「まだ届いていない」である。 */
+  it('1 枚も届いていないうちは、静かな課題にしない', () => {
+    const container = view(arriving([]));
+
+    expect(
+      container.textContent,
+      '「まだ何も言われていない」と言えるのは、読み終えた課題だけである',
+    ).not.toContain('Nothing has been said');
+    expect(container.querySelector('[role="progressbar"]')?.getAttribute('aria-label')).toBe(
+      'Reading the discussion',
+    );
+  });
+
+  /* 尋ねてもいない `absent` は「この番号のやり取りは無かった」ではない。**歩き終える前の
+     `absent` を、その番号が無かったことにしない。** */
+  it('尋ねる前の `absent` を、その番号が無かったことにしない', () => {
+    const container = view({
+      state: 'absent',
+      reason: 'no-source',
+      entries: [],
+      truncated: false,
+      walked: false,
+    });
+
+    expect(
+      container.querySelector('.no-title'),
+      '尋ねる前から「GitHub にその番号は無い」と言うことになる',
+    ).toBeNull();
+    expect(container.querySelector('[role="progressbar"]')).not.toBeNull();
+  });
+
+  /* 読めなかったことは最初の 1 枚で決まっている。**歩き終えるのを待たない** ——
+     待つと、読めなかった画面が一瞬だけ読み込み中の顔になる。 */
+  it('読めなかったことは、歩き終えるのを待たずに言う', () => {
+    const container = view({
+      state: 'unobservable',
+      reason: 'tracker.timeout',
+      entries: [],
+      truncated: false,
+      walked: false,
+    });
+
+    expect(container.querySelector('.no-code')?.textContent).toBe('tracker.timeout');
+  });
+
+  /* 上限に当たったかが分かるのは読み終えたときである。**読んでいる途中に言わない** ——
+     まだ届いていない発言が「上限で切った先」として画面から消える。 */
+  it('切った先が在ることは、読み終えてから言う', () => {
+    const container = view({ ...arriving([said('first')]), truncated: true });
+
+    expect(
+      container.querySelector('.disc-cut'),
+      '読んでいる途中の並びを、切り詰めたものとして出す',
+    ).toBeNull();
   });
 });

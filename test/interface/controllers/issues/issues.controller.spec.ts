@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { absent, observed } from '~/app-kernel/observation.ts';
 import { ok } from '~/app-kernel/result.ts';
-import { getGithubIssueDiscussion } from '~/interface/controllers/issues/issues.controller.ts';
+import {
+  getGithubIssueDiscussion,
+  streamGithubIssueDiscussion,
+} from '~/interface/controllers/issues/issues.controller.ts';
 
 /* 届いたリクエストを、やり取りへの問いとして読めるときだけ受ける。
 
@@ -69,6 +72,9 @@ function spyDiscussion(): DiscussionUseCase & { readonly seen: DiscussionInput[]
     async execute(input) {
       seen.push(input);
       return ok(observed({ entries: [], truncated: false }));
+    },
+    stream() {
+      throw new Error('not called');
     },
   };
 }
@@ -145,6 +151,9 @@ describe('やり取りのリクエストを検証する', () => {
       async execute() {
         return ok(absent('no-source'));
       },
+      stream() {
+        throw new Error('not called');
+      },
     };
 
     const response = await getGithubIssueDiscussion(depsWith(noRepository), {
@@ -157,6 +166,92 @@ describe('やり取りのリクエストを検証する', () => {
       reason: 'no-source',
       entries: [],
       truncated: false,
+      walked: true,
     });
+  });
+});
+
+/* ページごとに配る経路も、同じ検証を通る。**そして断れるのは最初のチャンクより前だけである。**
+
+   1 つでも配った後は HTTP のステータスが既に決まっているので、そこで投げてもエラーコードから
+   引いた status にはならない。逆に、ページが読めなかったことはここでは断らない —— それは
+   観測の結果なので、最初の 1 枚が `state` として運ぶ。 */
+describe('やり取りを、読めたページから配る', () => {
+  /** 配ったチャンク。投げられたなら、そこまでに配れたものと一緒に返す */
+  async function drain(input: unknown, discussion: DiscussionUseCase) {
+    const chunks: unknown[] = [];
+    try {
+      for await (const chunk of streamGithubIssueDiscussion(depsWith(discussion), input)) {
+        chunks.push(chunk);
+      }
+      return { chunks, threw: false };
+    } catch {
+      return { chunks, threw: true };
+    }
+  }
+
+  /** 起こされたかどうかだけを控える偽のユースケース */
+  function spyStream(chunks: readonly unknown[] = []) {
+    const seen: DiscussionInput[] = [];
+    const useCase: DiscussionUseCase = {
+      async execute() {
+        throw new Error('not called');
+      },
+      async *stream(input) {
+        seen.push(input);
+        for (const chunk of chunks) yield chunk as never;
+      },
+    };
+    return { useCase, seen };
+  }
+
+  it('番号の形が違えば、`gh` を起こす前に断る', async () => {
+    const { useCase, seen } = spyStream();
+
+    const { chunks, threw } = await drain({ projectId: 'glasshive', number: 0 }, useCase);
+
+    expect(threw, '受理していないことを、配り始めた後で言うことになる').toBe(true);
+    expect(chunks, '1 つでも配った後の断りは、エラーコードから引いた status にならない').toEqual(
+      [],
+    );
+    expect(seen, '一覧に出ない番号で `gh` を起こしている').toEqual([]);
+  });
+
+  it('一覧に無いプロジェクトも、配り始める前に断る', async () => {
+    const { useCase, seen } = spyStream();
+
+    const { chunks, threw } = await drain({ projectId: 'not-observed', number: 13 }, useCase);
+
+    expect(threw).toBe(true);
+    expect(chunks).toEqual([]);
+    expect(seen, '尋ね先を決めるのは観測したプロジェクトであって、尋ねてきた側ではない').toEqual(
+      [],
+    );
+  });
+
+  /* ページが読めなかったことは断りではない。**503 にすると、`gh` が答えなかったことと、
+     こちらが受理しなかったことが同じ形になる。** */
+  it('ページが読めなかったことは、断りではなく最初の 1 枚が運ぶ', async () => {
+    const { useCase } = spyStream([
+      { kind: 'head', head: absent('no-source') },
+      { kind: 'complete', truncated: false },
+    ]);
+
+    const { chunks, threw } = await drain({ projectId: 'glasshive', number: 13 }, useCase);
+
+    expect(threw).toBe(false);
+    expect(chunks).toEqual([
+      {
+        kind: 'head',
+        head: {
+          state: 'absent',
+          reason: 'no-source',
+          entries: [],
+          truncated: false,
+          walked: false,
+        },
+      },
+      { kind: 'complete', truncated: false },
+    ]);
   });
 });

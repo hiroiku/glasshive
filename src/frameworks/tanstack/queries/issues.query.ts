@@ -1,5 +1,7 @@
 import { queryOptions, experimental_streamedQuery as streamedQuery } from '@tanstack/react-query';
 import type {
+  GithubIssueDiscussionChunkJson,
+  GithubIssueDiscussionJson,
   GithubIssueEventLogJson,
   GithubIssueEventsChunkJson,
   IssuesChunkJson,
@@ -7,7 +9,7 @@ import type {
 } from '~/interface/presenters/issues/issues.presenter.ts';
 import {
   getGithubIssueBody,
-  getGithubIssueDiscussion,
+  getGithubIssueDiscussionStream,
   getGithubIssueEventsStream,
   getGithubIssuesStream,
 } from '../functions/issues.ts';
@@ -86,10 +88,41 @@ export const githubIssueBodyQuery = (projectId: string, number: number) =>
    置く時間は本文(10 分)より短く、`transcript` を読む問い合わせ(20〜60 秒)より長い 2 分に
    してある。やり取りは誰かが書き込むたびに伸びるので本文ほど動かないとは言えず、一方で
    取り直すたびに `gh` の起動と最大 5 ページぶんの API の呼び出しが要る。 */
+/* 最初のチャンクが着くまでの姿。項目はまだ 1 つも無く、歩き終えてもいない。
+
+   `state` を `absent` にしてあるのは、まだ尋ねてもいないからである。**`unobservable` に
+   しない** —— 尋ねる前から「読めなかった」と言うことになる。 */
+const NO_DISCUSSION: GithubIssueDiscussionJson = {
+  state: 'absent',
+  reason: 'no-source',
+  entries: [],
+  truncated: false,
+  walked: false,
+};
+
+/* チャンクを 1 本の並びへ畳む。**足すのであって、置き換えない。**
+
+   `truncated` と `walked` を動かすのは最後の 1 つだけである。読んでいる途中に立てると、
+   まだ届いていない項目が「上限で切った先」として画面に出る。 */
+export function reduceIssueDiscussion(
+  current: GithubIssueDiscussionJson,
+  chunk: GithubIssueDiscussionChunkJson,
+): GithubIssueDiscussionJson {
+  if (chunk.kind === 'head') return chunk.head;
+  if (chunk.kind === 'complete') return { ...current, truncated: chunk.truncated, walked: true };
+  return { ...current, entries: [...current.entries, ...chunk.entries] };
+}
+
 export const githubIssueDiscussionQuery = (projectId: string, number: number) =>
   queryOptions({
     queryKey: ['github-issue-discussion', projectId, number] as const,
-    queryFn: () => getGithubIssueDiscussion({ data: { projectId, number } }),
+    queryFn: streamedQuery({
+      streamFn: () => getGithubIssueDiscussionStream({ data: { projectId, number } }),
+      reducer: reduceIssueDiscussion,
+      initialValue: NO_DISCUSSION,
+      // 取り直しの間、前のやり取りを出したままにする。捨てると、読んでいた話が一度消える
+      refetchMode: 'replace',
+    }),
     staleTime: 120_000,
   });
 

@@ -40,10 +40,27 @@ export interface GetGithubIssueDiscussionInput {
   readonly number: number;
 }
 
+/* やり取りの届き方。一覧と同じく、ページ 1 の 100 件にページ 5 を待つ理由は無い。
+
+   最初に来るのは `head` 1 つで、そこに観測が成り立ったかどうかが入る。成り立っていなければ
+   それが答えの全部で、`page` は 1 つも来ない。`page` はページ 1 つぶんの並びで、前のページを
+   含まない。
+
+   `truncated` は最後にしか言えない。**読んでいる途中を `truncated: true` で表さない** ——
+   あちらは「上限に当たって、その先を読んでいない」であって、まだ届いていないことではない。 */
+export type GithubIssueDiscussionChunk =
+  | { readonly kind: 'head'; readonly head: Observation<null> }
+  | { readonly kind: 'page'; readonly entries: readonly GithubIssueDiscussionEntry[] }
+  | { readonly kind: 'complete'; readonly truncated: boolean };
+
 export interface GetGithubIssueDiscussionUseCase {
   execute(
     input: GetGithubIssueDiscussionInput,
   ): Promise<Result<Observation<GithubIssueDiscussion>, never>>;
+  /** 読めたページから順に配る。`execute` はこれを汲み尽くしたものである */
+  stream(
+    input: GetGithubIssueDiscussionInput,
+  ): AsyncGenerator<GithubIssueDiscussionChunk, void, void>;
 }
 
 /* やり取りで名指された人。**顔を引ける先を、観た通りに覚えるためだけに集める。**
@@ -66,51 +83,94 @@ export function createGetGithubIssueDiscussion(deps: {
   readonly tracker: IssueTrackerIntegration;
   readonly avatars: AvatarCacheService;
 }): GetGithubIssueDiscussionUseCase {
-  return {
-    async execute({ projectPath, number }) {
-      const source = await locateGithubRepository(deps.git, projectPath);
-      if (source.kind !== 'observed') return ok(source);
-      const { repository } = source.value;
+  async function* walk({
+    projectPath,
+    number,
+  }: GetGithubIssueDiscussionInput): AsyncGenerator<GithubIssueDiscussionChunk, void, void> {
+    const source = await locateGithubRepository(deps.git, projectPath);
+    if (source.kind !== 'observed') {
+      yield { kind: 'head', head: source };
+      yield { kind: 'complete', truncated: false };
+      return;
+    }
+    const { repository } = source.value;
 
-      const entries: GithubIssueDiscussionEntry[] = [];
-      let cursor: string | null = null;
-      let truncated = false;
+    let cursor: string | null = null;
+    let truncated = false;
+    let opened = false;
 
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const answer = await deps.tracker.fetchIssueDiscussion({
-          owner: repository.owner,
-          name: repository.name,
-          number,
-          cursor,
-        });
-        /* 1 ページ目で躓いたなら、観測そのものが成り立っていない。2 ページ目より後なら、
-           そこまでは観えている — **観えたぶんを捨てない。** 捨てると、途中で `gh` が
-           答えなくなった瞬間に、それまでのやり取りごと消える。 */
-        if (answer.kind !== 'observed') {
-          if (page === 0) return ok(answer);
-          truncated = true;
-          break;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const answer = await deps.tracker.fetchIssueDiscussion({
+        owner: repository.owner,
+        name: repository.name,
+        number,
+        cursor,
+      });
+      /* 1 ページ目で躓いたなら、観測そのものが成り立っていない。2 ページ目より後なら、
+         そこまでは観えている — **観えたぶんを捨てない。** 捨てると、途中で `gh` が
+         答えなくなった瞬間に、それまでのやり取りごと消える。 */
+      if (answer.kind !== 'observed') {
+        if (!opened) {
+          yield { kind: 'head', head: answer };
+          yield { kind: 'complete', truncated: false };
+          return;
         }
-
-        const parsed = parseIssueDiscussion(answer.value);
-        /* 応答から課題を辿れなかった。閉じて消された番号も、こちらの数え違いもここへ来る。
-         **観測できなかったことにしない** —— `gh` は答えていて、その答えに無かった。 */
-        if (parsed === null) {
-          if (page === 0) return ok(absent('empty'));
-          truncated = true;
-          break;
-        }
-
-        entries.push(...parsed.entries);
-        if (!parsed.hasNextPage || parsed.endCursor === null) break;
-        cursor = parsed.endCursor;
-        // 次の周回に入れないなら、その先は読んでいない
-        if (page === MAX_PAGES - 1) truncated = true;
+        truncated = true;
+        break;
       }
 
-      /* 名指された人の顔を引ける先を覚える。**読めたぶんだけ覚える** —— 途中で切れた
-         やり取りでも、そこまでに出てきた人の顔は引けるべきである。 */
-      deps.avatars.rememberActors(actorsIn(entries));
+      const parsed = parseIssueDiscussion(answer.value);
+      /* 応答から課題を辿れなかった。閉じて消された番号も、こちらの数え違いもここへ来る。
+       **観測できなかったことにしない** —— `gh` は答えていて、その答えに無かった。 */
+      if (parsed === null) {
+        if (!opened) {
+          yield { kind: 'head', head: absent('empty') };
+          yield { kind: 'complete', truncated: false };
+          return;
+        }
+        truncated = true;
+        break;
+      }
+
+      /* 名指された人の顔を引ける先を、そのページを配る前に覚える。**配ってから覚えては
+         いけない** —— 画面はチャンクが着いた時点で顔を取りに行き、そこで断られた画像を
+         ブラウザーは取り直さない。 */
+      deps.avatars.rememberActors(actorsIn(parsed.entries));
+
+      if (!opened) {
+        yield { kind: 'head', head: observed(null) };
+        opened = true;
+      }
+      yield { kind: 'page', entries: parsed.entries };
+
+      if (!parsed.hasNextPage || parsed.endCursor === null) break;
+      cursor = parsed.endCursor;
+      // 次の周回に入れないなら、その先は読んでいない
+      if (page === MAX_PAGES - 1) truncated = true;
+    }
+
+    yield { kind: 'complete', truncated };
+  }
+
+  return {
+    stream: walk,
+    async execute(input) {
+      let head: Observation<null> | null = null;
+      const entries: GithubIssueDiscussionEntry[] = [];
+      let truncated = false;
+
+      for await (const chunk of walk(input)) {
+        if (chunk.kind === 'head') head = chunk.head;
+        else if (chunk.kind === 'complete') truncated = chunk.truncated;
+        else entries.push(...chunk.entries);
+      }
+
+      /* 配り終える前に `head` が来ないことは無い。それでも観測が成り立たなかった側へ倒すのは、
+         成り立ったことにすると、1 件も観ていないやり取りが「まだ誰も書いていない」として
+         出るからである。 */
+      if (head === null || head.kind !== 'observed') {
+        return ok(head ?? absent('empty'));
+      }
 
       /* 誰も何も言っていない課題は、空の並びとして観測できている。`absent` にすると
          「まだ誰も書いていない」と「読みに行けなかった」が同じ画面になる。 */

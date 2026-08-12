@@ -7,7 +7,10 @@ import type {
   IssueTrackerIntegration,
 } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
 import type { AvatarCacheService } from '~/application/services/issues/avatar-cache.service.ts';
-import { createGetGithubIssueDiscussion } from '~/application/use-cases/issues/get-github-issue-discussion.use-case.ts';
+import {
+  createGetGithubIssueDiscussion,
+  type GithubIssueDiscussionChunk,
+} from '~/application/use-cases/issues/get-github-issue-discussion.use-case.ts';
 
 /* 課題 1 件のやり取りは、本文と同じく 1 件を開いたときにだけ引く。
 
@@ -92,6 +95,8 @@ function fakeAvatars() {
   };
   return { avatars, learned };
 }
+
+type Chunk = GithubIssueDiscussionChunk;
 
 const useCaseWith = (
   tracker: IssueTrackerIntegration,
@@ -312,5 +317,107 @@ describe('やり取りで名指された人の顔', () => {
       true,
     );
     expect(learned).toEqual(['octocat']);
+  });
+});
+
+/* やり取りもページごとに配る。**ページ 1 の 100 件に、ページ 5 を待つ理由は無い。**
+
+   何百も続いた課題を開いたとき、最初の 10 件を 5 ページぶんの往復が終わるまで隠しておく
+   理由が無い。ここで見るのは、配る順と、途中で躓いたときに配ったぶんを取り消さないことと、
+   顔を引ける先を配る前に覚えていることである。 */
+describe('読めたページから順に配る', () => {
+  /** ラベルを付けた人。一覧に居ないので、顔はこの経路でしか覚えられない */
+  const labeledBy = (login: string) => ({
+    __typename: 'LabeledEvent',
+    createdAt: '2026-08-01T00:00:00Z',
+    actor: { login, avatarUrl: 'https://avatars.githubusercontent.com/u/1?s=48' },
+    label: { name: 'ui', color: 'd73a4a' },
+  });
+
+  const drain = async (walk: AsyncGenerator<Chunk, void, void>) => {
+    const chunks: Chunk[] = [];
+    for await (const chunk of walk) chunks.push(chunk);
+    return chunks;
+  };
+
+  it('最初の 1 枚が観測の成否を運び、ページがその後に続く', async () => {
+    const { tracker } = fakeTracker([
+      pageOf([commentAt('2026-08-01T00:00:00Z', '1 枚目')], 'CURSOR'),
+      pageOf([commentAt('2026-08-02T00:00:00Z', '2 枚目')], null),
+    ]);
+
+    const chunks = await drain(
+      useCaseWith(tracker).stream({ projectPath: '/work/glasshive', number: 13 }),
+    );
+
+    expect(chunks.map((chunk) => chunk.kind)).toEqual(['head', 'page', 'page', 'complete']);
+    expect(
+      chunks.flatMap((chunk) => (chunk.kind === 'page' ? chunk.entries.length : [])),
+      'ページが前のページを含むと、畳んだ並びに同じ発言が 2 度出る',
+    ).toEqual([1, 1]);
+  });
+
+  /* 途中で読めなくなっても、観えたぶんは配り終えている。**配ったページを取り消さない** ——
+     取り消すと、途中で `gh` が答えなくなった瞬間に、それまでのやり取りごと画面から消える。 */
+  it('2 ページ目で躓いても、配ったページは取り消さない', async () => {
+    const { tracker } = fakeTracker([pageOf([commentAt('2026-08-01T00:00:00Z', 'ひとこと')], 'C')]);
+
+    const chunks = await drain(
+      useCaseWith(tracker).stream({ projectPath: '/work/glasshive', number: 13 }),
+    );
+
+    expect(chunks.map((chunk) => chunk.kind)).toEqual(['head', 'page', 'complete']);
+    const last = chunks.at(-1);
+    expect(
+      last?.kind === 'complete' && last.truncated,
+      '読めなくなったことを黙ると、その先の発言が「言われなかった」ことになる',
+    ).toBe(true);
+  });
+
+  /* 1 ページ目で躓いたなら、観測そのものが成り立っていない。**`page` は 1 つも配らない** */
+  it('1 ページ目で躓いたら、それが答えの全部である', async () => {
+    const { tracker } = fakeTracker([]);
+
+    const chunks = await drain(
+      useCaseWith(tracker).stream({ projectPath: '/work/glasshive', number: 13 }),
+    );
+
+    expect(chunks.map((chunk) => chunk.kind)).toEqual(['head', 'complete']);
+    const head = chunks[0];
+    expect(head?.kind === 'head' && head.head.kind).toBe('unobservable');
+  });
+
+  /* 画面はチャンクが着いた時点で顔を取りに行き、そこで断られた画像をブラウザーは取り直さない。
+   **配ってから覚えては間に合わない。** */
+  it('顔を引ける先は、そのページを配る前に覚える', async () => {
+    const { tracker } = fakeTracker([pageOf([labeledBy('octocat')], null)]);
+    const { avatars, learned } = fakeAvatars();
+    const seen: string[][] = [];
+
+    const walk = useCaseWith(tracker, undefined, avatars).stream({
+      projectPath: '/work/glasshive',
+      number: 13,
+    });
+    for await (const chunk of walk) {
+      if (chunk.kind === 'page') seen.push([...learned]);
+    }
+
+    expect(seen, '配った後で覚えると、その顔は一度断られたまま出ない').toEqual([['octocat']]);
+  });
+
+  it('`execute` は、これを汲み尽くしたものである', async () => {
+    const { tracker } = fakeTracker([
+      pageOf([commentAt('2026-08-01T00:00:00Z', '1 枚目')], 'CURSOR'),
+      pageOf([commentAt('2026-08-02T00:00:00Z', '2 枚目')], null),
+    ]);
+
+    const result = await useCaseWith(tracker).execute({
+      projectPath: '/work/glasshive',
+      number: 13,
+    });
+
+    expect(
+      result.ok && result.value.kind === 'observed' && result.value.value.entries,
+    ).toHaveLength(2);
   });
 });

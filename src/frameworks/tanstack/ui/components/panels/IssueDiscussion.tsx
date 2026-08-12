@@ -15,7 +15,6 @@ import {
   mdiRestart,
 } from '@mdi/js';
 import type { ReactNode } from 'react';
-import type { ApiResponse } from '~/interface/presenters/api-error.presenter.ts';
 import type {
   GithubActorJson,
   GithubIssueDiscussionEntryJson,
@@ -41,11 +40,17 @@ import { MdView } from '../text/MdView.tsx';
 
    ここは描くだけで、尋ねるのは `GithubIssueDetail` である。答えをそのまま受け取るのは、
    途中で潰さないためである —— 「まだ返っていない」「誰も何も言っていない」「読めなかった」
-   の 3 つは、どれも項目の無い画面になる。 */
+   の 3 つは、どれも項目の無い画面になる。
+
+   やり取りはページごとに届く。**届いたぶんから描く** —— 何百も続いた課題の最初の 10 件を、
+   5 ページぶんの往復が終わるまで隠しておく理由が無い。まだ途中であることは、届いた項目の
+   下に置いた行が言う。 */
 
 export interface IssueDiscussionProps {
-  /** 尋ねた答え。まだ返っていなければ `undefined` */
-  readonly answer: ApiResponse<GithubIssueDiscussionJson> | undefined;
+  /** 届いたページまでのやり取り。まだ 1 枚も届いていなければ `undefined` */
+  readonly answer: GithubIssueDiscussionJson | undefined;
+  /** 取りに行けなかったか。答えの無いことと、読めなかったことは違う */
+  readonly failed: boolean;
   /** まだ尋ねている最中か。答えの無いことと、読めなかったことは違う */
   readonly pending: boolean;
   readonly project: ProjectJson | undefined;
@@ -329,13 +334,28 @@ function Entry({
   );
 }
 
-export function IssueDiscussion({ answer, pending, project, nowMs, url }: IssueDiscussionProps) {
-  const discussion = answer?.ok === true ? answer.body : null;
+export function IssueDiscussion({
+  answer,
+  failed,
+  pending,
+  project,
+  nowMs,
+  url,
+}: IssueDiscussionProps) {
+  const discussion = failed ? undefined : answer;
+  /* 1 枚も届いていないあいだ。**空の並びも、何も無い画面も出さない** —— どちらも、これから
+     届くやり取りが「まだ何も言われていない」ものとして画面に出る。見出しは先に置く ——
+     やり取りがここに来ることは、届く前から分かっている。
 
-  /* 尋ねている最中。**空の一覧も、何も無い画面も出さない** —— どちらも、これから届く
-     やり取りが「まだ何も言われていない」ものとして画面に出る。見出しは先に置く ——
-     やり取りがここに来ることは、届く前から分かっている。 */
-  if (discussion === null && pending) {
+     尋ねてもいない `absent` もここに入る。歩き終える前の `absent` は「この番号のやり取りは
+     無かった」ではなく、まだ最初の 1 枚が着いていないという意味である。**`unobservable` は
+     入らない** —— 読めなかったことは最初の 1 枚で決まっているので、歩き終えるのを待たない。 */
+  const reading =
+    discussion !== undefined &&
+    !discussion.walked &&
+    discussion.entries.length === 0 &&
+    discussion.state !== 'unobservable';
+  if ((discussion === undefined && pending) || reading) {
     return (
       <>
         <div className="sec-h">Discussion</div>
@@ -344,11 +364,10 @@ export function IssueDiscussion({ answer, pending, project, nowMs, url }: IssueD
     );
   }
 
-  if (discussion === null || discussion.state !== 'observed') {
+  if (discussion === undefined || discussion.state !== 'observed') {
     /* 読めなかった理由。`gh` が入っていないのか、認証が切れたのか、その番号が無かったのかは
        ここにしか残らない */
-    const code =
-      answer === undefined ? null : answer.ok ? answer.body.reason : (answer.body.code ?? null);
+    const code = discussion?.reason ?? null;
     const steps =
       url === null ? {} : { steps: [{ text: 'Read the discussion on GitHub', href: url }] };
     /* **観測できなかったのと、その番号が無かったのは別である。** 前者は `gh` が答えなかった
@@ -393,8 +412,11 @@ export function IssueDiscussion({ answer, pending, project, nowMs, url }: IssueD
           ))}
         </div>
       )}
+      {/* 続きが届く先を、届く前から空けておく。**畳まない** —— 項目の下で画面が止まって
+          見えると、そこがやり取りの終わりとして読める */}
+      {!discussion.walked && <ReadingLines lines={2} label="Reading more of the discussion" />}
       {/* 切ったことを黙らない。黙ると、読まなかったぶんが「言われなかった」ことになる */}
-      {discussion.truncated && (
+      {discussion.walked && discussion.truncated && (
         <p className="disc-cut">
           Only the first part of this discussion was read. Anything said after the last entry above
           is not on this screen.

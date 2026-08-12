@@ -13,6 +13,7 @@ import { InvalidSessionsRequestError } from '~/interface/errors/sessions/request
 import { type ApiResponse, presentError } from '~/interface/presenters/api-error.presenter.ts';
 import {
   type GithubIssueBodyJson,
+  type GithubIssueDiscussionChunkJson,
   type GithubIssueDiscussionJson,
   type GithubIssueEventLogJson,
   type GithubIssueEventsChunkJson,
@@ -20,6 +21,8 @@ import {
   type IssuesJson,
   presentGithubIssueBody,
   presentGithubIssueDiscussion,
+  presentGithubIssueDiscussionHead,
+  presentGithubIssueDiscussionPage,
   presentGithubIssueEvents,
   presentGithubIssueEventsHead,
   presentGithubIssueEventsPage,
@@ -159,6 +162,34 @@ export async function getGithubIssueDiscussion(
   });
   if (!discussion.ok) return { ok: false, ...presentError(discussion.error) };
   return { ok: true, body: presentGithubIssueDiscussion(discussion.value) };
+}
+
+/* GitHub の課題 1 件のやり取りを、読めたページから順に返す。
+
+   **断りは最初のチャンクより前にしか投げられない。** プロジェクトを名指せなかったことと、
+   番号が課題の番号の形をしていないことは、どちらも最初の `yield` の前に出る。
+
+   ページが読めなかったことは断りではない。それは観測の結果なので、最初の 1 枚が `state` として
+   運ぶ —— 断って 503 にすると、`gh` が答えなかったことと、こちらが受理しなかったことが
+   同じ形になる。 */
+export async function* streamGithubIssueDiscussion(
+  deps: GithubIssuesDeps,
+  input: unknown,
+): AsyncGenerator<GithubIssueDiscussionChunkJson, void, void> {
+  const path = await locate(deps.index, input);
+  if (!path.ok) throw path.error;
+
+  const number = issueNumberOf(input);
+  if (!number.ok) throw number.error;
+
+  const walk = deps.discussion.stream({ projectPath: path.value, number: number.value });
+  for await (const chunk of walk) {
+    if (chunk.kind === 'head')
+      yield { kind: 'head', head: presentGithubIssueDiscussionHead(chunk.head) };
+    else if (chunk.kind === 'page') {
+      yield { kind: 'page', entries: presentGithubIssueDiscussionPage(chunk.entries) };
+    } else yield { kind: 'complete', truncated: chunk.truncated };
+  }
 }
 
 /* 一覧に出ている課題に起きたこと。

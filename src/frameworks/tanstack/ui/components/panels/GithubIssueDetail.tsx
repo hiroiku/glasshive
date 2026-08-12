@@ -331,6 +331,7 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
 
         <IssueDiscussion
           answer={discussion.data}
+          failed={discussion.error !== null}
           pending={discussion.isPending && askable}
           project={project}
           nowMs={nowMs}

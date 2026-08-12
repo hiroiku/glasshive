@@ -6,6 +6,7 @@ import {
   getGithubIssueDiscussion as readGithubIssueDiscussion,
   getGithubIssueEvents as readGithubIssueEvents,
   listGithubIssues as readGithubIssues,
+  streamGithubIssueDiscussion as walkGithubIssueDiscussion,
   streamGithubIssueEvents as walkGithubIssueEvents,
   streamGithubIssues as walkGithubIssues,
 } from '~/interface/controllers/issues/issues.controller.ts';
@@ -49,6 +50,11 @@ export const getGithubIssueBody = createServerFn({ method: 'GET' })
 export const getGithubIssueDiscussion = createServerFn({ method: 'GET' })
   .validator((value: unknown) => value)
   .handler(({ data }) => readGithubIssueDiscussion(githubDeps(), data));
+
+/* やり取りも、読めたページから順に渡す。一覧と同じ形である */
+export const getGithubIssueDiscussionStream = createServerFn({ method: 'GET' })
+  .validator((value: unknown) => value)
+  .handler(({ data }) => walkGithubIssueDiscussion(githubDeps(), data));
 
 /* 一覧に出ている課題に起きたこと。**一覧とも別に叩く。** 同じ問い合わせに混ぜると、
    Work の画面が開くまでが倍になる —— 一覧は一覧の速さで開き、点は返ってきたときに埋まる。 */

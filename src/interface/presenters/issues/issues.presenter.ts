@@ -235,6 +235,10 @@ export interface GithubIssueDiscussionJson {
   entries: GithubIssueDiscussionEntryJson[];
   /** 上限に当たって、その先を読んでいないか。読めなかったときは `false` */
   truncated: boolean;
+  /* 歩き終えたか。**`truncated` とは別のものである** —— あちらは「上限に当たって、その先を
+     読んでいない」で、こちらは「まだページが届いている途中」である。ここが無いと、1 件目が
+     届く前の画面が「まだ誰も書いていない課題」として読める。 */
+  walked: boolean;
 }
 
 /** 理由を 1 つの文字列で返す。`absent` なら何が無いのか、`unobservable` ならエラーコード */
@@ -483,5 +487,34 @@ export function presentGithubIssueDiscussion(
     entries:
       discussion.kind === 'observed' ? discussion.value.entries.map(presentDiscussionEntry) : [],
     truncated: discussion.kind === 'observed' && discussion.value.truncated,
+    // 1 枚で返す経路は、返した時点で歩き終えている
+    walked: true,
   };
+}
+
+/* やり取りをページごとに配るときの形。一覧と同じく、最初の 1 枚が観測の成否を運ぶ */
+export type GithubIssueDiscussionChunkJson =
+  | { kind: 'head'; head: GithubIssueDiscussionJson }
+  | { kind: 'page'; entries: GithubIssueDiscussionEntryJson[] }
+  | { kind: 'complete'; truncated: boolean };
+
+/* 最初の 1 枚。**行はまだ 1 つも無い。** ここで `walked` を立てないのは、立てると
+   1 件目が届く前の画面が「まだ誰も書いていない課題」として出るからである。 */
+export function presentGithubIssueDiscussionHead(
+  head: Observation<null>,
+): GithubIssueDiscussionJson {
+  return {
+    state: head.kind,
+    reason: reasonOf(head),
+    entries: [],
+    truncated: false,
+    walked: false,
+  };
+}
+
+/** ページ 1 つぶんのやり取り。前のページを含まないので、畳む側が積み上げる */
+export function presentGithubIssueDiscussionPage(
+  entries: readonly GithubIssueDiscussionEntry[],
+): GithubIssueDiscussionEntryJson[] {
+  return entries.map(presentDiscussionEntry);
 }

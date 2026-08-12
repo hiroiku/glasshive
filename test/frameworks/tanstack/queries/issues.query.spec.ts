@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { reduceIssueEvents, reduceIssues } from '~/frameworks/tanstack/queries/issues.query.ts';
+import {
+  reduceIssueDiscussion,
+  reduceIssueEvents,
+  reduceIssues,
+} from '~/frameworks/tanstack/queries/issues.query.ts';
 
 /* 一覧はページごとに届く。**畳み方を間違えると、届いたぶんが消えるか、二重に並ぶ。**
 
@@ -175,5 +179,58 @@ describe('記録のページを 1 枚へ畳む', () => {
     folded = reduceIssueEvents(folded, { kind: 'complete', complete: true });
 
     expect(folded.walked).toBe(true);
+  });
+});
+
+/* やり取りも同じ形で届く。**畳み方を間違えると、届いた発言が次のページで消える。**
+
+   `truncated` と `walked` を動かすのは最後の 1 つだけである。読んでいる途中に立てると、
+   まだ届いていない発言が「上限で切った先」として画面に出る。 */
+type DiscussionJson = Parameters<typeof reduceIssueDiscussion>[0];
+type DiscussionChunk = Parameters<typeof reduceIssueDiscussion>[1];
+
+const NO_DISCUSSION: DiscussionJson = {
+  state: 'absent',
+  reason: 'no-source',
+  entries: [],
+  truncated: false,
+  walked: false,
+};
+
+const discussionHead: DiscussionChunk = {
+  kind: 'head',
+  head: { ...NO_DISCUSSION, state: 'observed', reason: null },
+};
+
+/** 発言 1 つ。ここで見るのは畳み方だけなので、時刻以外は問わない */
+const said = (at: string): DiscussionChunk => ({
+  kind: 'page',
+  entries: [{ at }] as DiscussionJson['entries'],
+});
+
+describe('やり取りのページを 1 本へ畳む', () => {
+  it('ページの発言は、前のページの後ろに足す', () => {
+    let folded = reduceIssueDiscussion(NO_DISCUSSION, discussionHead);
+    folded = reduceIssueDiscussion(folded, said('2026-08-01T00:00:00Z'));
+    folded = reduceIssueDiscussion(folded, said('2026-08-02T00:00:00Z'));
+
+    expect(
+      folded.entries.map((entry) => entry.at),
+      'ページで置き換えると、届いた発言が次のページで消える',
+    ).toEqual(['2026-08-01T00:00:00Z', '2026-08-02T00:00:00Z']);
+  });
+
+  it('切れた先が在ることも、歩き終えたことも、最後の 1 つが言う', () => {
+    let folded = reduceIssueDiscussion(NO_DISCUSSION, discussionHead);
+    folded = reduceIssueDiscussion(folded, said('2026-08-01T00:00:00Z'));
+
+    expect(folded.truncated, '読んでいる途中の並びが、切り詰めたものとして出る').toBe(false);
+    expect(folded.walked, '届く前の画面が、まだ誰も書いていない課題として読める').toBe(false);
+
+    folded = reduceIssueDiscussion(folded, { kind: 'complete', truncated: true });
+
+    expect(folded.truncated).toBe(true);
+    expect(folded.walked).toBe(true);
+    expect(folded.entries, '読み終えたことを言うだけで、発言は動かさない').toHaveLength(1);
   });
 });

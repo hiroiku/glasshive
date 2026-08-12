@@ -3,6 +3,7 @@ import { AppError } from '~/app-kernel/error.ts';
 import { absent, observed, unobservable } from '~/app-kernel/observation.ts';
 import {
   presentGithubIssueDiscussion,
+  presentGithubIssueDiscussionHead,
   presentGithubIssueEvents,
   presentGithubIssueEventsHead,
   presentIssues,
@@ -352,6 +353,7 @@ describe('やり取りを外の形へ写す', () => {
       state: 'observed',
       reason: null,
       truncated: false,
+      walked: true,
       entries: [
         {
           kind: 'comment',
@@ -477,6 +479,7 @@ describe('やり取りを外の形へ写す', () => {
       reason: null,
       entries: [],
       truncated: false,
+      walked: true,
     });
   });
 
@@ -489,6 +492,7 @@ describe('やり取りを外の形へ写す', () => {
       reason: 'tracker.not_installed',
       entries: [],
       truncated: false,
+      walked: true,
     });
   });
 
@@ -498,6 +502,7 @@ describe('やり取りを外の形へ写す', () => {
       reason: 'no-source',
       entries: [],
       truncated: false,
+      walked: true,
     });
   });
 
@@ -580,6 +585,10 @@ describe('歩き終えたかどうかを、届き方が言う', () => {
       presentGithubIssueEventsHead(observed(null)).walked,
       '点が 1 つも届いていないところで、記録が読み終えたことになる',
     ).toBe(false);
+    expect(
+      presentGithubIssueDiscussionHead(observed(null)).walked,
+      '発言が 1 つも届いていないところが、まだ誰も書いていない課題として出る',
+    ).toBe(false);
   });
 
   it('1 枚で返す経路は、返した時点で歩き終えている', () => {
@@ -588,5 +597,8 @@ describe('歩き終えたかどうかを、届き方が言う', () => {
       '歩き終えたと言わないと、画面が永久に読んでいる最中の顔で待つ',
     ).toBe(true);
     expect(presentGithubIssueEvents(observed({ issues: [], complete: true })).walked).toBe(true);
+    expect(presentGithubIssueDiscussion(observed({ entries: [], truncated: false })).walked).toBe(
+      true,
+    );
   });
 });
