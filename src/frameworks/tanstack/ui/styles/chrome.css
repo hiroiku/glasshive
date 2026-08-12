@@ -66,12 +66,51 @@
   color: var(--fg);
   border-bottom-color: var(--accent);
 }
-#scope {
+/* ディレクトリを名指して開いたウィンドウが、タブ行の場所に出すもの。
+
+   **タブ行と同じ高さにする。** Overview の画面とこのウィンドウで上の高さが変わると、同じ機械の同じ画面が
+   2 つの形を持つことになり、並べたときにどちらかが壊れて見える。 */
+#here {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 12px;
+  min-height: 31px;
+}
+.here-name {
+  font-weight: 600;
+}
+/* パスは長い。切れた先は `title` から読める */
+.here-path {
   color: var(--dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 34ch;
+  max-width: 46ch;
+}
+/* 同じリポジトリに居る、開いていないプロジェクト。**押せば開くだけ** —— 人が選んだ
+   並びではないので、留めることも外すこともできない */
+.here-rest {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 11px;
+}
+.here-sib {
+  color: var(--fg);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 7px;
+}
+.here-sib:hover {
+  border-color: var(--accent);
 }
 #counts {
   color: var(--dim);

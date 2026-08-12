@@ -27,6 +27,20 @@ export function containsPath(root: string, candidate: string): boolean {
   return c.startsWith(r.endsWith(path.sep) ? r : r + path.sep);
 }
 
+/* 同じ場所を指す 2 つのパスか。**末尾の区切りだけは同じ場所として読む** —
+   `/a/b/` と `/a/b` を別の場所として扱うと、打ち方の違いだけで同じディレクトリが
+   2 つに割れる。 */
+export function samePath(a: string, b: string): boolean {
+  if (a === '' || b === '') return false;
+  const strip = (value: string) => {
+    const normalized = path.normalize(value);
+    return normalized.length > 1 && normalized.endsWith(path.sep)
+      ? normalized.slice(0, -1)
+      : normalized;
+  };
+  return strip(a) === strip(b);
+}
+
 /* パスの深さ。区切り文字で割った、空でない要素の数。
 
    **`containsPath` と同じ読み方をしなければならない。** 含むかどうかを正規化したパスで

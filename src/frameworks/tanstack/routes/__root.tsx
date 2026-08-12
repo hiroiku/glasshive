@@ -8,10 +8,13 @@ import {
   Outlet,
   Scripts,
   useMatchRoute,
+  useSearch,
 } from '@tanstack/react-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { TreeJson } from '~/interface/presenters/sessions/tree.presenter.ts';
+import { targetQuery } from '../queries/target.query.ts';
 import { treeQuery } from '../queries/tree.query.ts';
+import { OpenProject } from '../ui/components/chrome/OpenProject.tsx';
 import { Icon } from '../ui/components/primitives/Icon.tsx';
 import { LocaleSwitch } from '../ui/components/primitives/LocaleSwitch.tsx';
 import { TabBar } from '../ui/components/tabs/TabBar.tsx';
@@ -84,8 +87,11 @@ export interface TopCounts {
   readonly unreadable: boolean;
 }
 
-/** 全部のセッションを数えて 1 行にする。**待っている数を落とさない** */
-export function countsOf(tree: TreeJson | undefined): TopCounts {
+/* 全部のセッションを数えて 1 行にする。**待っている数を落とさない**
+
+   1 つのディレクトリを開いたウィンドウでは、そのプロジェクトだけを数える。**このウィンドウに出ていない
+   セッションを足すと、画面のどこを探しても見つからない待ちが数に出る。** */
+export function countsOf(tree: TreeJson | undefined, onlyId: string | null = null): TopCounts {
   const counts = { active: 0, waiting: 0, ended: 0, input: 0 };
   /* `~/.claude/projects` を走査できなかったときは、数えた相手が 1 つも無い。
      観測できなかったことを 0 として断定させない。
@@ -94,6 +100,8 @@ export function countsOf(tree: TreeJson | undefined): TopCounts {
   // 木がまだ届いていないあいだも、数えた相手が 1 つも無い
   let partial = tree === undefined;
   for (const project of tree?.projects ?? []) {
+    if (onlyId !== null && project.id !== onlyId) continue;
+
     /* 走査できなかったプロジェクトの行は一覧に残り、`sessions` が空のまま読み終える。
      **その 0 を数え終えた 0 と同じ顔で出すのが、この数のいちばん静かな嘘である。** */
     if (project.sources.state === 'unobservable') unreadable = true;
@@ -153,8 +161,27 @@ function Chrome() {
   const match = matchRoute({ to: '/projects/$slug', fuzzy: true });
   const current = match === false ? null : match.slug;
 
-  const counts = useMemo(() => countsOf(tree.data), [tree.data]);
-  useAwaitingNotice(tree.data, prefs.notify);
+  /* ディレクトリを名指して開いたウィンドウか。**枠の出し方だけを決める** —— 観測しているものは
+     どちらでも同じで、変わるのはタブ行を出すか、開いているリポジトリを出すかである。
+     URL に載っているので、読み込み直しても最初の描画から枠が決まっている。 */
+  const search = useSearch({ strict: false }) as { only?: boolean };
+  const only = search.only === true;
+  const target = useQuery({ ...targetQuery, enabled: only });
+  const open = tree.data?.projects.find((project) => project.id === current);
+
+  /* ウィンドウの題に、開いているリポジトリの名前を入れる。**ディレクトリごとにウィンドウを開く使い方に
+     なるので、どれがどれかを見分けられるのは題だけである。** Overview の画面では名前を足さない ——
+     そちらは 1 つのリポジトリを見ているのではない。 */
+  useEffect(() => {
+    const name = only ? (open?.name ?? target.data?.name ?? null) : null;
+    document.title = name === null ? 'glasshive' : `glasshive — ${name}`;
+  }, [only, open?.name, target.data?.name]);
+
+  const counts = useMemo(
+    () => countsOf(tree.data, only ? current : null),
+    [tree.data, only, current],
+  );
+  useAwaitingNotice(tree.data, prefs.notify, only ? current : null);
   useTabShortcuts({
     visible: tabs.visibleTabs,
     pinned: tabs.selection.pinned,
@@ -237,15 +264,27 @@ function Chrome() {
         <ConnStatus connected={stream.connected} watching={stream.watching} />
       </header>
 
-      <TabBar
-        visible={tabs.visibleTabs}
-        pinned={tabs.selection.pinned}
-        projects={tree.data?.projects}
-        onUnpin={tabs.togglePin}
-        onPin={tabs.togglePin}
-        onMove={tabs.movePin}
-        current={current}
-      />
+      {/* タブ行は Overview のものである。**1 つのディレクトリを開いたウィンドウには出さない** ——
+          出すと、そこに並ぶのは開いていないプロジェクトばかりになり、選ばせる相手が
+          このウィンドウの外にしかない列ができる。代わりに、開いているリポジトリを出す。 */}
+      {only ? (
+        <OpenProject
+          open={open}
+          current={current}
+          projects={tree.data?.projects}
+          target={target.data}
+        />
+      ) : (
+        <TabBar
+          visible={tabs.visibleTabs}
+          pinned={tabs.selection.pinned}
+          projects={tree.data?.projects}
+          onUnpin={tabs.togglePin}
+          onPin={tabs.togglePin}
+          onMove={tabs.movePin}
+          current={current}
+        />
+      )}
 
       <Outlet />
     </>

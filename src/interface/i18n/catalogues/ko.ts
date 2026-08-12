@@ -12,6 +12,7 @@ export const ko: Catalogue = {
   'Some projects could not be read — the count may be short':
     '일부 프로젝트를 읽지 못했습니다 — 개수가 실제보다 적을 수 있습니다',
   'Counted from the projects read so far': '지금까지 읽은 프로젝트를 기준으로 센 값',
+  'also in this repository': '같은 저장소',
   active: '실행 중',
   waiting: '대기 중',
   input: '입력 대기',

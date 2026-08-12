@@ -1,3 +1,4 @@
+import { containsPath } from '~/app-kernel/path.ts';
 import { ok, type Result } from '~/app-kernel/result.ts';
 import type { TranscriptGroup } from '~/application/ports/repositories/sessions/transcript.repository.ts';
 import type { TranscriptDraftService } from '~/application/services/sessions/transcript-draft.service.ts';
@@ -5,6 +6,7 @@ import type { TranscriptIndexService } from '~/application/services/sessions/tra
 import type {
   ObservedProject,
   ProjectIndex,
+  ProjectStub,
   ProjectTree,
 } from '~/domain/entities/sessions/observed-project.entity.ts';
 import type { IndexedProject } from '~/domain/services/sessions/project-index.service.ts';
@@ -80,10 +82,32 @@ function liveFilesOf(groups: readonly TranscriptGroup[]): ReadonlySet<string> {
   return live;
 }
 
+/* 名指されたディレクトリのプロジェクトから先に読む。
+
+   **並べ替えるのは読む順だけである。** 一覧の並びは索引が決めたままで、配るときは id で
+   置き換えるので、読む順が画面の行の順に漏れることはない。動くのは、名指した相手が
+   画面に揃うまでの待ち時間だけである。 */
+export function readFirstOrder(
+  stubs: readonly ProjectStub[],
+  roots: readonly string[],
+): readonly ProjectStub[] {
+  if (roots.length === 0) return stubs;
+  const inside = (stub: ProjectStub): boolean => {
+    const path = stub.canonicalPath;
+    return path !== null && roots.some((root) => containsPath(root, path));
+  };
+  const named = stubs.filter(inside);
+  return named.length === 0 ? stubs : [...named, ...stubs.filter((stub) => !inside(stub))];
+}
+
 export function createObserveTree(deps: {
   readonly index: TranscriptIndexService;
   readonly drafts: TranscriptDraftService;
   readonly activeThresholdMs: number;
+  /* 先に読むディレクトリ。起動のときに名指されたリポジトリの根と worktree である。
+
+     **観測してよい範囲ではない。** 読むのは今までどおり全部で、順番だけが変わる。 */
+  readonly readFirst?: () => Promise<readonly string[]>;
 }): ObserveTreeUseCase {
   const { index, drafts, activeThresholdMs } = deps;
 
@@ -104,9 +128,10 @@ export function createObserveTree(deps: {
     const projects: ObservedProject[] = [];
     let read = 0;
 
-    /* 索引の並びで配る。並べ替えは索引が済ませてあるので、後から届いた行が既に落ち着いた
-       行を押しのけることが無い。 */
-    for (const stub of projectIndex.stubs) {
+    /* 読む順だけを、名指されたディレクトリから先にする。並べ替えは索引が済ませてあり、
+       配るときは id で置き換えるので、後から届いた行が既に落ち着いた行を押しのけることは
+       この順でも起きない。 */
+    for (const stub of readFirstOrder(projectIndex.stubs, (await deps.readFirst?.()) ?? [])) {
       const sessions: DraftSession[] = [];
       /* `transcript` は 1 つずつ読む。**一度に始めると、読み取ったテキストが全部いっぺんに居座る。**
          `~/.claude/projects` を読むのに待ち時間は無いので、まとめて始めても速くはならない。

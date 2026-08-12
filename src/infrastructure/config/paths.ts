@@ -14,6 +14,11 @@ export interface Settings {
   configDir: string;
   /** 最後の書き込みから何ミリ秒までを「稼働」と見るか */
   activeThresholdMs: number;
+  /* 起動のときに名指されたディレクトリ。絶対パスで、名指されていなければ `null`。
+
+     **観測してよい範囲ではない。** どこを開いて、どこから先に読むかを決めるだけで、
+     名指されていてもいなくても、観測するのは `~/.claude/projects` の全部である。 */
+  target: string | null;
 }
 
 const DEFAULT_ACTIVE_THRESHOLD_MS = 60_000;
@@ -32,5 +37,6 @@ export function currentSettings(env: NodeJS.ProcessEnv = process.env): Settings 
       env.GLASSHIVE_CONFIG_DIR ??
       path.join(env.XDG_CONFIG_HOME ?? path.join(home, '.config'), 'glasshive'),
     activeThresholdMs,
+    target: env.GLASSHIVE_TARGET ?? null,
   };
 }

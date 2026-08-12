@@ -1,10 +1,16 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 /* 上端バーそのものを描くための下ごしらえ。ルーターも SSE も好みの保存先も、ここで見たい
    ものには関わらない。**木だけを本物のまま渡す** —— 数えるのも、数え終えていないことを
    言うのも、木から決まる。 */
+/* いま居る URL。既定は検索パラメータの無い Overview で、1 つのディレクトリを開いた枠は
+   `only` が載っているときだけ描かれる。 */
+const { url } = vi.hoisted(() => ({
+  url: { search: {} as Record<string, unknown>, match: false as false | { slug: string } },
+}));
+
 vi.mock('@tanstack/react-router', () => ({
   createRootRouteWithContext: () => (options: unknown) => ({ options }),
   HeadContent: () => null,
@@ -15,8 +21,9 @@ vi.mock('@tanstack/react-router', () => ({
       {children}
     </a>
   ),
-  useMatchRoute: () => () => false,
+  useMatchRoute: () => () => url.match,
   useNavigate: () => () => undefined,
+  useSearch: () => url.search,
 }));
 
 vi.mock('~/frameworks/tanstack/queries/tree.query.ts', () => ({
@@ -47,7 +54,23 @@ vi.mock('~/frameworks/tanstack/ui/hooks/useTabSelection.ts', () => ({
   }),
 }));
 
+vi.mock('~/frameworks/tanstack/queries/target.query.ts', () => ({
+  targetQueryKey: ['target'],
+  targetQuery: {
+    queryKey: ['target'],
+    // 名指された相手も問い合わせずに置く。取りに行き始めたら、それはここで見たいものが変わっている
+    queryFn: () => {
+      throw new Error('名指された相手は取りに行かない');
+    },
+  },
+}));
+
 import { ConnStatus, countsOf, Route } from '~/frameworks/tanstack/routes/__root.tsx';
+
+afterEach(() => {
+  url.search = {};
+  url.match = false;
+});
 
 /* 材料の形は、数える実装そのものから引く。ここは外部 API の形を宣言した層を `import` できない。 */
 type TreeJson = NonNullable<Parameters<typeof countsOf>[0]>;
@@ -303,6 +326,100 @@ describe('数え終えていないことを、上端バーが言う', () => {
 
     expect(text).toBe('active 1 / waiting 1 / input 1 / ended 0');
     expect(marks, '断定してよい数にまで添えると、`+?` は誰にも読まれなくなる').toHaveLength(0);
+  });
+});
+
+/* ディレクトリを名指して開いたときの枠。
+
+   **タブ行は Overview のものである。** 出したままにすると、そこに並ぶのは開いていない
+   プロジェクトばかりになる。数も同じで、このウィンドウに出ていないセッションを足すと、
+   画面のどこを探しても見つからない待ちが上端バーに出る。 */
+describe('1 つのディレクトリを開いたウィンドウ', () => {
+  const Chrome = (Route as unknown as { options: { component: () => React.ReactNode } }).options
+    .component;
+
+  const twoProjects = (): TreeJson =>
+    tree({
+      projects: [
+        project({ sessions: [session({ state: 'active' })] }),
+        project({
+          id: '-w-beta',
+          name: 'beta',
+          path: '/w/beta',
+          sessions: [session({ state: 'waiting', awaiting: 'user' })],
+        }),
+      ],
+    });
+
+  const draw = (data: TreeJson) => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { enabled: false, retry: false } },
+    });
+    client.setQueryData(['tree'], data);
+    client.setQueryData(['target'], {
+      requested_path: '/w/alpha',
+      root_path: '/w/alpha',
+      name: 'alpha',
+      project_id: '-w-alpha',
+      siblings: [{ id: '-w-beta', name: 'beta', path: '/w/beta' }],
+    });
+    const { container } = render(
+      <QueryClientProvider client={client}>
+        <Chrome />
+      </QueryClientProvider>,
+    );
+    return container;
+  };
+
+  it('タブ行を出さず、開いているリポジトリを出す', () => {
+    url.search = { only: true };
+    url.match = { slug: '-w-alpha' };
+
+    const container = draw(twoProjects());
+
+    expect(
+      container.querySelector('#tabs'),
+      'このウィンドウの外にしか行き先の無いタブが並ぶ',
+    ).toBeNull();
+    const here = container.querySelector('#here');
+    expect(here?.textContent, 'どのリポジトリを開いているかが、どこにも出ていない').toContain(
+      'alpha',
+    );
+    expect(here?.querySelector('.here-path')?.textContent).toBe('/w/alpha');
+  });
+
+  /* 1 つのリポジトリは複数のプロジェクトに割れている。開いたのが割れた片方であることを
+     黙ると、隣で動いているセッションが「無かった」ものとして読まれる。 */
+  it('同じリポジトリに居るほかのプロジェクトを、押せる形で並べる', () => {
+    url.search = { only: true };
+    url.match = { slug: '-w-alpha' };
+
+    const links = [...draw(twoProjects()).querySelectorAll('#here .here-sib')];
+
+    expect(links.map((link) => link.textContent)).toEqual(['beta']);
+  });
+
+  it('数えるのは、開いているプロジェクトのぶんだけである', () => {
+    url.search = { only: true };
+    url.match = { slug: '-w-alpha' };
+
+    const text = (draw(twoProjects()).querySelector('#counts')?.textContent ?? '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    expect(text, '押して行ける先がこのウィンドウに無い待ちを、数に足さない').toBe(
+      'active 1 / waiting 0 / ended 0',
+    );
+  });
+
+  it('Overview では、いつもどおりタブ行を出す', () => {
+    const container = draw(twoProjects());
+
+    expect(
+      container.querySelector('#tabs'),
+      'タブが無いと、プロジェクトを移る手立てが無い',
+    ).not.toBeNull();
+    expect(container.querySelector('#here')).toBeNull();
   });
 });
 

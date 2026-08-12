@@ -16,6 +16,7 @@ import {
   createTreeSnapshot,
   type TreeSnapshotService,
 } from '~/application/services/sessions/tree-snapshot.service.ts';
+import { createTargetRoot } from '~/application/services/workspace/target-root.service.ts';
 import {
   createObserveRef,
   type ObserveRefUseCase,
@@ -57,6 +58,10 @@ import {
   createSearchTranscripts,
   type ObserveSearchUseCase,
 } from '~/application/use-cases/sessions/search-transcripts.use-case.ts';
+import {
+  createObserveTarget,
+  type ObserveTargetUseCase,
+} from '~/application/use-cases/workspace/observe-target.use-case.ts';
 import {
   createReadPreferences,
   type ReadPreferencesUseCase,
@@ -105,6 +110,9 @@ export interface Kernel {
   gitRef: ObserveRefUseCase;
   readPreferences: ReadPreferencesUseCase;
   writePreferences: WritePreferencesUseCase;
+  /* 起動のときに名指されたディレクトリが指すプロジェクト。名指されていなければ `null` を
+     答える —— そのときに開くのは Overview である。 */
+  target: ObserveTargetUseCase;
 }
 
 let instance: Kernel | undefined;
@@ -123,6 +131,14 @@ function assemble(): Kernel {
     transcripts,
     activeThresholdMs: settings.activeThresholdMs,
   });
+  /* `git` はプロジェクトごとに起動する。衝突の見込みだけは、先端の組が同じならキャッシュを
+     返す — 先端が 18 本あれば差分を取るだけで 18 回起動することになり、そこが一番重い。 */
+  const git = createCliGitCommandIntegration();
+
+  /* 起動のときにディレクトリを名指されていたら、それをリポジトリ 1 つに読み替える。
+     名指されていなければ何も起きず、開くのは Overview である。 */
+  const targetRoot = createTargetRoot({ target: settings.target, git });
+
   /* 何が並ぶかを、中身を読む前に決める 1 枚。**パスを引くだけの呼び出しはここで足りる。**
      Git も課題も会話も「この id はどこに在るか」しか要らないので、木を組ませない。 */
   const index = createTranscriptIndex({
@@ -131,17 +147,22 @@ function assemble(): Kernel {
     drafts,
     activeThresholdMs: settings.activeThresholdMs,
     clock: systemClock,
+    /* 名指されたディレクトリは、まだ `transcript` を 1 本も持っていなくても一覧に載せる。
+       載せないと、そこで Claude Code を走らせるまで開くウィンドウがどこにも無い。 */
+    namedPath: async () => (await targetRoot.get())?.rootPath ?? null,
   });
   const observeTree = createObserveTree({
     index,
     drafts,
     activeThresholdMs: settings.activeThresholdMs,
+    /* 名指されたリポジトリから先に読む。読むのは今までどおり全部で、変わるのは
+       名指した相手が画面に揃うまでの待ち時間だけである。 */
+    readFirst: async () => {
+      const root = await targetRoot.get();
+      return root === null ? [] : [root.rootPath, ...root.worktrees];
+    },
   });
   const tree = createTreeSnapshot({ observe: observeTree, clock: systemClock });
-
-  /* `git` はプロジェクトごとに起動する。衝突の見込みだけは、先端の組が同じならキャッシュを
-     返す — 先端が 18 本あれば差分を取るだけで 18 回起動することになり、そこが一番重い。 */
-  const git = createCliGitCommandIntegration();
 
   /* GitHub へは `gh` に尋ねる。トークンを持つのは `gh` の側で、glasshive はそれを読まない。 */
   const tracker = createGhIssueTrackerIntegration();
@@ -184,6 +205,7 @@ function assemble(): Kernel {
     gitRef: createObserveRef({ git }),
     readPreferences: createReadPreferences({ preferences }),
     writePreferences: createWritePreferences({ preferences }),
+    target: createObserveTarget({ root: targetRoot, index }),
   };
 }
 

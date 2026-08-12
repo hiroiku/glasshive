@@ -9,9 +9,17 @@ import { useT } from '../i18n/useT.ts';
 
    最初の一巡では鳴らさない。開いた瞬間に、既に待っていた分が全部鳴ってしまう。
 
-   画面を見ているときも鳴らさない。目の前に出ているものを、わざわざ横から言わない。 */
+   画面を見ているときも鳴らさない。目の前に出ているものを、わざわざ横から言わない。
 
-export function useAwaitingNotice(tree: TreeJson | undefined, enabled: boolean): void {
+   1 つのディレクトリを開いたウィンドウでは、そのプロジェクトのぶんだけ鳴らす。**このウィンドウに出ていない
+   セッションのことを言っても、押して行ける先がここには無い。** ウィンドウを何枚も開いている
+   ときに、同じ 1 つの待ちがウィンドウの数だけ鳴らないのも同じ理由による。 */
+
+export function useAwaitingNotice(
+  tree: TreeJson | undefined,
+  enabled: boolean,
+  onlyId: string | null = null,
+): void {
   const t = useT();
   const previousRef = useRef(new Map<string, string | null>());
 
@@ -27,6 +35,7 @@ export function useAwaitingNotice(tree: TreeJson | undefined, enabled: boolean):
     const first = previous.size === 0;
 
     for (const project of tree.projects) {
+      if (onlyId !== null && project.id !== onlyId) continue;
       for (const session of project.sessions) {
         const was = previous.get(session.file);
         const becameAwaiting = session.awaiting === 'user' && was !== 'user';
@@ -42,7 +51,7 @@ export function useAwaitingNotice(tree: TreeJson | undefined, enabled: boolean):
         previous.set(session.file, session.awaiting);
       }
     }
-  }, [tree, enabled, t]);
+  }, [tree, enabled, onlyId, t]);
 }
 
 /** 知らせを使ってよいかを尋ねる。断られたら入れない */

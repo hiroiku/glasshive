@@ -1,5 +1,6 @@
 import type { Clock } from '~/app-kernel/clock.ts';
-import { mapObserved } from '~/app-kernel/observation.ts';
+import { mapObserved, observed } from '~/app-kernel/observation.ts';
+import { samePath } from '~/app-kernel/path.ts';
 import { ok, type Result } from '~/app-kernel/result.ts';
 import type { AgentProcessIntegration } from '~/application/ports/integrations/sessions/agent-process.integration.ts';
 import type {
@@ -14,6 +15,7 @@ import {
   deriveGroupPath,
   type LocatedGroup,
 } from '~/domain/services/sessions/project-index.service.ts';
+import { slugOfPath } from '~/domain/value-objects/sessions/project-slug.value-object.ts';
 import { isSubagentFileName } from '~/domain/value-objects/sessions/subagent-id.value-object.ts';
 
 /* 何が並ぶかを、中身を読む前に決める。
@@ -47,6 +49,14 @@ export interface TranscriptIndexService {
 /** 覚えておく時間。木のスナップショットと同じ長さにする — 同じ 1 枚を分け合うためである */
 const DEFAULT_TTL_MS = 1000;
 
+/** 索引を組むのに要るところだけを持つ、`transcript` 1 本 */
+interface LocatedTranscript {
+  readonly file: string;
+  readonly cwd: string | null;
+  readonly lastActivityMs: number;
+  readonly transcriptCount: number;
+}
+
 /** 子として数えるものだけを残す。数え方を `readSession` と揃える */
 const subagentsOf = (source: SessionSource) =>
   source.subagents.filter((child) => isSubagentFileName(child.fileName));
@@ -58,6 +68,12 @@ export function createTranscriptIndex(deps: {
   readonly activeThresholdMs: number;
   readonly clock: Clock;
   readonly ttlMs?: number;
+  /* 起動のときに名指されたディレクトリ。**まだ `transcript` を 1 本も持っていなくても
+     一覧に載せる** —— 打った相手が一覧に居なければ、開くウィンドウがどこにも無い。
+
+     観測してよい範囲ではない。走査するのは今までどおり `~/.claude/projects` の全部で、
+     ここが足すのは名指された 1 行だけである。 */
+  readonly namedPath?: () => Promise<string | null>;
 }): TranscriptIndexService {
   const ttlMs = deps.ttlMs ?? DEFAULT_TTL_MS;
   let cachedAtMs = Number.NEGATIVE_INFINITY;
@@ -67,6 +83,31 @@ export function createTranscriptIndex(deps: {
      変更通知が走り終えた瞬間に上書きで消える。 */
   let signals = 0;
 
+  /* 名指されたディレクトリを一覧に足す。**すでに居るなら足さない** —— 同じ場所が 2 行に
+     割れて、片方だけにセッションが並ぶ。居るのに `transcript` を 1 本も持たない行には、
+     一覧に残す指定だけを付ける。 */
+  async function includeNamed(groups: LocatedGroup<LocatedTranscript>[]): Promise<void> {
+    const named = (await deps.namedPath?.()) ?? null;
+    if (named === null) return;
+
+    const canonical = await deps.transcripts.canonicalize(named);
+    const path = canonical.kind === 'observed' ? canonical.value : named;
+    const slug = slugOfPath(path);
+    const at = groups.findIndex(
+      (group) =>
+        group.slug === slug ||
+        (group.canonicalPath !== null && samePath(group.canonicalPath, path)),
+    );
+    const existing = at < 0 ? undefined : groups[at];
+    if (existing !== undefined) {
+      groups[at] = { ...existing, namedPath: path };
+      return;
+    }
+    /* まだ `transcript` が 1 本も無いディレクトリ。**数え上げられなかったのではなく、
+       0 本だと分かっている。** そこで Claude Code が動き出せば、同じ名前の下に増えていく。 */
+    groups.push({ slug, canonicalPath: path, sessions: [], walked: observed(0), namedPath: path });
+  }
+
   async function build(nowMs: number): Promise<Result<TranscriptIndexSnapshot>> {
     const [groups, live] = await Promise.all([
       deps.transcripts.listTranscripts(),
@@ -75,12 +116,7 @@ export function createTranscriptIndex(deps: {
     const found: readonly TranscriptGroup[] = groups.kind === 'observed' ? groups.value : [];
 
     const transcriptFiles = new Set<string>();
-    const located: LocatedGroup<{
-      readonly file: string;
-      readonly cwd: string | null;
-      readonly lastActivityMs: number;
-      readonly transcriptCount: number;
-    }>[] = [];
+    const located: LocatedGroup<LocatedTranscript>[] = [];
 
     for (const group of found) {
       const sessions = [];
@@ -105,6 +141,8 @@ export function createTranscriptIndex(deps: {
         walked: group.walked,
       });
     }
+
+    await includeNamed(located);
 
     return ok({
       index: buildProjectIndex({

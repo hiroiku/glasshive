@@ -37,7 +37,8 @@ needs `ps` and either `/proc/<pid>/cwd` or `lsof`.
 
 Every project an agent has worked in, wherever you started glasshive from. The ones waiting for your
 input come first, then the ones still running. Filter by name, state, or time span, and pin the
-projects you care about to the tab bar.
+projects you care about to the tab bar. Start with a path (`glasshive .`) and you skip straight to
+that one repository instead.
 
 ![Overview](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/overview.png)
 
@@ -107,15 +108,26 @@ which pull request referenced it, read next to the agents working on it right no
 ## Options
 
 ```sh
-npx glasshive                       # http://127.0.0.1:4483
+npx glasshive                       # http://127.0.0.1:4483 — every project
+npx glasshive .                     # just this repository
+npx glasshive ~/src/foo             # or that one, from anywhere
 npx glasshive --port 8080           # listen somewhere else
 npx glasshive --no-open             # do not open the browser
 npx glasshive --active-threshold 120  # seconds since last write that still counts as active
 npx glasshive --config-dir ~/somewhere  # where preferences.json is kept
 ```
 
-Run `glasshive --help` for the full list. Scope is not a startup option: every project an agent has
-worked in is listed, and you pick which ones become tabs.
+Run `glasshive --help` for the full list.
+
+A path is the only thing that changes what you land on. Give one and glasshive opens that
+repository — no tab bar, its name in the header, and the hive one click away on the mark. The path
+resolves to the repository it belongs to, so a subdirectory or a worktree gets you to the same place,
+and the other projects of that repository are named next to it. Give no path and you get the
+Overview, exactly as before.
+
+**A path is not a scope.** Every project stays observable either way; naming one decides where you
+land and what gets read first, not what glasshive is allowed to see. The default port falls through
+to the next free one, so one window per repository is a normal thing to have.
 
 ### Keyboard
 

@@ -11,6 +11,7 @@ export const zhHant: Catalogue = {
     '即時連線：已連線，但監看程式已停止 —— 更新不會送達',
   'Some projects could not be read — the count may be short': '有些專案無法讀取 —— 計數可能偏少',
   'Counted from the projects read so far': '根據目前已讀取的專案統計',
+  'also in this repository': '同一儲存庫',
   active: '執行中',
   waiting: '等待中',
   input: '等待輸入',

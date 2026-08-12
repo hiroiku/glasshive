@@ -12,6 +12,7 @@ export const ja: Catalogue = {
   'Some projects could not be read — the count may be short':
     '一部のプロジェクトを読めなかった — 件数は足りていない可能性がある',
   'Counted from the projects read so far': 'ここまでに読めたプロジェクトから数えたもの',
+  'also in this repository': '同じリポジトリ',
   active: '稼働中',
   waiting: '待機',
   input: '入力待ち',

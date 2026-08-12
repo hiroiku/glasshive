@@ -1,4 +1,4 @@
-import { parseArgs } from './cli.js';
+import { DEFAULTS, parseArgs } from './cli.js';
 import { launch } from './launcher.js';
 
 const parsed = parseArgs(process.argv.slice(2));
@@ -11,6 +11,6 @@ try {
   await launch(parsed.args);
 } catch (e) {
   const message = e instanceof Error ? e.message : String(e);
-  console.error(`could not bind port ${parsed.args.port}: ${message}`);
+  console.error(`could not bind port ${parsed.args.port ?? DEFAULTS.port}: ${message}`);
   process.exit(1);
 }

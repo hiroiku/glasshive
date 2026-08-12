@@ -45,6 +45,12 @@ export interface LocatedGroup<S extends LocatedSession> {
      セッションが空になる理由は 2 つある。本当に 1 つも無いのと、ディレクトリを読めなかった
      のである。**後者を前者に倒すと、プロジェクトが一覧から黙って消える。** */
   readonly walked?: Observation<number>;
+  /* 起動のときに名指されたディレクトリ。**セッションが 1 つも無くても一覧に残す** ——
+     打った相手が一覧に居なければ、開くウィンドウがどこにも無い。
+
+     作業ディレクトリもここから採る。セッションが無ければ `transcript` に書かれた cwd は
+     どこにも無く、名前もパスも決まらないままになる。 */
+  readonly namedPath?: string;
 }
 
 /** 束ねて数え終えたプロジェクト。中身は呼ぶ側が知っている型のまま運ぶ */
@@ -134,10 +140,18 @@ export function indexProjects<S extends LocatedSession>(input: {
      落とすと、動いているセッションを抱えたプロジェクトが一覧から消え、ユーザーには
      初めから無かったのと同じに見える。 */
   const mergeable: MergeableProject<S>[] = input.groups
-    .filter((group) => group.sessions.length > 0 || walks.get(group.slug)?.kind === 'unobservable')
+    .filter(
+      (group) =>
+        group.sessions.length > 0 ||
+        group.namedPath !== undefined ||
+        walks.get(group.slug)?.kind === 'unobservable',
+    )
     .map((group) => ({
       slug: group.slug,
-      path: deriveGroupPath(group.sessions),
+      /* 名指されたディレクトリのパスは、セッションが 1 本でも在ればそちらを採る。
+         `transcript` に書かれた cwd がそのプロジェクトの言う自分の場所であって、
+         名指したほうは同じ場所を別の書き方で指しているだけのことが在る。 */
+      path: deriveGroupPath(group.sessions) ?? group.namedPath ?? null,
       canonicalPath: group.canonicalPath,
       latestActivityMs: latestOf(group.sessions),
       sessions: group.sessions,

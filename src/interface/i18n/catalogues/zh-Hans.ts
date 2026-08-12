@@ -11,6 +11,7 @@ export const zhHans: Catalogue = {
     '实时连接：已连接，但监视器已停止 —— 更新不会送达',
   'Some projects could not be read — the count may be short': '有些项目无法读取 —— 计数可能偏少',
   'Counted from the projects read so far': '根据目前已读取的项目统计',
+  'also in this repository': '同一仓库',
   active: '运行中',
   waiting: '等待中',
   input: '等待输入',

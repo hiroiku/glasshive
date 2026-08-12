@@ -54,8 +54,15 @@ const unreadableOf = (slug: string): TranscriptGroup => ({
   walked: unobservable(new UnexpectedError('開けない')),
 });
 
+/** slug ごとに別の作業ディレクトリを名乗らせる。渡さなければ、どの slug も同じ場所を指す */
+const headOf = (cwd: string) =>
+  `${JSON.stringify({ type: 'user', cwd, timestamp: '2026-01-01T00:00:00Z' })}\n`;
+
+/** `/nest/projects/<slug>/…` の slug */
+const slugOfFile = (file: string) => file.split('/')[3] ?? '';
+
 /** 読みに行った範囲の大きさを控える偽のポート。**どこまで開いたかそのものが確かめたいこと** */
-function spyRepository(groups: readonly TranscriptGroup[]) {
+function spyRepository(groups: readonly TranscriptGroup[], cwdBySlug: Record<string, string> = {}) {
   const heads: number[] = [];
   const tails: number[] = [];
   const transcripts: TranscriptRepository = {
@@ -65,9 +72,12 @@ function spyRepository(groups: readonly TranscriptGroup[]) {
     async statTranscript() {
       return observed({ mtimeMs: NOW, sizeBytes: HEAD.length });
     },
-    async readHead(_at, request) {
+    async readHead(at, request) {
       heads.push(request.maxBytes);
-      return observed({ text: HEAD, complete: true });
+      return observed({
+        text: headOf(cwdBySlug[slugOfFile(at.file)] ?? '/w/proj'),
+        complete: true,
+      });
     },
     async readTail(_at, request) {
       tails.push(request.maxBytes);
@@ -80,24 +90,39 @@ function spyRepository(groups: readonly TranscriptGroup[]) {
   return { transcripts, heads, tails };
 }
 
-function sceneOf(groups: readonly TranscriptGroup[], processes?: AgentProcessIntegration) {
-  const spy = spyRepository(groups);
+interface SceneOptions {
+  readonly processes?: AgentProcessIntegration;
+  /** 起動のときに名指されたディレクトリ */
+  readonly namedPath?: string;
+  /** slug ごとの作業ディレクトリ。渡さなければ、どの slug も同じ場所を指す */
+  readonly cwdBySlug?: Record<string, string>;
+}
+
+function sceneOf(groups: readonly TranscriptGroup[], options: SceneOptions = {}) {
+  const spy = spyRepository(groups, options.cwdBySlug);
   const drafts = createTranscriptDrafts({
     transcripts: spy.transcripts,
     activeThresholdMs: ACTIVE_THRESHOLD_MS,
   });
+  const named = options.namedPath;
   const index = createTranscriptIndex({
     transcripts: spy.transcripts,
-    processes: processes ?? { list: async () => observed([]) },
+    processes: options.processes ?? { list: async () => observed([]) },
     drafts,
     activeThresholdMs: ACTIVE_THRESHOLD_MS,
     clock: { now: () => NOW },
     ttlMs: 0,
+    ...(named === undefined ? {} : { namedPath: async () => named }),
   });
   return {
     ...spy,
     index,
-    observe: createObserveTree({ index, drafts, activeThresholdMs: ACTIVE_THRESHOLD_MS }),
+    observe: createObserveTree({
+      index,
+      drafts,
+      activeThresholdMs: ACTIVE_THRESHOLD_MS,
+      ...(named === undefined ? {} : { readFirst: async () => [named] }),
+    }),
   };
 }
 
@@ -251,5 +276,62 @@ describe('索引と本読みの読み取り', () => {
     expect(scene.tails.length, '稼働区間と消費は、木を組むときに初めて読む').toBeGreaterThan(
       tailsAfterIndex,
     );
+  });
+});
+
+/* 起動のときにディレクトリを名指されたとき。
+
+   名指すのは観測してよい範囲の指定ではない。走査するのは今までどおり `~/.claude/projects`
+   の全部で、変わるのは **一覧に 1 行足りること** と **読む順** だけである。 */
+describe('名指されたディレクトリ', () => {
+  it('`transcript` が 1 本も無くても、一覧に居る', async () => {
+    const scene = sceneOf([sourceOf('a', 'session')], { namedPath: '/w/fresh' });
+
+    const snapshot = await indexOf(scene);
+    const named = snapshot.index.stubs.find((stub) => stub.canonicalPath === '/w/fresh');
+
+    expect(named, '居なければ、そのディレクトリを開くことができない').toBeDefined();
+    expect(named?.path, 'セッションが無ければ、パスは名指されたほうからしか来ない').toBe(
+      '/w/fresh',
+    );
+    expect(named?.name).toBe('fresh');
+    expect(named?.walked, '数え上げられなかったのではなく、0 本だと分かっている').toEqual(
+      observed(0),
+    );
+  });
+
+  it('すでに観測できているディレクトリを名指しても、行は増えない', async () => {
+    const scene = sceneOf([sourceOf('a', 'session')], { namedPath: '/w/proj' });
+
+    const snapshot = await indexOf(scene);
+
+    expect(
+      snapshot.index.stubs,
+      '同じ場所が 2 行に割れると、片方だけにセッションが並ぶ',
+    ).toHaveLength(1);
+    expect(snapshot.index.stubs[0]?.canonicalPath).toBe('/w/proj');
+  });
+
+  /* 名指したリポジトリが画面に揃うまでの待ちを、ほかのプロジェクトの読み取りで長くしない。
+   **並べ替えるのは読む順だけである** —— 一覧の並びは索引が決めたままにする。 */
+  it('名指されたディレクトリのプロジェクトから先に読む', async () => {
+    const scene = sceneOf([sourceOf('a', 'first'), sourceOf('b', 'second')], {
+      namedPath: '/w/b',
+      cwdBySlug: { a: '/w/a', b: '/w/b' },
+    });
+
+    const read: string[] = [];
+    const stream = scene.observe.observe(NOW);
+    for (let step = await stream.next(); !step.done; step = await stream.next()) {
+      if (step.value.kind === 'project') read.push(step.value.project.id);
+    }
+
+    expect(read, '後から読むと、名指した相手が画面に出るまで待つことになる').toEqual(['b', 'a']);
+
+    const snapshot = await indexOf(scene);
+    expect(
+      snapshot.index.stubs.map((stub) => stub.id),
+      '読む順が一覧の並びに漏れると、行が読み取りのたびに入れ替わる',
+    ).toEqual(['a', 'b']);
   });
 });

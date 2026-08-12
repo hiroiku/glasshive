@@ -20,6 +20,12 @@ export interface ProjectSearch {
   pv?: string | undefined;
   /** Git のパネルにだけあるラベル。`rev` だけでは何のブランチか読めない */
   pl?: string | undefined;
+  /* このディレクトリだけを見ているウィンドウか。**起動のときにパスを名指されると立つ。**
+
+     見えるものを狭めるのではなく、枠の出し方を決める —— タブ行を出さず、上に開いている
+     リポジトリの名前を出す。URL に載せるのは、読み込み直しても枠が変わらないためと、
+     Overview へ移るのがこの欄を落とすだけで済むためである。 */
+  only?: true | undefined;
   /** 検索語。3 つの画面で同じキーを使う — 語を保ったまま画面を移れる */
   q?: string | undefined;
   /** 要注意だけに絞るか */
@@ -81,6 +87,7 @@ export function parseProjectSearch(raw: Record<string, unknown>): ProjectSearch 
     panel: panel === 'conv' || panel === 'issue' || panel === 'ref' ? panel : undefined,
     pv: asString(raw.pv),
     pl: asString(raw.pl),
+    only: raw.only === true || raw.only === 'true' || raw.only === '1' ? true : undefined,
     q: asString(raw.q),
     // 検索パラメータに載るのは文字列なので、両方の書き方を受ける
     attention: raw.attention === true || raw.attention === 'true' ? true : undefined,
