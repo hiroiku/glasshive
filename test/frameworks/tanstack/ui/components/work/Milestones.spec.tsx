@@ -70,6 +70,7 @@ const read = (
 ): EventLog => ({
   kind: 'observed',
   complete: true,
+  reading: false,
   byId: new Map(
     entries.map((entry) => [
       entry.id,

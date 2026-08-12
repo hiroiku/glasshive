@@ -4,7 +4,10 @@ import type {
   GithubIssueDiscussionEntry,
   GithubIssueReference,
 } from '~/application/use-cases/issues/get-github-issue-discussion.use-case.ts';
-import type { GithubIssueEventLog } from '~/application/use-cases/issues/list-github-issue-events.use-case.ts';
+import type {
+  GithubIssueEventLog,
+  GithubIssueEvents,
+} from '~/application/use-cases/issues/list-github-issue-events.use-case.ts';
 import type {
   GithubActor,
   GithubIssueExtra,
@@ -419,17 +422,38 @@ export function presentGithubIssueEvents(
   return {
     state: log.kind,
     reason: reasonOf(log),
-    issues:
-      log.kind === 'observed'
-        ? log.value.issues.map((issue) => ({
-            id: issue.id,
-            events: issue.events.map((event) => ({ at: event.at, kind: event.kind })),
-            truncated: issue.truncated,
-          }))
-        : [],
+    issues: log.kind === 'observed' ? presentGithubIssueEventsPage(log.value.issues) : [],
     complete: log.kind === 'observed' && log.value.complete,
   };
 }
+
+/* ストリームに流れる 1 つ。
+
+   **`log` が必ず先に来る。** そこに `state` が入っているので、後から届くページは行を足すだけに
+   なる。`complete` は最後の 1 つが決める —— 読んでいる途中を `complete: false` で表すと、
+   まだ届いていない行が「読みに行って辿れなかった行」として画面に出る。 */
+export type GithubIssueEventsChunkJson =
+  | { kind: 'log'; log: GithubIssueEventLogJson }
+  | { kind: 'page'; issues: GithubIssueEventsJson[] }
+  | { kind: 'complete'; complete: boolean };
+
+/* 記録の最初の 1 枚。**行はまだ 1 つも無い。**
+
+   `complete` は `false` である。全部を辿れたかどうかが分かるのは読み終えたときで、
+   読み始めに `true` を置くと、辿れていない先が無いとまだ言えないうちから言うことになる。 */
+export function presentGithubIssueEventsHead(head: Observation<null>): GithubIssueEventLogJson {
+  return { state: head.kind, reason: reasonOf(head), issues: [], complete: false };
+}
+
+/** ページ 1 つぶん。中身は写すだけで、順序も切られたことも触らない */
+export const presentGithubIssueEventsPage = (
+  issues: readonly GithubIssueEvents[],
+): GithubIssueEventsJson[] =>
+  issues.map((issue) => ({
+    id: issue.id,
+    events: issue.events.map((event) => ({ at: event.at, kind: event.kind })),
+    truncated: issue.truncated,
+  }));
 
 /* 観測できなかったときも、この形で言える。
 

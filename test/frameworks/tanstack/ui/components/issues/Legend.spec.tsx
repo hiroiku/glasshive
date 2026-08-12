@@ -9,8 +9,10 @@ import type { EventLog } from '~/frameworks/tanstack/ui/derive/issueEvents.ts';
    まだ読んでいる行の見分け方そのものである。**見分け方がここに無ければ、4 通りの絵は
    ただの模様になる。** 見本も説明の文も、落ちても画面は出てしまう。 */
 
-const WHOLE: EventLog = { kind: 'observed', complete: true, byId: new Map() };
-const PARTIAL: EventLog = { kind: 'observed', complete: false, byId: new Map() };
+const WHOLE: EventLog = { kind: 'observed', complete: true, reading: false, byId: new Map() };
+const PARTIAL: EventLog = { kind: 'observed', complete: false, reading: false, byId: new Map() };
+/** まだ次のページを読んでいる。全部を辿れたかは、まだ言えない */
+const WALKING: EventLog = { kind: 'observed', complete: false, reading: true, byId: new Map() };
 
 describe('一覧の凡例', () => {
   it('読み切れていない記録が在るなら、ハッチの見分け方を言う', () => {
@@ -29,6 +31,17 @@ describe('一覧の凡例', () => {
     expect(
       reading.container.textContent,
       'まだ読んでいる最中は、読み残しが在るかどうかも分かっていない',
+    ).not.toContain('hatched, not empty');
+  });
+
+  /* ページが届いている途中は、居ない行が読めなかった行ではない。**そこで読み残しを言うと、
+     これから届く行のことを「読めなかった」と言うことになる。** */
+  it('ページが届いている途中は、読み残しを言わない', () => {
+    const walking = render(<IssuesLegend complete events={WALKING} />);
+
+    expect(
+      walking.container.textContent,
+      'まだ届いていない行を、読みに行って読めなかった行として言っている',
     ).not.toContain('hatched, not empty');
   });
 

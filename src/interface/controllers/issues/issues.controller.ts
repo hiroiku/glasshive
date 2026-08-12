@@ -15,11 +15,14 @@ import {
   type GithubIssueBodyJson,
   type GithubIssueDiscussionJson,
   type GithubIssueEventLogJson,
+  type GithubIssueEventsChunkJson,
   type IssuesChunkJson,
   type IssuesJson,
   presentGithubIssueBody,
   presentGithubIssueDiscussion,
   presentGithubIssueEvents,
+  presentGithubIssueEventsHead,
+  presentGithubIssueEventsPage,
   presentIssuePage,
   presentIssues,
   presentIssuesHead,
@@ -172,4 +175,23 @@ export async function getGithubIssueEvents(
   const events = await deps.events.execute({ projectPath: path.value });
   if (!events.ok) return { ok: false, ...presentError(events.error) };
   return { ok: true, body: presentGithubIssueEvents(events.value) };
+}
+
+/* 一覧に出ている課題に起きたことを、読めたページから順に返す。
+
+   **ページが読めなかったことは断りではない。** 断って 503 にすると、`gh` が答えなかったことと、
+   こちらが受理しなかったことが同じ形になる。断れるのは最初のチャンクより前だけである。 */
+export async function* streamGithubIssueEvents(
+  deps: GithubIssuesDeps,
+  input: unknown,
+): AsyncGenerator<GithubIssueEventsChunkJson, void, void> {
+  const path = await locate(deps.index, input);
+  if (!path.ok) throw path.error;
+
+  for await (const chunk of deps.events.stream({ projectPath: path.value })) {
+    if (chunk.kind === 'head') yield { kind: 'log', log: presentGithubIssueEventsHead(chunk.head) };
+    else if (chunk.kind === 'page') {
+      yield { kind: 'page', issues: presentGithubIssueEventsPage(chunk.issues) };
+    } else yield { kind: 'complete', complete: chunk.complete };
+  }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reduceIssues } from '~/frameworks/tanstack/queries/issues.query.ts';
+import { reduceIssueEvents, reduceIssues } from '~/frameworks/tanstack/queries/issues.query.ts';
 
 /* 一覧はページごとに届く。**畳み方を間違えると、届いたぶんが消えるか、二重に並ぶ。**
 
@@ -85,5 +85,54 @@ describe('ページを 1 枚の一覧へ畳む', () => {
 
     expect(folded.state).toBe('unobservable');
     expect(folded.issues, '読めなかった一覧に行を残すと、読めた顔で出る').toEqual([]);
+  });
+});
+
+/* 記録も同じ形で届く。**`complete` を動かすのは最後の 1 つだけである。**
+
+   読んでいる途中で `true` にすると、まだ届いていない行が「読みに行って、そこに記録が
+   無かった行」になる —— 画面ではその行にハッチが掛かる。 */
+type EventLogJson = Parameters<typeof reduceIssueEvents>[0];
+type EventChunk = Parameters<typeof reduceIssueEvents>[1];
+
+const NO_EVENTS: EventLogJson = {
+  state: 'absent',
+  reason: 'no-source',
+  issues: [],
+  complete: false,
+};
+
+const logHead: EventChunk = {
+  kind: 'log',
+  log: { state: 'observed', reason: null, issues: [], complete: false },
+};
+
+const eventsOf = (ids: readonly string[]): EventChunk => ({
+  kind: 'page',
+  issues: ids.map((id) => ({ id, events: [], truncated: false })),
+});
+
+describe('記録のページを 1 枚へ畳む', () => {
+  it('ページの行は、前のページの後ろに足す', () => {
+    let folded = reduceIssueEvents(NO_EVENTS, logHead);
+    folded = reduceIssueEvents(folded, eventsOf(['#1']));
+    folded = reduceIssueEvents(folded, eventsOf(['#2']));
+
+    expect(
+      folded.issues.map((entry) => entry.id),
+      'ページで置き換えると、届いた行が次のページで消える',
+    ).toEqual(['#1', '#2']);
+  });
+
+  it('全部を辿れたかは、読み終えたときに言う', () => {
+    let folded = reduceIssueEvents(NO_EVENTS, logHead);
+    folded = reduceIssueEvents(folded, eventsOf(['#1']));
+
+    expect(folded.complete, '読んでいる途中の行に、読めなかった行のハッチが掛かる').toBe(false);
+
+    folded = reduceIssueEvents(folded, { kind: 'complete', complete: true });
+
+    expect(folded.complete).toBe(true);
+    expect(folded.issues, '読み終えたことを言うだけで、行は動かさない').toHaveLength(1);
   });
 });

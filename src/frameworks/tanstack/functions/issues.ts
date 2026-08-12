@@ -6,6 +6,7 @@ import {
   getGithubIssueDiscussion as readGithubIssueDiscussion,
   getGithubIssueEvents as readGithubIssueEvents,
   listGithubIssues as readGithubIssues,
+  streamGithubIssueEvents as walkGithubIssueEvents,
   streamGithubIssues as walkGithubIssues,
 } from '~/interface/controllers/issues/issues.controller.ts';
 
@@ -54,3 +55,8 @@ export const getGithubIssueDiscussion = createServerFn({ method: 'GET' })
 export const getGithubIssueEvents = createServerFn({ method: 'GET' })
   .validator((value: unknown) => value)
   .handler(({ data }) => readGithubIssueEvents(githubDeps(), data));
+
+/* 記録も、読めたページから順に渡す。一覧と同じ形である */
+export const getGithubIssueEventsStream = createServerFn({ method: 'GET' })
+  .validator((value: unknown) => value)
+  .handler(({ data }) => walkGithubIssueEvents(githubDeps(), data));

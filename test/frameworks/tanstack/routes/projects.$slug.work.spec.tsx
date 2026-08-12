@@ -97,9 +97,12 @@ function draw(
   });
   /* 一覧はページごとに届くので、置くのは畳んだ後の 1 枚である。`ApiResponse` では包まない */
   client.setQueryData(['github-issues', probe.slug, true], body);
+  /* 記録もページごとに届くので、置くのは畳んだ後の 1 枚である */
   client.setQueryData(['github-issue-events', probe.slug], {
-    ok: true,
-    body: { state: 'observed', reason: null, issues: [], complete: true },
+    state: 'observed',
+    reason: null,
+    issues: [],
+    complete: true,
   });
 
   const { container } = render(

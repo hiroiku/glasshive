@@ -77,6 +77,9 @@ const unusedEvents: Deps['events'] = {
   async execute() {
     throw new Error('not called');
   },
+  stream() {
+    throw new Error('not called');
+  },
 };
 
 const depsWith = (discussion: DiscussionUseCase): Deps => ({

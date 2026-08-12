@@ -65,8 +65,10 @@ const entry = (id: string, events: readonly { at: number; kind: string }[], trun
 
 const logOf = (issues: readonly ReturnType<typeof entry>[], complete = true): EventLog =>
   eventLogOf(false, false, {
-    ok: true,
-    body: { state: 'observed', reason: null, issues: [...issues], complete },
+    state: 'observed',
+    reason: null,
+    issues: [...issues],
+    complete,
   } as Answer);
 
 const closeOf = (issues: readonly Issue[], log: EventLog, id: string) =>
@@ -660,8 +662,10 @@ describe('4 つの状態は、どれも別の答えである', () => {
 
   it('読むものが無かった', () => {
     const log = eventLogOf(false, false, {
-      ok: true,
-      body: { state: 'absent', reason: null, issues: [], complete: false },
+      state: 'absent',
+      reason: null,
+      issues: [],
+      complete: false,
     } as Answer);
 
     expect(log.kind).toBe('absent');
@@ -670,8 +674,10 @@ describe('4 つの状態は、どれも別の答えである', () => {
 
   it('観測できなかった', () => {
     const log = eventLogOf(false, false, {
-      ok: true,
-      body: { state: 'unobservable', reason: 'gh exited 1', issues: [], complete: false },
+      state: 'unobservable',
+      reason: 'gh exited 1',
+      issues: [],
+      complete: false,
     } as Answer);
 
     expect(log).toEqual({ kind: 'unobservable', reason: 'gh exited 1' });
@@ -686,12 +692,9 @@ describe('4 つの状態は、どれも別の答えである', () => {
   it('取りに行けなかったのも、観測できなかったである', () => {
     expect(eventLogOf(false, true, null)).toEqual({ kind: 'unobservable', reason: null });
     expect(
-      eventLogOf(false, false, {
-        ok: false,
-        status: 503,
-        body: { state: 'unobservable', code: 'issues.gh_failed', message: 'gh is not installed' },
-      } as Answer),
-    ).toEqual({ kind: 'unobservable', reason: 'gh is not installed' });
+      eventLogOf(true, true, null),
+      '読んでいる最中に落ちたことを、読んでいる最中のままにしない',
+    ).toEqual({ kind: 'unobservable', reason: null });
   });
 
   it('読んでイベントが 0 件だった', () => {
@@ -1000,5 +1003,54 @@ describe('課題を束ねたトラック', () => {
       openedMs: null,
     });
     expect(groupTrack(issues, { kind: 'absent' }, AXIS).track.kind).toBe('nolog');
+  });
+});
+
+/* 記録はページごとに届く。**届く前の行にハッチを掛けない。**
+
+   ハッチは「読みに行って、この行は読めなかった」である。まだ届いていない行に掛けると、
+   これから点が出る行が、読めなかった行として画面に出る。読み終えてから初めて、居ないことが
+   「読んで、居なかった」という観測になる。 */
+describe('ページが届いている途中', () => {
+  const walking = (issues: readonly ReturnType<typeof entry>[]): EventLog =>
+    eventLogOf(true, false, {
+      state: 'observed',
+      reason: null,
+      issues: [...issues],
+      complete: false,
+    } as Answer);
+
+  it('届いた行には点を置く', () => {
+    const log = walking([entry('#1', [{ at: NOW - SLOT, kind: 'comment' }])]);
+
+    expect(trackOf([issue('#1')], log, '#1').kind, '届いた行を待たせる理由が無い').toBe('read');
+  });
+
+  it('まだ届いていない行は、読んでいる最中である', () => {
+    const log = walking([entry('#1', [{ at: NOW - SLOT, kind: 'comment' }])]);
+
+    expect(
+      trackOf([issue('#1'), issue('#2')], log, '#2'),
+      'これから点が出る行に、読めなかった行のハッチが掛かっている',
+    ).toEqual({ kind: 'reading' });
+  });
+
+  it('読み終えたら、居ない行は読めなかった行になる', () => {
+    const log = logOf([entry('#1', [{ at: NOW - SLOT, kind: 'comment' }])], false);
+
+    expect(
+      trackOf([issue('#1'), issue('#2')], log, '#2').kind,
+      '読み終えた記録の下で、その行だけが永久に読み込み中の顔で残る',
+    ).toBe('unread');
+  });
+
+  it('読んでいる最中であることは、辿り切れなかったこととは別に持つ', () => {
+    const log = walking([]);
+
+    expect(log.kind === 'observed' && log.reading).toBe(true);
+    expect(
+      log.kind === 'observed' && log.complete,
+      '読み終える前に辿り切ったと言うと、次のページが無かったことになる',
+    ).toBe(false);
   });
 });

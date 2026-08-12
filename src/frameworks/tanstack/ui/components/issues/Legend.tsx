@@ -127,7 +127,7 @@ export function IssuesLegend({
       )}
       {/* 全部を読めていないなら黙らない。**どこで読むのをやめたかは画面に出ている** ——
           読まなかった行はハッチが掛かるので、言うべきなのはその見分け方である */}
-      {events.kind === 'observed' && !events.complete && (
+      {events.kind === 'observed' && !events.complete && !events.reading && (
         <span className="dg-cut">
           some issues were not read — those rows are hatched, not empty
         </span>

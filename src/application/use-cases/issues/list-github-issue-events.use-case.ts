@@ -37,55 +37,107 @@ export interface ListGithubIssueEventsInput {
   readonly projectPath: string;
 }
 
+/* 記録の届き方。**一覧と同じく、ページ 1 にページ 5 を待つ理由は無い。**
+
+   最初に来るのは `head` 1 つで、そこに観測が成り立ったかどうかが入る。成り立っていなければ
+   それが答えの全部である。`page` はページ 1 つぶんで、前のページを含まない。
+
+   `complete` は最後にしか言えない。**読んでいる途中を `complete: false` で表さない** ——
+   あちらは「読みに行って、そこまでしか辿れなかった」であって、まだ届いていないことではない。 */
+export type GithubIssueEventsChunk =
+  | { readonly kind: 'head'; readonly head: Observation<null> }
+  | { readonly kind: 'page'; readonly issues: readonly GithubIssueEvents[] }
+  | { readonly kind: 'complete'; readonly complete: boolean };
+
 export interface ListGithubIssueEventsUseCase {
   execute(
     input: ListGithubIssueEventsInput,
   ): Promise<Result<Observation<GithubIssueEventLog>, never>>;
+  /** 読めたページから順に配る。`execute` はこれを汲み尽くしたものである */
+  stream(input: ListGithubIssueEventsInput): AsyncGenerator<GithubIssueEventsChunk, void, void>;
 }
 
 export function createListGithubIssueEvents(deps: {
   readonly git: GitCommandIntegration;
   readonly tracker: IssueTrackerIntegration;
 }): ListGithubIssueEventsUseCase {
-  return {
-    async execute({ projectPath }) {
-      const source = await locateGithubRepository(deps.git, projectPath);
-      if (source.kind !== 'observed') return ok(source);
-      const { repository } = source.value;
+  async function* walk({
+    projectPath,
+  }: ListGithubIssueEventsInput): AsyncGenerator<GithubIssueEventsChunk, void, void> {
+    const source = await locateGithubRepository(deps.git, projectPath);
+    if (source.kind !== 'observed') {
+      yield { kind: 'head', head: source };
+      yield { kind: 'complete', complete: false };
+      return;
+    }
+    const { repository } = source.value;
 
-      const issues: GithubIssueEvents[] = [];
-      let cursor: string | null = null;
-      let complete = true;
+    let cursor: string | null = null;
+    let complete = true;
+    let opened = false;
 
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const answer = await deps.tracker.fetchIssueEvents({
-          owner: repository.owner,
-          name: repository.name,
-          cursor,
-          pageSize: PAGE_SIZE,
-        });
-        /* 1 ページ目で躓いたなら、この観測は成り立っていない。2 ページ目より後なら、
-           そこまでは観えている —— 観えたぶんを捨てず、全部は辿れなかったことだけを言う。 */
-        if (answer.kind !== 'observed') {
-          if (page === 0) return ok(answer);
-          complete = false;
-          break;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const answer = await deps.tracker.fetchIssueEvents({
+        owner: repository.owner,
+        name: repository.name,
+        cursor,
+        pageSize: PAGE_SIZE,
+      });
+      /* 1 ページ目で躓いたなら、この観測は成り立っていない。2 ページ目より後なら、
+         そこまでは観えている —— 観えたぶんを捨てず、全部は辿れなかったことだけを言う。 */
+      if (answer.kind !== 'observed') {
+        if (!opened) {
+          yield { kind: 'head', head: answer };
+          yield { kind: 'complete', complete: false };
+          return;
         }
-
-        const parsed = parseIssueEventsPage(answer.value);
-        if (parsed === null) {
-          if (page === 0) return ok(observed({ issues: [], complete: false }));
-          complete = false;
-          break;
-        }
-
-        issues.push(...parsed.issues);
-        if (!parsed.hasNextPage || parsed.endCursor === null) break;
-        cursor = parsed.endCursor;
-        // 次の周回に入れないなら、その先は読んでいない
-        if (page === MAX_PAGES - 1) complete = false;
+        complete = false;
+        break;
       }
 
+      /* 応答を歩けなかった。**読みに行けなかったのとは分ける** —— `gh` は答えているので、
+         観測そのものは成り立っている。辿れなかったことだけを言う。 */
+      const parsed = parseIssueEventsPage(answer.value);
+      if (parsed === null) {
+        if (!opened) {
+          yield { kind: 'head', head: observed(null) };
+          yield { kind: 'complete', complete: false };
+          return;
+        }
+        complete = false;
+        break;
+      }
+
+      if (!opened) {
+        yield { kind: 'head', head: observed(null) };
+        opened = true;
+      }
+      yield { kind: 'page', issues: parsed.issues };
+
+      if (!parsed.hasNextPage || parsed.endCursor === null) break;
+      cursor = parsed.endCursor;
+      // 次の周回に入れないなら、その先は読んでいない
+      if (page === MAX_PAGES - 1) complete = false;
+    }
+
+    yield { kind: 'complete', complete };
+  }
+
+  return {
+    stream: walk,
+    async execute(input) {
+      let head: Observation<null> | null = null;
+      const issues: GithubIssueEvents[] = [];
+      let complete = false;
+
+      for await (const chunk of walk(input)) {
+        if (chunk.kind === 'head') head = chunk.head;
+        else if (chunk.kind === 'complete') complete = chunk.complete;
+        else issues.push(...chunk.issues);
+      }
+
+      if (head === null || head.kind !== 'observed')
+        return ok(head ?? observed({ issues, complete }));
       return ok(observed({ issues, complete }));
     },
   };

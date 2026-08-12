@@ -211,7 +211,12 @@ describe('右のトラック', () => {
   const iso = (daysAgo: number) => new Date(NOW - daysAgo * DAY).toISOString();
 
   /** 読めたが、どの課題も並びに居なかった記録。行は `unread` になる */
-  const NOT_IN_LOG: EventLog = { kind: 'observed', complete: true, byId: new Map() };
+  const NOT_IN_LOG: EventLog = {
+    kind: 'observed',
+    complete: true,
+    reading: false,
+    byId: new Map(),
+  };
 
   /* 1 か月の幅で見る。`all` は出ている課題で軸が決まるので、位置を数で確かめられない */
   const drawGantt = (
@@ -226,6 +231,7 @@ describe('右のトラック', () => {
   ): EventLog => ({
     kind: 'observed',
     complete,
+    reading: false,
     byId: new Map(
       entries.map((entry) => [
         entry.id,
@@ -1310,6 +1316,7 @@ describe('マイルストーンのグリッド', () => {
   const readAll = (ids: readonly string[]): EventLog => ({
     kind: 'observed',
     complete: true,
+    reading: false,
     byId: new Map(ids.map((id) => [id, { id, events: [], truncated: false }])),
   });
 
@@ -1404,6 +1411,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
   ): EventLog => ({
     kind: 'observed',
     complete,
+    reading: false,
     byId: new Map(
       entries.map((entry) => [
         entry.id,
@@ -1515,6 +1523,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
     const unreadable: EventLog = {
       kind: 'observed',
       complete: true,
+      reading: false,
       byId: new Map([
         ['#1', { id: '#1', events: [{ at: 'soon', kind: 'comment' }], truncated: false }],
       ]),
@@ -1523,7 +1532,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
       { kind: 'reading' },
       { kind: 'absent' },
       { kind: 'unobservable', reason: 'gh exited 1' },
-      { kind: 'observed', complete: true, byId: new Map() },
+      { kind: 'observed', complete: true, reading: false, byId: new Map() },
       observed([{ id: '#1', truncated: true }]),
       unreadable,
     ];
@@ -1553,6 +1562,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
     const partial: EventLog = {
       kind: 'observed',
       complete: true,
+      reading: false,
       byId: new Map([
         [
           '#1',
@@ -1578,6 +1588,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
     const both: EventLog = {
       kind: 'observed',
       complete: true,
+      reading: false,
       byId: new Map([
         ['#1', { id: '#1', events: [{ at: 'soon', kind: 'comment' }], truncated: true }],
       ]),
@@ -1595,6 +1606,7 @@ describe('4 つの状態は、どれも別の絵になる', () => {
     const mixed: EventLog = {
       kind: 'observed',
       complete: true,
+      reading: false,
       byId: new Map([
         ['#1', { id: '#1', events: [], truncated: true }],
         ['#3', { id: '#3', events: [{ at: 'soon', kind: 'comment' }], truncated: false }],

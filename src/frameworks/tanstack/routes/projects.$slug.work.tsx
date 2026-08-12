@@ -83,8 +83,8 @@ function WorkView() {
      ときに埋まり、それまでは「読んでいる最中」を描く。 */
   const events = useQuery(githubIssueEventsQuery(slug));
   const eventLog = useMemo(
-    () => eventLogOf(events.isPending, events.error !== null, events.data ?? null),
-    [events.isPending, events.error, events.data],
+    () => eventLogOf(events.isFetching, events.error !== null, events.data ?? null),
+    [events.isFetching, events.error, events.data],
   );
 
   const project = tree.data?.projects.find((candidate) => candidate.id === slug);

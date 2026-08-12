@@ -1,4 +1,3 @@
-import type { ApiResponse } from '~/interface/presenters/api-error.presenter.ts';
 import type {
   GithubIssueEventLogJson,
   GithubIssueEventsJson,
@@ -37,29 +36,33 @@ export type EventLog =
   | {
       readonly kind: 'observed';
       readonly complete: boolean;
+      /* まだ次のページを読んでいる。**`complete` とは別に持つ** —— あちらは「読みに行って、
+         そこまでしか辿れなかった」で、こちらは「まだ届いていない」である。混ぜると、
+         届く前の行にハッチが掛かり、読めなかった行として画面に出る。 */
+      readonly reading: boolean;
       /** 読めた課題だけが鍵を持つ。**`events: []` の課題も鍵を持つ** —— この Map に居ることが
           「この課題は読んだ」という観測そのものである */
       readonly byId: ReadonlyMap<string, GithubIssueEventsJson>;
     };
 
 /* 問い合わせの答えを 4 つの状態のどれかにする。**まだ読んでいる最中と、読めなかったことを
-   分ける** —— 混ぜると、失敗が永久に読み込み中の顔で残る。 */
-export function eventLogOf(
-  pending: boolean,
-  failed: boolean,
-  answer: ApiResponse<GithubIssueEventLogJson> | null,
-): EventLog {
-  if (pending) return { kind: 'reading' };
-  if (failed || answer === null) return { kind: 'unobservable', reason: null };
-  if (!answer.ok) return { kind: 'unobservable', reason: answer.body.message };
+   分ける** —— 混ぜると、失敗が永久に読み込み中の顔で残る。
 
-  const body = answer.body;
-  if (body.state === 'absent') return { kind: 'absent' };
+   記録はページごとに届く。1 枚も届いていないあいだが `reading` で、届き始めた後は
+   `observed` に移り、まだ途中であることは `reading` の欄が持つ。 */
+export function eventLogOf(
+  reading: boolean,
+  failed: boolean,
+  body: GithubIssueEventLogJson | null,
+): EventLog {
+  if (failed) return { kind: 'unobservable', reason: null };
+  if (body === null) return reading ? { kind: 'reading' } : { kind: 'unobservable', reason: null };
+  if (body.state === 'absent') return reading ? { kind: 'reading' } : { kind: 'absent' };
   if (body.state === 'unobservable') return { kind: 'unobservable', reason: body.reason };
 
   const byId = new Map<string, GithubIssueEventsJson>();
   for (const entry of body.issues) byId.set(entry.id, entry);
-  return { kind: 'observed', complete: body.complete, byId };
+  return { kind: 'observed', complete: body.complete, reading, byId };
 }
 
 export interface EventMark {
@@ -298,9 +301,13 @@ export function trackLineOf(ends: TrackEnds | null, axis: GanttAxis): TrackLine 
 }
 
 /* 記録の並びにこの課題が居ないときのトラック。**「読んで、居なかった」を「まだ読んでいる」に
-   落とさない** —— 落とすと、読み終えた記録の下でその行だけが永久に読み込み中の顔で残る。 */
+   落とさない** —— 落とすと、読み終えた記録の下でその行だけが永久に読み込み中の顔で残る。
+
+   逆向きも同じである。まだ次のページを読んでいるあいだは、居ないことが観測になっていない ——
+   そこへハッチを掛けると、これから届く行が読めなかった行として出る。 */
 export function unlistedTrack(log: EventLog): RowTrack {
   if (log.kind === 'reading') return { kind: 'reading' };
+  if (log.kind === 'observed' && log.reading) return { kind: 'reading' };
   if (log.kind === 'absent') return { kind: 'nolog' };
   return {
     kind: 'unread',

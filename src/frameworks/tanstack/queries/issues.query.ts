@@ -1,12 +1,14 @@
 import { queryOptions, experimental_streamedQuery as streamedQuery } from '@tanstack/react-query';
 import type {
+  GithubIssueEventLogJson,
+  GithubIssueEventsChunkJson,
   IssuesChunkJson,
   IssuesJson,
 } from '~/interface/presenters/issues/issues.presenter.ts';
 import {
   getGithubIssueBody,
   getGithubIssueDiscussion,
-  getGithubIssueEvents,
+  getGithubIssueEventsStream,
   getGithubIssuesStream,
 } from '../functions/issues.ts';
 
@@ -92,9 +94,36 @@ export const githubIssueDiscussionQuery = (projectId: string, number: number) =>
 
    置く時間は一覧(5 分)と揃えてある。同じ 100 件を別の呼び出しで見ているので、片方だけが
    新しくなると、一覧に在る行の点が消えたり、消えた行の点が残ったりする。 */
+/* 最初のチャンクが着くまでの姿。行はまだ 1 つも無く、全部を辿ってもいない */
+const NO_EVENTS: GithubIssueEventLogJson = {
+  state: 'absent',
+  reason: 'no-source',
+  issues: [],
+  complete: false,
+};
+
+/* チャンクを 1 枚の記録へ畳む。**足すのであって、置き換えない。**
+
+   `complete` を動かすのは最後の 1 つだけである。読んでいる途中で `true` にすると、まだ
+   届いていない行が「読みに行って、そこに記録が無かった行」になる。 */
+export function reduceIssueEvents(
+  current: GithubIssueEventLogJson,
+  chunk: GithubIssueEventsChunkJson,
+): GithubIssueEventLogJson {
+  if (chunk.kind === 'log') return chunk.log;
+  if (chunk.kind === 'complete') return { ...current, complete: chunk.complete };
+  return { ...current, issues: [...current.issues, ...chunk.issues] };
+}
+
 export const githubIssueEventsQuery = (projectId: string) =>
   queryOptions({
     queryKey: ['github-issue-events', projectId] as const,
-    queryFn: () => getGithubIssueEvents({ data: { projectId } }),
+    queryFn: streamedQuery({
+      streamFn: () => getGithubIssueEventsStream({ data: { projectId } }),
+      reducer: reduceIssueEvents,
+      initialValue: NO_EVENTS,
+      // 取り直しの間、前の記録を出したままにする。捨てると、点が消えてから埋まり直す
+      refetchMode: 'replace',
+    }),
     staleTime: 300_000,
   });
