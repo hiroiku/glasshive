@@ -14,11 +14,13 @@ class TestError extends AppError {
 /** ウォッチャーの偽物。変更通知も、張った後の死も、好きなときに起こせる */
 function fakeWatcher() {
   let notify: ((path: string) => void) | undefined;
+  let replaced: (() => void) | undefined;
   let die: ((error: AppError) => void) | undefined;
   let closed = false;
   const integration: TranscriptWatchIntegration = {
-    watch({ onChange, onFail }) {
+    watch({ onChange, onTreeChange, onFail }) {
       notify = onChange;
+      replaced = onTreeChange;
       die = onFail;
       return observed(() => {
         closed = true;
@@ -28,6 +30,7 @@ function fakeWatcher() {
   return {
     integration,
     fire: (path: string) => notify?.(path),
+    replace: () => replaced?.(),
     kill: () => die?.(new TestError('張った後で死にました')),
     get closed() {
       return closed;
@@ -58,6 +61,25 @@ describe('変更通知を配る', () => {
     expect(got).toEqual([
       { kind: 'file', path: '/a.jsonl' },
       { kind: 'file', path: '/b.jsonl' },
+      { kind: 'tree' },
+    ]);
+  });
+
+  /* 木そのものが入れ替わったときは、名指せる `transcript` が 1 本も無い。**それでも黙らない**
+     — 画面が持っているのは消えたほうの木なので、読み直させるところまでが変更通知である。 */
+  it('木そのものが入れ替わったら、`file` を添えずに `tree` を配る', () => {
+    const watcher = fakeWatcher();
+    const broadcast = createChangeBroadcast(watcher.integration, { quietMs: 250 });
+    const got: ChangeMessage[] = [];
+    broadcast.subscribe((m) => got.push(m));
+
+    watcher.replace();
+
+    expect(got, '静けさが来るまでは配らない').toEqual([]);
+
+    vi.advanceTimersByTime(250);
+
+    expect(got, '動いた 1 本を名指せないことと、何も動いていないことは違う').toEqual([
       { kind: 'tree' },
     ]);
   });

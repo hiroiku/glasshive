@@ -85,6 +85,11 @@ export function createChangeBroadcast(
       pending.add(absolutePath);
       if (timer === undefined) timer = setTimeout(flush, quietMs);
     },
+    /* 木そのものが入れ替わった。名指せる 1 本は無いので `file` は配らないが、`tree` は配る
+       —— 画面が持っている木はもう在らない */
+    onTreeChange: () => {
+      if (timer === undefined) timer = setTimeout(flush, quietMs);
+    },
     onFail: fail,
   });
 

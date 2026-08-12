@@ -16,6 +16,12 @@ export type Unsubscribe = () => void;
 export interface TranscriptWatchHandlers {
   /** `transcript` が動いた。渡すのは絶対パス */
   onChange(absolutePath: string): void;
+  /* 根そのものが入れ替わった。動いたのは木の中の 1 本ではないので、渡せる絶対パスは無い。
+
+     **黙って張り替えない** —— 張り替えた先は別の木で、画面が持っているのは消えたほうの
+     木である。中の 1 本が消えたことは `onChange` で届くのに、木ごと消えたことだけが
+     届かないことになる。 */
+  onTreeChange(): void;
   /** 張った後にウォッチャーが死んだ。ここから先は変更通知が来ない */
   onFail(error: AppError): void;
 }
