@@ -1,9 +1,10 @@
 import { scaleLinear } from 'd3-scale';
 import { curveStepAfter, line } from 'd3-shape';
-import { type TimeWindow, WINDOWS } from '../../derive/timeWindow.ts';
+import { type TimeWindow, windowChips } from '../../derive/timeWindow.ts';
 import { type Bin, footLabel, rangeLabel } from '../../derive/usage.ts';
 import { formatTokens, mdhm } from '../../format.ts';
 import { useChartHover } from '../../hooks/useChartHover.ts';
+import { useT } from '../../i18n/useT.ts';
 import { TimeTicks } from '../primitives/TimeTicks.tsx';
 import {
   isObserved,
@@ -72,13 +73,14 @@ export function TokensPanel({
     total: bin.total,
   }));
   const at = hover.at;
+  const t = useT();
   const bin = at === null ? undefined : bins[at.bar];
 
   return (
     <div className="sf-panel sf-chart">
       <div className="sf-h">
-        <span className="sf-title">Tokens</span>
-        {WINDOWS.map((preset) => (
+        <span className="sf-title">{t('Tokens')}</span>
+        {windowChips(t).map((preset) => (
           <button
             key={preset.label}
             type="button"
@@ -89,7 +91,7 @@ export function TokensPanel({
             title={preset.title}
             onClick={() => onWindow(preset.key)}
           >
-            {preset.label}
+            {preset.text}
           </button>
         ))}
         <span className="sf-dim">
@@ -98,7 +100,7 @@ export function TokensPanel({
         {/* 観測できていない消費を 0 として出さない。0 は「使っていなかった」という断定である */}
         <span
           className="sf-big"
-          title={read ? 'input + output + cache write' : observationTitle(observation)}
+          title={read ? t('input + output + cache write') : observationTitle(t, observation)}
         >
           {read ? formatTokens(total) : observationMark(observation)}
         </span>
@@ -120,7 +122,7 @@ export function TokensPanel({
             preserveAspectRatio="none"
             role="img"
           >
-            <title>Tokens over time</title>
+            <title>{t('Tokens over time')}</title>
             {columns.map((column) =>
               column.total > 0 ? (
                 <rect

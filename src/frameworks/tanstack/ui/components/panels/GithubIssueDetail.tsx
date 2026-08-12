@@ -7,6 +7,7 @@ import { githubIssueBodyQuery, githubIssueDiscussionQuery } from '../../../queri
 import { issueTypeColor, labelColors, subProgress } from '../../derive/githubIssue.ts';
 import { viaLabel, workerIndex, workersOn } from '../../derive/workers.ts';
 import { absTime, formatSinceIso } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import { ActivityLanes, resolveActivityRows } from '../activity/ActivityLanes.tsx';
 import { AgentChip } from '../chips/Chips.tsx';
@@ -51,6 +52,7 @@ export interface GithubIssueDetailProps {
 }
 
 export function GithubIssueDetail({ issue, all, walked, project, nowMs }: GithubIssueDetailProps) {
+  const t = useT();
   const nav = useNav();
   const workers = useMemo(() => workerIndex(project), [project]);
   const id = issue.id ?? '';
@@ -122,7 +124,7 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
 
       <div className="detail-body">
         <div className="meta-grid">
-          <span className="mk">type</span>
+          <span className="mk">{t('type')}</span>
           <span>
             {issue.issue_type === null ? (
               <span className="dimtxt">—</span>
@@ -136,7 +138,7 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
             )}
           </span>
 
-          <span className="mk">assignees</span>
+          <span className="mk">{t('assignees')}</span>
           <span className="mv-agents">
             {github.assignees.length > 0 ? (
               <AvatarStack actors={github.assignees} max={MAX_FACES} />
@@ -145,7 +147,7 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
             )}
           </span>
 
-          <span className="mk">author</span>
+          <span className="mk">{t('author')}</span>
           <span className="mv-agents">
             {github?.author == null ? (
               <span className="dimtxt">—</span>
@@ -158,7 +160,7 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
             )}
           </span>
 
-          <span className="mk">milestone</span>
+          <span className="mk">{t('milestone')}</span>
           <span>
             {milestone === null ? (
               <span className="dimtxt">—</span>
@@ -166,12 +168,15 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
               <button
                 type="button"
                 className="lnk"
-                title={`Show just ${milestone.title}`}
+                title={t('Show just {title}', { title: milestone.title })}
                 onClick={() => nav.gotoMilestone(milestone.title)}
               >
                 {milestone.title}
                 {milestone.due_on !== null && (
-                  <span className="dimtxt"> · due {absTime(milestone.due_on)}</span>
+                  <span className="dimtxt">
+                    {' '}
+                    · {t('due {at}', { at: absTime(milestone.due_on) })}
+                  </span>
                 )}
               </button>
             )}
@@ -179,9 +184,15 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
 
           {progress !== null && progress.total > 0 && (
             <>
-              <span className="mk">sub-issues</span>
+              <span className="mk">{t('sub-issues')}</span>
               <span>
-                <span className="epic-prog" title={`${progress.closed}/${progress.total} closed`}>
+                <span
+                  className="epic-prog"
+                  title={t('{closed}/{total} closed', {
+                    closed: progress.closed,
+                    total: progress.total,
+                  })}
+                >
                   <span className="epic-bar">
                     <i style={{ width: `${(progress.closed / progress.total) * 100}%` }} />
                   </span>
@@ -193,7 +204,7 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
             </>
           )}
 
-          <span className="mk">pull requests</span>
+          <span className="mk">{t('pull requests')}</span>
           <span className="mv-agents">
             {github.pull_requests.length === 0 ? (
               <span className="dimtxt">—</span>
@@ -202,7 +213,7 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
                 <span key={pull.number} className="pr-line">
                   <span
                     className={`prchip ${pull.is_draft ? 'draft' : pull.state.toLowerCase()}`}
-                    title={`Pull request #${pull.number}`}
+                    title={t('Pull request #{number}', { number: pull.number })}
                   >
                     #{pull.number}
                   </span>
@@ -210,7 +221,7 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
                     <button
                       type="button"
                       className="brstate"
-                      title={`Open branch ${pull.head_ref_name}`}
+                      title={t('Open branch {name}', { name: pull.head_ref_name })}
                       onClick={() =>
                         pull.head_ref_name !== null &&
                         nav.openRef(pull.head_ref_name, pull.head_ref_name)
@@ -225,7 +236,7 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
             )}
           </span>
 
-          <span className="mk">agents</span>
+          <span className="mk">{t('agents')}</span>
           <span className="mv-agents">
             {found.length === 0 ? (
               <span className="dimtxt">—</span>
@@ -238,7 +249,7 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
                     state={worker.state}
                     label={worker.label}
                     where={worker.where}
-                    via={viaLabel(worker)}
+                    via={viaLabel(t, worker)}
                   />
                 ))}
                 {found.length > MAX_LISTED_WORKERS && (
@@ -248,22 +259,22 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
             )}
           </span>
 
-          <span className="mk">reactions</span>
+          <span className="mk">{t('reactions')}</span>
           <span className="dimtxt">
             <Icon path={mdiCommentOutline} size={11} /> {github?.comments ?? 0}
             {'   '}
             <Icon path={mdiHeartOutline} size={11} /> {github?.reactions ?? 0}
           </span>
 
-          <span className="mk">updated</span>
+          <span className="mk">{t('updated')}</span>
           <span>
             {absTime(issue.updated_at)}{' '}
-            <span className="dimtxt">({formatSinceIso(issue.updated_at, nowMs)})</span>
+            <span className="dimtxt">({formatSinceIso(t, issue.updated_at, nowMs)})</span>
           </span>
-          <span className="mk">created</span>
+          <span className="mk">{t('created')}</span>
           <span>
             {absTime(issue.created_at)}{' '}
-            <span className="dimtxt">({formatSinceIso(issue.created_at, nowMs)})</span>
+            <span className="dimtxt">({formatSinceIso(t, issue.created_at, nowMs)})</span>
           </span>
         </div>
 
@@ -291,21 +302,21 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
             まだ届いていないページに在る課題が「この課題を待っていない」ことになる */}
         {!walked && (
           <div className="mg-more">
-            Still fetching issues — anything waiting on this one may not be listed yet
+            {t('Still fetching issues — anything waiting on this one may not be listed yet')}
           </div>
         )}
         {(upstream.length > MAX_GRAPH_NODES || downstream.length > MAX_GRAPH_NODES) && (
           <div className="mg-more">
             {upstream.length > MAX_GRAPH_NODES &&
-              `+${upstream.length - MAX_GRAPH_NODES} more upstream `}
+              `${t('+{n} more upstream', { n: upstream.length - MAX_GRAPH_NODES })} `}
             {downstream.length > MAX_GRAPH_NODES &&
-              `+${downstream.length - MAX_GRAPH_NODES} more downstream`}
+              t('+{n} more downstream', { n: downstream.length - MAX_GRAPH_NODES })}
           </div>
         )}
 
         {lanes.length > 0 && (
           <>
-            <div className="sec-h">Agent activity</div>
+            <div className="sec-h">{t('Agent activity')}</div>
             <ActivityLanes rows={lanes} nowMs={nowMs} />
           </>
         )}
@@ -320,17 +331,21 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
             {text !== null ? (
               text !== '' && <MdView text={text} source="github" project={project} />
             ) : body.isPending ? (
-              <ReadingLines lines={3} label="Reading the description" />
+              <ReadingLines lines={3} label={t('Reading the description')} />
             ) : (
               <NotObserved
                 partial
                 icon={mdiGithub}
-                title="The description did not come back"
-                detail="The rest of this panel is built from the issue list, which glasshive already has. The body text is fetched on its own when you open an issue, and that fetch did not answer."
+                title={t('The description did not come back')}
+                detail={t(
+                  'The rest of this panel is built from the issue list, which glasshive already has. The body text is fetched on its own when you open an issue, and that fetch did not answer.',
+                )}
                 {...(bodyReason === null ? {} : { code: bodyReason })}
                 {...(github?.url == null
                   ? {}
-                  : { steps: [{ text: 'Read the whole issue on GitHub', href: github.url }] })}
+                  : {
+                      steps: [{ text: t('Read the whole issue on GitHub'), href: github.url }],
+                    })}
               />
             )}
 

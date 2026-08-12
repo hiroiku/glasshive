@@ -6,7 +6,7 @@ import type { ViewerPreferencesRepository } from '~/application/ports/repositori
 import { documentOf } from '~/application/services/workspace/preferences-document.service.ts';
 import {
   createWritePreferences,
-  type TabAction,
+  type PreferenceAction,
 } from '~/application/use-cases/workspace/write-preferences.use-case.ts';
 
 /** 断りの偽物。エラーコードだけが同じであればよく、実装の側の型は要らない */
@@ -43,7 +43,7 @@ const selectionIn = (document: string | undefined) => JSON.parse(document ?? 'nu
 
 const execute = (
   store: ReturnType<typeof fakeStore>,
-  action: TabAction,
+  action: PreferenceAction,
   scope: { ids?: readonly string[]; roots?: readonly string[] } = {},
 ) =>
   createWritePreferences({ preferences: store.repository }).execute({
@@ -63,6 +63,7 @@ describe('留める・外す・並べ替えを、向こう側の 1 つの操作�
       mode: 'all',
       pinned: ['-w-a'],
       hidden: [],
+      locale: null,
     });
     if (!saved.ok) throw new Error('置けなかった');
     expect(saved.value.visibleTabs).toEqual(['-w-a']);
@@ -76,7 +77,9 @@ describe('留める・外す・並べ替えを、向こう側の 1 つの操作�
      置き換えで黙って消える。読み直してから当てることでしか塞げない。 */
   it('当てる相手は、いま置いてある `preferences.json` である', async () => {
     const store = fakeStore({
-      stored: observed(documentOf({ version: 1, mode: 'all', pinned: ['-w-他'], hidden: [] })),
+      stored: observed(
+        documentOf({ version: 1, mode: 'all', pinned: ['-w-他'], hidden: [] }, null),
+      ),
     });
 
     const saved = await execute(store, { action: 'pin', id: '-w-a' });
@@ -92,12 +95,15 @@ describe('留める・外す・並べ替えを、向こう側の 1 つの操作�
   it('外すと、`preferences.json` から消えて返る', async () => {
     const store = fakeStore({
       stored: observed(
-        documentOf({
-          version: 1,
-          mode: 'all',
-          pinned: ['-w-a', '-w-b'],
-          hidden: [],
-        }),
+        documentOf(
+          {
+            version: 1,
+            mode: 'all',
+            pinned: ['-w-a', '-w-b'],
+            hidden: [],
+          },
+          null,
+        ),
       ),
     });
 
@@ -109,18 +115,22 @@ describe('留める・外す・並べ替えを、向こう側の 1 つの操作�
       pinned: ['-w-b'],
       // 外すのはタブの並びから下ろすことで、一覧から消すことではない
       hidden: [],
+      locale: null,
     });
   });
 
   it('並べ替えると、その順のまま置かれる', async () => {
     const store = fakeStore({
       stored: observed(
-        documentOf({
-          version: 1,
-          mode: 'all',
-          pinned: ['-w-a', '-w-b', '-w-c'],
-          hidden: [],
-        }),
+        documentOf(
+          {
+            version: 1,
+            mode: 'all',
+            pinned: ['-w-a', '-w-b', '-w-c'],
+            hidden: [],
+          },
+          null,
+        ),
       ),
     });
 
@@ -152,18 +162,22 @@ describe('留める・外す・並べ替えを、向こう側の 1 つの操作�
       mode: 'all',
       pinned: ['-w-b', '-w-a', '-w-c'],
       hidden: ['-w-noise'],
+      locale: null,
     });
   });
 
   it('一覧から消えた id も、そのまま置く', async () => {
     const store = fakeStore({
       stored: observed(
-        documentOf({
-          version: 1,
-          mode: 'all',
-          pinned: ['-w-gone'],
-          hidden: [],
-        }),
+        documentOf(
+          {
+            version: 1,
+            mode: 'all',
+            pinned: ['-w-gone'],
+            hidden: [],
+          },
+          null,
+        ),
       ),
     });
 
@@ -229,5 +243,60 @@ describe('留める・外す・並べ替えを、向こう側の 1 つの操作�
       'preferences.refused',
     );
     expect(store.written, '断ったのだから、何も置かれていない').toEqual([]);
+  });
+});
+
+/* 選んだ言葉も `preferences.json` に入っている。**片方の操作でもう片方を落とさない** ——
+   留め直しのたびに選んだ言葉が消えると、選び直したのに戻ったように見える。 */
+describe('画面の言葉を選ぶ', () => {
+  it('選んだ言葉が、`preferences.json` に置かれて返る', async () => {
+    const store = fakeStore();
+
+    const saved = await execute(store, { action: 'locale', locale: 'ko' });
+
+    expect(selectionIn(store.written[0]).locale).toBe('ko');
+    if (!saved.ok) throw new Error('置けなかった');
+    expect(saved.value.locale).toBe('ko');
+  });
+
+  it('言葉を選んでも、留めたタブは残る', async () => {
+    const store = fakeStore({
+      stored: observed(documentOf({ version: 1, mode: 'all', pinned: ['-w-a'], hidden: [] }, null)),
+    });
+
+    await execute(store, { action: 'locale', locale: 'ja' });
+
+    expect(selectionIn(store.written[0]).pinned, '言葉を選んだだけで、留めたタブが消えた').toEqual([
+      '-w-a',
+    ]);
+  });
+
+  it('タブを留めても、選んだ言葉は残る', async () => {
+    const store = fakeStore({
+      stored: observed(documentOf({ version: 1, mode: 'all', pinned: [], hidden: [] }, 'zh-Hant')),
+    });
+
+    const saved = await execute(store, { action: 'pin', id: '-w-a' });
+
+    expect(
+      selectionIn(store.written[0]).locale,
+      '留め直しのたびに言葉が消えると、選び直したのに戻ったように見える',
+    ).toBe('zh-Hant');
+    if (!saved.ok) throw new Error('置けなかった');
+    expect(saved.value.locale).toBe('zh-Hant');
+  });
+
+  /* `null` は英語ではなく「選ぶのをやめる」である。選び直せる先が無いと、一度選んだ人は
+     ブラウザーの言葉へ戻れなくなる。 */
+  it('選ぶのをやめられる', async () => {
+    const store = fakeStore({
+      stored: observed(documentOf({ version: 1, mode: 'all', pinned: [], hidden: [] }, 'ja')),
+    });
+
+    const saved = await execute(store, { action: 'locale', locale: null });
+
+    expect(selectionIn(store.written[0]).locale).toBeNull();
+    if (!saved.ok) throw new Error('置けなかった');
+    expect(saved.value.locale, '英語を選んだことにすると、ブラウザーの言葉へ戻れない').toBeNull();
   });
 });

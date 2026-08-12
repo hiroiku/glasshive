@@ -9,6 +9,7 @@ import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
 import { StatsFooter } from '../ui/components/stats/StatsFooter.tsx';
 import { projectTrouble, treeTrouble } from '../ui/derive/trouble.ts';
 import { useNowMs } from '../ui/hooks/useNowMs.ts';
+import { useT } from '../ui/i18n/useT.ts';
 import { openPanelOf, type ProjectSearch } from '../ui/nav/search.ts';
 import { usePrefs } from '../ui/prefs/PrefsContext.tsx';
 
@@ -30,6 +31,7 @@ const DEFAULT_SORTING: SortingState = [{ id: 'timeline', desc: false }];
 const TICK_MS = 5000;
 
 function AgentsView() {
+  const t = useT();
   const { slug } = Route.useParams();
   const search: ProjectSearch = Route.useSearch();
   const navigate = useNavigate();
@@ -76,15 +78,15 @@ function AgentsView() {
   if (project === undefined) {
     /* 木を読めなかったのと、読めた上でこのプロジェクトが無かったのは別の事実である。
        読めなかったほうを「無かった」と言うと、観測できなかったことが消える。 */
-    if (tree.error !== null) return <NotObserved {...treeTrouble()} />;
-    if (tree.data === undefined) return <ReadProgress label="Reading transcripts" />;
+    if (tree.error !== null) return <NotObserved {...treeTrouble(t)} />;
+    if (tree.data === undefined) return <ReadProgress label={t('Reading transcripts')} />;
     /* `~/.claude/projects` を走査できていない。木そのものは返るので行は空で並ぶが、
        **空なのは無かったからではない。** ここで「そんな名前は無い」と言うと、
        観測できなかったことの上に「無かった」という判定を建てることになる。 */
-    if (tree.data.sources.state === 'unobservable') return <NotObserved {...treeTrouble()} />;
+    if (tree.data.sources.state === 'unobservable') return <NotObserved {...treeTrouble(t)} />;
     // 読み終えるまでは、まだ届いていない行の中に居るかもしれない
-    if (!tree.data.complete) return <ReadProgress label="Reading transcripts" />;
-    return <NotObserved {...projectTrouble(slug)} />;
+    if (!tree.data.complete) return <ReadProgress label={t('Reading transcripts')} />;
+    return <NotObserved {...projectTrouble(t, slug)} />;
   }
 
   return (

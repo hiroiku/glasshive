@@ -24,14 +24,35 @@
   --border: #2a3441;
   --fg: #d5dde6;
   --dim: #7d8a99;
+  /* 地の文の書体。**同じ漢字を、言葉ごとに違う形で描く。** 日本語の書体で中国語を出すのは
+     崩れた表示ではなく別の文字なので、`lang` に合わせて一族ごと差し替える。日本語を既定に
+     しているのは、`lang` がまだ書かれていない最初の描画でも読める形を出すためである。 */
+  --sans: "Noto Sans JP Variable", system-ui, sans-serif;
   /* 桁を揃える所の書体。地の文と同じ Noto の一族から等幅を採るので、
-     混ざっても文字の見え方が変わらない。日本語の文字は Mono に無いので、地の文へ落とす。 */
-  --mono: "Noto Sans Mono Variable", "Noto Sans JP Variable", ui-monospace, monospace;
+     混ざっても文字の見え方が変わらない。漢字と仮名は Mono に無いので、地の文へ落とす。 */
+  --mono: "Noto Sans Mono Variable", var(--sans), ui-monospace, monospace;
   --active: #34d399;
   --waiting: #fbbf24;
   --ended: #64748b;
   --accent: #60a5fa;
   --input: #c084fc;
+}
+/* 出している言葉に合わせて、漢字とハングルを描く一族を選ぶ。
+   仮名を持たない一族が在るので、後ろに日本語を残す。
+
+   `html` に限らずどの要素でも効かせる。言葉を選ぶ一覧は、5 つの名前をそれぞれの言葉で
+   同時に出す唯一の場所で、そこだけは行ごとに一族が違う。 */
+[lang="zh-Hans"] {
+  --sans: "Noto Sans SC Variable", "Noto Sans JP Variable", system-ui, sans-serif;
+}
+[lang="zh-Hant"] {
+  --sans: "Noto Sans TC Variable", "Noto Sans JP Variable", system-ui, sans-serif;
+}
+[lang="ko"] {
+  --sans: "Noto Sans KR Variable", "Noto Sans JP Variable", system-ui, sans-serif;
+}
+[lang="ja"] {
+  --sans: "Noto Sans JP Variable", system-ui, sans-serif;
 }
 html,
 body {
@@ -44,10 +65,7 @@ body {
   color: var(--fg);
   /* 書体はパッケージに同梱してある。機械に何が入っているかで文字の見え方が変わると、
      詰め方も折り返しもその機械だけの見え方になる。 */
-  font:
-    12px / 1.5 "Noto Sans JP Variable",
-    system-ui,
-    sans-serif;
+  font: 12px / 1.5 var(--sans);
   overflow: hidden;
   display: flex;
   flex-direction: column;

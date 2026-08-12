@@ -11,6 +11,7 @@ import type {
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import type { GraphRow, TipSortKey } from '../../derive/gitGraph.ts';
 import { layoutOf, sortTips } from '../../derive/gitGraph.ts';
+import { pullStateLabel, reviewLabel } from '../../derive/labels.ts';
 import { milestonesOnBranch } from '../../derive/milestones.ts';
 import {
   type Occupant,
@@ -21,6 +22,7 @@ import {
 import { workerIndex, workersOn } from '../../derive/workers.ts';
 import type { WorkJoin } from '../../derive/workJoin.ts';
 import { cut, formatSinceIso } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import { laneColor } from '../../palette.ts';
 import { pulseDelay } from '../../phase.ts';
@@ -92,6 +94,7 @@ export function GitGraph({
   lead,
   join,
 }: GitGraphProps) {
+  const t = useT();
   const nav = useNav();
   const occupants = useMemo(() => occupantIndex(project), [project]);
   /* 課題の id で結んだエージェント。**cwd とブランチだけでは足りない** —— 会話の中で
@@ -179,7 +182,10 @@ export function GitGraph({
               </button>
               <span className="dimtxt">
                 {' '}
-                — {conflict.n} shared file{conflict.n > 1 ? 's' : ''} (merge conflict likely)
+                {t(
+                  '— {n, plural, one {# shared file} other {# shared files}} (merge conflict likely)',
+                  { n: conflict.n },
+                )}
               </span>
             </div>
           ))}
@@ -188,20 +194,20 @@ export function GitGraph({
       {/* 行を開く操作の説明。全部の行が指す 1 つで足りるので、行の中には置かない —
           置くと 6 列の行に 7 個目のセルが増える */}
       <span id={OPEN_HINT_ID} className="vhidden">
-        Press Enter to open the ref or commit
+        {t('Press Enter to open the ref or commit')}
       </span>
       {/* 表そのものが `grid` である。**行を `button` にすると中身が消える。** `button` は
           中の要素を読み上げから外す役なので、ahead も behind も sha も更新の時刻も、
           行の名前 1 つに置き換わってしまう。 */}
-      <div id="git-rows" role="grid" aria-label="Refs and commits">
+      <div id="git-rows" role="grid" aria-label={t('Refs and commits')}>
         <div className="git-row head" role="row">
           {/* 線を描く余白の列。行の側でも `aria-hidden` の svg が占める */}
           <span aria-hidden="true" style={{ width }} />
-          <SortHead label="Ref / Commit" sortKey="name" order={order} onSort={onSort} />
-          <span role="columnheader">Assignee / Agents</span>
-          <SortHead label="Ahead" sortKey="ahead" order={order} onSort={onSort} right />
-          <SortHead label="Updated" sortKey="date" order={order} onSort={onSort} right />
-          <span role="columnheader">SHA</span>
+          <SortHead label={t('Ref / Commit')} sortKey="name" order={order} onSort={onSort} />
+          <span role="columnheader">{t('Assignee / Agents')}</span>
+          <SortHead label={t('Ahead')} sortKey="ahead" order={order} onSort={onSort} right />
+          <SortHead label={t('Updated')} sortKey="date" order={order} onSort={onSort} right />
+          <span role="columnheader">{t('SHA')}</span>
         </div>
         {rows.map((row, index) => {
           const gutter = (
@@ -234,7 +240,7 @@ export function GitGraph({
                   file: worker.file,
                   state: worker.state,
                   label: worker.label,
-                  via: `named ${issue.id ?? ''} in its conversation`,
+                  via: t('named {id} in its conversation', { id: issue.id ?? '' }),
                 });
               }
             }
@@ -272,14 +278,17 @@ export function GitGraph({
                   {pull !== null && (
                     <span
                       className={`prchip ${pull.is_draft ? 'draft' : pull.state.toLowerCase()}`}
-                      title={`Pull request #${pull.number} — ${pull.is_draft ? 'draft' : pull.state.toLowerCase()}${
-                        pull.review_decision === null
-                          ? ''
-                          : `, ${pull.review_decision.toLowerCase()}`
-                      }`}
+                      title={t('Pull request #{number} — {state}{review}', {
+                        number: pull.number,
+                        state: pull.is_draft ? t('draft') : pullStateLabel(t, pull.state),
+                        review:
+                          pull.review_decision === null
+                            ? ''
+                            : `, ${reviewLabel(t, pull.review_decision)}`,
+                      })}
                     >
                       #{pull.number}
-                      {pull.is_draft && ' draft'}
+                      {pull.is_draft && ` ${t('draft')}`}
                     </span>
                   )}
                   {closes.slice(0, MAX_LISTED_ISSUES).map((issue) => (
@@ -303,7 +312,7 @@ export function GitGraph({
                       key={title}
                       type="button"
                       className="mschip"
-                      title={`Milestone: ${title} — show just this milestone`}
+                      title={t('Milestone: {title} — show just this milestone', { title })}
                       {...pressable(() => nav.gotoMilestone(title), { stopPropagation: true })}
                     >
                       {cut(title, 18)}
@@ -313,9 +322,11 @@ export function GitGraph({
                   {unseenBase.has(index) && (
                     <span
                       className="g-cut"
-                      title="The branch point is not among the commits shown, so this line runs to the bottom of the graph — it did not fork there"
+                      title={t(
+                        'The branch point is not among the commits shown, so this line runs to the bottom of the graph — it did not fork there',
+                      )}
                     >
-                      <Icon path={mdiAlertOutline} size={10} /> fork not shown
+                      <Icon path={mdiAlertOutline} size={10} /> {t('fork not shown')}
                     </span>
                   )}
                 </span>
@@ -332,7 +343,10 @@ export function GitGraph({
                   {tip.behind > 0 && (
                     <span
                       className={`g-behind${tip.behind >= BEHIND_WARN ? ' warn' : ''}`}
-                      title={`${tip.behind} commit${tip.behind > 1 ? 's' : ''} behind ${overview.base}`}
+                      title={t(
+                        '{n, plural, one {# commit behind {base}} other {# commits behind {base}}}',
+                        { n: tip.behind, base: overview.base },
+                      )}
                     >
                       {' '}
                       −{tip.behind}
@@ -340,7 +354,7 @@ export function GitGraph({
                   )}
                 </span>
                 <span className="g-date" role="gridcell">
-                  {formatSinceIso(tip.date, nowMs)}
+                  {formatSinceIso(t, tip.date, nowMs)}
                 </span>
                 <span className="g-sha" role="gridcell">
                   {tip.sha.slice(0, 9)}
@@ -358,7 +372,7 @@ export function GitGraph({
               >
                 {gutter}
                 <span className="g-title g-fold" role="gridcell">
-                  ··· {row.count} commits
+                  ··· {t('{n} commits', { n: row.count })}
                 </span>
                 <span role="gridcell" />
                 <span role="gridcell" />
@@ -396,7 +410,7 @@ export function GitGraph({
               </span>
               <span role="gridcell" />
               <span className="g-date" role="gridcell">
-                {formatSinceIso(node.date, nowMs)}
+                {formatSinceIso(t, node.date, nowMs)}
               </span>
               <span className="g-sha" role="gridcell">
                 {node.sha.slice(0, 9)}
@@ -411,9 +425,12 @@ export function GitGraph({
             <span
               className="g-title g-cut"
               role="gridcell"
-              title={`glasshive reads only the most recent stretch of ${overview.base} — commits older than these are not read, and a branch that left earlier has no branch point to draw`}
+              title={t(
+                'glasshive reads only the most recent stretch of {base} — commits older than these are not read, and a branch that left earlier has no branch point to draw',
+                { base: overview.base },
+              )}
             >
-              ··· older commits are not read
+              ··· {t('older commits are not read')}
             </span>
             <span role="gridcell" />
             <span role="gridcell" />
@@ -499,6 +516,7 @@ function SortHead({ label, sortKey, order, onSort, right }: HeadProps) {
    **状態を出す。** 閉じた課題を閉じるためのブランチが残っているのは、片付け忘れという
    読める事実で、開いた課題と同じ顔で並べるとそれが消える。 */
 function ClosesChip({ issue }: { readonly issue: IssueSummaryJson }) {
+  const t = useT();
   const nav = useNav();
   const id = issue.id ?? '';
   const closed = issue.status === 'closed';
@@ -506,8 +524,11 @@ function ClosesChip({ issue }: { readonly issue: IssueSummaryJson }) {
     <button
       type="button"
       className={`ichip closes${closed ? ' closed' : ''}`}
-      title={`${id} ${issue.title ?? ''} — closed by the pull request on this branch`}
-      aria-label={`Open issue ${id}`}
+      title={t('{id} {title} — closed by the pull request on this branch', {
+        id,
+        title: issue.title ?? '',
+      })}
+      aria-label={t('Open issue {id}', { id })}
       {...pressable(() => nav.openIssue(id), { stopPropagation: true })}
     >
       <Icon path={mdiRhombus} size={9} className="ichip-i" />

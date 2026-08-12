@@ -1,5 +1,6 @@
 import type { Bin, QuotaWindow } from '../../derive/usage.ts';
 import { absTime, formatMinutes, formatTokens } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { isObserved, StatsNote, type StatsObservation } from './StatsObservation.tsx';
 
 /* 利用枠の期間と、週ぶんの合計と、内訳。
@@ -22,16 +23,22 @@ export function WindowsPanel({
      0 の並びと「idle」は、枠を 1 つも使っていないという断定である。 */
   readonly observation: StatsObservation;
 }) {
-  const breakdown = `in ${formatTokens(totals.input)} · out ${formatTokens(totals.output)} · cacheW ${formatTokens(totals.cacheWrite)} · cacheR ${formatTokens(totals.cacheRead)}`;
+  const t = useT();
+  const breakdown = t('in {input} · out {output} · cacheW {cacheWrite} · cacheR {cacheRead}', {
+    input: formatTokens(totals.input),
+    output: formatTokens(totals.output),
+    cacheWrite: formatTokens(totals.cacheWrite),
+    cacheRead: formatTokens(totals.cacheRead),
+  });
 
   return (
     <div className="sf-panel sf-win">
       <div className="sf-h">
         <span
           className="sf-title"
-          title="Approximated from transcripts (this project only) — may not match billing"
+          title={t('Approximated from transcripts (this project only) — may not match billing')}
         >
-          Windows (observed)
+          {t('Windows (observed)')}
         </span>
       </div>
 
@@ -47,18 +54,24 @@ export function WindowsPanel({
               <>
                 <span className="sf-mtok">{formatTokens(quota.tokens)}</span>
                 <span className="sf-dim">
-                  ↻ {absTime(quota.endsAtMs).slice(11)} (in {formatMinutes(quota.endsAtMs - nowMs)})
+                  ↻{' '}
+                  {t('{at} (in {left})', {
+                    at: absTime(quota.endsAtMs).slice(11),
+                    left: formatMinutes(t, quota.endsAtMs - nowMs),
+                  })}
                 </span>
               </>
             ) : (
-              <span className="sf-dim sf-span">idle — next prompt opens a window</span>
+              <span className="sf-dim sf-span">{t('idle — next prompt opens a window')}</span>
             )}
           </div>
 
           <div className="sf-wrow">
             <span className="sf-wk">7d</span>
             <span className="sf-mtok">{formatTokens(weekTokens)}</span>
-            <span className="sf-dim">{formatTokens(weekTokens / 7)}/day avg</span>
+            <span className="sf-dim">
+              {t('{tokens}/day avg', { tokens: formatTokens(weekTokens / 7) })}
+            </span>
           </div>
 
           <div className="sf-wrow">

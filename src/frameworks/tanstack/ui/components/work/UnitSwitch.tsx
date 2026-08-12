@@ -4,6 +4,7 @@ import {
   mdiSourceBranch,
   mdiViewSequentialOutline,
 } from '@mdi/js';
+import { useT } from '../../i18n/useT.ts';
 import type { WorkUnit } from '../../nav/search.ts';
 import { Icon } from '../primitives/Icon.tsx';
 
@@ -18,6 +19,9 @@ import { Icon } from '../primitives/Icon.tsx';
    断定で、読みに行けていないときにそれを出すと、切り替える必要が無いように読める。 */
 export type UnitCount = number | 'pending' | 'unobservable';
 
+/** 数える相手。文字列で受けると、訳の鍵を取り出せなくなる */
+type UnitName = 'issues' | 'branches' | 'milestones';
+
 export interface UnitSwitchProps {
   readonly unit: WorkUnit | null;
   readonly onUnit: (unit: WorkUnit | null) => void;
@@ -28,15 +32,18 @@ export interface UnitSwitchProps {
 
 /* 数えられていない件数の出し方。まだ来ていないなら `—`、読めなかったなら `?` にする ——
    Overview の表が既にこの 2 つを使い分けているので、同じ意味に同じ絵を当てる。 */
-function Count({ count, unit }: { count: UnitCount; unit: string }) {
+function Count({ count, unit }: { count: UnitCount; unit: UnitName }) {
+  const t = useT();
   if (typeof count === 'number') return <span className="n">{count}</span>;
+  const name =
+    unit === 'issues' ? t('issues') : unit === 'branches' ? t('branches') : t('milestones');
   return (
     <span
       className={`n ${count === 'pending' ? 'counting' : 'unread'}`}
       title={
         count === 'pending'
-          ? `Still counting the ${unit}`
-          : `The ${unit} could not be read — this is not zero`
+          ? t('Still counting the {unit}', { unit: name })
+          : t('The {unit} could not be read — this is not zero', { unit: name })
       }
     >
       {count === 'pending' ? '—' : '?'}
@@ -51,6 +58,7 @@ export function UnitSwitch({
   branchCount,
   milestoneCount,
 }: UnitSwitchProps) {
+  const t = useT();
   return (
     <span className="unit-switch">
       <button
@@ -60,7 +68,7 @@ export function UnitSwitch({
         onClick={() => onUnit(null)}
       >
         <Icon path={mdiSitemapOutline} size={11} />
-        Issues
+        {t('Issues')}
         <Count count={issueCount} unit="issues" />
       </button>
       <button
@@ -70,7 +78,7 @@ export function UnitSwitch({
         onClick={() => onUnit('branches')}
       >
         <Icon path={mdiSourceBranch} size={11} />
-        Branches
+        {t('Branches')}
         <Count count={branchCount} unit="branches" />
       </button>
       <button
@@ -80,7 +88,7 @@ export function UnitSwitch({
         onClick={() => onUnit('milestones')}
       >
         <Icon path={mdiFlagOutline} size={11} />
-        Milestones
+        {t('Milestones')}
         <Count count={milestoneCount} unit="milestones" />
       </button>
     </span>
@@ -101,27 +109,28 @@ export function LayoutSwitch({
   readonly graph: boolean;
   readonly onGraph: (graph: boolean) => void;
 }) {
+  const t = useT();
   return (
     <span className="layout-switch">
       <button
         type="button"
         className={`lbtn${graph ? '' : ' on'}`}
         aria-pressed={!graph}
-        title="List — rows, with dependency arcs in the gutter"
+        title={t('List — rows, with dependency arcs in the gutter')}
         onClick={() => onGraph(false)}
       >
         <Icon path={mdiViewSequentialOutline} size={13} />
-        List
+        {t('List')}
       </button>
       <button
         type="button"
         className={`lbtn${graph ? ' on' : ''}`}
         aria-pressed={graph}
-        title="Graph — laid out left to right in start order"
+        title={t('Graph — laid out left to right in start order')}
         onClick={() => onGraph(true)}
       >
         <Icon path={mdiSitemapOutline} size={13} />
-        Graph
+        {t('Graph')}
       </button>
     </span>
   );

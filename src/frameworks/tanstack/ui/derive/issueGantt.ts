@@ -1,3 +1,4 @@
+import { englishTranslator, type Translator } from '~/interface/i18n/translator.ts';
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import { niceTicks } from '../timeline/axis.ts';
 import { DAY_MS } from './timeWindow.ts';
@@ -29,16 +30,29 @@ export const MIN_GANTT_SPAN_MS = DAY_MS;
    あちらは `transcript` の稼働区間を測るもので、30m から 7d までしか無い。課題は週や月の
    単位で生きているので、同じ刻みで選ばせると `'all'` 以外がどれも空に見える。同じ時間軸の
    上に在るものではないから、揃える理由も無い。 */
-export const GANTT_WINDOWS: readonly {
+export interface GanttChip {
   readonly key: GanttWindow;
+  /** URL とテストが見ている名前。訳さない */
   readonly label: string;
+  /** チップに出す言葉。`1w` のような幅そのものの綴りは、どの言葉でもそのまま読める */
+  readonly text: string;
   readonly title: string;
-}[] = [
-  { key: 'all', label: 'All', title: 'Every issue with a known creation time, in one view' },
-  { key: WEEK_MS, label: '1w', title: 'The last 7 days' },
-  { key: MONTH_MS, label: '1mo', title: 'The last 30 days' },
-  { key: QUARTER_MS, label: '3mo', title: 'The last 90 days' },
+}
+
+export const ganttChips = (t: Translator): readonly GanttChip[] => [
+  {
+    key: 'all',
+    label: 'All',
+    text: t('All'),
+    title: t('Every issue with a known creation time, in one view'),
+  },
+  { key: WEEK_MS, label: '1w', text: '1w', title: t('The last 7 days') },
+  { key: MONTH_MS, label: '1mo', text: '1mo', title: t('The last 30 days') },
+  { key: QUARTER_MS, label: '3mo', text: '3mo', title: t('The last 90 days') },
 ];
+
+/** 幅そのものを見るところ用。訳の要らない `key` と `label` だけを当てにする */
+export const GANTT_WINDOWS: readonly GanttChip[] = ganttChips(englishTranslator);
 
 export const DEFAULT_GANTT_WINDOW: GanttWindow = 'all';
 

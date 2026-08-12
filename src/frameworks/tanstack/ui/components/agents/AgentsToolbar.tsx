@@ -1,4 +1,5 @@
-import { WINDOWS } from '../../derive/timeWindow.ts';
+import { windowChips } from '../../derive/timeWindow.ts';
+import { useT } from '../../i18n/useT.ts';
 import type { Axis, Scale } from '../../timeline/axis.ts';
 import { SearchInput } from '../primitives/SearchInput.tsx';
 import { RangeSlider, TimeInput } from '../timeline/RangeSlider.tsx';
@@ -92,49 +93,66 @@ export function AgentsToolbar({
   onRange,
   onCommitTime,
 }: AgentsToolbarProps) {
+  const t = useT();
   /* メッセージのチップに添える説明。**観測できなかったことと、届かなかった古いぶんを、
      どちらも言葉にする。** 数字だけでは、どちらも「そうだった」ようにしか読めない。 */
   const talkTitle = (): string => {
     if (talkReading) {
-      return "Reading the open session's transcripts for messages agents sent each other";
+      return t("Reading the open session's transcripts for messages agents sent each other");
     }
     if (talkNote === null) {
-      return "Draw arrows for messages agents sent each other (reads the open session's transcripts)";
+      return t(
+        "Draw arrows for messages agents sent each other (reads the open session's transcripts)",
+      );
     }
     if (!talkNote.readable) {
-      return 'Messages could not be read — this is not the same as no messages';
+      return t('Messages could not be read — this is not the same as no messages');
     }
-    const parts = [`${talkNote.messages} messages in ${talkNote.marks} arrows`];
+    const parts = [
+      t('{messages} messages in {marks} arrows', {
+        messages: talkNote.messages,
+        marks: talkNote.marks,
+      }),
+    ];
     if (talkNote.peers > 0) {
       parts.push(
-        `${talkNote.peers} whose other end was not found in this project — only this end is drawn`,
+        t('{n} whose other end was not found in this project — only this end is drawn', {
+          n: talkNote.peers,
+        }),
       );
       /* 探し切れていないなら、見つからなかったことの意味が変わる。**黙ると、開かなかった
          セッションに居た相手が「居なかった」ことになる。** */
       if (!talkNote.peersComplete) {
-        parts.push('not every session was opened to look for the other end');
+        parts.push(t('not every session was opened to look for the other end'));
       }
     }
     if (talkNote.messages === 0 && talkNote.peers === 0) {
-      parts.push('none of these agents messaged each other in this window');
+      parts.push(t('none of these agents messaged each other in this window'));
     }
     if (talkNote.dropped > 0) {
-      parts.push(`${talkNote.dropped} outside the window or over the limit`);
+      parts.push(t('{n} outside the window or over the limit', { n: talkNote.dropped }));
     }
     if (talkNote.unplaced > 0) {
       parts.push(
-        `${talkNote.unplaced} sent to a name that is not in this session, with nothing recording where they arrived`,
+        t(
+          '{n} sent to a name that is not in this session, with nothing recording where they arrived',
+          { n: talkNote.unplaced },
+        ),
       );
     }
     if (!talkNote.complete) {
-      parts.push('messages older than the scan window are not counted');
+      parts.push(t('messages older than the scan window are not counted'));
     }
     return parts.join(', ');
   };
 
   return (
     <div className="view-toolbar">
-      <SearchInput value={query} onChange={onQuery} placeholder="Search agents and transcripts…" />
+      <SearchInput
+        value={query}
+        onChange={onQuery}
+        placeholder={t('Search agents and transcripts…')}
+      />
       {/* 読み終えるまで出し続ける。消えたときが、全部を見終えたときである。
           読みながら結果が増えるので、変わったことをその場で読み上げさせる */}
       {deepNote !== null && (
@@ -144,15 +162,22 @@ export function AgentsToolbar({
           aria-live="polite"
           title={
             deepNote.unreadable
-              ? 'Some transcripts could not be read. The rows stay narrowed to the matches found so far, so rows may be missing'
-              : 'Reading inside transcripts (last 1 MiB · last 7 days). Matches are added as they are read'
+              ? t(
+                  'Some transcripts could not be read. The rows stay narrowed to the matches found so far, so rows may be missing',
+                )
+              : t(
+                  'Reading inside transcripts (last 1 MiB · last 7 days). Matches are added as they are read',
+                )
           }
         >
           {deepNote.unreadable
-            ? 'transcripts could not be read'
+            ? t('transcripts could not be read')
             : deepNote.total === 0
-              ? 'reading transcripts…'
-              : `${deepNote.scanned} of ${deepNote.total} transcripts read`}
+              ? t('reading transcripts…')
+              : t('{scanned} of {total} transcripts read', {
+                  scanned: deepNote.scanned,
+                  total: deepNote.total,
+                })}
         </span>
       )}
       <button
@@ -168,7 +193,7 @@ export function AgentsToolbar({
         {talkReading
           ? '⇄ …'
           : talkNote === null
-            ? '⇄ messages'
+            ? `⇄ ${t('messages')}`
             : !talkNote.readable
               ? '⇄ ?'
               : `⇄ ${talkNote.complete ? '' : '≥'}${talkNote.messages + talkNote.peers}`}
@@ -182,10 +207,12 @@ export function AgentsToolbar({
         type="button"
         className={`fchip ${attention ? 'on' : ''}`}
         aria-pressed={attention}
-        title="Show only what needs attention: awaiting your input, or waiting 30 minutes with no activity"
+        title={t(
+          'Show only what needs attention: awaiting your input, or waiting 30 minutes with no activity',
+        )}
         onClick={() => onAttention(!attention)}
       >
-        ⚠ attention
+        ⚠ {t('attention')}
       </button>
       {/* 終わったものを足す。Work の `+ closed` と同じ形にしてある —— 同じ「隠してあるものを
           足す」操作なので、単位が違っても押し方と読み方は変えない */}
@@ -193,13 +220,15 @@ export function AgentsToolbar({
         type="button"
         className={`fchip ${showAll ? 'on' : ''}`}
         aria-pressed={showAll}
-        title="Also show sessions that ended more than a day ago, and every subagent that ended"
+        title={t(
+          'Also show sessions that ended more than a day ago, and every subagent that ended',
+        )}
         onClick={() => onShowAll(!showAll)}
       >
-        {endedHidden > 0 ? `+ ended ${endedHidden}` : '+ ended'}
+        {endedHidden > 0 ? `+ ${t('ended')} ${endedHidden}` : `+ ${t('ended')}`}
       </button>
       <span className="scale-chips">
-        {WINDOWS.map((preset) => (
+        {windowChips(t).map((preset) => (
           <button
             key={preset.label}
             type="button"
@@ -208,14 +237,14 @@ export function AgentsToolbar({
             title={preset.title}
             onClick={() => onScale(preset.key)}
           >
-            {preset.label}
+            {preset.text}
           </button>
         ))}
       </span>
       <RangeSlider min={domain.t0} max={domain.t1} a={axis.t0} b={axis.t1} onChange={onRange} />
       <span className="rs-label">
-        <TimeInput value={axis.t0} label="Window start" onCommit={onCommitTime('t0')} />–
-        <TimeInput value={axis.t1} label="Window end" onCommit={onCommitTime('t1')} />
+        <TimeInput value={axis.t0} label={t('Window start')} onCommit={onCommitTime('t0')} />–
+        <TimeInput value={axis.t1} label={t('Window end')} onCommit={onCommitTime('t1')} />
       </span>
     </div>
   );

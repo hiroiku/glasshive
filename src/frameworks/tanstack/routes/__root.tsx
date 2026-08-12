@@ -13,12 +13,15 @@ import { useMemo } from 'react';
 import type { TreeJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { treeQuery } from '../queries/tree.query.ts';
 import { Icon } from '../ui/components/primitives/Icon.tsx';
+import { LocaleSwitch } from '../ui/components/primitives/LocaleSwitch.tsx';
 import { TabBar } from '../ui/components/tabs/TabBar.tsx';
 import { requestNoticePermission, useAwaitingNotice } from '../ui/hooks/useAwaitingNotice.ts';
 import { type ChangeStreamState, useChangeStream } from '../ui/hooks/useChangeStream.ts';
 import { useHydrated } from '../ui/hooks/useHydrated.ts';
 import { useTabSelection } from '../ui/hooks/useTabSelection.ts';
 import { useTabShortcuts } from '../ui/hooks/useTabShortcuts.ts';
+import { LocaleProvider } from '../ui/i18n/LocaleContext';
+import { useT } from '../ui/i18n/useT.ts';
 import { PrefsProvider, usePrefs } from '../ui/prefs/PrefsContext.tsx';
 import '../ui/styles/index.css';
 
@@ -54,13 +57,15 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* 好みはルートより上に置く。ルートを移っても保つものなので、ルートの中に持たせると
-   画面を移るたびに読み直され、そのたびにパネルの出方が跳ねる。 */
+/* 好みと言葉はルートより上に置く。ルートを移っても保つものなので、ルートの中に持たせると
+   画面を移るたびに読み直され、そのたびにパネルの出方と言葉が跳ねる。 */
 function Root() {
   return (
-    <PrefsProvider>
-      <Chrome />
-    </PrefsProvider>
+    <LocaleProvider>
+      <PrefsProvider>
+        <Chrome />
+      </PrefsProvider>
+    </LocaleProvider>
   );
 }
 
@@ -110,12 +115,13 @@ export function countsOf(tree: TreeJson | undefined): TopCounts {
 
    点の色だけでは読み上げに「●」しか届かないので、`role="status"` と読める文を持たせる。 */
 export function ConnStatus({ connected, watching }: ChangeStreamState) {
+  const t = useT();
   const tone = !connected ? 'off' : watching ? 'on' : 'stale';
   const label = !connected
-    ? 'Realtime connection: disconnected'
+    ? t('Realtime connection: disconnected')
     : watching
-      ? 'Realtime connection: connected'
-      : 'Realtime connection: connected, but the watcher is down — updates will not arrive';
+      ? t('Realtime connection: connected')
+      : t('Realtime connection: connected, but the watcher is down — updates will not arrive');
   return (
     <span id="conn" className={tone} role="status" title={label}>
       <span aria-hidden="true">●</span>
@@ -137,6 +143,7 @@ const brand = (
 );
 
 function Chrome() {
+  const t = useT();
   const tree = useQuery(treeQuery);
   const tabs = useTabSelection();
   const prefs = usePrefs();
@@ -168,8 +175,8 @@ function Chrome() {
       className="dimtxt"
       title={
         counts.unreadable
-          ? 'Some projects could not be read — the count may be short'
-          : 'Counted from the projects read so far'
+          ? t('Some projects could not be read — the count may be short')
+          : t('Counted from the projects read so far')
       }
     >
       +?
@@ -192,17 +199,17 @@ function Chrome() {
           </a>
         )}
         <span id="counts">
-          active <b className="active">{counts.active}</b>
-          {partialMark} / waiting <b className="waiting">{counts.waiting}</b>
+          {t('active')} <b className="active">{counts.active}</b>
+          {partialMark} / {t('waiting')} <b className="waiting">{counts.waiting}</b>
           {partialMark}
           {counts.input > 0 && (
             <>
               {' '}
-              / input <b className="input">{counts.input}</b>
+              / {t('input')} <b className="input">{counts.input}</b>
               {partialMark}
             </>
           )}{' '}
-          / ended <b className="ended">{counts.ended}</b>
+          / {t('ended')} <b className="ended">{counts.ended}</b>
           {partialMark}
         </span>
         <button
@@ -211,12 +218,14 @@ function Chrome() {
           className={prefs.notify ? 'on' : ''}
           /* 名前は状態で変えない。切り替わるのは `aria-pressed` のほうで、
              名前まで変わると、押した後に別のボタンになったように読まれる */
-          aria-label="Notify when a session starts awaiting input"
+          aria-label={t('Notify when a session starts awaiting input')}
           aria-pressed={prefs.notify}
           title={
             prefs.notify
-              ? 'Notifications on: alerts you when a session starts awaiting input (only while the window is unfocused)'
-              : 'Notifications off — click to enable'
+              ? t(
+                  'Notifications on: alerts you when a session starts awaiting input (only while the window is unfocused)',
+                )
+              : t('Notifications off — click to enable')
           }
           onClick={() => void toggleNotify()}
         >
@@ -224,6 +233,7 @@ function Chrome() {
         </button>
         {/* 更新が届いていないことは隠さない。届いていないのに静かなだけに見えると、
             ユーザーは「何も起きていない」と読む */}
+        <LocaleSwitch />
         <ConnStatus connected={stream.connected} watching={stream.watching} />
       </header>
 

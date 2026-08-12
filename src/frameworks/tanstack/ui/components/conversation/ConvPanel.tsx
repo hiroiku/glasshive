@@ -1,3 +1,4 @@
+import type { Translator } from '~/interface/i18n/translator.ts';
 import type {
   ProjectJson,
   SessionJson,
@@ -6,6 +7,7 @@ import type {
 import { conversationTrouble } from '../../derive/trouble.ts';
 import { cut, formatByteRange, worktreeName } from '../../format.ts';
 import { type TranscriptWindowHeld, useTranscriptWindow } from '../../hooks/useTranscriptWindow.ts';
+import { useT } from '../../i18n/useT.ts';
 import { AgentChip, RefChip } from '../chips/Chips.tsx';
 import { NotObserved } from '../primitives/NotObserved.tsx';
 import { ReadProgress, type ReadScan } from '../primitives/ReadProgress.tsx';
@@ -49,6 +51,7 @@ function AgentContext({
   selected: Selected;
   project: ProjectJson | undefined;
 }) {
+  const t = useT();
   if (project === undefined) return null;
   const node = selected.node;
   const worktree = worktreeName(node.cwd);
@@ -59,7 +62,7 @@ function AgentContext({
     if (session.subagents.length > 0) {
       groups.push(
         <span key="subs" className="ctx-g">
-          <span className="mk">subagents</span>
+          <span className="mk">{t('subagents')}</span>
           {session.subagents.slice(0, MAX_LISTED_SUBAGENTS).map((subagent) => (
             <AgentChip
               key={subagent.file}
@@ -77,7 +80,7 @@ function AgentContext({
     if (session.issues.length > 0) {
       groups.push(
         <span key="work" className="ctx-g">
-          <span className="mk">working on</span>
+          <span className="mk">{t('working on')}</span>
           {/* `.worktrees/<名前>` から拾った名前である。**チップにしない** — GitHub の課題の
               id ではないので、押しどころに見せると開く先が無いことが押すまで分からない */}
           {session.issues.slice(0, MAX_LISTED_ISSUES).map((id) => (
@@ -96,7 +99,7 @@ function AgentContext({
     if (parent !== undefined) {
       groups.push(
         <span key="parent" className="ctx-g">
-          <span className="mk">parent</span>
+          <span className="mk">{t('parent')}</span>
           <AgentChip
             file={parent.file}
             state={parent.state}
@@ -108,7 +111,7 @@ function AgentContext({
     if (subagent.issue !== null) {
       groups.push(
         <span key="work" className="ctx-g">
-          <span className="mk">working on</span>
+          <span className="mk">{t('working on')}</span>
           <span className="wtname">{subagent.issue}</span>
         </span>,
       );
@@ -169,12 +172,14 @@ export function ConvPanel({
    その 1 回ではなく `transcript` 全体のどこまでが画面に在るかである。名指さないと、押した
    1 回が進んでいないように読める。大きさを観測できていないうちは `null` を返し、バーは
    輪郭だけで出る。 */
-function olderScan(held: TranscriptWindowHeld | null): ReadScan | null {
+function olderScan(t: Translator, held: TranscriptWindowHeld | null): ReadScan | null {
   if (held === null) return null;
   return {
     done: held.bytes,
     total: held.size,
-    text: `${formatByteRange(held.bytes, held.size)} read from this transcript`,
+    text: t('{range} read from this transcript', {
+      range: formatByteRange(t, held.bytes, held.size),
+    }),
   };
 }
 
@@ -185,12 +190,13 @@ function Conversation({
   file: string | null;
   project: ProjectJson | undefined;
 }) {
+  const t = useT();
   const window = useTranscriptWindow(file);
 
   if (file === null) {
     return (
       <div id="conversation">
-        <div id="placeholder">Select a session or subagent to view its conversation</div>
+        <div id="placeholder">{t('Select a session or subagent to view its conversation')}</div>
       </div>
     );
   }
@@ -207,8 +213,10 @@ function Conversation({
     return (
       <div id="conversation" ref={window.boxRef}>
         <ReadProgress
-          label="Reading the conversation"
-          slowNote="glasshive reads the end of the transcript first. A long one takes a moment."
+          label={t('Reading the conversation')}
+          slowNote={t(
+            'glasshive reads the end of the transcript first. A long one takes a moment.',
+          )}
         />
       </div>
     );
@@ -218,17 +226,17 @@ function Conversation({
     <div id="conversation" ref={window.boxRef}>
       {/* 読み込みに失敗したことを、空の会話で表さない。遡りの失敗は「もっと前」の側で言う */}
       {(failed.initial || failed.older) && (
-        <NotObserved {...conversationTrouble()} partial={failed.older} />
+        <NotObserved {...conversationTrouble(t)} partial={failed.older} />
       )}
       {/* 遡りが返るのを待っているあいだは、押したボタンのところで言う。**ボタンと入れ替える**
           —— 押した後もボタンが残ると、まだ届いていないのか、もう前が無いのかが読めない。
           1 回で 8 歩まで遡るので、ここは見える長さの待ちになる。 */}
       {window.reading.older ? (
-        <ReadProgress label="Reading older messages" scan={olderScan(window.held)} />
+        <ReadProgress label={t('Reading older messages')} scan={olderScan(t, window.held)} />
       ) : (
         window.hasOlder && (
           <button type="button" id="older" onClick={window.loadOlder}>
-            Load older
+            {t('Load older')}
           </button>
         )
       )}
@@ -239,7 +247,7 @@ function Conversation({
           会話は末尾へ吸い付くので、伸びなくなったことに気付く人はそこを見ている。
           箱そのものは中身が無くても置く。読み上げる場所は、中身が入る前から在る必要がある。 */}
       <div className="conv-tail" role="status">
-        {failed.follow && <NotObserved {...conversationTrouble()} partial />}
+        {failed.follow && <NotObserved {...conversationTrouble(t)} partial />}
       </div>
     </div>
   );

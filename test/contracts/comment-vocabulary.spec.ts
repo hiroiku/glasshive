@@ -97,13 +97,35 @@ const BANNED: readonly { readonly term: string; readonly use: string; readonly a
     {
       term: '字',
       use: '文字列 / テキスト',
-      allow: ['文字', '数字', '絵文字', '添字', '字下げ', '漢字', '英字', '赤字', '十字', '字句'],
+      allow: [
+        '文字',
+        '数字',
+        '絵文字',
+        '添字',
+        '字下げ',
+        '漢字',
+        '英字',
+        '赤字',
+        '十字',
+        '字句',
+        '簡体字',
+        '繁体字',
+      ],
     },
   ];
 
 /* 落ちた `visual` のテストが残す写し。**中身は PNG である** —— 文字として読むと、たまたま
    禁じた語のバイト列に当たった写しが、コメントの違反として出てくる。 */
 const ARTIFACTS = '__screenshots__';
+
+/* 中国語と韓国語のカタログ。ここで挙げている語は日本語の語彙で、同じ漢字が中国語では
+   まったく別の普通の語として出てくる。日本語の一覧を中国語の文に当てても何も言えない。
+   日本語のカタログ(`ja.ts`)は同じ語彙で書くものなので、そちらは見る。 */
+const OTHER_LANGUAGES = [
+  path.join('src', 'interface', 'i18n', 'catalogues', 'zh-Hans.ts'),
+  path.join('src', 'interface', 'i18n', 'catalogues', 'zh-Hant.ts'),
+  path.join('src', 'interface', 'i18n', 'catalogues', 'ko.ts'),
+];
 
 function walk(dir: string, found: string[]): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -118,7 +140,7 @@ function walk(dir: string, found: string[]): string[] {
 const files = ROOTS.flatMap((dir) => walk(path.join(ROOT, dir), []))
   .map((file) => path.relative(ROOT, file))
   // このファイル自身は一覧を持っているので、当然すべての語を含む
-  .filter((file) => file !== SELF)
+  .filter((file) => file !== SELF && !OTHER_LANGUAGES.includes(file))
   .sort();
 
 describe('コメントの語彙', () => {

@@ -1,6 +1,7 @@
 import { mdiHomeOutline, mdiRhombus, mdiSourceBranch, mdiSourceCommit } from '@mdi/js';
 import { commitToken } from '../../derive/tokens.ts';
 import { hoverTok } from '../../hoverTok.ts';
+import { useT } from '../../i18n/useT.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import { pressable } from '../../pressable.ts';
 import { Dot } from '../primitives/Dot.tsx';
@@ -42,6 +43,7 @@ export function AgentChip({
   where?: string | null | undefined;
   via?: string | null | undefined;
 }) {
+  const t = useT();
   const nav = useNav();
   const reason = via === null || via === undefined || via === '' ? null : via;
   return (
@@ -49,7 +51,7 @@ export function AgentChip({
       type="button"
       className={`wk${reason === null ? '' : ' via'}`}
       title={reason === null ? file : `${file} — ${reason}`}
-      aria-label={`Open conversation for ${label}`}
+      aria-label={t('Open conversation for {label}', { label })}
       // 行そのもののクリックを乗っ取らない。チップはチップとして押される
       {...pressable(() => nav.openConv(file), { stopPropagation: true })}
       {...glow(file)}
@@ -68,13 +70,14 @@ export function AgentChip({
 
 /** 課題のチップ。閉じたものは沈めて見せる — 参照の大半は統合済みの課題である */
 export function IssueChip({ id, closed = false }: { id: string; closed?: boolean }) {
+  const t = useT();
   const nav = useNav();
   return (
     <button
       type="button"
       className={`ichip${closed ? ' closed' : ''}`}
-      title={closed ? `${id} (closed)` : id}
-      aria-label={`Open issue ${id}`}
+      title={closed ? t('{id} (closed)', { id }) : id}
+      aria-label={t('Open issue {id}', { id })}
       {...pressable(() => nav.openIssue(id), { stopPropagation: true })}
       {...glow(id)}
     >
@@ -97,13 +100,14 @@ export function CommitChip({
   label: string;
   subject: string;
 }) {
+  const t = useT();
   const nav = useNav();
   return (
     <button
       type="button"
       className="refchip commit"
       title={subject === '' ? rev : `${rev} — ${subject}`}
-      aria-label={`View commit ${label}`}
+      aria-label={t('View commit {label}', { label })}
       {...pressable(() => nav.openRef(rev, label), { stopPropagation: true })}
       {...glow(commitToken(rev))}
     >
@@ -115,13 +119,14 @@ export function CommitChip({
 
 /** ブランチ / worktree のチップ。押すと Git 画面のその行へ */
 export function RefChip({ name, kind = 'branch' }: { name: string; kind?: 'branch' | 'worktree' }) {
+  const t = useT();
   const nav = useNav();
   return (
     <button
       type="button"
       className="refchip"
       title={name}
-      aria-label={`View ${name} in Git`}
+      aria-label={t('View {name} in Git', { name })}
       {...pressable(() => nav.gotoBranch(name), { stopPropagation: true })}
       {...glow(name)}
     >

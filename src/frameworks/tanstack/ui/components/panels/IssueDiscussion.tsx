@@ -15,6 +15,7 @@ import {
   mdiRestart,
 } from '@mdi/js';
 import type { ReactNode } from 'react';
+import type { Translator } from '~/interface/i18n/translator.ts';
 import type {
   GithubActorJson,
   GithubIssueDiscussionEntryJson,
@@ -24,6 +25,7 @@ import type {
 } from '~/interface/presenters/issues/issues.presenter.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { formatSinceIso } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import { IssueChip } from '../chips/Chips.tsx';
 import { Avatar } from '../primitives/Avatar.tsx';
@@ -105,7 +107,8 @@ const entryKey = (entry: GithubIssueDiscussionEntryJson): string =>
 
    顔は `decorative` で伏せる。名前がすぐ隣に文字で並んでいるので、伏せないと 2 回読まれる。 */
 function Who({ actor }: { actor: GithubActorJson | null }) {
-  if (actor === null) return <span className="dimtxt">unknown</span>;
+  const t = useT();
+  if (actor === null) return <span className="dimtxt">{t('unknown')}</span>;
   return (
     <span className="disc-who">
       <Avatar actor={actor} decorative />
@@ -116,7 +119,8 @@ function Who({ actor }: { actor: GithubActorJson | null }) {
 
 /** イベントが名指す題。GitHub が題を返さなかったことを、無題として出さない */
 function Named({ title }: { title: string | null }) {
-  if (title === null) return <span className="dimtxt">unknown</span>;
+  const t = useT();
+  if (title === null) return <span className="dimtxt">{t('unknown')}</span>;
   return <span className="disc-ttl">{title}</span>;
 }
 
@@ -161,7 +165,10 @@ type DiscussionEventJson = Exclude<GithubIssueDiscussionEntryJson, { kind: 'comm
    1 つのままになる。これは行が何をしたかの色であって、この課題がいま一覧でどう並ぶかでは
    ない —— 閉じた課題に堰き止めが足されることも在る。後者の `ev-ms` は、ガントの期日の
    縦線と同じ `--input` から採る。それ以外の行は色を持たない。 */
-function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; tone?: string } {
+function eventOf(
+  t: Translator,
+  entry: DiscussionEventJson,
+): { icon: string; what: ReactNode; tone?: string } {
   switch (entry.kind) {
     case 'closed':
       return {
@@ -172,19 +179,21 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; t
         tone: (entry.reason ?? '').toUpperCase() === 'NOT_PLANNED' ? 'st-not_planned' : 'st-closed',
         what: (
           <>
-            closed this
-            {entry.reason !== null && <span className="dimtxt"> as {entry.reason}</span>}
+            {t('closed this')}
+            {entry.reason !== null && (
+              <span className="dimtxt"> {t('as {reason}', { reason: entry.reason })}</span>
+            )}
           </>
         ),
       };
     case 'reopened':
-      return { icon: mdiRestart, tone: 'st-open', what: 'reopened this' };
+      return { icon: mdiRestart, tone: 'st-open', what: t('reopened this') };
     case 'labeled':
       return {
         icon: mdiLabelOutline,
         what: (
           <>
-            added <Label label={entry.label} />
+            {t('added')} <Label label={entry.label} />
           </>
         ),
       };
@@ -193,7 +202,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; t
         icon: mdiLabelOffOutline,
         what: (
           <>
-            removed <Label label={entry.label} />
+            {t('removed')} <Label label={entry.label} />
           </>
         ),
       };
@@ -202,7 +211,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; t
         icon: mdiAccountPlusOutline,
         what: (
           <>
-            assigned <Who actor={entry.assignee} />
+            {t('assigned')} <Who actor={entry.assignee} />
           </>
         ),
       };
@@ -211,7 +220,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; t
         icon: mdiAccountMinusOutline,
         what: (
           <>
-            unassigned <Who actor={entry.assignee} />
+            {t('unassigned')} <Who actor={entry.assignee} />
           </>
         ),
       };
@@ -221,7 +230,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; t
         tone: 'ev-ms',
         what: (
           <>
-            added this to <Named title={entry.milestone_title} />
+            {t('added this to')} <Named title={entry.milestone_title} />
           </>
         ),
       };
@@ -231,7 +240,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; t
         tone: 'ev-ms',
         what: (
           <>
-            removed this from <Named title={entry.milestone_title} />
+            {t('removed this from')} <Named title={entry.milestone_title} />
           </>
         ),
       };
@@ -241,7 +250,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; t
         icon: mdiPencilOutline,
         what: (
           <>
-            renamed <span className="disc-was">{entry.previous_title}</span> to{' '}
+            {t('renamed')} <span className="disc-was">{entry.previous_title}</span> {t('to')}{' '}
             <Named title={entry.current_title} />
           </>
         ),
@@ -251,7 +260,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; t
         icon: mdiFileTreeOutline,
         what: (
           <>
-            added this to <Reference reference={entry.parent} />
+            {t('added this to')} <Reference reference={entry.parent} />
           </>
         ),
       };
@@ -261,7 +270,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; t
         tone: 'st-blocked',
         what: (
           <>
-            marked this blocked by <Reference reference={entry.blocking_issue} />
+            {t('marked this blocked by')} <Reference reference={entry.blocking_issue} />
           </>
         ),
       };
@@ -270,7 +279,7 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; t
         icon: mdiContentDuplicate,
         what: (
           <>
-            marked this a duplicate of <Reference reference={entry.canonical} />
+            {t('marked this a duplicate of')} <Reference reference={entry.canonical} />
           </>
         ),
       };
@@ -280,8 +289,8 @@ function eventOf(entry: DiscussionEventJson): { icon: string; what: ReactNode; t
         icon: mdiLinkVariant,
         what: (
           <>
-            referenced this in <Reference reference={entry.source} />
-            {entry.will_close_target && <span className="dimtxt"> will close this</span>}
+            {t('referenced this in')} <Reference reference={entry.source} />
+            {entry.will_close_target && <span className="dimtxt"> {t('will close this')}</span>}
           </>
         ),
       };
@@ -297,7 +306,8 @@ function Entry({
   project: ProjectJson | undefined;
   nowMs: number;
 }) {
-  const since = formatSinceIso(entry.at, nowMs);
+  const t = useT();
+  const since = formatSinceIso(t, entry.at, nowMs);
 
   if (entry.kind === 'comment') {
     return (
@@ -309,7 +319,7 @@ function Entry({
         </div>
         {/* 本文の無いコメントと、本文を読めなかったコメントを同じ空白にしない */}
         {entry.body === null ? (
-          <span className="dimtxt">The text of this comment did not come back</span>
+          <span className="dimtxt">{t('The text of this comment did not come back')}</span>
         ) : (
           entry.body !== '' && <MdView text={entry.body} source="github" project={project} />
         )}
@@ -317,7 +327,7 @@ function Entry({
     );
   }
 
-  const { icon, what, tone } = eventOf(entry);
+  const { icon, what, tone } = eventOf(t, entry);
   return (
     <div className="disc-ev">
       <i className="disc-dot" />
@@ -342,6 +352,7 @@ export function IssueDiscussion({
   nowMs,
   url,
 }: IssueDiscussionProps) {
+  const t = useT();
   const discussion = failed ? undefined : answer;
   /* 1 枚も届いていないあいだ。**空の並びも、何も無い画面も出さない** —— どちらも、これから
      届くやり取りが「まだ何も言われていない」ものとして画面に出る。見出しは先に置く ——
@@ -358,8 +369,8 @@ export function IssueDiscussion({
   if ((discussion === undefined && pending) || reading) {
     return (
       <>
-        <div className="sec-h">Discussion</div>
-        <ReadingLines lines={4} label="Reading the discussion" />
+        <div className="sec-h">{t('Discussion')}</div>
+        <ReadingLines lines={4} label={t('Reading the discussion')} />
       </>
     );
   }
@@ -369,7 +380,7 @@ export function IssueDiscussion({
        ここにしか残らない */
     const code = discussion?.reason ?? null;
     const steps =
-      url === null ? {} : { steps: [{ text: 'Read the discussion on GitHub', href: url }] };
+      url === null ? {} : { steps: [{ text: t('Read the discussion on GitHub'), href: url }] };
     /* **観測できなかったのと、その番号が無かったのは別である。** 前者は `gh` が答えなかった
        ことで、後者は `gh` が答えたうえで、その答えにこの課題が無かったことである。 */
     if (discussion?.state === 'absent') {
@@ -377,8 +388,10 @@ export function IssueDiscussion({
         <NotObserved
           partial
           icon={mdiGithub}
-          title="GitHub has no discussion under this number"
-          detail="gh answered, and the answer carried no issue with this number. A deleted issue, or a number that belongs to another repository, looks like this. It does not say that nothing was written."
+          title={t('GitHub has no discussion under this number')}
+          detail={t(
+            'gh answered, and the answer carried no issue with this number. A deleted issue, or a number that belongs to another repository, looks like this. It does not say that nothing was written.',
+          )}
           {...(code === null ? {} : { code })}
           {...steps}
         />
@@ -388,8 +401,10 @@ export function IssueDiscussion({
       <NotObserved
         partial
         icon={mdiGithub}
-        title="The discussion did not come back"
-        detail="Comments and events are fetched on their own when you open an issue, and that fetch did not answer. The rest of this panel is built from the issue list, which glasshive already has."
+        title={t('The discussion did not come back')}
+        detail={t(
+          'Comments and events are fetched on their own when you open an issue, and that fetch did not answer. The rest of this panel is built from the issue list, which glasshive already has.',
+        )}
         {...(code === null ? {} : { code })}
         {...steps}
       />
@@ -398,11 +413,11 @@ export function IssueDiscussion({
 
   return (
     <>
-      <div className="sec-h">Discussion</div>
+      <div className="sec-h">{t('Discussion')}</div>
       {discussion.entries.length === 0 ? (
         /* 誰も何も言っていない。**読めなかったのとは違う画面にする** —— 同じ画面にすると、
            静かな課題と観測できなかった課題の見分けが付かない。 */
-        <p className="disc-quiet">Nothing has been said on this issue yet.</p>
+        <p className="disc-quiet">{t('Nothing has been said on this issue yet.')}</p>
       ) : (
         <div className="disc">
           {/* GitHub が返した順のまま、古いものから並べる。並べ替えると、同じ時刻に並んだ
@@ -414,12 +429,13 @@ export function IssueDiscussion({
       )}
       {/* 続きが届く先を、届く前から空けておく。**畳まない** —— 項目の下で画面が止まって
           見えると、そこがやり取りの終わりとして読める */}
-      {!discussion.walked && <ReadingLines lines={2} label="Reading more of the discussion" />}
+      {!discussion.walked && <ReadingLines lines={2} label={t('Reading more of the discussion')} />}
       {/* 切ったことを黙らない。黙ると、読まなかったぶんが「言われなかった」ことになる */}
       {discussion.walked && discussion.truncated && (
         <p className="disc-cut">
-          Only the first part of this discussion was read. Anything said after the last entry above
-          is not on this screen.
+          {t(
+            'Only the first part of this discussion was read. Anything said after the last entry above is not on this screen.',
+          )}
         </p>
       )}
     </>

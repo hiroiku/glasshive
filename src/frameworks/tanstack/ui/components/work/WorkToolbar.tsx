@@ -1,5 +1,6 @@
 import type React from 'react';
-import { GANTT_WINDOWS, type GanttWindow } from '../../derive/issueGantt.ts';
+import { type GanttWindow, ganttChips } from '../../derive/issueGantt.ts';
+import { useT } from '../../i18n/useT.ts';
 import type { IssueGroup, WorkUnit } from '../../nav/search.ts';
 import { SearchInput } from '../primitives/SearchInput.tsx';
 import { LayoutSwitch, type UnitCount, UnitSwitch } from './UnitSwitch.tsx';
@@ -45,6 +46,7 @@ export function WorkToolbar({
   onQuery,
   children,
 }: WorkToolbarProps) {
+  const t = useT();
   return (
     <div className="view-toolbar">
       <UnitSwitch
@@ -54,31 +56,31 @@ export function WorkToolbar({
         branchCount={branchCount}
         milestoneCount={milestoneCount}
       />
-      <SearchInput value={query} onChange={onQuery} placeholder="Search issues…" />
+      <SearchInput value={query} onChange={onQuery} placeholder={t('Search issues…')} />
       {children}
       {/* 束ね方も、束ねる一覧が在るときだけ選ばせる。ブランチにもマイルストーンにも
           依存グラフにも、束ね直す行は無い */}
       {unit === null && !graph && (
         <span className="scale-chips">
-          <span className="chip-label">Group</span>
+          <span className="chip-label">{t('Group')}</span>
           <button
             type="button"
             className={`fchip ${group === null ? 'on' : ''}`}
             /* 押されているかは色でしか出ていない。読み上げにも同じことを言わせる */
             aria-pressed={group === null}
-            title="Leave the issues nested under their parents"
+            title={t('Leave the issues nested under their parents')}
             onClick={() => onGroup(null)}
           >
-            None
+            {t('None')}
           </button>
           <button
             type="button"
             className={`fchip ${group === 'milestone' ? 'on' : ''}`}
             aria-pressed={group === 'milestone'}
-            title="Gather the issues under the milestone each one is in"
+            title={t('Gather the issues under the milestone each one is in')}
             onClick={() => onGroup('milestone')}
           >
-            Milestone
+            {t('Milestone')}
           </button>
         </span>
       )}
@@ -101,11 +103,12 @@ export function SpanChips({
   gantt: GanttWindow;
   onGantt: (gantt: GanttWindow) => void;
 }) {
+  const t = useT();
   return (
     <span className="scale-chips">
       {/* 束ね方のチップと隣り合うので、どちらの並びかを言う */}
-      <span className="chip-label">Span</span>
-      {GANTT_WINDOWS.map((preset) => (
+      <span className="chip-label">{t('Span')}</span>
+      {ganttChips(t).map((preset) => (
         <button
           key={preset.label}
           type="button"
@@ -114,7 +117,7 @@ export function SpanChips({
           title={preset.title}
           onClick={() => onGantt(preset.key)}
         >
-          {preset.label}
+          {preset.text}
         </button>
       ))}
     </span>

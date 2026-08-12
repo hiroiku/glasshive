@@ -5,6 +5,7 @@ import type {
 } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { unreadSpanOf } from '../../derive/concurrency.ts';
 import { absTime } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { intervalsOf, type TimelineNode } from '../../timeline/axis.ts';
 import { AgentChip } from '../chips/Chips.tsx';
 
@@ -47,6 +48,7 @@ export function resolveActivityRows(
 }
 
 export function ActivityLanes({ rows, nowMs }: { rows: readonly ActivityRow[]; nowMs: number }) {
+  const t = useT();
   const lanes = rows
     .map((row) => {
       const node: TimelineNode = row.node;
@@ -92,7 +94,10 @@ export function ActivityLanes({ rows, nowMs }: { rows: readonly ActivityRow[]; n
             {lane.unread !== null ? (
               <i
                 className="bar unknown"
-                title={`${absTime(lane.unread[0])} → ${absTime(lane.unread[1])} · activity could not be read`}
+                title={t('{from} → {to} · activity could not be read', {
+                  from: absTime(lane.unread[0]),
+                  to: absTime(lane.unread[1]),
+                })}
                 style={{
                   left: `${pct(lane.unread[0])}%`,
                   width: `${Math.max(0.8, pct(lane.unread[1]) - pct(lane.unread[0]))}%`,

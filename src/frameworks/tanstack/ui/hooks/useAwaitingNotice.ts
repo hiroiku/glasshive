@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { TreeJson } from '~/interface/presenters/sessions/tree.presenter.ts';
+import { useT } from '../i18n/useT.ts';
 
 /* 「あなたの返事待ち」に変わったことを、画面を見ていないユーザーへ知らせる。
 
@@ -11,6 +12,7 @@ import type { TreeJson } from '~/interface/presenters/sessions/tree.presenter.ts
    画面を見ているときも鳴らさない。目の前に出ているものを、わざわざ横から言わない。 */
 
 export function useAwaitingNotice(tree: TreeJson | undefined, enabled: boolean): void {
+  const t = useT();
   const previousRef = useRef(new Map<string, string | null>());
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export function useAwaitingNotice(tree: TreeJson | undefined, enabled: boolean):
         const becameAwaiting = session.awaiting === 'user' && was !== 'user';
         if (!first && enabled && becameAwaiting && !document.hasFocus()) {
           try {
-            new Notification(`${project.name}: awaiting your input`, {
+            new Notification(t('{project}: awaiting your input', { project: project.name }), {
               body: session.title ?? session.id.slice(0, 8),
             });
           } catch {
@@ -40,7 +42,7 @@ export function useAwaitingNotice(tree: TreeJson | undefined, enabled: boolean):
         previous.set(session.file, session.awaiting);
       }
     }
-  }, [tree, enabled]);
+  }, [tree, enabled, t]);
 }
 
 /** 知らせを使ってよいかを尋ねる。断られたら入れない */

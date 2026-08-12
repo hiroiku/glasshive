@@ -12,6 +12,7 @@ import { Icon } from '../ui/components/primitives/Icon.tsx';
 import { NotObserved } from '../ui/components/primitives/NotObserved.tsx';
 import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
 import { projectTrouble, treeTrouble } from '../ui/derive/trouble.ts';
+import { useT } from '../ui/i18n/useT.ts';
 import { NavProvider, useNav } from '../ui/nav/NavContext.tsx';
 import { openPanelOf, type ProjectSearch, parseProjectSearch } from '../ui/nav/search.ts';
 import { usePrefs } from '../ui/prefs/PrefsContext.tsx';
@@ -76,6 +77,7 @@ function ProjectLayout() {
 }
 
 function ProjectChrome({ slug }: { slug: string }) {
+  const t = useT();
   const tree = useQuery(treeQuery);
   const search: ProjectSearch = Route.useSearch();
   const prefs = usePrefs();
@@ -134,8 +136,8 @@ function ProjectChrome({ slug }: { slug: string }) {
   if (tree.data?.complete === true && project === undefined) {
     /* `~/.claude/projects` を走査できていないなら、並んでいる行が空でも「無かった」とは
        言えない。**観測できなかったことの上に、無かったという判定を建てない。** */
-    if (tree.data.sources.state === 'unobservable') return <NotObserved {...treeTrouble()} />;
-    return <NotObserved {...projectTrouble(slug)} />;
+    if (tree.data.sources.state === 'unobservable') return <NotObserved {...treeTrouble(t)} />;
+    return <NotObserved {...projectTrouble(t, slug)} />;
   }
 
   return (
@@ -175,14 +177,14 @@ function ProjectChrome({ slug }: { slug: string }) {
         >
           {/* 幅を掴んで変えるためだけの面。パネルの開け閉てと出し方は横のボタンからできる */}
           {/* biome-ignore lint/a11y/noStaticElementInteractions: 掴んで動かすためだけの面 */}
-          <div id="drawer-grip" title="Drag to resize" onMouseDown={onGripDown} />
+          <div id="drawer-grip" title={t('Drag to resize')} onMouseDown={onGripDown} />
           <div id="drawer-controls">
             <button
               type="button"
               title={
                 prefs.dock
-                  ? 'Switch to overlay panel (floats over the main area)'
-                  : 'Switch to side-by-side panel (shrinks the main area)'
+                  ? t('Switch to overlay panel (floats over the main area)')
+                  : t('Switch to side-by-side panel (shrinks the main area)')
               }
               onClick={() => prefs.set({ dock: !prefs.dock })}
             >
@@ -196,7 +198,7 @@ function ProjectChrome({ slug }: { slug: string }) {
             {/* 閉じている間は描かない。閉じたパネルの中身を持ち続けても誰にも見えない */}
             <div id="conv-pane">
               {panel !== null && (
-                <Suspense fallback={<ReadProgress label="Opening the panel" />}>
+                <Suspense fallback={<ReadProgress label={t('Opening the panel')} />}>
                   {panel.kind === 'issue' && <IssueDetail id={panel.id} project={project} />}
                   {panel.kind === 'ref' && (
                     <RefDetailPanel rev={panel.rev} label={panel.label} project={project} />
@@ -212,7 +214,7 @@ function ProjectChrome({ slug }: { slug: string }) {
           <button
             type="button"
             id="drawer-toggle"
-            title="Toggle panel"
+            title={t('Toggle panel')}
             onClick={() => {
               if (panel !== null) {
                 nav.closePanel();

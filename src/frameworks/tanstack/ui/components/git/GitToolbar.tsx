@@ -1,5 +1,6 @@
 import { mdiSourceBranch } from '@mdi/js';
 import type React from 'react';
+import { useT } from '../../i18n/useT.ts';
 import { Icon } from '../primitives/Icon.tsx';
 import { SearchInput } from '../primitives/SearchInput.tsx';
 
@@ -35,17 +36,22 @@ export function GitToolbar({
   branches,
   lead,
 }: GitToolbarProps) {
+  const t = useT();
   return (
     <div className="view-toolbar">
       {lead}
-      <SearchInput value={query} onChange={onQuery} placeholder="Search refs &amp; commits…" />
+      <SearchInput value={query} onChange={onQuery} placeholder={t('Search refs & commits…')} />
       <span className="g-base">
         <Icon path={mdiSourceBranch} size={12} /> {base}
       </span>
       <span className="g-note">
         {matches === null
-          ? `${tips} live lines · ${worktrees} worktrees · ${branches} branches`
-          : `${matches} matches`}
+          ? t('{tips} live lines · {worktrees} worktrees · {branches} branches', {
+              tips,
+              worktrees,
+              branches,
+            })
+          : t('{n} matches', { n: matches })}
       </span>
     </div>
   );

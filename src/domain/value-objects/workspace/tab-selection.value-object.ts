@@ -66,18 +66,3 @@ export function parseTabSelection(text: string): TabSelection | undefined {
   if (pinned === undefined || hidden === undefined) return undefined;
   return { version: TAB_SELECTION_VERSION, mode, pinned, hidden };
 }
-
-/* 選択を `preferences.json` のテキストにする。パースと同じ場所に置いてあるのは、
-   置いた形と読める形が離れないようにするためである。 */
-export function serializeTabSelection(selection: TabSelection): string {
-  return `${JSON.stringify(
-    {
-      version: TAB_SELECTION_VERSION,
-      mode: selection.mode,
-      pinned: [...selection.pinned],
-      hidden: [...selection.hidden],
-    },
-    null,
-    2,
-  )}\n`;
-}

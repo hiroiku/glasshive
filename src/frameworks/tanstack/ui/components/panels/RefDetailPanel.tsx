@@ -5,6 +5,7 @@ import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter
 import { gitRefQuery } from '../../../queries/git.query.ts';
 import { refTrouble, transportTrouble } from '../../derive/trouble.ts';
 import { cut, formatSinceIso, worktreeName } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { ActivityLanes, resolveActivityRows } from '../activity/ActivityLanes.tsx';
 import { AgentChip } from '../chips/Chips.tsx';
 import { Icon } from '../primitives/Icon.tsx';
@@ -80,6 +81,7 @@ export function RefDetailPanel({
   label: string;
   project: ProjectJson | undefined;
 }) {
+  const t = useT();
   const slug = project?.id ?? '';
   const ref = useQuery({ ...gitRefQuery(slug, rev), enabled: slug !== '' });
   const agents = useMemo(() => refAgents(project, label), [project, label]);
@@ -91,15 +93,15 @@ export function RefDetailPanel({
   if (ref.error !== null) {
     return (
       <div className="detail">
-        <NotObserved {...transportTrouble('this ref')} />
+        <NotObserved {...transportTrouble(t, t('this ref'))} />
       </div>
     );
   }
-  if (answer === undefined) return <ReadProgress label="Reading commits" />;
+  if (answer === undefined) return <ReadProgress label={t('Reading commits')} />;
   if (!answer.ok) {
     return (
       <div className="detail">
-        <NotObserved {...refTrouble(answer.body.code)} />
+        <NotObserved {...refTrouble(t, answer.body.code)} />
       </div>
     );
   }
@@ -108,7 +110,7 @@ export function RefDetailPanel({
   if (detail.state === 'absent') {
     return (
       <div className="detail">
-        <NotObserved {...refTrouble(null)} />
+        <NotObserved {...refTrouble(t, null)} />
       </div>
     );
   }
@@ -123,15 +125,15 @@ export function RefDetailPanel({
         </span>
         <div className="sub">
           {detail.unique && detail.base !== null
-            ? `${detail.commits.length} commits ahead of ${detail.base}`
-            : 'recent history'}
+            ? t('{n} commits ahead of {base}', { n: detail.commits.length, base: detail.base })
+            : t('recent history')}
           {' · '}
           {rev}
         </div>
         {agents.length > 0 && (
           <div className="agent-ctx">
             <span className="ctx-g">
-              <span className="mk">agents</span>
+              <span className="mk">{t('agents')}</span>
               {agents.slice(0, MAX_LISTED_AGENTS).map((agent) => (
                 <AgentChip
                   key={agent.file}
@@ -150,7 +152,7 @@ export function RefDetailPanel({
       <div className="detail-body">
         {lanes.length > 0 && (
           <>
-            <div className="sec-h">Agent activity</div>
+            <div className="sec-h">{t('Agent activity')}</div>
             <ActivityLanes rows={lanes} nowMs={nowMs} />
           </>
         )}
@@ -159,18 +161,21 @@ export function RefDetailPanel({
             <span className="rs-add">+{detail.stat.add}</span>
             <span className="rs-del">−{detail.stat.del}</span>
             <span className="dimtxt">
-              in {detail.stat.files} files since {detail.base}
+              {t('in {files} files since {base}', {
+                files: detail.stat.files,
+                base: detail.base ?? '',
+              })}
             </span>
             {detail.behind > 0 && (
               <span className="dimtxt">
-                · behind {detail.base} by {detail.behind}
+                {t('· behind {base} by {n}', { base: detail.base ?? '', n: detail.behind })}
               </span>
             )}
           </div>
         )}
         {detail.files.length > 0 && (
           <>
-            <div className="sec-h">Top changes</div>
+            <div className="sec-h">{t('Top changes')}</div>
             {detail.files.map((file) => (
               <div key={file.path} className="ref-file">
                 <span className="rf-path" title={file.path}>
@@ -182,7 +187,7 @@ export function RefDetailPanel({
             ))}
           </>
         )}
-        <div className="sec-h">Commits</div>
+        <div className="sec-h">{t('Commits')}</div>
         {detail.commits.map((commit) => (
           <div key={commit.sha} className="ref-commit">
             <span className="g-sha">{commit.sha}</span>
@@ -193,7 +198,7 @@ export function RefDetailPanel({
               {commit.author}
             </span>
             <span className="g-date" title={commit.date}>
-              {formatSinceIso(commit.date, nowMs)}
+              {formatSinceIso(t, commit.date, nowMs)}
             </span>
           </div>
         ))}

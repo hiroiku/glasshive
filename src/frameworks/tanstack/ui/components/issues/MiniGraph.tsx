@@ -1,7 +1,10 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import type { Translator } from '~/interface/i18n/translator.ts';
 import { edgeColorOf } from '../../derive/issueTree.ts';
+import { depLabel } from '../../derive/labels.ts';
 import { cut } from '../../format.ts';
 import { hoverTok } from '../../hoverTok.ts';
+import { useT } from '../../i18n/useT.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 
 /* 1 件の課題と、そこから直接つながっている課題。
@@ -13,20 +16,10 @@ import { useNav } from '../../nav/NavContext.tsx';
    線は要素の実際の位置から引く。折り返しや幅の変化に付いていくので、
    パネルの幅を変えても線が外れない。 */
 
-/** 依存の種類の表示名。`deps` の語のままだと向きが読めない */
-const DEP_LABEL: Readonly<Record<string, string>> = {
-  'parent-child': 'parent',
-  blocks: 'blocked by',
-  related: 'related',
-  duplicates: 'duplicates',
-  supersedes: 'supersedes',
-  'discovered-from': 'discovered from',
-};
-
-const LEGEND: readonly (readonly [string, string])[] = [
-  ['parent-child', edgeColorOf('parent-child')],
-  ['blocks', edgeColorOf('blocks')],
-  ['other', edgeColorOf('')],
+const legend = (t: Translator): readonly { key: string; text: string; color: string }[] => [
+  { key: 'parent-child', text: t('parent-child'), color: edgeColorOf('parent-child') },
+  { key: 'blocks', text: t('blocks'), color: edgeColorOf('blocks') },
+  { key: 'other', text: t('other'), color: edgeColorOf('') },
 ];
 
 export interface GraphNode {
@@ -55,6 +48,7 @@ export function MiniGraph({
   left: readonly GraphNode[];
   right: readonly GraphNode[];
 }) {
+  const t = useT();
   const nav = useNav();
   const rootRef = useRef<HTMLDivElement>(null);
   const [curves, setCurves] = useState<readonly Curve[]>([]);
@@ -107,7 +101,10 @@ export function MiniGraph({
       data-mg-id={item.id}
       data-mg-type={item.type}
       style={{ borderColor: edgeColorOf(item.type) }}
-      title={`${DEP_LABEL[item.type] ?? item.type}: ${item.title ?? item.id}`}
+      title={t('{kind}: {title}', {
+        kind: depLabel(t, item.type),
+        title: item.title ?? item.id,
+      })}
       onClick={() => nav.openIssue(item.id)}
       onMouseEnter={() => hoverTok(item.id, true)}
       onMouseLeave={() => hoverTok(item.id, false)}
@@ -124,7 +121,7 @@ export function MiniGraph({
   return (
     <div className="mini-graph" ref={rootRef}>
       <svg className="mg-svg" role="img">
-        <title>This issue and the issues connected to it</title>
+        <title>{t('This issue and the issues connected to it')}</title>
         {curves.map((curve) => (
           <g key={curve.key}>
             <path d={curve.d} stroke={curve.color} className="mg-edge" />
@@ -145,22 +142,22 @@ export function MiniGraph({
       <div className="mg-col">{right.map((item) => node(item, 'r'))}</div>
       <div className="mg-legend">
         <span className="lg">
-          <span className="mg-self-sample" /> this issue
+          <span className="mg-self-sample" /> {t('this issue')}
         </span>
-        {LEGEND.map(([name, color]) => (
-          <span key={name} className="lg">
+        {legend(t).map((entry) => (
+          <span key={entry.key} className="lg">
             <svg width="18" height="8" aria-hidden="true">
               <line
                 x1={1}
                 y1={4}
                 x2={17}
                 y2={4}
-                stroke={color}
+                stroke={entry.color}
                 strokeWidth={1.5}
                 strokeLinecap="round"
               />
             </svg>
-            {name}
+            {entry.text}
           </span>
         ))}
       </div>

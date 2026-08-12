@@ -4,8 +4,15 @@
 
 /* フォントそのものを連れてくる。**外へ取りに行かせない** — 配布先の機械に何が入っているかは
    こちらから見えず、外へ問い合わせないという決め事もある。文字の範囲(unicode-range)で
-   分けてあるので、ブラウザーが取るのは出す文字に要る分だけである。 */
+   分けてあるので、ブラウザーが取るのは出す文字に要る分だけである。
+
+   4 つ並べてあるのは、**日本語・簡体字・繁体字・韓国語で同じ漢字の形が違う**からである。
+   日本語の書体で中国語を出すのは、崩れた表示ではなく別の文字である。どれを使うかは
+   `base.css` が `lang` から選ぶので、ブラウザーが取りに行くのは 1 つの一族だけになる。 */
 @import "@fontsource-variable/noto-sans-jp/index.css";
+@import "@fontsource-variable/noto-sans-sc/index.css";
+@import "@fontsource-variable/noto-sans-tc/index.css";
+@import "@fontsource-variable/noto-sans-kr/index.css";
 @import "@fontsource-variable/noto-sans-mono/index.css";
 
 @import "./base.css";

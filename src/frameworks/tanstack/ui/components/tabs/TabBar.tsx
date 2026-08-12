@@ -1,6 +1,7 @@
 import { mdiHomeOutline } from '@mdi/js';
 import { Link } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
+import type { Translator } from '~/interface/i18n/translator.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { visibleSessions } from '~/interface/presenters/sessions/visibility.presenter.ts';
 import { dotFactsOf, dotStateOf, type RowDotState } from '../../derive/overview.ts';
@@ -8,6 +9,7 @@ import { counted } from '../../derive/sources.ts';
 import { useCommandMark } from '../../hooks/useCommandMark.ts';
 import { useHydrated } from '../../hooks/useHydrated.ts';
 import { MAX_SLOTS } from '../../hooks/useTabShortcuts.ts';
+import { useT } from '../../i18n/useT.ts';
 import { Dot } from '../primitives/Dot.tsx';
 import { Icon } from '../primitives/Icon.tsx';
 
@@ -22,12 +24,6 @@ import { Icon } from '../primitives/Icon.tsx';
 
 /** 掴んだと見なすまでの横の移動。これより小さい動きは、押しただけとして扱う */
 const DRAG_SLOP = 4;
-
-/** 数え上げられなかったプロジェクトの件数。見えたぶんは本当に在るが、それで全部とは言えない */
-const SHORT = 'Some of this project could not be read — the count may be short';
-
-/** まだ読んでいないプロジェクトの件数。数はまだどこにも無い */
-const NOT_READ = 'Not read yet';
 
 /* タブの点。**一覧と同じ 1 つの関数から出す。**
 
@@ -51,15 +47,21 @@ interface TabCount {
    読む前は数そのものをまだ持っていないので `?` だけを出す。空欄にすると、届いたばかりの
    スタブが「ここでは何も動いていない」と言うことになる。数え上げられなかったときは、
    見えた数が下限でしかないことを `+?` で言う。 */
-function countOf(project: ProjectJson | undefined, nowMs: number): TabCount {
+function countOf(t: Translator, project: ProjectJson | undefined, nowMs: number): TabCount {
   // 木そのものがまだ届いていない。プロジェクトが在るかどうかも観測していない
   if (project === undefined) return { text: '', note: undefined, wide: false };
-  if (!project.read) return { text: '?', note: NOT_READ, wide: false };
+  if (!project.read) return { text: '?', note: t('Not read yet'), wide: false };
   /* 終わったものは数えない。**タブの数は「ここで何が動いているか」である。**
      Agents の絞り込みに追随させると、そちらを押した人のタブ行が全部書き換わり、
      どのプロジェクトを開くかを決める手掛かりが、絞り込みの都合で動く。 */
   const shown = visibleSessions(project, false, nowMs).length;
-  if (!counted(project)) return { text: `${shown}+?`, note: SHORT, wide: true };
+  if (!counted(project)) {
+    return {
+      text: `${shown}+?`,
+      note: t('Some of this project could not be read — the count may be short'),
+      wide: true,
+    };
+  }
   return { text: shown === 0 ? '' : String(shown), note: undefined, wide: false };
 }
 
@@ -96,6 +98,7 @@ export function TabBar({
   onMove,
   current,
 }: TabBarProps) {
+  const t = useT();
   const byId = new Map((projects ?? []).map((project) => [project.id, project]));
   /* 木が届いているか。**届く前と、届いた上で見つからないのは別である。**
      前者は待っているだけなのでタブを出す。後者は観測から消えた id なので落とす。 */
@@ -115,7 +118,7 @@ export function TabBar({
   const home = (
     <>
       <Icon path={mdiHomeOutline} size={12} />
-      <span>Overview</span>
+      <span>{t('Overview')}</span>
     </>
   );
 
@@ -166,7 +169,7 @@ export function TabBar({
   };
 
   return (
-    <nav id="tabs" ref={navRef} aria-label="Pinned projects">
+    <nav id="tabs" ref={navRef} aria-label={t('Pinned projects')}>
       {/* Overview へ戻るタブ。**ピン留めが空でも消えない** — 消えると戻る手段が無くなる */}
       <span className="tab">
         {hydrated ? (
@@ -175,12 +178,12 @@ export function TabBar({
             className="tab-link"
             activeProps={{ className: 'tab-link on' }}
             activeOptions={{ exact: true }}
-            title={`Overview${slotMark(1)}`}
+            title={`${t('Overview')}${slotMark(1)}`}
           >
             {home}
           </Link>
         ) : (
-          <a className="tab-link" href="/" title={`Overview${slotMark(1)}`}>
+          <a className="tab-link" href="/" title={`${t('Overview')}${slotMark(1)}`}>
             {home}
           </a>
         )}
@@ -194,7 +197,7 @@ export function TabBar({
            ここでタブごと落とすと、ピン留めしたプロジェクトを直に開いたユーザーには、
            いまどこに居るかがどこにも出ない画面になる(アドレスバーを読むしか手が無くなる)。 */
         const name = project?.name ?? id;
-        const count = countOf(project, nowMs);
+        const count = countOf(t, project, nowMs);
         const dot = dotOf(project);
         return (
           // biome-ignore lint/a11y/noStaticElementInteractions: 掴むのは並べ替えの手立てで、開くのは中の `Link` が受ける
@@ -209,7 +212,10 @@ export function TabBar({
               params={{ slug: id }}
               className="tab-link"
               activeProps={{ className: 'tab-link on' }}
-              title={`${project?.path ?? id}${slotMark(index + 2)} — drag to reorder`}
+              title={t('{name}{slot} — drag to reorder', {
+                name: project?.path ?? id,
+                slot: slotMark(index + 2),
+              })}
               /* リンクは既定でブラウザーの掴み方を持っている。切らないと、掴んだ瞬間に
                  そちらが始まって `mousemove` も `mouseup` も来なくなる */
               draggable={false}
@@ -229,7 +235,7 @@ export function TabBar({
               <button
                 type="button"
                 className="tab-close"
-                aria-label={`Unpin ${name}`}
+                aria-label={t('Unpin {name}', { name })}
                 onClick={() => onUnpin(id)}
               >
                 ×
@@ -250,7 +256,9 @@ export function TabBar({
             to="/projects/$slug"
             params={{ slug: provisional }}
             className="tab-link on"
-            title={`${byId.get(provisional)?.path ?? provisional} — double-click to pin`}
+            title={t('{name} — double-click to pin', {
+              name: byId.get(provisional)?.path ?? provisional,
+            })}
           >
             <Dot state={dotOf(byId.get(provisional))} />
             <span>{byId.get(provisional)?.name ?? provisional}</span>

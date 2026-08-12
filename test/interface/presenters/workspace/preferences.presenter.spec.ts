@@ -21,6 +21,7 @@ const DEFAULT: View['selection'] = {
 const view = (parts: Partial<View>): View => ({
   selection: DEFAULT,
   visibleTabs: [],
+  locale: null,
   stored: observed(DEFAULT),
   ...parts,
 });
@@ -66,10 +67,25 @@ describe('タブの選択を外部 API の形へ変換する', () => {
     ).toEqual({ state: 'unobservable', reason: 'preferences.unreadable' });
   });
 
-  it('外へ出す欄はこの 3 つだけ', () => {
+  it('外へ出す欄はこの 4 つだけ', () => {
     expect(
       Object.keys(presentPreferences(view({}))),
       '欄を足すと、受け取る側が形を二通り覚えることになる',
-    ).toEqual(['tab_selection', 'visible_tabs', 'stored']);
+    ).toEqual(['tab_selection', 'visible_tabs', 'locale', 'stored']);
+  });
+});
+
+/* 選んだ言葉は、その人が選んだものである。**選んでいないことを、英語を選んだことにしない** ——
+   潰すと、選んでいない人の画面がブラウザーの言葉を見に行けなくなる。 */
+describe('選ばれた画面の言葉', () => {
+  it('選ばれていれば、その綴りをそのまま出す', () => {
+    expect(presentPreferences(view({ locale: 'zh-Hant' })).locale).toBe('zh-Hant');
+  });
+
+  it('まだ選んでいなければ、無いと言う', () => {
+    expect(
+      presentPreferences(view({ locale: null })).locale,
+      '英語へ倒すと、選んでいない人がブラウザーの言葉を出せなくなる',
+    ).toBeNull();
   });
 });

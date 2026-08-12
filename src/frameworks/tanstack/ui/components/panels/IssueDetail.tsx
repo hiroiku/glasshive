@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { githubIssuesQuery } from '../../../queries/issues.query.ts';
 import { issueTrouble, transportTrouble } from '../../derive/trouble.ts';
+import { useT } from '../../i18n/useT.ts';
 import { NotObserved } from '../primitives/NotObserved.tsx';
 import { ReadProgress } from '../primitives/ReadProgress.tsx';
 import { GithubIssueDetail } from './GithubIssueDetail.tsx';
@@ -12,6 +13,7 @@ import { GithubIssueDetail } from './GithubIssueDetail.tsx';
    繋がりの相手の題名が、その一覧からしか引けないからである。 */
 
 export function IssueDetail({ id, project }: { id: string; project: ProjectJson | undefined }) {
+  const t = useT();
   const slug = project?.id ?? '';
   /* **Work の画面と同じ `queryKey` を使う** —— 既に取ってあるので、ここで開いても
      `gh` はもう一度動かない。 */
@@ -41,7 +43,7 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
   if (tracker.error !== null) {
     return (
       <div className="detail">
-        <NotObserved {...transportTrouble('this issue')} />
+        <NotObserved {...transportTrouble(t, t('this issue'))} />
       </div>
     );
   }
@@ -49,14 +51,14 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
      まだ届いていないページに在るかもしれない。歩き終えたかは値そのものが持っている ——
      取り直しの間も前の一覧を出したままにしてあるので、`isFetching` は答えにならない。 */
   if (answer === undefined || !answer.walked) {
-    return <ReadProgress label="Reading the issue" />;
+    return <ReadProgress label={t('Reading the issue')} />;
   }
   /* 観測できなかったのと、一覧にこの id が無かったのは別である。**理由を持っているのは
      前者だけ** —— GitHub の remote が無いプロジェクトは失敗ではないので、理由を出さない。 */
   const code = answer.state === 'unobservable' ? answer.reason : null;
   return (
     <div className="detail">
-      <NotObserved {...issueTrouble(id, code)} />
+      <NotObserved {...issueTrouble(t, id, code)} />
     </div>
   );
 }

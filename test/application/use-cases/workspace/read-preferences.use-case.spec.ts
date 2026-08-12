@@ -33,12 +33,15 @@ const read = (loaded: Observation<string>) =>
 
 describe('`preferences.json` を読む', () => {
   it('読めたタブの選択を、観測と突き合わせて返す', async () => {
-    const stored = documentOf({
-      version: 1,
-      mode: 'pinned',
-      pinned: ['-w-alpha', '-w-gone'],
-      hidden: [],
-    });
+    const stored = documentOf(
+      {
+        version: 1,
+        mode: 'pinned',
+        pinned: ['-w-alpha', '-w-gone'],
+        hidden: [],
+      },
+      null,
+    );
 
     const view = await read(observed(stored)).execute(['-w-alpha', '-w-beta']);
     expect(view.selection.pinned, '一覧から消えた id も、留めたまま残る').toEqual([
@@ -76,12 +79,15 @@ describe('`preferences.json` を読む', () => {
   it('読むだけの経路は、置きに行かない', async () => {
     const store = fakeStore(
       observed(
-        documentOf({
-          version: 1,
-          mode: 'all',
-          pinned: ['-w-a', '-w-a'],
-          hidden: [],
-        }),
+        documentOf(
+          {
+            version: 1,
+            mode: 'all',
+            pinned: ['-w-a', '-w-a'],
+            hidden: [],
+          },
+          null,
+        ),
       ),
     );
 
@@ -99,5 +105,42 @@ describe('`preferences.json` を読む', () => {
 
     const broken = await read(unobservable(new StoreError('読めない'))).execute([]);
     expect(broken.stored.kind).toBe('unobservable');
+  });
+});
+
+/* 選んだ言葉も `preferences.json` に在る。**まだ選んでいないことを、英語を選んだことにしない** ——
+   潰すと、選んでいない人の画面がブラウザーの言葉を見に行けなくなる。 */
+describe('選ばれた画面の言葉を読む', () => {
+  it('選ばれていれば、その綴りをそのまま返す', async () => {
+    const view = await read(
+      observed(documentOf({ version: 1, mode: 'all', pinned: [], hidden: [] }, 'zh-Hans')),
+    ).execute([]);
+
+    expect(view.locale).toBe('zh-Hans');
+  });
+
+  it('まだ選んでいなければ、無いと返す', async () => {
+    const view = await read(
+      observed(documentOf({ version: 1, mode: 'all', pinned: [], hidden: [] }, null)),
+    ).execute([]);
+
+    expect(view.locale, '英語へ倒すと、選んでいない人がブラウザーの言葉を出せなくなる').toBeNull();
+  });
+
+  it('`preferences.json` を読めなかったときも、無いと返す', async () => {
+    const view = await read(unobservable(new StoreError('読めない'))).execute([]);
+
+    expect(view.locale).toBeNull();
+    expect(view.stored.kind, 'なぜ倒れたのかは、こちらに残っている').toBe('unobservable');
+  });
+
+  /* 1 つのパースで両方を読むと、片方の壊れ方がもう片方を巻き添えにする。 */
+  it('タブの選択が壊れていても、言葉は読める', async () => {
+    const view = await read(
+      observed('{"version":1,"mode":"all","pinned":"-w-a","hidden":[],"locale":"ja"}'),
+    ).execute([]);
+
+    expect(view.selection).toEqual(DEFAULT);
+    expect(view.locale, 'ピン留めの壊れ方が、選んだ言葉を巻き添えにしている').toBe('ja');
   });
 });

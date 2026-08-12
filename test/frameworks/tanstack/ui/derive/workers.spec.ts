@@ -6,6 +6,7 @@ import {
   workerIndex,
   workersOn,
 } from '~/frameworks/tanstack/ui/derive/workers.ts';
+import { defaultTranslator as t } from '~/frameworks/tanstack/ui/i18n/useT.ts';
 
 /* 課題の id から「いま誰が触っているか」を引くインデックス。
 
@@ -249,13 +250,13 @@ describe('突き合わせの訳', () => {
     const index = workerIndex(project([session({ git_branch: 'feat/x-1' })]));
     const found = workersOn(index, issue('#7', ['feat/x-1']));
 
-    expect(viaLabel(found[0] as MatchedWorker)).toBe('on the branch of PR #1');
+    expect(viaLabel(t, found[0] as MatchedWorker)).toBe('on the branch of PR #1');
   });
 
   it('会話で名指しされているなら、何も添えない', () => {
     const index = workerIndex(project([session({ issues: ['#7'] })]));
     const found = workersOn(index, issue('#7'));
 
-    expect(viaLabel(found[0] as MatchedWorker), '要らない説明を並べない').toBe(null);
+    expect(viaLabel(t, found[0] as MatchedWorker), '要らない説明を並べない').toBe(null);
   });
 });

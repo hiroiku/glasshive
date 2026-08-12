@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_TAB_SELECTION,
   parseTabSelection,
-  serializeTabSelection,
   type TabSelection,
 } from '~/domain/value-objects/workspace/tab-selection.value-object.ts';
 
@@ -105,29 +104,5 @@ describe('`preferences.json` のテキストをパースする', () => {
       parseTabSelection(`{"version":1,"mode":"all","pinned":${deep},"hidden":[]}`),
       'パースが例外を投げると、`preferences.json` を置かれただけで観測ごと止まる',
     ).toBeUndefined();
-  });
-});
-
-describe('`preferences.json` のテキストにする', () => {
-  it('書いて読み直すと同じものが返る', () => {
-    const written = serializeTabSelection(SELECTION);
-    expect(parseTabSelection(written)).toEqual(SELECTION);
-  });
-
-  it('既定も同じように往復する', () => {
-    expect(parseTabSelection(serializeTabSelection(DEFAULT_TAB_SELECTION))).toEqual(
-      DEFAULT_TAB_SELECTION,
-    );
-  });
-
-  it('知らない欄は持ち越さない', () => {
-    const written = serializeTabSelection({
-      ...SELECTION,
-      extra: 'x',
-    } as TabSelection);
-    expect(
-      Object.keys(JSON.parse(written)),
-      '欄を持ち越すと、`preferences.json` が少しずつ知らないものを抱える',
-    ).toEqual(['version', 'mode', 'pinned', 'hidden']);
   });
 });

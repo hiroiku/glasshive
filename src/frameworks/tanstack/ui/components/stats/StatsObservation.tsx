@@ -1,3 +1,6 @@
+import type { Translator } from '~/interface/i18n/translator.ts';
+import { useT } from '../../i18n/useT.ts';
+
 /* 統計フッターの 4 枚が、その数をどこまで観測できたか。
 
    **「まだ答えが来ていない」「無かった」「観測できなかった」を 1 つの空のバケットに
@@ -28,12 +31,12 @@ export const observationMark = (observation: StatsObservation): string =>
 
 /* 指したときに出す一言。エラーコードは隠さずに添える —— 案内が当たらなかったときに、
    その語で調べられる。 */
-export function observationTitle(observation: StatsObservation): string | undefined {
-  if (observation.kind === 'pending') return 'Not read yet';
+export function observationTitle(t: Translator, observation: StatsObservation): string | undefined {
+  if (observation.kind === 'pending') return t('Not read yet');
   if (observation.kind !== 'unobservable') return undefined;
   return observation.reason === null
-    ? 'Could not be read'
-    : `Could not be read — ${observation.reason}`;
+    ? t('Could not be read')
+    : t('Could not be read — {reason}', { reason: observation.reason });
 }
 
 /* 数の代わりに置く一言。**空欄にしない** —— 空欄は「0 だった」と読める。
@@ -46,13 +49,14 @@ export function StatsNote({
   readonly observation: StatsObservation;
   readonly className?: string;
 }) {
+  const t = useT();
   if (isObserved(observation)) return null;
   return (
     <span
       className={className === undefined ? 'sf-note' : `sf-note ${className}`}
-      title={observationTitle(observation)}
+      title={observationTitle(t, observation)}
     >
-      {observation.kind === 'pending' ? 'reading…' : 'could not be read'}
+      {observation.kind === 'pending' ? t('reading…') : t('could not be read')}
     </span>
   );
 }

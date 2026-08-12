@@ -14,6 +14,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { Translator } from '~/interface/i18n/translator.ts';
 import type {
   ProjectJson,
   SessionJson,
@@ -24,6 +25,7 @@ import {
   visibleSubagents,
 } from '~/interface/presenters/sessions/visibility.presenter.ts';
 import { messagesQuery } from '../../../queries/messages.query.ts';
+import { sessionStateLabel } from '../../derive/labels.ts';
 import { sourcesStateOf } from '../../derive/sources.ts';
 import {
   agentTypeShort,
@@ -34,6 +36,7 @@ import {
   worktreeName,
 } from '../../format.ts';
 import { useDeepSearch } from '../../hooks/useDeepSearch.ts';
+import { useT } from '../../i18n/useT.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import { popStyleOf, prunePops, touchFingerprint } from '../../phase.ts';
 import { pressable } from '../../pressable.ts';
@@ -227,13 +230,15 @@ export const AGENT_COLUMN_IDS = [
 type AgentColumn = ColumnDef<AgentRow> & { readonly id: (typeof AGENT_COLUMN_IDS)[number] };
 
 /** 消費の列に添える、何を数えているかの断り */
-const TOKENS_NOTE = 'input + output + cache write (transcripts active in the last 7 days only)';
+const tokensNote = (t: Translator): string =>
+  t('input + output + cache write (transcripts active in the last 7 days only)');
 
 /** 子を数え上げられなかったセッションに添える断り。見えている子は本当に居るが、それで全部とは言えない */
-const SUBAGENTS_SHORT = 'Subagents could not be counted — this session may have more';
+const subagentsShort = (t: Translator): string =>
+  t('Subagents could not be counted — this session may have more');
 
 /** 時間軸の列の名前。ほかの 10 列と違い、見出しの中身は語ではなく目盛りの時刻である */
-const TIMELINE_HEADER = 'Timeline';
+const timelineHeader = (t: Translator): string => t('Timeline');
 
 /** 目盛りのラベル 1 文字ぶんの幅の見積もり。10px の等幅で組んでいる */
 const TICK_CHAR_PX = 6;
@@ -244,21 +249,24 @@ const TICK_CHAR_PX = 6;
    「セッションを 1 つも持たないプロジェクト」と同じ形になる。同じページの統計フッターは
    同じ `sources` を読んで観測できなかったと言うので、ここで断定すると 1 つの画面の中で
    表とフッターの言うことが食い違う。 */
-function emptyNoteOf(project: ProjectJson): string {
+function emptyNoteOf(t: Translator, project: ProjectJson): string {
   const state = sourcesStateOf(project);
   /* 絞り込んで何も残らなかった。**分母も数え上げた数でしかない**ので、
      数え上げられていなければ `+?` を添える */
   if (project.sessions.length > 0) {
     const short = state === 'unobservable' ? '+?' : '';
-    return `No matching sessions (0 of ${project.sessions.length}${short})`;
+    return t('No matching sessions (0 of {total}{short})', {
+      total: project.sessions.length,
+      short,
+    });
   }
   if (state === 'unobservable') {
-    return 'Unknown — the sessions in this project could not be counted';
+    return t('Unknown — the sessions in this project could not be counted');
   }
-  if (!project.read) return 'Reading the transcripts in this project';
+  if (!project.read) return t('Reading the transcripts in this project');
   return state === 'absent'
-    ? 'Nothing to read — the directory for this project is not there'
-    : 'No sessions to show';
+    ? t('Nothing to read — the directory for this project is not there')
+    : t('No sessions to show');
 }
 
 /** 見えている欄への部分一致(大文字小文字を問わない) */
@@ -296,6 +304,7 @@ export function AgentsTable({
   sorting,
   onSorting,
 }: AgentsTableProps) {
+  const t = useT();
   const nav = useNav();
   const [expanded, setExpanded] = useState<ExpandedState>(true);
   /* エージェント間メッセージは URL の検索パラメータに載せない。**メッセージは
@@ -438,35 +447,35 @@ export function AgentsTable({
     () => [
       {
         id: 'name',
-        header: 'Session / Subagent',
+        header: t('Session / Subagent'),
         accessorFn: (row) => labelOf(row).toLowerCase(),
       },
       {
         id: 'state',
-        header: 'Status',
+        header: t('Status'),
         accessorFn: (row) => STATE_ORDER[row.node.state] ?? 9,
       },
       {
         id: 'model',
-        header: 'Model',
+        header: t('Model'),
         accessorFn: (row) => modelShort(row.node.model),
       },
       {
         id: 'effort',
-        header: 'Effort',
+        header: t('Effort'),
         accessorFn: (row) => EFFORT_ORDER[row.node.effort ?? ''] ?? -1,
         sortDescFirst: true,
       },
       {
         id: 'tokens',
-        header: 'Tokens',
+        header: t('Tokens'),
         accessorFn: (row) => row.node.tokens ?? -1,
         sortDescFirst: true,
       },
-      { id: 'work', header: 'Working on', accessorFn: workingOn },
+      { id: 'work', header: t('Working on'), accessorFn: workingOn },
       {
         id: 'worktree',
-        header: 'Worktree',
+        header: t('Worktree'),
         accessorFn: (row) => worktreeName(row.node.cwd),
       },
       {
@@ -476,12 +485,12 @@ export function AgentsTable({
       },
       {
         id: 'now',
-        header: 'Now',
+        header: t('Now'),
         accessorFn: (row) => (row.node.state === 'active' ? (row.node.current ?? '') : ''),
       },
       {
         id: 'updated',
-        header: 'Updated',
+        header: t('Updated'),
         accessorFn: (row) => Date.parse(row.node.last_activity) || 0,
         sortDescFirst: true,
       },
@@ -491,7 +500,7 @@ export function AgentsTable({
         accessorFn: (row) => Date.parse(row.node.started ?? row.node.last_activity) || 0,
       },
     ],
-    [],
+    [t],
   );
 
   const table = useReactTable({
@@ -793,15 +802,15 @@ export function AgentsTable({
         continue;
       }
       const out = exchange.direction === 'sent';
-      const who = exchange.peer === '' ? 'a session that did not give a name' : exchange.peer;
+      const who = exchange.peer === '' ? t('a session that did not give a name') : exchange.peer;
       peers.push({
         key: `${exchange.direction}:${exchange.msg_id}`,
         row,
         x,
         out,
         label: [
-          out ? `to ${who}` : `from ${who}`,
-          'the other end was not found in this project',
+          out ? t('to {who}', { who }) : t('from {who}', { who }),
+          t('the other end was not found in this project'),
           exchange.mode === null ? '' : exchange.mode,
           exchange.summary,
         ]
@@ -812,7 +821,7 @@ export function AgentsTable({
 
     const drawn = [...marks.values()].map((mark) => ({
       ...mark,
-      label: [mark.who, mark.count > 1 ? `${mark.count} messages` : '', mark.summary]
+      label: [mark.who, mark.count > 1 ? t('{n} messages', { n: mark.count }) : '', mark.summary]
         .filter((part) => part !== '')
         .join(' · '),
     }));
@@ -827,7 +836,7 @@ export function AgentsTable({
       peersComplete: answer.body.peers_complete,
       readable: true,
     };
-  }, [talk, talkQuery.data, rows, data, axis, span, tlGeom.width]);
+  }, [talk, talkQuery.data, rows, data, axis, span, tlGeom.width, t]);
 
   /* 矢が語っている中身を、送り手の行にも置く。
 
@@ -854,7 +863,7 @@ export function AgentsTable({
           置くと 11 本の `subgrid` に 12 個目のセルが増える。`grid` の子は `row` か
           `rowgroup` だけなので、`#tree-pane` の外に置く */}
       <span id={OPEN_HINT_ID} className="vhidden">
-        Press Enter to open the conversation
+        {t('Press Enter to open the conversation')}
       </span>
       <AgentsToolbar
         query={query}
@@ -907,7 +916,7 @@ export function AgentsTable({
       {/* 表そのものが `grid` である。**行を `button` にすると中身が消える。** `button` は
           中の要素を読み上げから外す役なので、状態もモデルも消費もブランチも、行の名前 1 つに
           置き換わってしまう。 */}
-      <div id="tree-pane" role="grid" aria-label="Sessions and subagents">
+      <div id="tree-pane" role="grid" aria-label={t('Sessions and subagents')}>
         <div className="grid-row head" role="row">
           {headers.map((header) => {
             const sorted = header.column.getIsSorted();
@@ -930,7 +939,7 @@ export function AgentsTable({
                 /* 時間軸の列は、見出しの中身が目盛りの時刻そのものである。名前を付けないと
                    「13:00 14:00 15:00」が列の名前になり、幅が狭くて目盛りが 1 本も残らない
                    ときは名前がまったく無くなる。 */
-                aria-label={header.column.id === 'timeline' ? TIMELINE_HEADER : undefined}
+                aria-label={header.column.id === 'timeline' ? timelineHeader(t) : undefined}
                 aria-sort={
                   sorted === false ? 'none' : sorted === 'desc' ? 'descending' : 'ascending'
                 }
@@ -938,7 +947,7 @@ export function AgentsTable({
                 <button
                   type="button"
                   className={className}
-                  aria-label={header.column.id === 'timeline' ? TIMELINE_HEADER : undefined}
+                  aria-label={header.column.id === 'timeline' ? timelineHeader(t) : undefined}
                   onClick={() => header.column.toggleSorting()}
                 >
                   {header.column.id === 'timeline'
@@ -1120,7 +1129,7 @@ export function AgentsTable({
 
           {rows.length === 0 ? (
             <div className="empty" role="row">
-              <span role="gridcell">{emptyNoteOf(project)}</span>
+              <span role="gridcell">{emptyNoteOf(t, project)}</span>
             </div>
           ) : (
             rows.map((row, index) => (
@@ -1195,6 +1204,7 @@ function AgentRowView({
   isExpanded: boolean;
   depth: number;
 }) {
+  const t = useT();
   const entry = row.original;
   const node: AgentNode = entry.node;
   const pop = popStyleOf(entry.rid, nowMs);
@@ -1209,9 +1219,9 @@ function AgentRowView({
      稼働中の作業は勝手に進むが、入力待ちはユーザーが動くまで進まない。 */
   const now =
     awaiting === 'user'
-      ? 'awaiting user input'
+      ? t('awaiting user input')
       : awaiting === 'agents'
-        ? 'waiting on subagents'
+        ? t('waiting on subagents')
         : node.state === 'active'
           ? (node.current ?? '')
           : '';
@@ -1258,7 +1268,7 @@ function AgentRowView({
         {/* 子を数え上げられなかったセッション。**子の居ないセッションと同じ姿にしない** —
             同じ形で並ぶと、数え損ねた子が居なかったことになる */}
         {uncountedSubagents && (
-          <span className="dimtxt" title={SUBAGENTS_SHORT}>
+          <span className="dimtxt" title={subagentsShort(t)}>
             +?
           </span>
         )}
@@ -1272,12 +1282,14 @@ function AgentRowView({
         {/* 矢が語っている中身を、読み上げにだけ残す。**矢の面は `aria-hidden` である** ——
             `#rows` は `rowgroup` なので、行を挟まずに押しどころを置けない。ここに置かないと、
             どの組がいつ何を話したかは、どの支援技術からも読めない */}
-        {talk.length > 0 && <span className="vhidden">{`Messages sent: ${talk.join('; ')}`}</span>}
+        {talk.length > 0 && (
+          <span className="vhidden">{t('Messages sent: {list}', { list: talk.join('; ') })}</span>
+        )}
       </span>
 
       <span role="gridcell">
         <span className={`chip state-${awaiting === 'user' ? 'input' : node.state}`}>
-          {awaiting === 'user' ? 'input' : node.state}
+          {awaiting === 'user' ? t('input') : sessionStateLabel(t, node.state)}
         </span>
       </span>
 
@@ -1295,10 +1307,14 @@ function AgentRowView({
         role="gridcell"
         title={
           unreadTokens
-            ? `Could not be read. ${TOKENS_NOTE}`
+            ? `${t('Could not be read.')} ${tokensNote(t)}`
             : node.tokens === null
-              ? TOKENS_NOTE
-              : `${formatTokens(node.tokens)} — ${Math.round((node.tokens / tokenTotal) * 100)}% of the ${formatTokens(tokenTotal)} shown. ${TOKENS_NOTE}`
+              ? tokensNote(t)
+              : `${t('{tokens} — {percent}% of the {total} shown.', {
+                  tokens: formatTokens(node.tokens),
+                  percent: Math.round((node.tokens / tokenTotal) * 100),
+                  total: formatTokens(tokenTotal),
+                })} ${tokensNote(t)}`
         }
       >
         <span className="mono">
@@ -1336,7 +1352,7 @@ function AgentRowView({
         {now}
       </span>
       <span className="col-upd" role="gridcell">
-        {formatSinceIso(node.last_activity, nowMs)}
+        {formatSinceIso(t, node.last_activity, nowMs)}
       </span>
 
       <TlBar

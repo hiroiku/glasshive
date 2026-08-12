@@ -1,5 +1,6 @@
 import { mdiCommentOutline, mdiSourceBranch } from '@mdi/js';
 import { useMemo, useState } from 'react';
+import type { Translator } from '~/interface/i18n/translator.ts';
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import {
   buildDependencyGraph,
@@ -9,6 +10,7 @@ import {
 } from '../../derive/dependencyGraph.ts';
 import { ARROW } from '../../derive/edgeShape.ts';
 import { labelColors, leadPullRequest, subProgress } from '../../derive/githubIssue.ts';
+import { sessionStateLabel, statusLabel } from '../../derive/labels.ts';
 import {
   liveCount,
   type MatchedWorker,
@@ -18,6 +20,7 @@ import {
 } from '../../derive/workers.ts';
 import { issueBranchOf, type WorkJoin } from '../../derive/workJoin.ts';
 import { cut } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { pressable } from '../../pressable.ts';
 import { AvatarStack } from '../primitives/Avatar.tsx';
 import { Icon } from '../primitives/Icon.tsx';
@@ -54,6 +57,7 @@ export interface DependencyGraphProps {
 }
 
 export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGraphProps) {
+  const t = useT();
   const graph = useMemo(() => buildDependencyGraph(issues), [issues]);
   const layout = useMemo(() => layoutGraph(graph), [graph]);
   const [hot, setHot] = useState<string | null>(null);
@@ -95,11 +99,11 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
   return (
     <div className="dep-graph">
       <div className="dg-bar">
-        <span className="dg-title">Dependency graph</span>
+        <span className="dg-title">{t('Dependency graph')}</span>
         {/* この読み出しは hover でも focus でも変わる。**読み上げにも変わったことを伝える** ——
             伝えないと、キーボードで辿れているのに何が選ばれたか分からないままになる */}
         <span className="dg-readout" role="status">
-          {readoutOf(hot, downstream, graph)}
+          {readoutOf(t, hot, downstream, graph)}
         </span>
       </div>
 
@@ -107,7 +111,7 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
           余りを絵が抱え込み、チップだけが窮屈になる。続けて流せば、絵はその高さぶんで済む。 */}
       <div className="dg-body">
         {layout.nodes.length === 0 ? (
-          <div className="empty">No issue blocks another one</div>
+          <div className="empty">{t('No issue blocks another one')}</div>
         ) : (
           <div className="dg-scroll">
             <div
@@ -151,7 +155,7 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
                       rx={11}
                     />
                     <text className="dg-pen-label" x={-11} y={layout.band.y - 23}>
-                      {`Caught in a cycle — ${caughtCount} cannot start`}
+                      {t('Caught in a cycle — {n} cannot start', { n: caughtCount })}
                     </text>
                   </>
                 )}
@@ -165,7 +169,7 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
                       x={column.x}
                       y={-12}
                     >
-                      {column.layer === 0 ? 'Ready now' : `${column.layer} away`}
+                      {column.layer === 0 ? t('Ready now') : t('{n} away', { n: column.layer })}
                     </text>
                     <line
                       className={`dg-col-rule${column.layer === 0 ? ' ready' : ''}`}
@@ -216,7 +220,10 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
         {loose.length > 0 && (
           <div className={`dg-loose${hot === null ? '' : ' hot'}`}>
             <div className="dg-loose-head">
-              {`No dependencies — ${loose.length} ${loose.length === 1 ? 'issue' : 'issues'} you can start any time`}
+              {t(
+                '{n, plural, one {No dependencies — # issue you can start any time} other {No dependencies — # issues you can start any time}}',
+                { n: loose.length },
+              )}
             </div>
             <div className="dg-loose-list">
               {loose.map((node) => (
@@ -237,58 +244,59 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
           読めないアイコンは、読む人にとって在っても無くても同じである */}
       <div className="legend-bar">
         <span>
-          <EdgeSample color="var(--ended)" /> blocks — follow the arrows to get the start order
+          <EdgeSample color="var(--ended)" />{' '}
+          {t('blocks — follow the arrows to get the start order')}
         </span>
         <span>
-          <EdgeSample color="#fb7185" dashed /> blocks inside a cycle
+          <EdgeSample color="#fb7185" dashed /> {t('blocks inside a cycle')}
         </span>
         {/* 左端のバーと枠線は状態を表す。ラベルの色は下のチップが持っている */}
         {states.map((status) => (
           <span key={status}>
-            <i className={`rail st-${status}`} /> {status.replace('_', ' ')}
+            <i className={`rail st-${status}`} /> {statusLabel(t, status)}
           </span>
         ))}
         <span>
-          <i className="dot" style={{ background: 'var(--active)' }} /> agent working
+          <i className="dot" style={{ background: 'var(--active)' }} /> {t('agent working')}
         </span>
         <span>
-          <i className="dot" style={{ background: 'var(--waiting)' }} /> waiting for you
+          <i className="dot" style={{ background: 'var(--waiting)' }} /> {t('waiting for you')}
         </span>
         <span>
-          <b className="dg-unlock">+n</b> finishing it frees n issues
+          <b className="dg-unlock">+n</b> {t('finishing it frees n issues')}
         </span>
         {/* 親子はここにしか出ない。**辺にはならない** — 階層であって、待ちではない */}
         <span>
-          <b className="dg-parent">↳#n</b> it is a sub-issue of #n
+          <b className="dg-parent">↳#n</b> {t('it is a sub-issue of #n')}
         </span>
         <span>
-          <b className="dg-sub">n/m</b> n of its m sub-issues are closed
+          <b className="dg-sub">n/m</b> {t('n of its m sub-issues are closed')}
         </span>
         <span>
           <b className="dg-cmt">
             <Icon path={mdiCommentOutline} size={9} />n
           </b>{' '}
-          it has n comments
+          {t('it has n comments')}
         </span>
         <span>
           <b className="dg-br">
             <Icon path={mdiSourceBranch} size={9} />
             ↓n
           </b>{' '}
-          its branch is n commits behind the base
+          {t('its branch is n commits behind the base')}
         </span>
         <span>
           <b className="dg-br warn">
             <Icon path={mdiSourceBranch} size={9} />⚠
           </b>{' '}
-          its branch touches the same files as another
+          {t('its branch touches the same files as another')}
         </span>
         <span>
-          <b className="prchip open">#n</b> the pull request that closes it
+          <b className="prchip open">#n</b> {t('the pull request that closes it')}
         </span>
         {!graph.complete && (
-          <span className="dg-cut" title="Some blocking issues were not fetched">
-            some dependencies were not fetched — edges may be missing
+          <span className="dg-cut" title={t('Some blocking issues were not fetched')}>
+            {t('some dependencies were not fetched — edges may be missing')}
           </span>
         )}
       </div>
@@ -299,16 +307,25 @@ export function DependencyGraph({ issues, workers, onOpen, join }: DependencyGra
 /* 読み上げ。**「輪の中にある」を「何も空かない」と同じ言い方にしない** —
    前者は依存を 1 本外せば動く話で、後者は本当に下流が無い話である。 */
 function readoutOf(
+  t: Translator,
   hot: string | null,
   downstream: ReadonlySet<string> | null,
   graph: ReturnType<typeof buildDependencyGraph>,
 ): string {
-  if (hot === null || downstream === null) return 'Hover an issue to see what finishing it frees';
-  if (graph.caught.includes(hot)) {
-    return `${hot} is caught in a cycle — nothing frees up until the cycle is broken`;
+  if (hot === null || downstream === null) {
+    return t('Hover an issue to see what finishing it frees');
   }
-  if (downstream.size === 0) return `Finishing ${hot} frees nothing`;
-  return `Finishing ${hot} frees ${downstream.size} ${downstream.size === 1 ? 'issue' : 'issues'}`;
+  if (graph.caught.includes(hot)) {
+    return t('{id} is caught in a cycle — nothing frees up until the cycle is broken', { id: hot });
+  }
+  if (downstream.size === 0) return t('Finishing {id} frees nothing', { id: hot });
+  return t(
+    '{n, plural, one {Finishing {id} frees # issue} other {Finishing {id} frees # issues}}',
+    {
+      n: downstream.size,
+      id: hot,
+    },
+  );
 }
 
 interface CardProps {
@@ -323,6 +340,7 @@ interface CardProps {
 }
 
 function Card({ placed, workers, hot, downstream, join, onEnter, onLeave, onOpen }: CardProps) {
+  const t = useT();
   const node: GraphNode = placed.node;
   const id = node.issue.id ?? '';
 
@@ -336,7 +354,7 @@ function Card({ placed, workers, hot, downstream, join, onEnter, onLeave, onOpen
       style={{ left: placed.x, top: placed.y }}
       role="button"
       tabIndex={0}
-      aria-label={`Open issue ${id}`}
+      aria-label={t('Open issue {id}', { id })}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
       onFocus={onEnter}
@@ -361,6 +379,7 @@ interface LooseCardProps {
 
    触れても何も光らせない。空ける先が無いのだから、絵を薄くして見せるものが無い。 */
 function LooseCard({ node, workers, join, onOpen }: LooseCardProps) {
+  const t = useT();
   const id = node.issue.id ?? '';
 
   return (
@@ -369,7 +388,7 @@ function LooseCard({ node, workers, join, onOpen }: LooseCardProps) {
       className={`dg-node loose st-${node.issue.status}`}
       role="button"
       tabIndex={0}
-      aria-label={`Open issue ${id}`}
+      aria-label={t('Open issue {id}', { id })}
       {...pressable(() => onOpen(id))}
     >
       <CardFace node={node} workers={workers} join={join} />
@@ -389,6 +408,7 @@ interface CardFaceProps {
    2 行しか無いので、載せるものは選んである。1 行目は名前と、終わらせると何件空くか。
    2 行目はこの課題の今 —— ラベル、担当、動いているエージェント、親子、コメント、PR。 */
 function CardFace({ node, workers, join }: CardFaceProps) {
+  const t = useT();
   const issue = node.issue;
   const colors = labelColors(issue);
   const labels = issue.labels ?? [];
@@ -434,7 +454,15 @@ function CardFace({ node, workers, join }: CardFaceProps) {
         {beat !== null && (
           <span
             className={`dg-beat ${beat.state}${beat.via === 'branch' ? ' via' : ''}`}
-            title={[`${beat.label} — ${beat.state}`, viaLabel(beat)].filter(Boolean).join(' · ')}
+            title={[
+              t('{label} — {state}', {
+                label: beat.label,
+                state: sessionStateLabel(t, beat.state),
+              }),
+              viaLabel(t, beat),
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           >
             <i />
             {cut(beat.label, 14)}
@@ -442,20 +470,26 @@ function CardFace({ node, workers, join }: CardFaceProps) {
         )}
         <span className="dg-grow" />
         {parent !== null && (
-          <span className="dg-parent" title={`Sub-issue of ${parent}`}>
+          <span className="dg-parent" title={t('Sub-issue of {parent}', { parent })}>
             ↳{parent}
           </span>
         )}
         {progress !== null && progress.total > 0 && (
           <span
             className="dg-sub"
-            title={`${progress.closed} of ${progress.total} sub-issues closed`}
+            title={t('{closed} of {total} sub-issues closed', {
+              closed: progress.closed,
+              total: progress.total,
+            })}
           >
             {progress.closed}/{progress.total}
           </span>
         )}
         {comments > 0 && (
-          <span className="dg-cmt" title={`${comments} comments`}>
+          <span
+            className="dg-cmt"
+            title={t('{n, plural, one {# comment} other {# comments}}', { n: comments })}
+          >
             <Icon path={mdiCommentOutline} size={9} />
             {comments}
           </span>
@@ -467,8 +501,10 @@ function CardFace({ node, workers, join }: CardFaceProps) {
             className="dg-br unread"
             title={`${branch.name} — ${
               branch.reach === 'pending'
-                ? 'still reading the local git'
-                : 'the local git could not be read, so how far behind it is, and whether it conflicts, are unknown'
+                ? t('still reading the local git')
+                : t(
+                    'the local git could not be read, so how far behind it is, and whether it conflicts, are unknown',
+                  )
             }`}
           >
             <Icon path={mdiSourceBranch} size={9} />
@@ -481,12 +517,16 @@ function CardFace({ node, workers, join }: CardFaceProps) {
           (branch.branch.behind > 0 || branch.branch.conflictsWith.length > 0) && (
             <span
               className={`dg-br${branch.branch.conflictsWith.length > 0 ? ' warn' : ''}`}
-              title={`${branch.branch.name} — ${branch.branch.ahead} ahead, ${
-                branch.branch.behind
-              } behind${
+              title={`${t('{name} — {ahead} ahead, {behind} behind', {
+                name: branch.branch.name,
+                ahead: branch.branch.ahead,
+                behind: branch.branch.behind,
+              })}${
                 branch.branch.conflictsWith.length === 0
                   ? ''
-                  : ` · touches the same files as ${branch.branch.conflictsWith.join(', ')}`
+                  : ` · ${t('touches the same files as {list}', {
+                      list: branch.branch.conflictsWith.join(', '),
+                    })}`
               }`}
             >
               <Icon path={mdiSourceBranch} size={9} />
@@ -496,7 +536,7 @@ function CardFace({ node, workers, join }: CardFaceProps) {
         {pull !== null && (
           <span
             className={`prchip ${pull.is_draft ? 'draft' : pull.state.toLowerCase()}`}
-            title={`Pull request #${pull.number}`}
+            title={t('Pull request #{number}', { number: pull.number })}
           >
             #{pull.number}
           </span>

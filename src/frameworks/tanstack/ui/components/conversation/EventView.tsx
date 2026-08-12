@@ -7,6 +7,7 @@ import {
 import type { EventJson } from '~/interface/presenters/sessions/conversation.presenter.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { cut } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { highlight } from '../../markdown.ts';
 import { Icon } from '../primitives/Icon.tsx';
 import { MdView } from '../text/MdView.tsx';
@@ -36,6 +37,7 @@ export function EventView({
   event: EventJson;
   project: ProjectJson | undefined;
 }) {
+  const t = useT();
   return (
     <div className={`event ${event.role}`}>
       {/* 時刻の欄はイベントの全行に跨がらせる — 本文の高さぶん貼り付いていられるように */}
@@ -82,8 +84,8 @@ export function EventView({
                   {block.name ?? 'system'}
                 </span>
               )}
-              {block.kind === 'thinking' && <span className="blk-name">thinking</span>}
-              {block.kind === 'tool_result' && <span className="blk-name">result</span>}
+              {block.kind === 'thinking' && <span className="blk-name">{t('thinking')}</span>}
+              {block.kind === 'tool_result' && <span className="blk-name">{t('result')}</span>}
               <span className="blk-prev">{preview}</span>
             </summary>
             {block.kind === 'tool_use' ? (

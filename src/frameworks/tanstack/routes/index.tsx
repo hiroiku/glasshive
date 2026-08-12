@@ -27,6 +27,7 @@ import {
 } from '../ui/derive/overview.ts';
 import { treeTrouble } from '../ui/derive/trouble.ts';
 import { useTabSelection } from '../ui/hooks/useTabSelection.ts';
+import { useT } from '../ui/i18n/useT.ts';
 
 export const Route = createFileRoute('/')({
   /* 先に走らせるだけで、待たない。待つと、それぞれの画面が持っている
@@ -42,6 +43,7 @@ export const Route = createFileRoute('/')({
 
    タブに出すものはユーザーが選ぶ。タブの選択は見せ方の話で、何を観測するかには一切効かない。 */
 function Overview() {
+  const t = useT();
   const tree = useQuery(treeQuery);
   const tabs = useTabSelection();
   const [query, setQuery] = useState('');
@@ -112,12 +114,12 @@ function Overview() {
     );
   };
 
-  if (tree.error !== null) return <NotObserved {...treeTrouble()} />;
+  if (tree.error !== null) return <NotObserved {...treeTrouble(t)} />;
   if (tree.isPending) {
     return (
       <ReadProgress
-        label="Reading transcripts"
-        slowNote="A large ~/.claude/projects takes a moment on the first read"
+        label={t('Reading transcripts')}
+        slowNote={t('A large ~/.claude/projects takes a moment on the first read')}
       />
     );
   }
@@ -167,26 +169,27 @@ function Overview() {
         {/* 観測できなかったことは、見えた振りをせずにそのまま言う */}
         {sources.state === 'unobservable' && (
           <p className="warn">
-            Could not read the transcript roots — projects are not missing, we could not look
+            {t('Could not read the transcript roots — projects are not missing, we could not look')}
           </p>
         )}
         {/* 走査できなかったプロジェクトは行として残るが、数はどれも欠けている。
             行の欄だけで言うと、一覧を上から眺めている人には届かない */}
         {unreadableRows > 0 && (
           <p className="warn">
-            {unreadableRows === 1
-              ? '1 project could not be read — its row shows what we could see, not what is there'
-              : `${unreadableRows} projects could not be read — their rows show what we could see, not what is there`}
+            {t(
+              '{n, plural, one {# project could not be read — its row shows what we could see, not what is there} other {# projects could not be read — their rows show what we could see, not what is there}}',
+              { n: unreadableRows },
+            )}
           </p>
         )}
         {processes.state === 'unobservable' && (
           <p className="warn">
-            Could not count live processes — waiting and ended cannot be told apart
+            {t('Could not count live processes — waiting and ended cannot be told apart')}
           </p>
         )}
         {tabs.storedState === 'unobservable' && (
           <p className="warn">
-            Could not read the pinned tabs — the order fell back to the default
+            {t('Could not read the pinned tabs — the order fell back to the default')}
           </p>
         )}
         {tabs.error !== null && <p className="warn">{tabs.error}</p>}
@@ -195,16 +198,16 @@ function Overview() {
           /* **読み終えるまで「1 つも無い」と言わない。** 索引がまだ届いていないだけかもしれず、
              「無かった」と「まだ観測していない」を同じ画面にすると見分けが付かない。 */
           !tree.data.complete ? (
-            <ReadProgress label="Reading transcripts" />
+            <ReadProgress label={t('Reading transcripts')} />
           ) : (
             <p className="empty">
               {/* 「無かった」と「観測できなかった」を同じ文にしない。**片方は 0 で、
                   もう片方は不明である。** 同じに書くと、読む人は在るものを無いと読む */}
               {sources.state === 'observed'
-                ? 'No projects yet — run Claude Code and they show up here'
+                ? t('No projects yet — run Claude Code and they show up here')
                 : sources.state === 'absent'
-                  ? 'Nothing to read yet — ~/.claude/projects is not there'
-                  : 'Unknown — the projects could not be counted'}
+                  ? t('Nothing to read yet — ~/.claude/projects is not there')
+                  : t('Unknown — the projects could not be counted')}
             </p>
           )
         ) : shown.length === 0 ? (
@@ -212,8 +215,10 @@ function Overview() {
              読み終えていないなら、まだ読んでいない行のほうに在るかもしれないと言う。 */
           <p className="empty">
             {tree.data.complete
-              ? `No matching projects (0 of ${rows.length})`
-              : `No matches yet among the projects read so far (0 of ${rows.length})`}
+              ? t('No matching projects (0 of {total})', { total: rows.length })
+              : t('No matches yet among the projects read so far (0 of {total})', {
+                  total: rows.length,
+                })}
           </p>
         ) : (
           <OverviewTable
@@ -232,28 +237,30 @@ function Overview() {
           読めない絵は、読む人にとって在っても無くても同じである */}
       <div className="legend-bar">
         <span>
-          <Dot state="input" /> waiting for you
+          <Dot state="input" /> {t('waiting for you')}
         </span>
         <span>
-          <Dot state="active" /> an agent is working
+          <Dot state="active" /> {t('an agent is working')}
         </span>
         <span>
-          <Dot state="waiting" /> idle, but the process is alive
+          <Dot state="waiting" /> {t('idle, but the process is alive')}
         </span>
         <span>
-          <Dot state="ended" /> nothing running
+          <Dot state="ended" /> {t('nothing running')}
         </span>
         <span>
-          <Dot state="unknown" /> not read yet, or could not be read
+          <Dot state="unknown" /> {t('not read yet, or could not be read')}
         </span>
         <span>
-          <i className="lg-bar" /> share of the tokens spent in the last 24h by the projects shown
+          <i className="lg-bar" />{' '}
+          {t('share of the tokens spent in the last 24h by the projects shown')}
         </span>
         <span>
-          <i className="lg-act" /> when anything in the project was running, over the {span} window
+          <i className="lg-act" />{' '}
+          {t('when anything in the project was running, over the {span} window', { span })}
         </span>
         <span>
-          <i className="lg-act cut" /> some of that activity could not be read
+          <i className="lg-act cut" /> {t('some of that activity could not be read')}
         </span>
       </div>
     </>

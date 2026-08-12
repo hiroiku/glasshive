@@ -2,6 +2,7 @@ import { mdiAlertOutline, mdiSourceBranch } from '@mdi/js';
 import { ARROW, arrowPoints } from '../../derive/edgeShape.ts';
 import type { EventLog } from '../../derive/issueEvents.ts';
 import { edgeColorOf } from '../../derive/issueTree.ts';
+import { useT } from '../../i18n/useT.ts';
 import { Icon } from '../primitives/Icon.tsx';
 
 /* 読み方の凡例。**画面の下に置く。**
@@ -45,19 +46,21 @@ export function IssuesLegend({
   readonly complete: boolean;
   readonly events: EventLog;
 }) {
+  const t = useT();
   return (
     <div className="legend-bar">
       <span>
-        <span className="tree-mark">└</span> parent-child
+        <span className="tree-mark">└</span> {t('parent-child')}
       </span>
       <span>
-        <EdgeSample color={edgeColorOf('blocks')} /> blocks — the arrow points at what comes later
+        <EdgeSample color={edgeColorOf('blocks')} />{' '}
+        {t('blocks — the arrow points at what comes later')}
       </span>
       <span>
-        <EdgeSample color={edgeColorOf('')} /> other
+        <EdgeSample color={edgeColorOf('')} /> {t('other')}
       </span>
       <span>
-        <b className="iunlock">+n</b> finishing it frees n issues
+        <b className="iunlock">+n</b> {t('finishing it frees n issues')}
       </span>
       <span>
         <b className="brstate">
@@ -65,7 +68,7 @@ export function IssuesLegend({
           <b>↑n</b>
           <i>↓n</i>
         </b>{' '}
-        its branch is n ahead and n behind the base
+        {t('its branch is n ahead and n behind the base')}
       </span>
       {/* 手元の git を読めていないブランチ。**読めなかったことにも見本が要る** —— `?` の意味が
           `title` の中にしか無いと、触れる人にしか読めない */}
@@ -74,16 +77,16 @@ export function IssuesLegend({
           <Icon path={mdiSourceBranch} size={10} />
           <b>?</b>
         </b>{' '}
-        it has a branch, but the local git could not be read
+        {t('it has a branch, but the local git could not be read')}
       </span>
       <span>
-        <b className="prchip open">#n</b> the pull request that closes it
+        <b className="prchip open">#n</b> {t('the pull request that closes it')}
       </span>
       <span>
         <b className="wk-dup">
-          <Icon path={mdiAlertOutline} size={10} /> n concurrent
+          <Icon path={mdiAlertOutline} size={10} /> {t('n concurrent')}
         </b>{' '}
-        more than one agent is on it right now
+        {t('more than one agent is on it right now')}
       </span>
       {/* 右のトラックの読み方。**見本は本物と同じ class から採る** —— 別に作ると本物とずれる。
 
@@ -91,38 +94,38 @@ export function IssuesLegend({
           読んだか読めなかったかを言う唯一の目印である** —— これを載せないと、読み終えて
           何も起きていなかった行と、読めなかった行の見分け方がどこにも書いていないことになる。 */}
       <span className="lg-gt">
-        <i className="gt-line" /> from the first instant observed to the last — never to now
+        <i className="gt-line" /> {t('from the first instant observed to the last — never to now')}
       </span>
       <span className="lg-gt">
-        <i className="gt-open" /> created
+        <i className="gt-open" /> {t('created')}
       </span>
       <span className="lg-gt">
-        <i className="gt-ev" /> something happened
+        <i className="gt-ev" /> {t('something happened')}
       </span>
       <span className="lg-gt">
-        <i className="gt-ev many" /> more than one, too close to tell apart
+        <i className="gt-ev many" /> {t('more than one, too close to tell apart')}
       </span>
       <span className="lg-gt">
-        <i className="gt-flag st-closed" /> closed
+        <i className="gt-flag st-closed" /> {t('closed')}
       </span>
       <span className="lg-gt">
-        <i className="gt-flag st-closed approx" /> closed, the time taken from updated_at
+        <i className="gt-flag st-closed approx" /> {t('closed, the time taken from updated_at')}
       </span>
       <span className="lg-gt">
-        <i className="gt-cut" /> read only back to here
+        <i className="gt-cut" /> {t('read only back to here')}
       </span>
       <span className="lg-gt">
-        <i className="gt unread" /> not read
+        <i className="gt unread" /> {t('not read')}
       </span>
       <span className="lg-gt">
-        <i className="gt reading" /> still reading
+        <i className="gt reading" /> {t('still reading')}
       </span>
       <span className="lg-gt">
-        <i className="lg-gt-line guide" /> a milestone is due
+        <i className="lg-gt-line guide" /> {t('a milestone is due')}
       </span>
       {!complete && (
-        <span className="dg-cut" title="Some blocking issues were not fetched">
-          some dependencies were not fetched — arcs may be missing
+        <span className="dg-cut" title={t('Some blocking issues were not fetched')}>
+          {t('some dependencies were not fetched — arcs may be missing')}
         </span>
       )}
       {/* 読み終えていて、なお全部を読めていないなら黙らない。**どこで読むのをやめたかは
@@ -131,7 +134,7 @@ export function IssuesLegend({
           在るかどうかはまだ分かっていない */}
       {events.kind === 'observed' && !events.complete && !events.reading && (
         <span className="dg-cut">
-          some issues were not read — those rows are hatched, not empty
+          {t('some issues were not read — those rows are hatched, not empty')}
         </span>
       )}
     </div>

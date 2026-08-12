@@ -1,3 +1,4 @@
+import type { Translator } from '~/interface/i18n/translator.ts';
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { cut, worktreeName } from '../format.ts';
@@ -105,5 +106,7 @@ export const liveCount = (workers: readonly Worker[]): number =>
 
 /* ブランチ越しに見つけた訳。**id で見つけたものには何も添えない** ——
    会話の中で課題を名指ししているのだから、そこに説明は要らない。 */
-export const viaLabel = (worker: MatchedWorker): string | null =>
-  worker.via === 'branch' && worker.pull !== null ? `on the branch of PR #${worker.pull}` : null;
+export const viaLabel = (t: Translator, worker: MatchedWorker): string | null =>
+  worker.via === 'branch' && worker.pull !== null
+    ? t('on the branch of PR #{number}', { number: worker.pull })
+    : null;

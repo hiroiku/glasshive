@@ -1,5 +1,6 @@
 import { mdiCalendarBlankOutline, mdiFlagOutline, mdiSourceBranch } from '@mdi/js';
 import { useMemo } from 'react';
+import type { Translator } from '~/interface/i18n/translator.ts';
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import type { GroupTrack, RowTrack } from '../../derive/issueEvents.ts';
@@ -24,6 +25,7 @@ import { buildMilestones, type MilestoneRow } from '../../derive/milestones.ts';
 import { viaLabel, type WorkerIndex } from '../../derive/workers.ts';
 import type { WorkJoin } from '../../derive/workJoin.ts';
 import { absTime, cut, formatDue } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import { pressable } from '../../pressable.ts';
 import { AgentChip } from '../chips/Chips.tsx';
@@ -81,6 +83,7 @@ export function Milestones({
   eventLog,
   nowMs,
 }: MilestonesProps) {
+  const t = useT();
   const rows = useMemo(() => buildMilestones(issues, join, workers), [issues, join, workers]);
 
   const needle = query.trim().toLowerCase();
@@ -114,19 +117,19 @@ export function Milestones({
       {shown.length === 0 ? (
         <p className="empty">
           {rows.length === 0
-            ? 'No milestones on the issues fetched from GitHub'
-            : `No matching milestones (0 of ${rows.length})`}
+            ? t('No milestones on the issues fetched from GitHub')
+            : t('No matching milestones (0 of {total})', { total: rows.length })}
         </p>
       ) : (
         <div id="ms-list" style={{ ['--gt-grid' as string]: gridImage }}>
           <div className="ms-row head">
-            <span>Milestone</span>
-            <span>Due</span>
-            <span>Progress</span>
-            <span className="right">Open</span>
-            <span className="right">Blocked</span>
-            <span>Branches</span>
-            <span>Agents</span>
+            <span>{t('Milestone')}</span>
+            <span>{t('Due')}</span>
+            <span>{t('Progress')}</span>
+            <span className="right">{t('Open')}</span>
+            <span className="right">{t('Blocked')}</span>
+            <span>{t('Branches')}</span>
+            <span>{t('Agents')}</span>
             {/* 目盛りは課題の一覧と同じ引き方で、軸の位置そのものに置く。同じ密度の 2 つの表を
                 行き来するので、目盛りの読み方まで別にしない */}
             <span className="gt-head">
@@ -203,6 +206,7 @@ function MilestoneLine({
   group: GroupTrack;
   nowMs: number;
 }) {
+  const t = useT();
   const nav = useNav();
   const dueMs = row.dueOn === null ? null : Date.parse(row.dueOn);
   const soon = dueMs !== null && Number.isFinite(dueMs) && dueMs - nowMs < SOON_MS;
@@ -236,7 +240,7 @@ function MilestoneLine({
       : {
           role: 'button' as const,
           tabIndex: 0,
-          'aria-label': `Show issues in ${title}`,
+          'aria-label': t('Show issues in {title}', { title }),
           ...pressable(() => nav.gotoMilestone(title)),
         };
 
@@ -250,7 +254,7 @@ function MilestoneLine({
         <Icon path={mdiFlagOutline} size={11} />
         {/* 名前が無いことを名前で表さない。付いていない課題の束であることをそのまま言う */}
         {title === null ? (
-          <em>no milestone</em>
+          <em>{t('no milestone')}</em>
         ) : (
           <span className="ms-title">
             <SubjectText text={title} project={project} />
@@ -262,11 +266,14 @@ function MilestoneLine({
         {row.dueOn === null ? (
           <span className="dimtxt">—</span>
         ) : (
-          <span title={absTime(row.dueOn)}>{formatDue(row.dueOn, nowMs)}</span>
+          <span title={absTime(row.dueOn)}>{formatDue(t, row.dueOn, nowMs)}</span>
         )}
       </span>
 
-      <span className="epic-prog" title={`${row.closed}/${row.total} closed`}>
+      <span
+        className="epic-prog"
+        title={t('{closed}/{total} closed', { closed: row.closed, total: row.total })}
+      >
         <span className="epic-bar">
           <i style={{ width: `${done * 100}%` }} />
         </span>
@@ -284,7 +291,7 @@ function MilestoneLine({
             key={branch}
             type="button"
             className="msbr"
-            title={`Open branch ${branch}`}
+            title={t('Open branch {name}', { name: branch })}
             {...pressable(() => nav.openRef(branch, branch), { stopPropagation: true })}
           >
             <Icon path={mdiSourceBranch} size={9} />
@@ -304,7 +311,7 @@ function MilestoneLine({
             state={worker.state}
             label={worker.label}
             where={worker.where}
-            via={viaLabel(worker)}
+            via={viaLabel(t, worker)}
           />
         ))}
         {row.workers.length > MAX_LISTED_WORKERS && (
@@ -316,16 +323,18 @@ function MilestoneLine({
 
           **子は絶対配置の要素だけを平らに並べる。** 包む要素を足すと `subgrid` が切れる。
           並べた順がそのまま重なりの順で、線とハッチが下、点が上、期日がいちばん上になる */}
-      <span className={`gt${stateClass(track)}`} title={groupTitle(track, group.unread, row.total)}>
+      <span
+        className={`gt${stateClass(track)}`}
+        title={groupTitle(t, track, group.unread, row.total)}
+      >
         {/* 読めなかった課題の数。左端で言う —— 軸の上に置ける時刻を持たないものである */}
         {group.unread > 0 && track.kind === 'read' && (
           <b
             className="gt-off left unplaced"
-            title={`${countOf(group.unread, 'issue')} in this milestone ${
-              group.unread === 1 ? 'was' : 'were'
-            } not in the event log that was read, so nothing from ${
-              group.unread === 1 ? 'it' : 'them'
-            } is on this line`}
+            title={t(
+              '{n, plural, one {# issue in this milestone was not in the event log that was read, so nothing from it is on this line} other {# issues in this milestone were not in the event log that was read, so nothing from them is on this line}}',
+              { n: group.unread },
+            )}
           >
             ?{group.unread}
           </b>
@@ -334,16 +343,17 @@ function MilestoneLine({
           <i
             className={`gt-line${line.softFrom ? ' soft-from' : ''}${line.softTo ? ' soft-to' : ''}`}
             style={{ left: `${line.left}%`, width: `${line.width}%` }}
-            title={groupLineTitle(ends.fromMs, ends.toMs, line.softFrom, line.softTo)}
+            title={groupLineTitle(t, ends.fromMs, ends.toMs, line.softFrom, line.softTo)}
           />
         )}
         {cutRegion !== null && (
           <i
             className={`gt-cut${cutRegion.softFrom ? ' soft-from' : ''}${cutRegion.softTo ? ' soft-to' : ''}`}
             style={{ left: `${cutRegion.left}%`, width: `${cutRegion.width}%` }}
-            title={`Only the 30 most recent events were read for at least one issue here — anything before ${absTime(
-              cutRegion.toMs,
-            )} is not shown`}
+            title={t(
+              'Only the 30 most recent events were read for at least one issue here — anything before {to} is not shown',
+              { to: absTime(cutRegion.toMs) },
+            )}
           />
         )}
         {open !== null && (
@@ -352,9 +362,11 @@ function MilestoneLine({
               open.clamped === 'before' ? ' soft-from' : ''
             }${open.clamped === 'after' ? ' soft-to' : ''}`}
             style={{ left: `${open.pct}%` }}
-            title={`The first issue here was opened ${absTime(open.at)}${
-              open.clamped === null ? '' : ', outside this span — the ring sits at the edge'
-            }`}
+            title={t('The first issue here was opened {at}{clamped}', {
+              at: absTime(open.at),
+              clamped:
+                open.clamped === null ? '' : t(', outside this span — the ring sits at the edge'),
+            })}
           />
         )}
         <TrackMarks track={track} />
@@ -364,7 +376,7 @@ function MilestoneLine({
           <i
             className="gt-due"
             style={{ left: `${duePct}%` }}
-            title={`Due ${absTime(row.dueOn)}`}
+            title={t('Due {at}', { at: absTime(row.dueOn) })}
           />
         )}
       </span>
@@ -374,41 +386,62 @@ function MilestoneLine({
 
 /* 束のトラック全体の説明。**課題 1 件の説明と同じ言葉にしない** —— 「この課題は記録に
    居なかった」と「この区切りの課題が記録に居なかった」は別の文である。 */
-function groupTitle(track: RowTrack, unread: number, total: number): string {
+function groupTitle(t: Translator, track: RowTrack, unread: number, total: number): string {
   const missing =
     unread === 0
       ? ''
-      : ` — ${countOf(unread, 'issue')} of ${total} ${
-          unread === 1 ? 'was' : 'were'
-        } not in the event log, so nothing from ${unread === 1 ? 'it' : 'them'} is drawn here`;
-  if (track.kind === 'reading') return 'Reading the issue event log';
-  if (track.kind === 'nolog') return 'This project has no issue event log';
+      : t(
+          '{n, plural, one { — # issue of {total} was not in the event log, so nothing from it is drawn here} other { — # issues of {total} were not in the event log, so nothing from them is drawn here}}',
+          { n: unread, total },
+        );
+  if (track.kind === 'reading') return t('Reading the issue event log');
+  if (track.kind === 'nolog') return t('This project has no issue event log');
   if (track.kind === 'unread') {
-    if (track.why === 'log') return 'Issue events could not be read';
-    if (track.why === 'row') return 'None of the issues here were in the event log that was read';
-    if (track.why === 'unreadable') {
-      return `The time on ${countOf(track.dropped, 'event')} could not be read, so nothing is drawn here`;
+    if (track.why === 'log') return t('Issue events could not be read');
+    if (track.why === 'row') {
+      return t('None of the issues here were in the event log that was read');
     }
-    return 'The event log was cut short before it reached any issue here';
+    if (track.why === 'unreadable') {
+      return t('The time on {what} could not be read, so nothing is drawn here', {
+        what: countOf(t, track.dropped, 'event'),
+      });
+    }
+    return t('The event log was cut short before it reached any issue here');
   }
   if (track.count === 0 || track.lastAt === null) {
-    return `No events on record for the ${countOf(total, 'issue')} here${missing}`;
+    return t('No events on record for the {what} here{missing}', {
+      what: countOf(t, total, 'issue'),
+      missing,
+    });
   }
-  return `${countOf(track.count, 'event')} across ${countOf(total, 'issue')}, the last on ${absTime(
-    track.lastAt,
-  )}${missing}`;
+  return t('{what} across {across}, the last on {at}{missing}', {
+    what: countOf(t, track.count, 'event'),
+    across: countOf(t, total, 'issue'),
+    at: absTime(track.lastAt),
+    missing,
+  });
 }
 
 /* 線が結ぶ 2 つの時刻。**長さは言わない** —— 端を軸で止めているときは描いた長さが本当の
    間隔ではないうえ、そもそもこの 2 つの時刻の間を観測したわけではない。 */
-function groupLineTitle(fromMs: number, toMs: number, softFrom: boolean, softTo: boolean): string {
-  const spans = `First issue opened ${absTime(fromMs)} — last event ${absTime(toMs)}`;
+function groupLineTitle(
+  t: Translator,
+  fromMs: number,
+  toMs: number,
+  softFrom: boolean,
+  softTo: boolean,
+): string {
+  const spans = t('First issue opened {from} — last event {to}', {
+    from: absTime(fromMs),
+    to: absTime(toMs),
+  });
   const stopped = [
-    softFrom ? 'it starts before this span' : '',
-    softTo ? 'it runs past this span' : '',
+    softFrom ? t('it starts before this span') : '',
+    softTo ? t('it runs past this span') : '',
   ].filter((clause) => clause !== '');
   if (stopped.length === 0) return spans;
-  return `${spans}. The line stops at the edge of this span: ${stopped.join(
-    ' and ',
-  )} — widen the span to see all of it.`;
+  return t(
+    '{spans}. The line stops at the edge of this span: {stopped} — widen the span to see all of it.',
+    { spans, stopped: stopped.join(t(' and ')) },
+  );
 }

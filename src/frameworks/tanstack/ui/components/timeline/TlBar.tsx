@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { formatDuration, mdhms } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { pulseDelay } from '../../phase.ts';
 import { type Axis, intervalsOf, type TimelineNode } from '../../timeline/axis.ts';
 
@@ -30,6 +31,7 @@ export function TlBar({
 }) {
   const delay = useMemo(() => pulseDelay(Date.now()), []);
   const span = axis.t1 - axis.t0;
+  const t = useT();
   const pct = (at: number) => ((at - axis.t0) / span) * 100;
 
   const intervals = intervalsOf(node, nowMs);
@@ -87,7 +89,10 @@ export function TlBar({
       {unknownEnd !== null && startEdge < unknownTo && (
         <i
           className="bar unknown"
-          title={`${mdhms(startedMs)} → ${mdhms(unknownEnd)} · earlier activity (density unknown — beyond bounded scan)`}
+          title={t('{from} → {to} · earlier activity (density unknown — beyond bounded scan)', {
+            from: mdhms(startedMs),
+            to: mdhms(unknownEnd),
+          })}
           style={{
             left: `${pct(startEdge)}%`,
             width: `${Math.max(0.3, pct(unknownTo) - pct(startEdge))}%`,
@@ -103,7 +108,12 @@ export function TlBar({
           <i
             key={`${bar.trueFrom}-${bar.trueTo}`}
             className={`bar ${node.state}${live ? '' : ' past'}`}
-            title={`${mdhms(bar.trueFrom)} → ${live ? 'now' : mdhms(bar.trueTo)} · ${formatDuration(bar.trueTo - bar.trueFrom)}${live ? ' · live' : ''}`}
+            title={t('{from} → {to} · {took}{live}', {
+              from: mdhms(bar.trueFrom),
+              to: live ? t('now') : mdhms(bar.trueTo),
+              took: formatDuration(t, bar.trueTo - bar.trueFrom),
+              live: live ? ` · ${t('live')}` : '',
+            })}
             style={{
               left: `${left}%`,
               width: `${width}%`,

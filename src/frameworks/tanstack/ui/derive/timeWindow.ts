@@ -6,6 +6,8 @@
    刻みは Claude Code の定額枠に合わせてある —— 5h と 7d はそのまま枠 1 つぶんで、
    30m / 1h / 1d はその中を刻んで読むための幅である。 */
 
+import { englishTranslator, type Translator } from '~/interface/i18n/translator.ts';
+
 /** `auto` は「実際に在るものがちょうど収まる幅」 */
 export type TimeWindow = 'auto' | number;
 
@@ -21,18 +23,41 @@ export const MIN_WINDOW_MS = 30 * 60_000;
 /** いちばん広い幅。素材がここまでしか遡らない */
 export const MAX_WINDOW_MS = 7 * DAY_MS;
 
-export const WINDOWS: readonly {
+export interface WindowChip {
   readonly key: TimeWindow;
+  /** URL とテストが見ている名前。訳さない */
   readonly label: string;
+  /** チップに出す言葉。`30m` のような幅そのものの綴りは、どの言葉でもそのまま読める */
+  readonly text: string;
   readonly title: string;
-}[] = [
-  { key: 'auto', label: 'Auto', title: 'The narrowest of these that still shows everything' },
-  { key: MIN_WINDOW_MS, label: '30m', title: 'The last 30 minutes' },
-  { key: HOUR_MS, label: '1h', title: 'The last hour' },
-  { key: QUOTA_WINDOW_MS, label: '5h', title: "Claude Code's 5h quota window in one view" },
-  { key: DAY_MS, label: '1d', title: 'The last day' },
-  { key: MAX_WINDOW_MS, label: '7d', title: "Claude Code's weekly quota window in one view" },
+}
+
+export const windowChips = (t: Translator): readonly WindowChip[] => [
+  {
+    key: 'auto',
+    label: 'Auto',
+    text: t('Auto'),
+    title: t('The narrowest of these that still shows everything'),
+  },
+  { key: MIN_WINDOW_MS, label: '30m', text: '30m', title: t('The last 30 minutes') },
+  { key: HOUR_MS, label: '1h', text: '1h', title: t('The last hour') },
+  {
+    key: QUOTA_WINDOW_MS,
+    label: '5h',
+    text: '5h',
+    title: t("Claude Code's 5h quota window in one view"),
+  },
+  { key: DAY_MS, label: '1d', text: '1d', title: t('The last day') },
+  {
+    key: MAX_WINDOW_MS,
+    label: '7d',
+    text: '7d',
+    title: t("Claude Code's weekly quota window in one view"),
+  },
 ];
+
+/** 幅そのものを見るところ用。訳の要らない `key` と `label` だけを当てにする */
+export const WINDOWS: readonly WindowChip[] = windowChips(englishTranslator);
 
 /** 選べる幅だけを、狭い順に */
 const STEPS: readonly number[] = WINDOWS.map((window) => window.key).filter(

@@ -1,6 +1,12 @@
+import type { Translator } from '~/interface/i18n/translator.ts';
+
 /* 数と時刻を、画面の狭い欄に収まる文字列にする。
 
-   どれも見せ方だけの話で、内側の値は丸めない。 */
+   どれも見せ方だけの話で、内側の値は丸めない。
+
+   **言葉を含むものだけが `t` を受ける。** `absTime` や `mdhm` のような数と区切りだけの形は、
+   どの言葉でも同じに読めるので訳さない。訳すと、同じ時刻が画面の場所によって別の綴りで
+   出ることになる。 */
 
 /** 大きな数を桁の頭だけで読ませる。列の幅が揺れないので、縦に並べたとき目で比べられる */
 export const formatTokens = (n: number): string => {
@@ -13,33 +19,39 @@ export const formatTokens = (n: number): string => {
 /* 今からどれだけ前かを言う。
 
    刻みを粗くしていくのは、古いものほど正確さが要らないからである。
-   1 分未満で負の値になるのは時計のずれのときだけなので、0 で止める。 */
-export function formatSince(atMs: number, nowMs: number): string {
+   1 分未満で負の値になるのは時計のずれのときだけなので、0 で止める。
+
+   **`Intl.RelativeTimeFormat` を使わない。** あれが出す `21 hr. ago` は、この画面のいちばん
+   狭い欄に入らない。並べて目で比べる列なので、幅が要る。刻みごとの短い言い方をカタログに
+   置いて、言葉ごとにその言葉の短い形を選べるようにしてある。 */
+export function formatSince(t: Translator, atMs: number, nowMs: number): string {
   const delta = nowMs - atMs;
-  if (delta < 60_000) return `${Math.max(0, Math.floor(delta / 1000))}s ago`;
-  if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m ago`;
-  if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)}h ago`;
-  return `${Math.floor(delta / 86_400_000)}d ago`;
+  if (delta < 60_000) {
+    return t('{n}s ago', { n: Math.max(0, Math.floor(delta / 1000)) });
+  }
+  if (delta < 3_600_000) return t('{n}m ago', { n: Math.floor(delta / 60_000) });
+  if (delta < 86_400_000) return t('{n}h ago', { n: Math.floor(delta / 3_600_000) });
+  return t('{n}d ago', { n: Math.floor(delta / 86_400_000) });
 }
 
 /** `transcript` の表記から起こす形。読めない文字列は空にする — 出鱈目な時刻を出すよりよい */
-export const formatSinceIso = (iso: string | null, nowMs: number): string => {
+export const formatSinceIso = (t: Translator, iso: string | null, nowMs: number): string => {
   if (iso === null) return '';
   const atMs = Date.parse(iso);
-  return Number.isFinite(atMs) ? formatSince(atMs, nowMs) : '';
+  return Number.isFinite(atMs) ? formatSince(t, atMs, nowMs) : '';
 };
 
 /* 期日までの残り。**`formatSince` を使い回さない** —— あちらは過ぎた時刻を読むためのもので、
    先の時刻を渡すと負の差が 0 に潰れ、来月の期日が「0s ago」として出る。
 
    日より細かくは刻まない。期日は日で切られたものなので、時間で出すと在りもしない精度が付く。 */
-export function formatDue(iso: string | null, nowMs: number): string {
+export function formatDue(t: Translator, iso: string | null, nowMs: number): string {
   if (iso === null) return '';
   const atMs = Date.parse(iso);
   if (!Number.isFinite(atMs)) return '';
   const days = Math.round((atMs - nowMs) / 86_400_000);
-  if (days === 0) return 'today';
-  return days > 0 ? `in ${days}d` : `${-days}d overdue`;
+  if (days === 0) return t('today');
+  return days > 0 ? t('in {n}d', { n: days }) : t('{n}d overdue', { n: -days });
 }
 
 const pad = (n: number): string => String(n).padStart(2, '0');
@@ -68,18 +80,20 @@ export const mdhm = (atMs: number): string => {
 };
 
 /** 長さを秒・分・時で。桁を揃えるので、縦に並べたとき目で比べられる */
-export function formatDuration(ms: number): string {
+export function formatDuration(t: Translator, ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000));
-  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 60) return t('{s}s', { s: seconds });
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m${pad(seconds % 60)}s`;
-  return `${Math.floor(minutes / 60)}h${pad(minutes % 60)}m`;
+  if (minutes < 60) return t('{m}m{s}s', { m: minutes, s: pad(seconds % 60) });
+  return t('{h}h{m}m', { h: Math.floor(minutes / 60), m: pad(minutes % 60) });
 }
 
 /** 分より細かくは言わない長さ。期間の残りのような、そこまで細かくなくてよい場所で使う */
-export function formatMinutes(ms: number): string {
+export function formatMinutes(t: Translator, ms: number): string {
   const minutes = Math.max(0, Math.round(ms / 60_000));
-  return minutes >= 60 ? `${Math.floor(minutes / 60)}h${pad(minutes % 60)}m` : `${minutes}m`;
+  return minutes >= 60
+    ? t('{h}h{m}m', { h: Math.floor(minutes / 60), m: pad(minutes % 60) })
+    : t('{m}m', { m: minutes });
 }
 
 /** バイトの単位。`transcript` は KiB から始まり、長いものは MiB を超える */
@@ -90,7 +104,7 @@ const BYTE_UNITS = ['B', 'KiB', 'MiB', 'GiB'] as const;
    そのためで、分けると片方だけ別の単位で丸める呼び方が書ける。
 
    B は整数、それより上は小数第 1 位まで。読み終えるまで動き続ける数なので、桁は揃える。 */
-export function formatByteRange(done: number, total: number): string {
+export function formatByteRange(t: Translator, done: number, total: number): string {
   let step = 0;
   let left = Math.max(0, total);
   while (left >= 1024 && step < BYTE_UNITS.length - 1) {
@@ -101,7 +115,11 @@ export function formatByteRange(done: number, total: number): string {
     const value = Math.max(0, bytes) / 1024 ** step;
     return step === 0 ? `${Math.round(value)}` : value.toFixed(1);
   };
-  return `${scale(done)} of ${scale(total)} ${BYTE_UNITS[step]}`;
+  return t('{done} of {total} {unit}', {
+    done: scale(done),
+    total: scale(total),
+    unit: BYTE_UNITS[step] ?? 'B',
+  });
 }
 
 /** 長すぎる文字列を切る。切り詰めたことが分かる省略記号を添える */

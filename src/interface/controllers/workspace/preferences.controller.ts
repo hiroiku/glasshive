@@ -1,7 +1,11 @@
 import { err, ok, type Result } from '~/app-kernel/result.ts';
 import type { TreeSnapshotService } from '~/application/services/sessions/tree-snapshot.service.ts';
-import type { ReadPreferencesUseCase } from '~/application/use-cases/workspace/read-preferences.use-case.ts';
+import {
+  isLocale,
+  type ReadPreferencesUseCase,
+} from '~/application/use-cases/workspace/read-preferences.use-case.ts';
 import type {
+  PreferenceAction,
   TabAction,
   WritePreferencesUseCase,
 } from '~/application/use-cases/workspace/write-preferences.use-case.ts';
@@ -33,7 +37,7 @@ export interface PreferencesDeps {
 /* 送る側が宣言する型。**送る側と受ける側が同じ 1 つの名前を見る。**
    両側で別々に書くと、片方だけ増えたときに気付けない。型は自己申告でしかないので、
    届いたものは型に関わらず検証する。 */
-export type { TabAction };
+export type { PreferenceAction, TabAction };
 
 /** 置きに行った結果。**通ったときと断られたときで形が違う** */
 export type PreferencesResponse = ApiResponse<PreferencesJson>;
@@ -46,17 +50,29 @@ const own = (record: Record<string, unknown>, key: string): unknown =>
 
    **読めなければ断る。既定を置かない。** 出鱈目を「留めない」と読み替えて置くと、
    送り間違いが `preferences.json` の書き換えとして通ってしまう。 */
-function tabActionOf(input: unknown): Result<TabAction, InvalidTabActionError> {
+function actionOf(input: unknown): Result<PreferenceAction, InvalidTabActionError> {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    return err(new InvalidTabActionError('Request is not readable as a tab action'));
+    return err(new InvalidTabActionError('Request is not readable as a preference action'));
   }
   const record = input as Record<string, unknown>;
 
   /* 何をしたいのかを先に見る。後にすると、知らない操作に対して
      「どれに対する操作か分からない」と答えることになり、判断が実態とずれる。 */
   const action = own(record, 'action');
-  if (action !== 'pin' && action !== 'unpin' && action !== 'move') {
-    return err(new InvalidTabActionError('Action is neither pin, unpin nor move'));
+  if (action !== 'pin' && action !== 'unpin' && action !== 'move' && action !== 'locale') {
+    return err(new InvalidTabActionError('Action is not pin, unpin, move nor locale'));
+  }
+
+  /* 言葉の選択には相手の id が要らない。**知らない綴りは断る** —— 既定へ倒して受けると、
+     送り間違いが「英語を選んだ」として `preferences.json` に残る。`null` は選ぶのをやめる
+     ことなので、これだけは受ける。 */
+  if (action === 'locale') {
+    const locale = own(record, 'locale');
+    if (locale === null) return ok({ action, locale: null });
+    if (!isLocale(locale)) {
+      return err(new InvalidTabActionError('Locale is not one of the languages this UI ships'));
+    }
+    return ok({ action, locale });
   }
 
   const id = own(record, 'id');
@@ -108,7 +124,7 @@ export async function writePreferences(
   deps: PreferencesDeps,
   input: unknown,
 ): Promise<PreferencesResponse> {
-  const action = tabActionOf(input);
+  const action = actionOf(input);
   // 形が読めないリクエストは、観測にも保存先にも触らずに断る
   if (!action.ok) return { ok: false, ...presentError(action.error) };
 

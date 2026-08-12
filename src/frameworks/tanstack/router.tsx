@@ -4,6 +4,7 @@ import { routeTree } from './routeTree.gen';
 import { NotObserved } from './ui/components/primitives/NotObserved.tsx';
 import { ReadProgress } from './ui/components/primitives/ReadProgress.tsx';
 import { crashTrouble, routeTrouble } from './ui/derive/trouble.ts';
+import { useT } from './ui/i18n/useT.ts';
 
 /* ルーターの組み立て。
 
@@ -11,6 +12,31 @@ import { crashTrouble, routeTrouble } from './ui/derive/trouble.ts';
    同じインスタンスを使える。観測は時とともに変わり続けるので、遷移のときだけ取り直す
    loader だけでは足りない — 変更通知が来たら捨てて取り直す、という流れの中心が
    この `QueryClient` である。 */
+
+/* 待ちと、落ちたときと、無い URL。**中で `t()` を呼ぶために、名前付きの
+   コンポーネントにしてある** —— ルーターへその場で渡す関数の中では、hook を呼べる保証が無い。
+
+   ここは言葉を選ぶ入れ物より外で描かれることが在る。そのときは英語のまま出る —— 落ちた画面が
+   さらに落ちるより、読める英語が出るほうがよい。 */
+function StartingView() {
+  const t = useT();
+  return (
+    <ReadProgress
+      label={t('Starting glasshive')}
+      slowNote={t('The first read of ~/.claude/projects takes a moment.')}
+    />
+  );
+}
+
+function CrashView({ error }: { error: unknown }) {
+  const t = useT();
+  return <NotObserved {...crashTrouble(t, error)} />;
+}
+
+function NoRouteView() {
+  const t = useT();
+  return <NotObserved {...routeTrouble(t, globalThis.location?.pathname ?? '')} />;
+}
 
 export function getRouter() {
   const queryClient = new QueryClient({
@@ -39,22 +65,15 @@ export function getRouter() {
        分母を持たない。8 秒を過ぎてから足す 1 行が食い違いにならないのは、それを出すのが
        `useEffect` のタイマーだからである。シェルを描くときには走らないので、hydrate する
        その瞬間はどちらの側にもこの 1 行が無い。 */
-    defaultPendingComponent: () => (
-      <ReadProgress
-        label="Starting glasshive"
-        slowNote="The first read of ~/.claude/projects takes a moment."
-      />
-    ),
+    defaultPendingComponent: () => <StartingView />,
     /* 待ちの表示を、間を置いてからではなく最初から出す。HTML シェルには既に描かれて
        いるので、ここで間を置くと、その間だけブラウザー側が空になって食い違う。 */
     defaultPendingMs: 0,
 
     /* 落ちたときと、無い URL を開いたとき。**ルーターの既定の画面をそのまま出さない** ——
        素の英文とスタックだけが出て、観測できなかったのか glasshive が壊れたのかが読み分けられない。 */
-    defaultErrorComponent: ({ error }) => <NotObserved {...crashTrouble(error)} />,
-    defaultNotFoundComponent: () => (
-      <NotObserved {...routeTrouble(globalThis.location?.pathname ?? '')} />
-    ),
+    defaultErrorComponent: ({ error }) => <CrashView error={error} />,
+    defaultNotFoundComponent: () => <NoRouteView />,
 
     context: { queryClient },
     Wrap: ({ children }) => (

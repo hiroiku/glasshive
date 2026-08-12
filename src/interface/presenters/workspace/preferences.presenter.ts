@@ -1,5 +1,6 @@
 import type { Observation } from '~/app-kernel/observation.ts';
 import type {
+  Locale,
   PreferencesView,
   TabSelection,
 } from '~/application/use-cases/workspace/read-preferences.use-case.ts';
@@ -33,6 +34,9 @@ export interface PreferencesJson {
      観測していない id は出ないので、両方を出さないと
      「ピン留めしてあるのにタブが無い」理由が受け取る側から見えなくなる。 */
   visible_tabs: string[];
+  /* 選ばれた画面の言葉。**まだ選んでいなければ `null` である。**
+     `"en"` に倒して写すと、選んでいない人の画面がブラウザーの言葉を見に行けなくなる。 */
+  locale: Locale | null;
   /* `preferences.json` を読めたか。既定へ倒れたとき、無かったのか観測できなかったのかを分ける。
      どちらも「ピン留めが無い」ように見えるので、この欄でしか見分けられない。 */
   stored: StoredStatusJson;
@@ -55,6 +59,7 @@ export function presentPreferences(view: PreferencesView): PreferencesJson {
   return {
     tab_selection: presentSelection(view.selection),
     visible_tabs: [...view.visibleTabs],
+    locale: view.locale,
     stored: { state: view.stored.kind, reason: reasonOf(view.stored) },
   };
 }

@@ -2,6 +2,7 @@ import { scaleLinear } from 'd3-scale';
 import { area, curveStepAfter, line } from 'd3-shape';
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import { FLOW_BARS, FLOW_SPAN_MS, flowSeries } from '../../derive/issueFlow.ts';
+import { useT } from '../../i18n/useT.ts';
 import { TimeTicks } from '../primitives/TimeTicks.tsx';
 
 /* 開いている件数の面と、閉じた件数の累計の線。
@@ -34,6 +35,7 @@ export function FlowChart({
   issues: readonly IssueSummaryJson[];
   nowMs: number;
 }) {
+  const t = useT();
   const { open, closed } = flowSeries(issues, nowMs);
   const fromMs = nowMs - FLOW_SPAN_MS;
   const openPeak = Math.max(1, ...open);
@@ -76,21 +78,21 @@ export function FlowChart({
         style={{ height: HEIGHT }}
         role="img"
       >
-        <title>Open issues and closed issues, day by day</title>
+        <title>{t('Open issues and closed issues, day by day')}</title>
         <path d={areaPath} className="fl-open" />
         <path d={linePath} className="fl-closed" />
       </svg>
       <TimeTicks fromMs={fromMs} toMs={nowMs} />
       <div className="flow-legend">
         <span className="lg">
-          <i className="sf-dot" style={{ background: 'rgba(96, 165, 250, .65)' }} /> open now{' '}
-          {open[FLOW_BARS - 1] ?? 0} (peak {openPeak})
+          <i className="sf-dot" style={{ background: 'rgba(96, 165, 250, .65)' }} />{' '}
+          {t('open now {n} (peak {peak})', { n: open[FLOW_BARS - 1] ?? 0, peak: openPeak })}
         </span>
         <span className="lg">
-          <i className="sf-dot" style={{ background: 'var(--active)' }} /> closed cumulative{' '}
-          {closed[FLOW_BARS - 1] ?? 0}
+          <i className="sf-dot" style={{ background: 'var(--active)' }} />{' '}
+          {t('closed cumulative {n}', { n: closed[FLOW_BARS - 1] ?? 0 })}
         </span>
-        <span className="dimtxt">last 30d</span>
+        <span className="dimtxt">{t('last 30d')}</span>
       </div>
     </div>
   );

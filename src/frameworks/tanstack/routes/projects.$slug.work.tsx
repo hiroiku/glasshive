@@ -24,11 +24,13 @@ import type { TipSortKey } from '../ui/derive/gitGraph.ts';
 import { eventLogOf } from '../ui/derive/issueEvents.ts';
 import { DEFAULT_GANTT_WINDOW, GANTT_WINDOWS, type GanttWindow } from '../ui/derive/issueGantt.ts';
 import { withoutClosed } from '../ui/derive/issueStatus.ts';
+import { statusLabel } from '../ui/derive/labels.ts';
 import { milestoneOf } from '../ui/derive/milestones.ts';
 import { githubTrouble, gitTrouble, transportTrouble } from '../ui/derive/trouble.ts';
 import { workerIndex } from '../ui/derive/workers.ts';
 import { buildWorkJoin, type GitReach, type WorkJoin } from '../ui/derive/workJoin.ts';
 import { useNowMs } from '../ui/hooks/useNowMs.ts';
+import { useT } from '../ui/i18n/useT.ts';
 import { useNav } from '../ui/nav/NavContext.tsx';
 import type { ProjectSearch, WorkUnit } from '../ui/nav/search.ts';
 
@@ -67,6 +69,7 @@ const BRANCH_SORT_KEYS: readonly TipSortKey[] = ['name', 'ahead', 'date'];
 const TICK_MS = 15_000;
 
 function WorkView() {
+  const t = useT();
   const { slug } = Route.useParams();
   const search: ProjectSearch = Route.useSearch();
   const navigate = useNavigate();
@@ -184,8 +187,9 @@ function WorkView() {
      言わないと空欄だけが観測の顔で残る。 */
   const workersNote = workersUnobservable ? (
     <p className="empty truncated">
-      The agent columns are blank because the transcripts could not be read — not because nobody is
-      working on these.
+      {t(
+        'The agent columns are blank because the transcripts could not be read — not because nobody is working on these.',
+      )}
     </p>
   ) : null;
 
@@ -265,7 +269,7 @@ function WorkView() {
     return (
       <>
         {toolbar()}
-        <NotObserved {...transportTrouble('issues')} />
+        <NotObserved {...transportTrouble(t, t('issues'))} />
       </>
     );
   }
@@ -276,8 +280,8 @@ function WorkView() {
       <>
         {toolbar()}
         <ReadProgress
-          label="Fetching issues from GitHub"
-          slowNote="gh is paging through this repository — a large one takes a few seconds"
+          label={t('Fetching issues from GitHub')}
+          slowNote={t('gh is paging through this repository — a large one takes a few seconds')}
         />
       </>
     );
@@ -296,7 +300,7 @@ function WorkView() {
     return (
       <>
         {toolbar()}
-        <NotObserved {...githubTrouble(body.reason)} />
+        <NotObserved {...githubTrouble(t, body.reason)} />
       </>
     );
   }
@@ -312,8 +316,10 @@ function WorkView() {
       <>
         {toolbar()}
         <ReadProgress
-          label="Fetching the rest of the issues from GitHub"
-          slowNote="this view needs every issue — the dependencies and milestones are read from the whole list"
+          label={t('Fetching the rest of the issues from GitHub')}
+          slowNote={t(
+            'this view needs every issue — the dependencies and milestones are read from the whole list',
+          )}
         />
       </>
     );
@@ -332,7 +338,7 @@ function WorkView() {
             <SearchInput
               value={search.q ?? ''}
               onChange={onQuery}
-              placeholder="Search milestones…"
+              placeholder={t('Search milestones…')}
             />
             <SpanChips gantt={ganttWindow} onGantt={onGantt} />
           </div>
@@ -364,8 +370,8 @@ function WorkView() {
           className="fchip on ms-chip"
           /* 中身は絞り込んでいる名前しか言わない。**押すと何が起きるかは名前で言う** ——
              読み上げに「1.4 — Ingest ×」とだけ渡すと、外すボタンだと分からない */
-          aria-label={`Clear the milestone filter: ${search.ms}`}
-          title="Clear the milestone filter"
+          aria-label={t('Clear the milestone filter: {name}', { name: search.ms })}
+          title={t('Clear the milestone filter')}
           onClick={() => patch({ ms: undefined })}
         >
           <Icon path={mdiFlagOutline} size={10} /> {search.ms} ×
@@ -385,7 +391,7 @@ function WorkView() {
             aria-pressed={search.status === name}
             onClick={() => patch({ status: search.status === name ? undefined : name })}
           >
-            {name} {body.walked ? count : '—'}
+            {statusLabel(t, name)} {body.walked ? count : '—'}
           </button>
         ))}
       <button
@@ -394,7 +400,7 @@ function WorkView() {
         aria-pressed={includeClosed}
         onClick={() => patch({ closed: includeClosed ? undefined : true })}
       >
-        + closed {body.walked ? (body.counts.closed ?? 0) : '—'}
+        + {t('closed')} {body.walked ? (body.counts.closed ?? 0) : '—'}
       </button>
     </>
   );
@@ -406,16 +412,19 @@ function WorkView() {
        **選んだことを黙らない** —— 黙ると、選ばなかったほうの課題が「無い」ことになる */}
       {body.other_repositories > 0 && body.repository !== null && (
         <p className="empty truncated">
-          Reading issues from <code>{body.repository}</code>. This project&rsquo;s remotes point at{' '}
-          {body.other_repositories + 1} GitHub repositories — run <code>gh repo set-default</code>{' '}
-          to change which one glasshive reads.
+          {t('Reading issues from')} <code>{body.repository}</code>
+          {t(
+            '. This project’s remotes point at {n} GitHub repositories — run `gh repo set-default` to change which one glasshive reads.',
+            { n: body.other_repositories + 1 },
+          )}
         </p>
       )}
       {/* 上限に当たったなら黙らない。黙ると、その先の課題が「無かった」ことになる */}
       {body.truncated && (
         <p className="empty truncated">
-          Showing the most recently updated issues only — this repository has more than glasshive
-          fetches in one go.
+          {t(
+            'Showing the most recently updated issues only — this repository has more than glasshive fetches in one go.',
+          )}
         </p>
       )}
 
@@ -455,7 +464,9 @@ function WorkView() {
       {body.walked ? (
         <FlowChart issues={body.issues} nowMs={nowMs} />
       ) : (
-        <ReadProgress label="Fetching the rest of the issues — the cumulative flow counts all of them" />
+        <ReadProgress
+          label={t('Fetching the rest of the issues — the cumulative flow counts all of them')}
+        />
       )}
     </>
   );
@@ -488,10 +499,11 @@ function Branches({
   onSort,
   nowMs,
 }: BranchesProps) {
-  if (failed) return <NotObserved {...transportTrouble('the repository')} />;
-  if (answer === undefined) return <ReadProgress label="Reading branches and worktrees" />;
+  const t = useT();
+  if (failed) return <NotObserved {...transportTrouble(t, t('the repository'))} />;
+  if (answer === undefined) return <ReadProgress label={t('Reading branches and worktrees')} />;
   /* 観測できなかったのはリポジトリの話ではない。`git` が無い・権限が無いはここへ来る */
-  if (!answer.ok) return <NotObserved {...gitTrouble(answer.body.code)} />;
+  if (!answer.ok) return <NotObserved {...gitTrouble(t, answer.body.code)} />;
 
   const overview = answer.body;
   if (overview.state === 'absent') return <NotARepository />;
@@ -533,15 +545,20 @@ function Branches({
    手元だけのリポジトリも、GitHub 以外に置いてあるリポジトリも珍しくない。何をすれば
    この画面が埋まるのかを書いておくと、空である理由と手立てが同時に読める。 */
 function NoRepository() {
+  const t = useT();
   return (
     <NotObserved
       icon={mdiGithub}
-      title="No GitHub repository behind this project"
-      detail="glasshive asks the remotes where this project lives, and none of them point at GitHub. Branches and worktrees are still readable — switch to Branches above."
+      title={t('No GitHub repository behind this project')}
+      detail={t(
+        'glasshive asks the remotes where this project lives, and none of them point at GitHub. Branches and worktrees are still readable — switch to Branches above.',
+      )}
       steps={[
-        { text: 'Point a remote at a GitHub repository', command: 'git remote -v' },
+        { text: t('Point a remote at a GitHub repository'), command: 'git remote -v' },
         {
-          text: 'Then this side fills in: the dependency graph, start order, and which agent is on which issue',
+          text: t(
+            'Then this side fills in: the dependency graph, start order, and which agent is on which issue',
+          ),
         },
       ]}
     />
@@ -550,12 +567,15 @@ function NoRepository() {
 
 /** git のリポジトリでないディレクトリ。これも失敗ではない */
 function NotARepository() {
+  const t = useT();
   return (
     <NotObserved
       icon={mdiGithub}
-      title="Not a git repository"
-      detail="This project directory has no repository, so there are no branches, worktrees or conflicts to draw."
-      steps={[{ text: 'Start one', command: 'git init' }]}
+      title={t('Not a git repository')}
+      detail={t(
+        'This project directory has no repository, so there are no branches, worktrees or conflicts to draw.',
+      )}
+      steps={[{ text: t('Start one'), command: 'git init' }]}
     />
   );
 }

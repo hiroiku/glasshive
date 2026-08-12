@@ -1,4 +1,5 @@
 import { formatTokens, modelShort } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { laneColor } from '../../palette.ts';
 import { isObserved, StatsNote, type StatsObservation } from './StatsObservation.tsx';
 
@@ -21,16 +22,17 @@ export function ByModelPanel({
      読めなかったプロジェクトは、使っていないプロジェクトではない。 */
   readonly observation: StatsObservation;
 }) {
+  const t = useT();
   return (
     <div className="sf-panel sf-models">
       <div className="sf-h">
-        <span className="sf-title">By model</span>
+        <span className="sf-title">{t('By model')}</span>
       </div>
 
       {!isObserved(observation) ? (
         <StatsNote observation={observation} />
       ) : models.length === 0 ? (
-        <div className="sf-dim">no usage in range</div>
+        <div className="sf-dim">{t('no usage in range')}</div>
       ) : (
         <>
           <div className="sf-stack">

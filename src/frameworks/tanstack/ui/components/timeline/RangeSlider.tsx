@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { absTime } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { parseTimeInput } from '../../timeline/axis.ts';
 
 /* 時間帯を選ぶ。両端のハンドルで端を動かし、選択範囲のバーそのものを掴めば
@@ -27,6 +28,7 @@ export function RangeSlider({
   b: number;
   onChange: (a: number, b: number) => void;
 }) {
+  const t = useT();
   const trackRef = useRef<HTMLDivElement>(null);
 
   const pct = (at: number) => Math.min(100, Math.max(0, ((at - min) / (max - min)) * 100));
@@ -133,7 +135,7 @@ export function RangeSlider({
         style={{ left: `${pct(a)}%` }}
         role="slider"
         tabIndex={0}
-        aria-label="Window start"
+        aria-label={t('Window start')}
         aria-valuemin={min}
         aria-valuemax={b}
         aria-valuenow={a}
@@ -146,7 +148,7 @@ export function RangeSlider({
         style={{ left: `${pct(b)}%` }}
         role="slider"
         tabIndex={0}
-        aria-label="Window end"
+        aria-label={t('Window end')}
         aria-valuemin={a}
         aria-valuemax={max}
         aria-valuenow={b}
@@ -175,6 +177,7 @@ export function TimeInput({
   label: string;
   onCommit: (atMs: number) => void;
 }) {
+  const t = useT();
   // null = 書き換えていない(今の値を映す)
   const [draft, setDraft] = useState<string | null>(null);
   const cancelledRef = useRef(false);
@@ -182,7 +185,7 @@ export function TimeInput({
   return (
     <input
       className="rs-time"
-      aria-label={`${label} (YYYY-MM-DD HH:MM)`}
+      aria-label={t('{label} (YYYY-MM-DD HH:MM)', { label })}
       title="YYYY-MM-DD HH:MM"
       value={draft ?? absTime(value)}
       onFocus={(event) => {

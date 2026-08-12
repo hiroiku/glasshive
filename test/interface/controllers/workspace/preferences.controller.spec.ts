@@ -33,6 +33,7 @@ const SELECTION: View['selection'] = {
 const VIEW: View = {
   selection: SELECTION,
   visibleTabs: ['-w-a'],
+  locale: null,
   stored: observed(SELECTION),
 };
 
@@ -172,6 +173,36 @@ describe('操作を受けるコントローラー', () => {
     });
   });
 
+  /* 言葉の選択には相手の id が要らない。**知らない綴りは断る** —— 既定へ倒して受けると、
+     送り間違いが「英語を選んだ」として `preferences.json` に残る。 */
+  it('言葉を選ぶ操作を、そのまま内側へ渡す', async () => {
+    const tree = fakeTree();
+    const cases = fakeUseCases();
+
+    const response = await writePreferences(deps(tree, cases), {
+      action: 'locale',
+      locale: 'zh-Hant',
+    });
+
+    expect(cases.inputs[0]?.action).toEqual({ action: 'locale', locale: 'zh-Hant' });
+    expect(response.ok).toBe(true);
+  });
+
+  /* `null` は英語ではなく「選ぶのをやめる」である。断ると、一度選んだ人は
+     ブラウザーの言葉へ戻れなくなる。 */
+  it('言葉を選ぶのをやめる操作も受ける', async () => {
+    const tree = fakeTree();
+    const cases = fakeUseCases();
+
+    const response = await writePreferences(deps(tree, cases), {
+      action: 'locale',
+      locale: null,
+    });
+
+    expect(cases.inputs[0]?.action).toEqual({ action: 'locale', locale: null });
+    expect(response.ok, '戻す先が無いと、一度選んだ人はブラウザーの言葉へ戻れない').toBe(true);
+  });
+
   it('外すという操作も受ける', async () => {
     const tree = fakeTree();
     const cases = fakeUseCases();
@@ -218,6 +249,10 @@ describe('読めないリクエストは、置きに行く前に断る', () => {
     ['落とし先が文字列', { action: 'move', id: '-w-a', toIndex: '2' }],
     ['落とし先が無限大', { action: 'move', id: '-w-a', toIndex: Number.POSITIVE_INFINITY }],
     ['落とし先が数でない値', { action: 'move', id: '-w-a', toIndex: Number.NaN }],
+    ['出せない言葉', { action: 'locale', locale: 'クリンゴン語' }],
+    ['寄せる前のタグ', { action: 'locale', locale: 'ja-JP' }],
+    ['言葉が無い', { action: 'locale' }],
+    ['言葉が文字列でない', { action: 'locale', locale: 1 }],
   ];
 
   for (const [name, input] of BAD) {

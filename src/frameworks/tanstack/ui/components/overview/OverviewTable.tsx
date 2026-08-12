@@ -10,13 +10,11 @@ import {
   shownTokens,
 } from '../../derive/overview.ts';
 import { formatSince, formatTokens } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { Dot } from '../primitives/Dot.tsx';
 
 /** まだ読んでいない欄。**空欄にしない** — 空欄は「0 だった」と読める */
 const DASH = '—';
-const NOT_READ = 'Not read yet';
-/** 数え上げられなかった行の欄。見えたぶんは本当に在るが、それで全部とは言えない */
-const SHORT = 'Some of this project could not be read — the count may be short';
 
 /** 期間を絞っていないときに稼働のトラックが覆う幅。稼働が 1 つも無いときの目盛りとして使う */
 const DEFAULT_STRIP_MS = 30 * 86_400_000;
@@ -38,16 +36,21 @@ function Count({
   read: boolean;
   counted: boolean;
 }) {
+  const t = useT();
   if (!read) {
     return (
-      <span className="right mono dimtxt" role="gridcell" title={NOT_READ}>
+      <span className="right mono dimtxt" role="gridcell" title={t('Not read yet')}>
         {DASH}
       </span>
     );
   }
   if (!counted) {
     return (
-      <span className="right mono" role="gridcell" title={SHORT}>
+      <span
+        className="right mono"
+        role="gridcell"
+        title={t('Some of this project could not be read — the count may be short')}
+      >
         {value ?? 0}
         <Short />
       </span>
@@ -110,9 +113,10 @@ function SortHead({ label, sortKey, order, onSort, right }: HeadProps) {
    全部を見られていないときは黙らない。途切れた絵をそのまま出すと、
    読めなかった時間が「静かだった時間」として並ぶ。 */
 function ActivityStrip({ row, fromMs, toMs }: { row: OverviewRow; fromMs: number; toMs: number }) {
+  const t = useT();
   const width = Math.max(1, toMs - fromMs);
   if (!row.read) {
-    return <span className="dash-act" role="gridcell" title={NOT_READ} />;
+    return <span className="dash-act" role="gridcell" title={t('Not read yet')} />;
   }
   const shown = row.spans.filter((span) => span[1] >= fromMs && span[0] <= toMs);
   return (
@@ -121,8 +125,8 @@ function ActivityStrip({ row, fromMs, toMs }: { row: OverviewRow; fromMs: number
       role="gridcell"
       title={
         row.spansComplete
-          ? `${shown.length} ${shown.length === 1 ? 'run' : 'runs'} in view`
-          : 'Some activity could not be read — the gaps may not be quiet'
+          ? t('{n, plural, one {# run in view} other {# runs in view}}', { n: shown.length })
+          : t('Some activity could not be read — the gaps may not be quiet')
       }
     >
       {shown.map((span) => {
@@ -163,6 +167,7 @@ export function OverviewTable({
   nowMs,
   spanMs,
 }: OverviewTableProps) {
+  const t = useT();
   const tokenTotal = shownTokens(rows);
 
   /* 稼働のトラックの軸は、行をまたいで 1 つである。**行ごとに合わせない** —
@@ -176,20 +181,20 @@ export function OverviewTable({
   const fromMs = spanMs === null ? (oldest ?? nowMs - DEFAULT_STRIP_MS) : nowMs - spanMs;
 
   return (
-    <div className="dash-grid" role="grid" aria-label="Projects">
+    <div className="dash-grid" role="grid" aria-label={t('Projects')}>
       <div className="dash-row head" role="row">
         {/* ピン留めの列にも名前を置く。**見えない形で置く** — 16px の列に語を出すと、
             その語の幅ぶんだけ列が広がって、点とピン留めの間が空く */}
         <span className="pin-col" role="columnheader">
-          <span className="vhidden">Pinned</span>
+          <span className="vhidden">{t('Pinned')}</span>
         </span>
-        <SortHead label="Project" sortKey="name" order={order} onSort={onSort} />
-        <SortHead label="Active" sortKey="active" order={order} onSort={onSort} right />
-        <SortHead label="Waiting" sortKey="waiting" order={order} onSort={onSort} right />
-        <SortHead label="Input" sortKey="input" order={order} onSort={onSort} right />
-        <SortHead label="Tokens 24h" sortKey="tokens" order={order} onSort={onSort} right />
-        <span role="columnheader">Activity</span>
-        <SortHead label="Last activity" sortKey="last" order={order} onSort={onSort} right />
+        <SortHead label={t('Project')} sortKey="name" order={order} onSort={onSort} />
+        <SortHead label={t('Active')} sortKey="active" order={order} onSort={onSort} right />
+        <SortHead label={t('Waiting')} sortKey="waiting" order={order} onSort={onSort} right />
+        <SortHead label={t('Input')} sortKey="input" order={order} onSort={onSort} right />
+        <SortHead label={t('Tokens 24h')} sortKey="tokens" order={order} onSort={onSort} right />
+        <span role="columnheader">{t('Activity')}</span>
+        <SortHead label={t('Last activity')} sortKey="last" order={order} onSort={onSort} right />
       </div>
 
       {rows.map((row) => {
@@ -207,7 +212,11 @@ export function OverviewTable({
                 type="button"
                 className={`pin${isPinned ? ' on' : ''}`}
                 aria-pressed={isPinned}
-                aria-label={isPinned ? `Unpin ${row.name}` : `Pin ${row.name}`}
+                aria-label={
+                  isPinned
+                    ? t('Unpin {name}', { name: row.name })
+                    : t('Pin {name}', { name: row.name })
+                }
                 onClick={() => onTogglePin(row.id)}
               >
                 <i />
@@ -234,7 +243,13 @@ export function OverviewTable({
             <span
               className={`right mono${(row.input ?? 0) > 0 ? ' inputc' : ''}`}
               role="gridcell"
-              title={row.read ? (counted ? undefined : SHORT) : NOT_READ}
+              title={
+                row.read
+                  ? counted
+                    ? undefined
+                    : t('Some of this project could not be read — the count may be short')
+                  : t('Not read yet')
+              }
             >
               {!row.read ? (
                 DASH
@@ -259,11 +274,15 @@ export function OverviewTable({
               title={
                 row.read
                   ? row.tokens24hState === 'unobservable'
-                    ? 'Could not be read'
+                    ? t('Could not be read')
                     : row.tokens24h !== null && row.tokens24h > 0
-                      ? `${formatTokens(row.tokens24h)} — ${Math.round((row.tokens24h / tokenTotal) * 100)}% of the ${formatTokens(tokenTotal)} shown`
+                      ? t('{tokens} — {percent}% of the {total} shown', {
+                          tokens: formatTokens(row.tokens24h),
+                          percent: Math.round((row.tokens24h / tokenTotal) * 100),
+                          total: formatTokens(tokenTotal),
+                        })
                       : undefined
-                  : NOT_READ
+                  : t('Not read yet')
               }
             >
               <span className="mono">
@@ -289,12 +308,18 @@ export function OverviewTable({
             <span
               className="right dimtxt"
               role="gridcell"
-              title={row.read ? (counted ? undefined : SHORT) : NOT_READ}
+              title={
+                row.read
+                  ? counted
+                    ? undefined
+                    : t('Some of this project could not be read — the count may be short')
+                  : t('Not read yet')
+              }
             >
               {!row.read
                 ? DASH
                 : row.lastActivityMs !== null
-                  ? formatSince(row.lastActivityMs, nowMs)
+                  ? formatSince(t, row.lastActivityMs, nowMs)
                   : counted
                     ? ''
                     : '?'}

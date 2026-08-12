@@ -6,6 +6,7 @@ import {
   mdiSourceBranch,
 } from '@mdi/js';
 import { Fragment, memo, useCallback, useMemo, useRef } from 'react';
+import type { Translator } from '~/interface/i18n/translator.ts';
 import type { IssueSummaryJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { buildDependencyGraph, startOrder } from '../../derive/dependencyGraph.ts';
@@ -51,6 +52,7 @@ import {
   relatedIndex,
   startRanker,
 } from '../../derive/issueTree.ts';
+import { pullStateLabel, reviewLabel } from '../../derive/labels.ts';
 import { milestoneBands } from '../../derive/milestones.ts';
 import { DAY_MS } from '../../derive/timeWindow.ts';
 import {
@@ -62,6 +64,7 @@ import {
 } from '../../derive/workers.ts';
 import { type IssueBranch, issueBranchOf, type WorkJoin } from '../../derive/workJoin.ts';
 import { absTime, cut, formatDue, formatSinceIso } from '../../format.ts';
+import { useT } from '../../i18n/useT.ts';
 import { useNav } from '../../nav/NavContext.tsx';
 import type { IssueGroup } from '../../nav/search.ts';
 import { popStyleOf, prunePops, touchFingerprint } from '../../phase.ts';
@@ -219,6 +222,7 @@ export function IssuesTable({
   nowMs,
   firstPaint,
 }: IssuesTableProps) {
+  const t = useT();
   const nav = useNav();
   const progress = useMemo(() => childProgress(all), [all]);
   const rankOf = useMemo(() => startRanker(issues), [issues]);
@@ -293,42 +297,50 @@ export function IssuesTable({
       graph.caught.length === 0 ? '' : `${graph.caught.join(' → ')} → ${graph.caught[0]}`;
     const bands = [
       {
-        title: 'Ready now',
-        note: `${queue.startable.length} waiting on nothing`,
+        title: t('Ready now'),
+        note: t('{n} waiting on nothing', { n: queue.startable.length }),
         tone: 'ready',
         issues: queue.startable.map((node) => node.issue),
       },
       {
-        title: 'Waiting',
-        note: `${queue.waiting.length} free up as the ones above land`,
+        title: t('Waiting'),
+        note: t('{n} free up as the ones above land', { n: queue.waiting.length }),
         tone: '',
         issues: queue.waiting.map((node) => node.issue),
       },
       {
-        title: 'Caught in a cycle',
+        title: t('Caught in a cycle'),
         note: ring,
         tone: 'caught',
         issues: queue.caught.map((node) => node.issue),
       },
-      { title: 'Closed', note: `${closed.length} done`, tone: 'done', issues: closed },
+      {
+        title: t('Closed'),
+        note: t('{n} done', { n: closed.length }),
+        tone: 'done',
+        issues: closed,
+      },
     ].filter((band) => band.issues.length > 0);
     return { bands, unlocks, complete: graph.complete };
-  }, [group, order.key, shown]);
+  }, [group, order.key, shown, t]);
 
   /* マイルストーンの束。見出しに出す件数は、**出ている課題だけで数える** ——
      絞り込んだ一覧の見出しに絞る前の件数を出すと、見出しと行が食い違う。 */
   const grouped = useMemo(() => {
     if (group !== 'milestone') return null;
     return milestoneBands(shown).map((band) => ({
-      title: band.title ?? 'No milestone',
+      title: band.title ?? t('No milestone'),
       note:
         band.dueOn === null
-          ? `${band.open} of ${band.total} open`
-          : `${formatDue(band.dueOn, nowMs)} · ${band.open} of ${band.total} open`,
+          ? t('{open} of {total} open', { open: band.open, total: band.total })
+          : `${formatDue(t, band.dueOn, nowMs)} · ${t('{open} of {total} open', {
+              open: band.open,
+              total: band.total,
+            })}`,
       tone: band.title === null ? 'done' : '',
       issues: band.issues,
     }));
-  }, [group, shown, nowMs]);
+  }, [group, shown, nowMs, t]);
 
   const bands = banded?.bands ?? grouped;
 
@@ -507,7 +519,7 @@ export function IssuesTable({
     }
     return found;
   }, [rows, tracks, unlisted]);
-  const logBand = bandForLog(eventLog, unread);
+  const logBand = bandForLog(t, eventLog, unread);
 
   return (
     <div id="issues-list" ref={listRef} style={{ ['--gt-grid' as string]: gridImage }}>
@@ -517,18 +529,20 @@ export function IssuesTable({
           type="button"
           className={`sortable dep-sort${order.key === 'start' ? ' sorted' : ''}`}
           style={{ width: gutter }}
-          title="Sort by start order: open with all blocks cleared, most recently updated first (exclusive with column sort)"
+          title={t(
+            'Sort by start order: open with all blocks cleared, most recently updated first (exclusive with column sort)',
+          )}
           onClick={() => onSort('start')}
         >
-          <Icon path={mdiPlay} size={11} /> Start
+          <Icon path={mdiPlay} size={11} /> {t('Start')}
         </button>
-        <SortHead label="ID" sortKey="id" order={order} onSort={onSort} />
-        <SortHead label="Title" sortKey="title" order={order} onSort={onSort} />
-        <SortHead label="Status" sortKey="status" order={order} onSort={onSort} />
-        <SortHead label="Type" sortKey="type" order={order} onSort={onSort} />
-        <SortHead label="Labels" sortKey="labels" order={order} onSort={onSort} />
-        <SortHead label="Assignee / Agents" sortKey="assignee" order={order} onSort={onSort} />
-        <SortHead label="Updated" sortKey="updated" order={order} onSort={onSort} right />
+        <SortHead label={t('ID')} sortKey="id" order={order} onSort={onSort} />
+        <SortHead label={t('Title')} sortKey="title" order={order} onSort={onSort} />
+        <SortHead label={t('Status')} sortKey="status" order={order} onSort={onSort} />
+        <SortHead label={t('Type')} sortKey="type" order={order} onSort={onSort} />
+        <SortHead label={t('Labels')} sortKey="labels" order={order} onSort={onSort} />
+        <SortHead label={t('Assignee / Agents')} sortKey="assignee" order={order} onSort={onSort} />
+        <SortHead label={t('Updated')} sortKey="updated" order={order} onSort={onSort} right />
         {/* 目盛りとマイルストーンの名前を持つ見出し。この列に並べ替えは無いので、押せる形にしない。
             見出しは `position: sticky` なので、名前は一覧を下まで辿る間ずっと残る ——
             だから行の中の線は名前を持たなくてよい */}
@@ -556,7 +570,10 @@ export function IssuesTable({
                 key={guide.title}
                 className="gt-ms"
                 style={{ right: `${100 - pct}%`, maxWidth: `calc(${room}% - 6px)` }}
-                title={`Milestone ${guide.title} — due ${absTime(guide.at)}`}
+                title={t('Milestone {title} — due {at}', {
+                  title: guide.title,
+                  at: absTime(guide.at),
+                })}
               >
                 {guide.title}
               </b>
@@ -564,24 +581,24 @@ export function IssuesTable({
           })}
           {/* 軸の外に落ちた期日。**黙って落とさない** —— 線を引けないことと、期日が無いことは違う */}
           {before.length > 0 && (
-            <b className="gt-off left" title={offTitle(before, 'before')}>
+            <b className="gt-off left" title={offTitle(t, before, 'before')}>
               ‹{before.length}
             </b>
           )}
           {after.length > 0 && (
-            <b className="gt-off right" title={offTitle(after, 'beyond')}>
+            <b className="gt-off right" title={offTitle(t, after, 'beyond')}>
               {after.length}›
             </b>
           )}
           {/* 期日の無いマイルストーン。線は引けないが、在ることは言える */}
           {undated.length > 0 && (
-            <b className="gt-off left undated" title={undatedTitle(undated)}>
+            <b className="gt-off left undated" title={undatedTitle(t, undated)}>
               ?{undated.length}
             </b>
           )}
           {/* 読んでいる最中に動くものは、画面に 1 つでよい。行ごとに置くと 200 個が同時に走る */}
           {eventLog.kind === 'reading' && (
-            <i className="gt-reading" title="Reading the issue event log" />
+            <i className="gt-reading" title={t('Reading the issue event log')} />
           )}
         </span>
       </div>
@@ -589,7 +606,7 @@ export function IssuesTable({
         <Band title={logBand.title} note={logBand.note} tone="cut" key="event-log" />
       )}
       {rows.length === 0 ? (
-        <div className="empty">No matching issues</div>
+        <div className="empty">{t('No matching issues')}</div>
       ) : (
         rows.map((row, index) => {
           const band = bandAt.get(index);
@@ -625,8 +642,8 @@ export function IssuesTable({
       {/* 辺を採り切れていないなら黙らない。黙ると、足りない絵が正しい絵として出る */}
       {banded !== null && !banded.complete && (
         <Band
-          title="Some blocking issues were not fetched"
-          note="this order may be missing constraints"
+          title={t('Some blocking issues were not fetched')}
+          note={t('this order may be missing constraints')}
           tone="cut"
         />
       )}
@@ -671,17 +688,18 @@ interface UnreadWhy {
    ハッチの掛かった行が在るのに 1 文も出ないことがあってはならない。**理由はすべて並べる**
    —— 絵はどれも同じなので、文に出ていない理由の行は、他の理由の説明の下に並ぶことになる。 */
 function bandForLog(
+  t: Translator,
   log: EventLog,
   unread: UnreadWhy,
 ): { readonly title: string; readonly note: string } | null {
   if (log.kind === 'unobservable') {
     return {
-      title: 'Issue events could not be read',
-      note: log.reason ?? 'no reason was given',
+      title: t('Issue events could not be read'),
+      note: log.reason ?? t('no reason was given'),
     };
   }
   if (log.kind === 'absent') {
-    return { title: 'This project has no issue event log', note: 'nothing to read' };
+    return { title: t('This project has no issue event log'), note: t('nothing to read') };
   }
   if (log.kind !== 'observed') return null;
 
@@ -689,15 +707,17 @@ function bandForLog(
   /* 取り直しが読めなかったなら、いま出ているのは前に読めた記録である。**行を消して
      「読めなかった」の絵にしない** —— 消せば、読めていた観測が無かったことになる。
      ここで言うのは、絵が取り直す前のものだということである。 */
-  if (log.stale) notes.push('these are the events read before the last attempt');
+  if (log.stale) notes.push(t('these are the events read before the last attempt'));
   // 記録そのものが途中で切れているなら、並びに居ない行はそれで説明が付く
-  if (!log.complete) notes.push('the event log was cut short');
-  else if (unread.row) notes.push('they were not in the event log');
-  if (unread.cut) notes.push('for some, it stopped before any of their events');
-  if (unread.unreadable) notes.push('for some, no event time could be read');
+  if (!log.complete) notes.push(t('the event log was cut short'));
+  else if (unread.row) notes.push(t('they were not in the event log'));
+  if (unread.cut) notes.push(t('for some, it stopped before any of their events'));
+  if (unread.unreadable) notes.push(t('for some, no event time could be read'));
   if (notes.length === 0) return null;
   return {
-    title: log.stale ? 'The issue events could not be refreshed' : 'Some issues were not read',
+    title: log.stale
+      ? t('The issue events could not be refreshed')
+      : t('Some issues were not read'),
     note: notes.join(' · '),
   };
 }
@@ -706,29 +726,38 @@ function bandForLog(
 
    **「読めなかった」を「何も起きなかった」と言わない。** 読めていない行は、なぜ読めていない
    のかをそれぞれの言葉で言う。開いた時刻を読めていないなら、そこを始まりとして語らない。 */
-function trackTitle(track: RowTrack, openedAt: boolean): string {
-  if (track.kind === 'reading') return 'Reading the issue event log';
-  if (track.kind === 'nolog') return 'This project has no issue event log';
+function trackTitle(t: Translator, track: RowTrack, openedAt: boolean): string {
+  if (track.kind === 'reading') return t('Reading the issue event log');
+  if (track.kind === 'nolog') return t('This project has no issue event log');
   if (track.kind === 'unread') {
-    if (track.why === 'log') return 'Issue events could not be read';
-    if (track.why === 'row') return 'This issue was not in the event log that was read';
+    if (track.why === 'log') return t('Issue events could not be read');
+    if (track.why === 'row') return t('This issue was not in the event log that was read');
     if (track.why === 'unreadable') {
       // 読めなかったのと切れていたのは同時に起こる。片方だけ言うと、残りが黙って落ちる
-      const also = track.truncated ? ' — the event log was also cut short here' : '';
-      return `The time on ${countOf(track.dropped, 'event')} could not be read, so nothing is drawn here${also}`;
+      const also = track.truncated ? t(' — the event log was also cut short here') : '';
+      return t('The time on {what} could not be read, so nothing is drawn here{also}', {
+        what: countOf(t, track.dropped, 'event'),
+        also,
+      });
     }
-    return 'The event log was cut short before it reached any event on this issue';
+    return t('The event log was cut short before it reached any event on this issue');
   }
   const missed =
     track.dropped === 0
       ? ''
-      : ` — the time on ${countOf(track.dropped, 'other event')} could not be read`;
+      : t(' — the time on {what} could not be read', {
+          what: countOf(t, track.dropped, 'other event'),
+        });
   if (track.count === 0 || track.lastAt === null) {
     return openedAt
-      ? `No events on record since it was opened${missed}`
-      : `No events on record for this issue${missed}`;
+      ? t('No events on record since it was opened{missed}', { missed })
+      : t('No events on record for this issue{missed}', { missed });
   }
-  return `${countOf(track.count, 'event')} read, the last on ${absTime(track.lastAt)}${missed}`;
+  return t('{what} read, the last on {at}{missed}', {
+    what: countOf(t, track.count, 'event'),
+    at: absTime(track.lastAt),
+    missed,
+  });
 }
 
 /* 輪の置き方。軸の端に立つ輪は列の中へ収める。**端に寄せた輪も同じところに立つ** ——
@@ -743,27 +772,40 @@ function openClass(open: OpenMark): string {
 /* 輪の説明。**時刻はいつも本当の時刻を言う** —— 端に寄せて描いていても、開いたのはその端では
    ない。幅を広げれば置けるのは軸の手前に在るときだけで、軸の先は `1w` でも `All` でも
    現在より先までは伸びない。だから広げてみるように言うのは手前の側だけにする。 */
-function openTitle(open: OpenMark): string {
-  const opened = `Opened ${absTime(open.at)}`;
+function openTitle(t: Translator, open: OpenMark): string {
+  const opened = t('Opened {at}', { at: absTime(open.at) });
   if (open.clamped === null) return opened;
-  const edge = 'the ring sits at the edge, not at that time';
   return open.clamped === 'before'
-    ? `${opened}, before this span starts — ${edge}. Widen the span to place it.`
-    : `${opened}, after this span ends — ${edge}.`;
+    ? t(
+        '{opened}, before this span starts — the ring sits at the edge, not at that time. Widen the span to place it.',
+        { opened },
+      )
+    : t('{opened}, after this span ends — the ring sits at the edge, not at that time.', {
+        opened,
+      });
 }
 
 /* 待ちの線の説明。**測った長さは軸の外まで含んだ長さである** —— 線は軸に収めて引くので、
    端を軸で止めているならそのことも言う。言わないと、8 日ぶんの長さの線が 18 日を名乗る。 */
-function lagTitle(wait: RowWait): string {
+function lagTitle(t: Translator, wait: RowWait): string {
   const measured = wait.approx
-    ? `Waiting on ${wait.blocker} — about ${wait.days}d, measured from a close time taken from updated_at, so where this wait starts is approximate`
-    : `Waiting on ${wait.blocker} — ${wait.days}d from ${wait.blocker} ending to this issue being created`;
+    ? t(
+        'Waiting on {blocker} — about {days}d, measured from a close time taken from updated_at, so where this wait starts is approximate',
+        { blocker: wait.blocker, days: wait.days },
+      )
+    : t('Waiting on {blocker} — {days}d from {blocker} ending to this issue being created', {
+        blocker: wait.blocker,
+        days: wait.days,
+      });
   const stopped = [
-    wait.softFrom ? `${wait.blocker} ended before this span` : '',
-    wait.softTo ? 'this issue was created after this span' : '',
+    wait.softFrom ? t('{blocker} ended before this span', { blocker: wait.blocker }) : '',
+    wait.softTo ? t('this issue was created after this span') : '',
   ].filter((clause) => clause !== '');
   if (stopped.length === 0) return measured;
-  return `${measured}. The line stops at the edge of this span: ${stopped.join(' and ')} — widen the span to see the whole wait.`;
+  return t(
+    '{measured}. The line stops at the edge of this span: {stopped} — widen the span to see the whole wait.',
+    { measured, stopped: stopped.join(t(' and ')) },
+  );
 }
 
 /* 線の説明。**線が結ぶ 2 つの時刻を言う。長さは言わない** —— 端を軸で止めているときは
@@ -773,25 +815,30 @@ function lagTitle(wait: RowWait): string {
    古いイベントが記録に在ったときである。**同じ言葉で言わない** —— 後者で「読めなかった」と
    言えば、読めている時刻を読めなかったことにする。どちらでも「開いた」とは語らない ——
    語れば、線の左端が観測した開始時刻に化ける。 */
-function lineTitle(ends: TrackEnds, line: TrackLine, openedAt: boolean): string {
+function lineTitle(t: Translator, ends: TrackEnds, line: TrackLine, openedAt: boolean): string {
   const from = ends.opened
-    ? `Opened ${absTime(ends.fromMs)}`
+    ? t('Opened {at}', { at: absTime(ends.fromMs) })
     : openedAt
-      ? `First event ${absTime(ends.fromMs)} — earlier than the time this issue was opened`
-      : `First event ${absTime(ends.fromMs)} — when this issue was opened could not be read`;
+      ? t('First event {at} — earlier than the time this issue was opened', {
+          at: absTime(ends.fromMs),
+        })
+      : t('First event {at} — when this issue was opened could not be read', {
+          at: absTime(ends.fromMs),
+        });
   const to = !ends.closed
-    ? `last event ${absTime(ends.toMs)}`
+    ? t('last event {at}', { at: absTime(ends.toMs) })
     : ends.approxTo
-      ? `closed around ${absTime(ends.toMs)}, taken from updated_at`
-      : `closed ${absTime(ends.toMs)}`;
+      ? t('closed around {at}, taken from updated_at', { at: absTime(ends.toMs) })
+      : t('closed {at}', { at: absTime(ends.toMs) });
   const stopped = [
-    line.softFrom ? 'it starts before this span' : '',
-    line.softTo && !ends.approxTo ? 'it runs past this span' : '',
+    line.softFrom ? t('it starts before this span') : '',
+    line.softTo && !ends.approxTo ? t('it runs past this span') : '',
   ].filter((clause) => clause !== '');
   if (stopped.length === 0) return `${from} — ${to}`;
-  return `${from} — ${to}. The line stops at the edge of this span: ${stopped.join(
-    ' and ',
-  )} — widen the span to see all of it.`;
+  return t(
+    '{from} — {to}. The line stops at the edge of this span: {stopped} — widen the span to see all of it.',
+    { from, to, stopped: stopped.join(t(' and ')) },
+  );
 }
 
 /** 期日を読めたマイルストーンだけを、置ける形にして取り出す */
@@ -806,20 +853,30 @@ function datedGuides(
 
 /** 軸の外に落ちた期日を数えて名前を添える。件数だけでは、何を見損ねたのか分からない */
 function offTitle(
+  t: Translator,
   guides: readonly { readonly title: string; readonly at: number }[],
   side: 'before' | 'beyond',
 ): string {
   const listed = guides.map((guide) => `${guide.title} (${absTime(guide.at)})`).join(', ');
-  const what = guides.length === 1 ? 'milestone is' : 'milestones are';
-  return `${guides.length} ${what} due ${side} this span: ${listed} — widen the span to see them`;
+  return side === 'before'
+    ? t(
+        '{n, plural, one {# milestone is} other {# milestones are}} due before this span: {listed} — widen the span to see them',
+        { n: guides.length, listed },
+      )
+    : t(
+        '{n, plural, one {# milestone is} other {# milestones are}} due beyond this span: {listed} — widen the span to see them',
+        { n: guides.length, listed },
+      );
 }
 
 /* 期日そのものが無いマイルストーン。**黙って消さない** —— 消すと「期日が無い」と「そんな
    マイルストーンは無い」が同じ絵になる。軸に置けないので、名前を数えて言うだけにする。 */
-function undatedTitle(guides: readonly GanttGuide[]): string {
+function undatedTitle(t: Translator, guides: readonly GanttGuide[]): string {
   const listed = guides.map((guide) => guide.title).join(', ');
-  const what = guides.length === 1 ? 'milestone has' : 'milestones have';
-  return `${guides.length} ${what} no due date: ${listed} — nothing can be placed on this axis for them`;
+  return t(
+    '{n, plural, one {# milestone has} other {# milestones have}} no due date: {listed} — nothing can be placed on this axis for them',
+    { n: guides.length, listed },
+  );
 }
 
 interface IssueRowProps {
@@ -865,6 +922,7 @@ interface IssueRowProps {
    読めていないのは遅れと衝突のほうである。ここを空欄にすると、衝突しているブランチが
    衝突していないものとして読まれる。 */
 function Branch({ branch }: { branch: IssueBranch }) {
+  const t = useT();
   const nav = useNav();
   const open = (name: string) => nav.openRef(name, name);
 
@@ -875,10 +933,12 @@ function Branch({ branch }: { branch: IssueBranch }) {
         className="brstate unread"
         title={`${branch.name} — ${
           branch.reach === 'pending'
-            ? 'still reading the local git'
-            : 'the local git could not be read, so how far ahead or behind it is, and whether it conflicts, are unknown'
+            ? t('still reading the local git')
+            : t(
+                'the local git could not be read, so how far ahead or behind it is, and whether it conflicts, are unknown',
+              )
         }`}
-        aria-label={`Open branch ${branch.name}`}
+        aria-label={t('Open branch {name}', { name: branch.name })}
         {...pressable(() => open(branch.name), { stopPropagation: true })}
       >
         <Icon path={mdiSourceBranch} size={10} />
@@ -893,12 +953,14 @@ function Branch({ branch }: { branch: IssueBranch }) {
     <button
       type="button"
       className={`brstate${conflictsWith.length > 0 ? ' warn' : ''}`}
-      title={`${name} — ${ahead} ahead, ${behind} behind${
-        worktree === null ? '' : ` · worktree ${worktree}`
+      title={`${t('{name} — {ahead} ahead, {behind} behind', { name, ahead, behind })}${
+        worktree === null ? '' : ` · ${t('worktree {name}', { name: worktree })}`
       }${
-        conflictsWith.length === 0 ? '' : ` · touches the same files as ${conflictsWith.join(', ')}`
+        conflictsWith.length === 0
+          ? ''
+          : ` · ${t('touches the same files as {list}', { list: conflictsWith.join(', ') })}`
       }`}
-      aria-label={`Open branch ${name}`}
+      aria-label={t('Open branch {name}', { name })}
       {...pressable(() => open(name), { stopPropagation: true })}
     >
       <Icon path={mdiSourceBranch} size={10} />
@@ -932,6 +994,7 @@ const IssueRow = memo(function IssueRow({
   onLabel,
   onOpen,
 }: IssueRowProps) {
+  const t = useT();
   const nav = useNav();
   const issue = row.issue;
   const live = liveCount(found);
@@ -999,7 +1062,7 @@ const IssueRow = memo(function IssueRow({
       style={pop === null ? undefined : { animationDelay: pop.animationDelay }}
       role="button"
       tabIndex={0}
-      aria-label={`Open issue ${issue.id ?? ''}`}
+      aria-label={t('Open issue {id}', { id: issue.id ?? '' })}
       onMouseEnter={() => onHot(issue.id, index)}
       onMouseLeave={() => onHot(null, index)}
       onFocus={() => onHot(issue.id, index)}
@@ -1025,7 +1088,10 @@ const IssueRow = memo(function IssueRow({
         {agg !== null && agg.total >= 2 && (
           <span
             className="epic-prog"
-            title={`Child issue progress: ${agg.closed}/${agg.total} closed`}
+            title={t('Child issue progress: {closed}/{total} closed', {
+              closed: agg.closed,
+              total: agg.total,
+            })}
           >
             <span className="epic-bar">
               <i style={{ width: `${(agg.closed / agg.total) * 100}%` }} />
@@ -1040,12 +1106,19 @@ const IssueRow = memo(function IssueRow({
         {pull !== null && (
           <span
             className={`prchip ${pull.is_draft ? 'draft' : pull.state.toLowerCase()}`}
-            title={`Pull request #${pull.number} — ${pull.is_draft ? 'draft' : pull.state.toLowerCase()}${
-              pull.review_decision === null ? '' : `, ${pull.review_decision.toLowerCase()}`
-            }${pull.head_ref_name === null ? '' : ` on ${pull.head_ref_name}`}`}
+            title={t('Pull request #{number} — {state}{review}{branch}', {
+              number: pull.number,
+              state: pull.is_draft ? t('draft') : pullStateLabel(t, pull.state),
+              review:
+                pull.review_decision === null ? '' : `, ${reviewLabel(t, pull.review_decision)}`,
+              branch:
+                pull.head_ref_name === null
+                  ? ''
+                  : ` ${t('on {branch}', { branch: pull.head_ref_name })}`,
+            })}
           >
             #{pull.number}
-            {pull.is_draft && ' draft'}
+            {pull.is_draft && ` ${t('draft')}`}
           </span>
         )}
         {/* マイルストーンへ渡れるようにしてある。**名前を出すだけにしない** —
@@ -1054,7 +1127,9 @@ const IssueRow = memo(function IssueRow({
           <button
             type="button"
             className="mschip"
-            title={`Milestone: ${milestone.title} — show just this milestone`}
+            title={t('Milestone: {title} — show just this milestone', {
+              title: milestone.title,
+            })}
             {...pressable(() => nav.gotoMilestone(milestone.title), { stopPropagation: true })}
           >
             {/* 単位の切り替えと同じ絵を使う。同じものを指しているので、同じ絵であるべきである */}
@@ -1065,7 +1140,7 @@ const IssueRow = memo(function IssueRow({
         {branch !== null && <Branch branch={branch} />}
         {/* 着手順で並べているときだけ、これを終わらせると何件が空くかを出す */}
         {unlocks !== null && unlocks > 0 && (
-          <span className="iunlock" title={`Finishing this frees ${unlocks}`}>
+          <span className="iunlock" title={t('Finishing this frees {n}', { n: unlocks })}>
             +{unlocks}
           </span>
         )}
@@ -1073,9 +1148,11 @@ const IssueRow = memo(function IssueRow({
         {!issue.deps_complete && (
           <span
             className="wk-dup"
-            title="Some blocking issues are not shown — this issue has more dependencies than glasshive fetches"
+            title={t(
+              'Some blocking issues are not shown — this issue has more dependencies than glasshive fetches',
+            )}
           >
-            <Icon path={mdiAlertOutline} size={10} /> deps cut
+            <Icon path={mdiAlertOutline} size={10} /> {t('deps cut')}
           </span>
         )}
       </span>
@@ -1127,7 +1204,7 @@ const IssueRow = memo(function IssueRow({
             state={worker.state}
             label={worker.label}
             where={worker.where}
-            via={viaLabel(worker)}
+            via={viaLabel(t, worker)}
           />
         ))}
         {found.length > MAX_LISTED_WORKERS && (
@@ -1143,17 +1220,20 @@ const IssueRow = memo(function IssueRow({
         )}
         {live >= 2 && (
           <span className="wk-dup">
-            <Icon path={mdiAlertOutline} size={10} /> {live} concurrent
+            <Icon path={mdiAlertOutline} size={10} /> {t('{n} concurrent', { n: live })}
           </span>
         )}
       </span>
       <span className="iupd">
         {comments > 0 && (
-          <span className="icmt" title={`${comments} comments`}>
+          <span
+            className="icmt"
+            title={t('{n, plural, one {# comment} other {# comments}}', { n: comments })}
+          >
             <Icon path={mdiCommentOutline} size={10} /> {comments}
           </span>
         )}
-        {formatSinceIso(issue.updated_at, nowMs)}
+        {formatSinceIso(t, issue.updated_at, nowMs)}
       </span>
       {/* 観測した時刻だけを置くトラック。GitHub は着手予定日も見積もりも返さないので、ここに
           計画された日程は 1 つも無い。マイルストーンの縦線はこのセルの背景が引いている。
@@ -1162,13 +1242,13 @@ const IssueRow = memo(function IssueRow({
           並べた順がそのまま重なりの順で、線とハッチが下、点が上、フラグがいちばん上になる */}
       <span
         className={`gt st-${issue.status}${stateClass(track)}`}
-        title={trackTitle(track, Number.isFinite(createdMs))}
+        title={trackTitle(t, track, Number.isFinite(createdMs))}
       >
         {line !== null && ends !== null && (
           <i
             className={`gt-line${line.softFrom ? ' soft-from' : ''}${line.softTo ? ' soft-to' : ''}`}
             style={{ left: `${line.left}%`, width: `${line.width}%` }}
-            title={lineTitle(ends, line, Number.isFinite(createdMs))}
+            title={lineTitle(t, ends, line, Number.isFinite(createdMs))}
           />
         )}
         {cutRegion !== null && (
@@ -1177,8 +1257,14 @@ const IssueRow = memo(function IssueRow({
             style={{ left: `${cutRegion.left}%`, width: `${cutRegion.width}%` }}
             title={
               cutRegion.fromMs === null || cutRegion.softFrom
-                ? `Only the 30 most recent events were read — anything before ${absTime(cutRegion.toMs)} is not shown`
-                : `Only the 30 most recent events were read — anything between ${absTime(cutRegion.fromMs)} and ${absTime(cutRegion.toMs)} is not shown`
+                ? t(
+                    'Only the 30 most recent events were read — anything before {to} is not shown',
+                    { to: absTime(cutRegion.toMs) },
+                  )
+                : t(
+                    'Only the 30 most recent events were read — anything between {from} and {to} is not shown',
+                    { from: absTime(cutRegion.fromMs), to: absTime(cutRegion.toMs) },
+                  )
             }
           />
         )}
@@ -1191,13 +1277,17 @@ const IssueRow = memo(function IssueRow({
           <i
             className={`gt-lag${wait.approx ? ' approx' : ''}${wait.softFrom ? ' soft-from' : ''}${wait.softTo ? ' soft-to' : ''}`}
             style={{ left: `${wait.left}%`, width: `${wait.right - wait.left}%` }}
-            title={lagTitle(wait)}
+            title={lagTitle(t, wait)}
           />
         )}
         {/* 作られた時刻。軸の外に在るときは端に寄せ、**寄せたことを見た目で言う** ——
             硬い輪のままだと、幅を切り替えただけで開いた時刻が動いたことになる */}
         {open !== null && (
-          <i className={openClass(open)} style={{ left: `${open.pct}%` }} title={openTitle(open)} />
+          <i
+            className={openClass(open)}
+            style={{ left: `${open.pct}%` }}
+            title={openTitle(t, open)}
+          />
         )}
         <TrackMarks track={track} />
         {/* 置ける時刻が 1 つも無い行。**黙って空にしない** —— 読んで何も起きていなかった行と、
@@ -1205,7 +1295,9 @@ const IssueRow = memo(function IssueRow({
         {unplacedOpening && (
           <b
             className="gt-off left unplaced"
-            title="When this issue was opened could not be read, and no events are on record — nothing can be placed on this axis for it"
+            title={t(
+              'When this issue was opened could not be read, and no events are on record — nothing can be placed on this axis for it',
+            )}
           >
             ?
           </b>
@@ -1216,8 +1308,10 @@ const IssueRow = memo(function IssueRow({
             style={{ left: `${flag.pct}%` }}
             title={
               flag.approx
-                ? `Closed around ${absTime(flag.at)}, taken from updated_at, so the close time is approximate`
-                : `Closed ${absTime(flag.at)}`
+                ? t('Closed around {at}, taken from updated_at, so the close time is approximate', {
+                    at: absTime(flag.at),
+                  })
+                : t('Closed {at}', { at: absTime(flag.at) })
             }
           />
         )}

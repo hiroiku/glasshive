@@ -2,6 +2,7 @@ import { scaleLinear } from 'd3-scale';
 import { area as areaOf, curveStepAfter, line as lineOf } from 'd3-shape';
 import { mdhm } from '../../format.ts';
 import { useChartHover } from '../../hooks/useChartHover.ts';
+import { useT } from '../../i18n/useT.ts';
 import { TimeTicks } from '../primitives/TimeTicks.tsx';
 import {
   isObserved,
@@ -50,6 +51,7 @@ export function ConcurrencyPanel({
   uncounted,
   observation,
 }: ConcurrencyPanelProps) {
+  const t = useT();
   const hover = useChartHover(bars);
   const read = isObserved(observation);
   const peak = Math.max(0, ...counts);
@@ -82,17 +84,17 @@ export function ConcurrencyPanel({
   const band = unknownPeak > 0 ? (unknownArea(stacked) ?? '') : '';
   /* 数え上げられなかったエージェントが居るときの一言。**`now` と `peak` で同じ文にする** ——
      2 つは同じ `session.subagents` を回して数えているので、足りない分も同じである。 */
-  const shortTitle = 'At least this many — some agents could not be counted';
-  const peakTitle = uncounted ? shortTitle : 'Peak agents concurrent in range';
+  const shortTitle = t('At least this many — some agents could not be counted');
+  const peakTitle = uncounted ? shortTitle : t('Peak agents concurrent in range');
   const reading = observation.kind === 'pending';
-  const nowTitle = reading ? observationTitle(observation) : uncounted ? shortTitle : undefined;
+  const nowTitle = reading ? observationTitle(t, observation) : uncounted ? shortTitle : undefined;
   /* グラフそのものの説明。ホバーできない人にも、積んだ面が何かと、数が下限でしかないことを届ける */
   const chartTitle = [
-    'Agents concurrent over time',
+    t('Agents concurrent over time'),
     ...(unknownPeak > 0
-      ? ['the dashed band on top is agents whose activity could not be read']
+      ? [t('the dashed band on top is agents whose activity could not be read')]
       : []),
-    ...(uncounted ? ['some agents could not be counted, so the counts are a lower bound'] : []),
+    ...(uncounted ? [t('some agents could not be counted, so the counts are a lower bound')] : []),
   ].join(' — ');
 
   const at = hover.at;
@@ -112,18 +114,18 @@ export function ConcurrencyPanel({
           数えているので、片方だけ言い切れば、`+` を足した当のものと同じ数え落としが、
           もう片方では数そのものとして出る。何人居たのかは分からないので、数そのものは動かさない。 */}
       <div className="sf-h">
-        <span className="sf-title">Agents</span>
+        <span className="sf-title">{t('Agents')}</span>
         <span className="sf-dim" title={nowTitle}>
-          now {reading ? observationMark(observation) : `${liveNow}${uncounted ? '+' : ''}`}
+          {t('now')} {reading ? observationMark(observation) : `${liveNow}${uncounted ? '+' : ''}`}
         </span>
-        <span className="sf-big" title={read ? peakTitle : observationTitle(observation)}>
-          peak {read ? `${peak}${uncounted ? '+' : ''}` : observationMark(observation)}
+        <span className="sf-big" title={read ? peakTitle : observationTitle(t, observation)}>
+          {t('peak')} {read ? `${peak}${uncounted ? '+' : ''}` : observationMark(observation)}
         </span>
         {/* 山の高さの脇に、読めなかったエージェントの数を添える。数を足して 1 つにすると、
             読めなかった分まで動いていたと言うことになる */}
         {read && unknownPeak > 0 && (
-          <span className="sf-unk" title="Agents whose activity could not be read">
-            +{unknownPeak} unknown
+          <span className="sf-unk" title={t('Agents whose activity could not be read')}>
+            +{t('{n} unknown', { n: unknownPeak })}
           </span>
         )}
       </div>
@@ -169,10 +171,12 @@ export function ConcurrencyPanel({
               {/* 1 本ぶんの数も、数え上げられなかった子が居るなら下限でしかない */}
               <div>
                 <b>{`${counts[at.bar] ?? 0}${uncounted ? '+' : ''}`}</b>{' '}
-                <span className="sf-dim">agents concurrent</span>
+                <span className="sf-dim">{t('agents concurrent')}</span>
               </div>
               {(unknown[at.bar] ?? 0) > 0 && (
-                <div className="sf-dim">+{unknown[at.bar]} could not be read</div>
+                <div className="sf-dim">
+                  +{t('{n} could not be read', { n: unknown[at.bar] ?? 0 })}
+                </div>
               )}
             </div>
           </>

@@ -176,6 +176,109 @@
   white-space: nowrap;
 }
 
+/* 画面の言葉を選ぶところ。
+
+   一覧は上部バーの中から浮かせる。バーは高さが決まっていて、中に開くと押した瞬間に
+   バーごと伸びて、下のタブ行と本文が跳ねる。 */
+.lsw {
+  position: relative;
+  display: inline-flex;
+}
+.lsw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+}
+/* いま出している言葉の名前。地の文より少しだけ強く出して、押しどころの中身が
+   アイコン 1 つに見えないようにする */
+.lsw-cur {
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.lsw-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  /* 右端に揃える。上部バーのこの位置は右寄せの群れなので、左に揃えると画面の外へ出る */
+  right: 0;
+  z-index: 30;
+  min-width: 156px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  /* 浮いていることを影で言う。枠だけだと、下の表の罫線と同じ太さで地に沈む */
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  animation: lsw-in 90ms ease-out;
+}
+@keyframes lsw-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+/* 動きを減らしたい人には、位置だけを出す。開いたことは影と枠で分かる */
+@media (prefers-reduced-motion: reduce) {
+  .lsw-menu {
+    animation: none;
+  }
+}
+.lsw-opt {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 9px 5px 5px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.lsw-opt:hover {
+  background: var(--bg);
+}
+.lsw-opt:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.lsw-opt[aria-selected="true"] {
+  color: var(--accent);
+}
+/* チェックの場所は選ばれていない行でも空けておく。詰めると、選び直すたびに名前が横へ動く */
+.lsw-mark {
+  display: inline-flex;
+  justify-content: center;
+  width: 12px;
+  flex: none;
+  color: var(--accent);
+}
+/* 名前はその言葉の書体で出す。`lang` が一族を選び、ここでそれを使う */
+.lsw-name {
+  font-family: var(--sans);
+}
+/* ブラウザーに合わせた先。選ぶ対象ではないので、名前より弱く、右端に置く */
+.lsw-hint {
+  margin-left: auto;
+  padding-left: 10px;
+  color: var(--dim);
+  font-family: var(--sans);
+  font-size: 11px;
+}
+/* 「合わせる」と、名前を名指す行の境。前者は他の 5 つと別の種類の選び方である */
+.lsw-follow {
+  margin-bottom: 3px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 5px 5px 0 0;
+}
+
 /* 変更通知の 3 つの状態。**繋がっていることと、更新が届くことを同じ色にしない** —
    同じにすると、ウォッチャーが張れずに二度と変わらない画面が健全に見える。 */
 #conn {
