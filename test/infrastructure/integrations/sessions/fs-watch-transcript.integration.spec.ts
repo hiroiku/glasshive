@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppError } from '~/app-kernel/error.ts';
 import type { Observation } from '~/app-kernel/observation.ts';
 import { createFsWatchTranscript } from '~/infrastructure/integrations/sessions/fs-watch-transcript.integration.ts';
@@ -47,12 +47,18 @@ function errorOf(observation: Observation<unknown>): AppError {
   return observation.error;
 }
 
-const ROOT = '/nest/projects';
+/** 根は本物のディレクトリで置く。張る前に根を見るので、無い場所には張れない */
+let root = '';
 
 const handlers = () => ({ onChange: vi.fn(), onFail: vi.fn() });
 
+beforeEach(() => {
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'glasshive-watch-'));
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
+  fs.rmSync(root, { recursive: true, force: true });
 });
 
 describe('`transcript` の木を見る', () => {
@@ -60,14 +66,14 @@ describe('`transcript` の木を見る', () => {
     const { fire } = stubWatch();
     const seen = handlers();
 
-    createFsWatchTranscript(ROOT).watch(seen);
+    createFsWatchTranscript(root).watch(seen);
     fire('a/session.jsonl');
     // 木の中には `transcript` でないものも置かれる
     fire('a/session.meta.json');
     // ファイル名の分からないイベントが来ることがある
     fire(null);
 
-    expect(seen.onChange.mock.calls).toEqual([[path.join(ROOT, 'a/session.jsonl')]]);
+    expect(seen.onChange.mock.calls).toEqual([[path.join(root, 'a/session.jsonl')]]);
   });
 
   /* 張った後に死ぬのは珍しくない。黙って閉じると、そこから更新が来ないことを
@@ -76,36 +82,33 @@ describe('`transcript` の木を見る', () => {
     const { watcher } = stubWatch();
     const seen = handlers();
 
-    createFsWatchTranscript(ROOT).watch(seen);
+    createFsWatchTranscript(root).watch(seen);
     watcher.emit('error', new Error('inotify watch limit reached'));
 
     expect(watcher.closed, 'OS のファイル監視を掴んだままにしない').toBe(true);
     expect(seen.onFail).toHaveBeenCalledTimes(1);
     const error = seen.onFail.mock.calls[0]?.[0] as AppError;
     expect(error.code).toBe('transcript.watch_unavailable');
-    expect(error.message, 'どの木を見ていたかを残す').toContain(ROOT);
+    expect(error.message, 'どの木を見ていたかを残す').toContain(root);
   });
 
   it('外すと、OS のファイル監視も外れる', () => {
     const { watcher } = stubWatch();
 
-    const started = createFsWatchTranscript(ROOT).watch(handlers());
+    const started = createFsWatchTranscript(root).watch(handlers());
     if (started.kind !== 'observed') throw new Error('張れたと言うはずだった');
     started.value();
 
     expect(watcher.closed).toBe(true);
   });
 
+  /* 本物の `fs.watch` に張らせる。差し替えると、**根が無くてもウォッチャーを返す実装**を
+     この偽物が隠してしまい、張れていないことを言えているかが確かめられない。 */
   it('根がまだ無ければ、無かったのではなく観測できなかったと言う', () => {
-    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'glasshive-watch-'));
-    try {
-      const missing = path.join(base, 'no-such-root');
+    const missing = path.join(root, 'no-such-root');
 
-      const started = createFsWatchTranscript(missing).watch(handlers());
+    const started = createFsWatchTranscript(missing).watch(handlers());
 
-      expect(errorOf(started).code).toBe('transcript.watch_unavailable');
-    } finally {
-      fs.rmSync(base, { recursive: true, force: true });
-    }
+    expect(errorOf(started).code).toBe('transcript.watch_unavailable');
   });
 });

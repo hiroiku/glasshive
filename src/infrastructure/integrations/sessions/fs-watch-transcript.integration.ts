@@ -15,6 +15,10 @@ export function createFsWatchTranscript(root: string): TranscriptWatchIntegratio
   return {
     watch({ onChange, onFail }): Observation<() => void> {
       try {
+        /* 張る前に根を見る。`fs.watch` は根が無くてもウォッチャーを返す実装があり
+           (Linux の Node 24 以降がそう)、**そのまま張れたことにすると、更新が 1 度も
+           無いことと、根を見に行けていないことが同じ絵になる**。 */
+        fs.statSync(root);
         const watcher = fs.watch(root, { recursive: true }, (_event, filename) => {
           // ファイル名の分からないイベントが来ることがある。どれが動いたか言えないので配らない
           if (filename === null) return;
