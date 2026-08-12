@@ -85,3 +85,56 @@ describe('打った引数', () => {
     expect(parsed.message).toContain('unknown option: --deep');
   });
 });
+
+/* サーバーは 1 つに保つので、居場所を訊く手段と終わらせる手段が要る。**どちらもサーバーを
+   立てない。** 立てる側と同じ手順を通すと、止めに来たコマンドが 2 枚目を立てて終わる。 */
+describe('走っているものへの求め', () => {
+  it('何も渡さなければ、立ち上げに来たものとして読む', () => {
+    const parsed = parseArgs([], environment([]));
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.args.action).toBe('serve');
+  });
+
+  it.each([
+    ['--status', 'status'],
+    ['--stop', 'stop'],
+  ])('%s は、立ち上げずに尋ねる求めとして読む', (flag, action) => {
+    const parsed = parseArgs([flag, '--port', '5000'], environment([]));
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.args.action).toBe(action);
+    expect(parsed.args.port, '尋ねる先を名指せなければ、別のポートのものを止めてしまう').toBe(5000);
+  });
+
+  /* `glasshive . --stop` を「このディレクトリのぶんだけ止める」と読んだ人に、1 つしかない
+     サーバーを止めたことを言わないまま終わってはいけない。 */
+  it('パスと一緒には受け取らない', () => {
+    const parsed = parseArgs(['/srv/a', '--stop'], environment(['/srv/a']));
+
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.message).toContain('--stop does not take a path: /srv/a');
+    expect(parsed.exitCode).toBe(2);
+  });
+
+  it('2 つ渡されたら断る', () => {
+    const parsed = parseArgs(['--status', '--stop'], environment([]));
+
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.message, '居場所を訊いたつもりで止まっていた、が起こる').toContain(
+      'only one of --status and --stop',
+    );
+  });
+
+  it('同じものを 2 度渡されるのは断らない', () => {
+    const parsed = parseArgs(['--stop', '--stop'], environment([]));
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.args.action).toBe('stop');
+  });
+});

@@ -7,8 +7,10 @@ Thanks for looking. Bug reports, questions, and patches are all welcome —
 
 ```sh
 npm install
-npm run dev        # http://127.0.0.1:4483 — every project
-npm run dev -- .   # just this repository (with Bun: bun run dev .)
+npm run dev           # http://127.0.0.1:4483 — every project
+npm run dev -- .      # just this repository (with Bun: bun run dev .)
+npm run dev -- --status  # where the dev server is, if it is anywhere
+npm run dev -- --stop    # end it without hunting for its terminal
 ```
 
 The dev server takes the same arguments as `glasshive` itself — `[path]`, `--port`, `--no-open`,

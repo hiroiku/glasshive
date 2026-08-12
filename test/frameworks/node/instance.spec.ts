@@ -4,10 +4,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULTS } from '~/frameworks/node/cli.ts';
 import { COMMAND_HEADER, COMMAND_HEADER_VALUE } from '~/frameworks/node/cli-request.ts';
 import {
+  askGlasshive,
+  findAllRunning,
   findRunning,
   isGlasshive,
   openDirectoryAt,
   portsToTry,
+  stopAt,
 } from '~/frameworks/node/instance.ts';
 
 /* すでに走っている glasshive を見つけて、開きたいディレクトリを伝える。
@@ -34,6 +37,7 @@ async function serve(
   port: number;
   seen: string[];
   headers: http.IncomingHttpHeaders[];
+  server: http.Server;
 }> {
   const seen: string[] = [];
   const headers: http.IncomingHttpHeaders[] = [];
@@ -55,7 +59,7 @@ async function serve(
   servers.push(server);
   await listen(server, at);
   const { port } = server.address() as AddressInfo;
-  return { origin: `http://127.0.0.1:${port}`, port, seen, headers };
+  return { origin: `http://127.0.0.1:${port}`, port, seen, headers, server };
 }
 
 /** 名指したポートで待つ。0 を渡せば空いている番号を借りる */
@@ -82,6 +86,27 @@ describe('そこに居るのが glasshive か', () => {
     const { origin } = await health(JSON.stringify({ app: 'glasshive', dev: false }));
 
     expect(await isGlasshive(origin, false)).toBe(true);
+  });
+
+  /* どのターミナルが持っているかを覚えていなくても訊けなければならない。**プロセス id が
+     無ければ、見つけたところで `ps` からも辿れない。** */
+  it('居場所と、誰がどれだけ動いているかを持ち帰る', async () => {
+    const { origin } = await health(
+      JSON.stringify({ app: 'glasshive', dev: false, pid: 4242, uptime_s: 8130 }),
+    );
+
+    expect(await askGlasshive(origin, false)).toEqual({
+      origin,
+      pid: 4242,
+      uptimeSecs: 8130,
+    });
+  });
+
+  /* 添え物を答えない glasshive も居る。**使い回せるかどうかは、そこでは変わらない。** */
+  it('添え物が無くても、居ることは変わらない', async () => {
+    const { origin } = await health(JSON.stringify({ app: 'glasshive', dev: false }));
+
+    expect(await askGlasshive(origin, false)).toEqual({ origin, pid: 0, uptimeSecs: 0 });
   });
 
   /* 開発中の glasshive がビルドされたものを使い回すと、書いたばかりのコードが画面に出ない。
@@ -112,7 +137,7 @@ describe('使い回せる glasshive を探す', () => {
   it('範囲の中に居れば、その居場所を答える', async () => {
     const { origin, port } = await health(JSON.stringify({ app: 'glasshive', dev: false }));
 
-    expect(await findRunning({ first: port - 2, attempts: 5 }, false)).toBe(origin);
+    expect((await findRunning({ first: port - 2, attempts: 5 }, false))?.origin).toBe(origin);
   });
 
   /* 何枚も開いている機械では、2 つ以上が同時に走っていることが在る。**採る相手が周ごとに
@@ -123,7 +148,21 @@ describe('使い回せる glasshive を探す', () => {
     const high = await health(body, 200, low.port + 1);
 
     expect(high.port, '隣のポートで待てなければ、この確かめは成り立たない').toBe(low.port + 1);
-    expect(await findRunning({ first: low.port, attempts: 2 }, false)).toBe(low.origin);
+    expect((await findRunning({ first: low.port, attempts: 2 }, false))?.origin).toBe(low.origin);
+  });
+
+  /* 1 つに保つと決めていても、そう決める前に立ち上げたものや `--port` で別の番号に立てたものが
+     残っていることは在る。**居場所を訊きに来た人に 1 つだけ答えると、残りは見えないまま
+     動き続ける。** */
+  it('全部を訊かれたら、番号の順に全部並べる', async () => {
+    const body = JSON.stringify({ app: 'glasshive', dev: false });
+    const low = await health(body);
+    const high = await health(body, 200, low.port + 1);
+
+    expect(high.port, '隣のポートで待てなければ、この確かめは成り立たない').toBe(low.port + 1);
+    expect(
+      (await findAllRunning({ first: low.port, attempts: 2 }, false)).map((one) => one.origin),
+    ).toEqual([low.origin, high.origin]);
   });
 
   it('範囲の外に居ても、見つけない', async () => {
@@ -180,5 +219,41 @@ describe('開きたいディレクトリを伝える', () => {
     const { origin } = await serve(() => ({ body: 'not json' }));
 
     await expect(openDirectoryAt(origin, '/src/repo')).rejects.toThrow('/src/repo');
+  });
+});
+
+describe('走っているものを終わらせる', () => {
+  /* 答えが返っただけでは、まだポートを握っている。**握りが解けるまで待つ** —— 止めた直後に
+     立ち上げ直す人が、自分が止めたサーバーに弾かれる。 */
+  it('握りが解けるのを見届けてから戻る', async () => {
+    let close: (() => void) | undefined;
+    const scene = await serve(() => {
+      setTimeout(() => close?.(), 10);
+      return { body: JSON.stringify({ pid: 4242 }) };
+    });
+    close = () => {
+      scene.server.closeAllConnections();
+      scene.server.close();
+    };
+
+    await stopAt({ origin: scene.origin, pid: 4242, uptimeSecs: 10 });
+
+    expect(scene.seen).toEqual(['POST /api/quit ']);
+    expect(
+      scene.headers[0]?.[COMMAND_HEADER],
+      '伝えずに送ると、終わらせに来たのがブラウザーと見分けられずに断られる',
+    ).toBe(COMMAND_HEADER_VALUE);
+    expect(await isGlasshive(scene.origin, false), '戻った時点で、そこはもう空いている').toBe(
+      false,
+    );
+  });
+
+  it('断られたら、その理由をそのまま伝える', async () => {
+    const { origin } = await serve(() => ({
+      status: 403,
+      body: JSON.stringify({ state: 'invalid', code: 'x', message: 'not allowed here' }),
+    }));
+
+    await expect(stopAt({ origin, pid: 0, uptimeSecs: 0 })).rejects.toThrow('not allowed here');
   });
 });

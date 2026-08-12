@@ -5,8 +5,8 @@ import type { Args } from './cli.js';
 import { isLocalHost } from './host-guard.js';
 import { toRequest, writeResponse } from './http-adapter.js';
 import {
+  askGlasshive,
   findRunning,
-  isGlasshive,
   LISTEN_ADDRESS,
   openDirectoryAt,
   portsToTry,
@@ -49,7 +49,7 @@ export async function launch(args: Args): Promise<http.Server | null> {
      使い回せる glasshive が在るなら、読み込むだけ無駄になる。走査も索引も `git` の答えも、
      走っているその 1 つが持っているものをそのまま使える。 */
   const running = await findRunning(range, false);
-  if (running !== null) return await joinRunning(running, args);
+  if (running !== null) return await joinRunning(running.origin, args);
 
   const clientDir = fileURLToPath(new URL('../client', import.meta.url));
   const entryUrl = new URL('../server/server.js', import.meta.url).href;
@@ -111,8 +111,8 @@ export async function launch(args: Args): Promise<http.Server | null> {
       break;
     } catch (error) {
       if (!inUse(error)) throw error;
-      const late = `http://${LISTEN_ADDRESS}:${at}`;
-      if (await isGlasshive(late, false)) return await joinRunning(late, args);
+      const late = await askGlasshive(`http://${LISTEN_ADDRESS}:${at}`, false);
+      if (late !== null) return await joinRunning(late.origin, args);
       if (i === range.attempts - 1) throw error;
     }
   }

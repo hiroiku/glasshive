@@ -12,8 +12,8 @@ import { createServer, runnerImport } from 'vite';
 
 const from = (file) => fileURLToPath(new URL(`../src/frameworks/node/${file}`, import.meta.url));
 
-const [cli, instance, browser] = await Promise.all(
-  ['cli.ts', 'instance.ts', 'browser.ts'].map(async (file) => {
+const [cli, commands, instance, browser] = await Promise.all(
+  ['cli.ts', 'commands.ts', 'instance.ts', 'browser.ts'].map(async (file) => {
     const loaded = await runnerImport(from(file), { configFile: false });
     return loaded.module;
   }),
@@ -26,12 +26,17 @@ if (!parsed.ok) {
 }
 const args = parsed.args;
 
+// 居場所を訊くのも終わらせるのも、相手は開発中の glasshive である
+const range = instance.portsToTry(args.port);
+if (args.action === 'status') process.exit(await commands.reportStatus(range, true));
+if (args.action === 'stop') process.exit(await commands.stopRunning(range, true));
+
 // 走っている開発中の glasshive が在れば、そこへ伝えて終わる。ビルドしたものは使い回さない —
 // 書いたばかりのコードが画面に出ないまま「開いた」ことになる。
-const running = await instance.findRunning(instance.portsToTry(args.port), true);
+const running = await instance.findRunning(range, true);
 if (running !== null) {
-  const url = await instance.openDirectoryAt(running, args.target);
-  console.log(`glasshive: ${running} (already running)`);
+  const url = await instance.openDirectoryAt(running.origin, args.target);
+  console.log(`glasshive: ${running.origin} (already running)`);
   if (args.target !== undefined) console.log(`           ${args.target}`);
   if (args.open) browser.openBrowser(url);
   process.exit(0);

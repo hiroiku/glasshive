@@ -113,6 +113,8 @@ npx glasshive .                     # just this repository
 npx glasshive ~/src/foo             # or that one, from anywhere
 npx glasshive --port 8080           # listen somewhere else
 npx glasshive --no-open             # do not open the browser
+npx glasshive --status              # where is it running, and since when
+npx glasshive --stop                # end it, from any terminal
 npx glasshive --active-threshold 120  # seconds since last write that still counts as active
 npx glasshive --config-dir ~/somewhere  # where preferences.json is kept
 ```
@@ -134,6 +136,19 @@ the scan, the index, and everything `git` has already answered are reused, so th
 arrives about as fast as switching tabs. Only the command line can name a directory this way; a page
 open in your browser cannot. The default port falls through to the next free one only when something
 that is not glasshive is holding it.
+
+Because there is one, you never have to remember which terminal has it:
+
+```sh
+$ glasshive --status
+glasshive: http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+
+$ glasshive --stop
+glasshive: stopped http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+```
+
+`--status` lists every glasshive it can find and exits non-zero when there is none, so it reads as a
+condition in a script. `--stop` ends all of them and is happy to find nothing.
 
 ### Keyboard
 

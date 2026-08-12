@@ -1,7 +1,12 @@
 import { statSync } from 'node:fs';
 import path from 'node:path';
 
+/* 打たれたコマンドが何をするか。**サーバーを立てないものが在る** —— `status` と `stop` は
+   走っているものに尋ねて終わるので、立てる側と同じ手順を通らせてはいけない。 */
+export type Action = 'serve' | 'status' | 'stop';
+
 export interface Args {
+  action: Action;
   /* 待ち受けるポート。**渡されなかったときは `undefined` である** — 既定から順に空きを
      探してよいのは、こちらが決めた番号のときだけである。名指されたら、その番号で待つ。 */
   port: number | undefined;
@@ -29,6 +34,8 @@ Usage: glasshive [path] [options]
   --active-threshold <secs>  Seconds since the last write to still count as "active" (default ${DEFAULTS.activeThresholdSecs})
   --config-dir <path>        Where local preferences are kept (default ~/.config/glasshive)
   --no-open                  Do not open the browser automatically
+  --status                   Say where glasshive is running, and since when
+  --stop                     Stop the glasshive that is running
   -h, --help                 Show this help
 
 With no path, every project an agent has worked in is listed, and the viewer picks
@@ -37,6 +44,8 @@ rest is still observed, and the hive is one click away.
 
 Running glasshive again does not start a second server. It hands the path to the one
 already listening and opens that window, reusing the scan and the index it has built.
+Since there is only ever one, --status says where it is and --stop ends it, from any
+directory and any terminal.
 `;
 
 export type ParseResult =
@@ -69,6 +78,7 @@ export function parseArgs(
   environment: CliEnvironment = REAL_ENVIRONMENT,
 ): ParseResult {
   const args: Args = {
+    action: 'serve',
     port: undefined,
     activeThresholdSecs: DEFAULTS.activeThresholdSecs,
     open: true,
@@ -82,6 +92,21 @@ export function parseArgs(
       case '--no-open':
         args.open = false;
         break;
+      /* 走っているものに尋ねて終わるだけの求め。**2 つ渡されたら断る** —— 居場所を訊いた
+         つもりで止まっていた、が起こらないようにする。 */
+      case '--status':
+      case '--stop': {
+        const action = a === '--stop' ? 'stop' : 'status';
+        if (args.action !== 'serve' && args.action !== action) {
+          return {
+            ok: false,
+            message: 'only one of --status and --stop can be given\n',
+            exitCode: 2,
+          };
+        }
+        args.action = action;
+        break;
+      }
       case '-h':
       case '--help':
         return { ok: false, message: HELP, exitCode: 0 };
@@ -163,6 +188,17 @@ export function parseArgs(
         break;
       }
     }
+  }
+
+  /* 走っているものに尋ねるだけの求めに、開く先は要らない。**黙って捨てない** ——
+     `glasshive . --stop` を「このディレクトリのぶんだけ止める」と読んだ人に、
+     1 つしかないサーバーを止めたことを言わないまま終わることになる。 */
+  if (args.action !== 'serve' && args.target !== undefined) {
+    return {
+      ok: false,
+      message: `--${args.action} does not take a path: ${args.target}\n`,
+      exitCode: 2,
+    };
   }
 
   return { ok: true, args };
