@@ -49,6 +49,9 @@ export interface MessagesJson {
   /* 宛先も相手が自己申告した名前も決まらなかったメッセージの数。**別のセッションへ渡ったものは
      ここに入らない** —— そちらは `peers` に、相手の自己申告した名前ごと在る。 */
   unplaced: number;
+  /* 片端しか置けなかったやり取りの相手を、当たり得るセッションぜんぶで探せたか。
+   **探し切れなかったことと、相手が居なかったことを同じにしない。** */
+  peers_complete: boolean;
   hops: HopJson[];
   peers: PeerExchangeJson[];
 }
@@ -60,6 +63,7 @@ export function presentMessages(messages: Observation<SessionMessages>): Message
       reason: messages.kind === 'absent' ? messages.reason : messages.error.code,
       complete: false,
       unplaced: 0,
+      peers_complete: false,
       hops: [],
       peers: [],
     };
@@ -69,6 +73,7 @@ export function presentMessages(messages: Observation<SessionMessages>): Message
     reason: null,
     complete: messages.value.complete,
     unplaced: messages.value.unplaced,
+    peers_complete: messages.value.peersComplete,
     hops: messages.value.hops.map((placed) => ({
       at: iso(placed.hop.atMs),
       from: placed.fromId,

@@ -28,7 +28,7 @@ const hop = {
 describe('エージェント間のメッセージの変換', () => {
   it('メッセージ 1 通は時刻と相手と要約を持って出る', () => {
     const presented = presentMessages(
-      observed({ hops: [hop], peers: [], complete: true, unplaced: 0 }),
+      observed({ hops: [hop], peers: [], complete: true, unplaced: 0, peersComplete: true }),
     );
 
     expect(presented.hops).toEqual([
@@ -44,7 +44,7 @@ describe('エージェント間のメッセージの変換', () => {
 
   it('欄はこれで全部', () => {
     const presented = presentMessages(
-      observed({ hops: [], peers: [], complete: true, unplaced: 0 }),
+      observed({ hops: [], peers: [], complete: true, unplaced: 0, peersComplete: true }),
     );
 
     expect(Object.keys(presented)).toEqual([
@@ -52,6 +52,7 @@ describe('エージェント間のメッセージの変換', () => {
       'reason',
       'complete',
       'unplaced',
+      'peers_complete',
       'hops',
       'peers',
     ]);
@@ -60,12 +61,25 @@ describe('エージェント間のメッセージの変換', () => {
   /* 読み取り範囲が先頭まで届かなかったことは、観測できなかったことと別である。 */
   it('読み取り範囲が届かなかったことを、そのまま伝える', () => {
     const presented = presentMessages(
-      observed({ hops: [], peers: [], complete: false, unplaced: 3 }),
+      observed({ hops: [], peers: [], complete: false, unplaced: 3, peersComplete: true }),
     );
 
     expect(presented.state).toBe('observed');
     expect(presented.complete).toBe(false);
     expect(presented.unplaced).toBe(3);
+  });
+
+  /* 片端しか置けなかったやり取りの相手を、探し切れたか。**探し切れなかったことと、相手が
+     居なかったことを同じにしない** —— 潰すと、開かなかったセッションに居た相手が
+     「居なかった」ことになる。 */
+  it('相手を探し切れなかったことも、そのまま伝える', () => {
+    const presented = presentMessages(
+      observed({ hops: [], peers: [], complete: true, unplaced: 0, peersComplete: false }),
+    );
+
+    expect(presented.peers_complete, '探し切れていないのに、探し切れたことになっている').toBe(
+      false,
+    );
   });
 
   it('観測できなかったときは、理由のエラーコードを添えて空で返す', () => {
@@ -99,7 +113,7 @@ describe('この画面に居ないセッションとのやり取り', () => {
 
   it('相手が自己申告した名前と、両端を結ぶ鍵ごと出る', () => {
     const presented = presentMessages(
-      observed({ hops: [], peers: [exchange], complete: true, unplaced: 0 }),
+      observed({ hops: [], peers: [exchange], complete: true, unplaced: 0, peersComplete: true }),
     );
 
     expect(presented.peers).toEqual([
@@ -123,6 +137,7 @@ describe('この画面に居ないセッションとのやり取り', () => {
         peers: [{ ...exchange, mode: 'notify' }],
         complete: true,
         unplaced: 0,
+        peersComplete: true,
       }),
     );
 

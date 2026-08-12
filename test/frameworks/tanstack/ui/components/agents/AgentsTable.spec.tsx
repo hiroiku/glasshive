@@ -190,6 +190,7 @@ beforeEach(() => {
     reason: null,
     complete: true,
     unplaced: 0,
+    peers_complete: true,
     peers: [],
     hops: [],
   });
@@ -370,6 +371,7 @@ describe('メッセージを観測できなかったことを、0 通と言わ�
       reason: 'EACCES',
       complete: false,
       unplaced: 0,
+      peers_complete: true,
       peers: [],
       hops: [],
     });
@@ -393,6 +395,7 @@ describe('メッセージを観測できなかったことを、0 通と言わ�
       reason: null,
       complete: false,
       unplaced: 0,
+      peers_complete: true,
       peers: [],
       hops: [],
     });
@@ -426,6 +429,7 @@ describe('メッセージを観測できなかったことを、0 通と言わ�
       reason: null,
       complete: true,
       unplaced: 2,
+      peers_complete: true,
       peers: [],
       hops: [],
     });
@@ -444,7 +448,15 @@ describe('メッセージを観測できなかったことを、0 通と言わ�
   /* 押してから返るまで `transcript` を読みに行くので、ここは見える長さの待ちである。 */
   const READ = {
     ok: true,
-    body: { state: 'observed', reason: null, complete: true, unplaced: 0, peers: [], hops: [] },
+    body: {
+      state: 'observed',
+      reason: null,
+      complete: true,
+      unplaced: 0,
+      peers_complete: true,
+      peers: [],
+      hops: [],
+    },
   };
 
   /** 1 回目だけすぐ返す返事。2 回目は `settle()` を呼ぶまで返らない */
@@ -860,6 +872,7 @@ describe('メッセージの矢印を、行の束の中へ浮かせない', () =
       reason: null,
       complete: true,
       unplaced: 0,
+      peers_complete: true,
       peers: [],
       hops: [
         {
@@ -951,6 +964,7 @@ describe('メッセージの矢印を、行の束の中へ浮かせない', () =
       reason: null,
       complete: true,
       unplaced: 0,
+      peers_complete: true,
       hops: [],
       peers: [
         {
@@ -998,7 +1012,7 @@ describe('メッセージの矢印を、行の束の中へ浮かせない', () =
     const said = rowOf('sess').textContent ?? '';
     expect(said).toContain('glasshive-clean-arch-port');
     expect(said, 'マークだけでは、相手がこの画面に居ないことが読めない').toContain(
-      'not in this view',
+      'the other end was not found in this project',
     );
   });
 

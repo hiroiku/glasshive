@@ -47,6 +47,8 @@ export interface AgentsToolbarProps {
     /* 読み取り範囲が `transcript` の先頭まで届いたか。届かなかったぶんの古いメッセージは
        数に入っていない。 */
     readonly complete: boolean;
+    /** 相手を探し切れたか。探し切れていなければ、見つからなかったことの意味が変わる */
+    readonly peersComplete: boolean;
   } | null;
   /* まだ `transcript` を読んでいる最中か。**押していないときと同じ顔にしない** —— 押した人から
      見て何も変わらない間が在ると、この画面ではやり取りが無かったのだと読める。 */
@@ -105,8 +107,13 @@ export function AgentsToolbar({
     const parts = [`${talkNote.messages} messages in ${talkNote.marks} arrows`];
     if (talkNote.peers > 0) {
       parts.push(
-        `${talkNote.peers} with a session that is not in this view — only this end is drawn`,
+        `${talkNote.peers} whose other end was not found in this project — only this end is drawn`,
       );
+      /* 探し切れていないなら、見つからなかったことの意味が変わる。**黙ると、開かなかった
+         セッションに居た相手が「居なかった」ことになる。** */
+      if (!talkNote.peersComplete) {
+        parts.push('not every session was opened to look for the other end');
+      }
     }
     if (talkNote.messages === 0 && talkNote.peers === 0) {
       parts.push('none of these agents messaged each other in this window');

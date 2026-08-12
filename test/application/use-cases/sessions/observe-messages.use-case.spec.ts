@@ -114,7 +114,7 @@ const session = (over: Partial<TranscriptSession> = {}): TranscriptSession => ({
   ...over,
 });
 
-const treeOf = (found: TranscriptSession): Tree => ({
+const treeOf = (sessions: readonly TranscriptSession[]): Tree => ({
   generatedAtMs: AT,
   activeThresholdMs: 300_000,
   sources: observed(1),
@@ -127,7 +127,7 @@ const treeOf = (found: TranscriptSession): Tree => ({
       canonicalPath: '/w/proj',
       name: 'proj',
       liveProcessCount: 0,
-      sessions: [found],
+      sessions: [...sessions],
       latestActivityMs: AT,
       recentTokens: observed(0),
       walked: observed(1),
@@ -135,9 +135,13 @@ const treeOf = (found: TranscriptSession): Tree => ({
   ],
 });
 
-/** ファイルごとの中身を決めておく `transcript` の保存先。読めない指定は `null` で表す */
-function repositoryOf(texts: Record<string, string | null>): TranscriptRepository {
-  return {
+/** 1 本ぶんの中身。読めないなら `null`、先頭まで届かなかったなら `partial` を立てる */
+type Held = string | null | { readonly text: string; readonly partial: true };
+
+/** ファイルごとの中身を決めておく `transcript` の保存先。開いた先も控える */
+function repositoryOf(texts: Record<string, Held>) {
+  const opened: string[] = [];
+  const repository = {
     async listTranscripts() {
       return absent('empty');
     },
@@ -148,32 +152,44 @@ function repositoryOf(texts: Record<string, string | null>): TranscriptRepositor
       return absent('empty');
     },
     async readTail(at: { readonly file: string }) {
-      const text = texts[at.file];
-      if (text === undefined) return absent('empty');
-      if (text === null) return unobservable(new ReadFailed('読めない'));
-      return observed({ text, complete: true });
+      opened.push(at.file);
+      const held = texts[at.file];
+      if (held === undefined) return absent('empty');
+      if (held === null) return unobservable(new ReadFailed('読めない'));
+      if (typeof held === 'string') return observed({ text: held, complete: true });
+      return observed({ text: held.text, complete: false });
     },
     async canonicalize(file: string) {
       return observed(file);
     },
   } as unknown as TranscriptRepository;
+  return { repository, opened };
 }
 
-const run = (found: TranscriptSession, texts: Record<string, string | null>) => {
+const run = (
+  found: TranscriptSession,
+  texts: Record<string, Held>,
+  others: readonly TranscriptSession[] = [],
+) => {
   const tree: TreeSnapshotService = {
     async get() {
-      return ok(treeOf(found));
+      return ok(treeOf([found, ...others]));
     },
   } as TreeSnapshotService;
-  return createObserveMessages({ tree, transcripts: repositoryOf(texts) }).execute(
-    'proj',
-    found.id,
-  );
+  const { repository, opened } = repositoryOf(texts);
+  return {
+    opened,
+    answer: createObserveMessages({ tree, transcripts: repository }).execute('proj', found.id),
+  };
 };
 
 /** 観測できたところまで取り出す。観測できていなければ、そこで組み立てが誤っている */
-const seen = async (found: TranscriptSession, texts: Record<string, string | null>) => {
-  const result = await run(found, texts);
+const seen = async (
+  found: TranscriptSession,
+  texts: Record<string, Held>,
+  others: readonly TranscriptSession[] = [],
+) => {
+  const result = await run(found, texts, others).answer;
   if (!result.ok || result.value.kind !== 'observed') throw new Error('観測できていない');
   return result.value.value;
 };
@@ -299,8 +315,182 @@ describe('この画面に居ないセッションとのやり取り', () => {
     const result = await run(session({ subagents: [subagent()] }), {
       '/nest/sess-1.jsonl': arrived('be3ecd13'),
       '/nest/a1.jsonl': null,
-    });
+    }).answer;
 
     expect(result.ok && result.value.kind).toBe('unobservable');
+  });
+});
+
+/* 名乗る名前はどの id とも一致しないが、`msg_id` は両端の `transcript` に同じ文字列で
+   書かれている。**そこを名前で結ぶと、観測していない対応を作ることになる。** */
+describe('片端しか置けなかった相手を、同じプロジェクトの中に探す', () => {
+  const other = (over: Partial<TranscriptSession> = {}) =>
+    session({ id: 'sess-2', file: '/nest/sess-2.jsonl', lastActivityMs: AT + 60_000, ...over });
+
+  it('送った先が同じプロジェクトのセッションなら、片端ではなく矢にする', async () => {
+    const messages = await seen(
+      session(),
+      {
+        '/nest/sess-1.jsonl': [
+          send('glasshive-clean-arch-port', 'toolu_01A'),
+          sendResult('toolu_01A', 'be3ecd13'),
+        ].join('\n'),
+        '/nest/sess-2.jsonl': arrived('be3ecd13'),
+      },
+      [other()],
+    );
+
+    expect(messages.peers, '両端を観測できているのに、片端のままにしている').toEqual([]);
+    expect(messages.hops).toHaveLength(1);
+    expect(messages.hops[0]?.fromId).toBe('sess-1');
+    expect(messages.hops[0]?.toId).toBe('sess-2');
+    expect(messages.hops[0]?.hop.summary, '矢は送った側の 1 行から作る').toBe('よろしく');
+    expect(messages.peersComplete).toBe(true);
+  });
+
+  it('届いたメッセージの送り主も、同じプロジェクトの中に探す', async () => {
+    const messages = await seen(
+      session(),
+      {
+        '/nest/sess-1.jsonl': arrived('be3ecd13'),
+        '/nest/sess-2.jsonl': [
+          send('glasshive-clean-arch-port', 'toolu_01A'),
+          sendResult('toolu_01A', 'be3ecd13'),
+        ].join('\n'),
+      },
+      [other()],
+    );
+
+    expect(messages.peers).toEqual([]);
+    expect(messages.hops).toHaveLength(1);
+    expect(messages.hops[0]?.fromId, '送ったのは向こうである').toBe('sess-2');
+    expect(messages.hops[0]?.toId).toBe('sess-1');
+  });
+
+  /* 2 つのセッションが互いに送り合う。**どちらの向きも、送った側の行から作る** ——
+     届いた側の記録は宛先を持たないので、そこから作ると誰へ送ったのかが消える。 */
+  it('送り合っていれば、両方の向きの矢になる', async () => {
+    const messages = await seen(
+      session(),
+      {
+        '/nest/sess-1.jsonl': [
+          send('glasshive-clean-arch-port', 'toolu_01A'),
+          sendResult('toolu_01A', 'out-1'),
+          arrived('in-1'),
+        ].join('\n'),
+        '/nest/sess-2.jsonl': [
+          arrived('out-1'),
+          send('wave-1', 'toolu_01B'),
+          sendResult('toolu_01B', 'in-1'),
+        ].join('\n'),
+      },
+      [other()],
+    );
+
+    expect(messages.peers).toEqual([]);
+    expect(
+      messages.hops.map((placed) => `${placed.fromId}→${placed.toId}`),
+      '一方の向きだけが残ると、やり取りが片側の独り言になる',
+    ).toEqual(['sess-1→sess-2', 'sess-2→sess-1']);
+  });
+
+  /* 同じ 1 通が 2 つのセッションへ届くことは在る。**届いた者どうしを矢で結ばない** ——
+     どちらも受け取った側で、送り手はここに居ない。矢は送った側の 1 行からしか作れない。 */
+  it('同じ 1 通を受け取っただけのセッションとは、結ばない', async () => {
+    const messages = await seen(
+      session(),
+      {
+        '/nest/sess-1.jsonl': arrived('be3ecd13'),
+        '/nest/sess-2.jsonl': arrived('be3ecd13'),
+      },
+      [other()],
+    );
+
+    expect(messages.hops, '受け取った者どうしを、送った・届いたの関係にしている').toEqual([]);
+    expect(messages.peers, '送り手を置けていないので、片端のまま残る').toHaveLength(1);
+  });
+
+  /* 始まりより前にも、最後の書き込みより後にも、その 1 行は書かれようがない。
+     **開かずに済むものを開かない** —— 1 通ぶんの相手を探すために、プロジェクトぜんぶを
+     開くわけにはいかない。 */
+  it('その時刻に動いていなかったセッションは、開きに行かない', async () => {
+    const { opened, answer } = run(
+      session(),
+      {
+        '/nest/sess-1.jsonl': [
+          send('glasshive-clean-arch-port', 'toolu_01A'),
+          sendResult('toolu_01A', 'be3ecd13'),
+        ].join('\n'),
+        '/nest/sess-2.jsonl': arrived('be3ecd13'),
+      },
+      [other({ lastActivityMs: AT - 60_000 })],
+    );
+    await answer;
+
+    expect(opened, '持ち得ない `transcript` まで開いている').toEqual(['/nest/sess-1.jsonl']);
+  });
+
+  it('やり取りより後に始まったセッションも、開きに行かない', async () => {
+    const { opened, answer } = run(
+      session(),
+      {
+        '/nest/sess-1.jsonl': [
+          send('glasshive-clean-arch-port', 'toolu_01A'),
+          sendResult('toolu_01A', 'be3ecd13'),
+        ].join('\n'),
+        '/nest/sess-2.jsonl': arrived('be3ecd13'),
+      },
+      [other({ startedRaw: new Date(AT + 60_000).toISOString() })],
+    );
+    await answer;
+
+    expect(opened, 'まだ始まっていないセッションに、その 1 行は書かれようがない').toEqual([
+      '/nest/sess-1.jsonl',
+    ]);
+  });
+
+  /* 開かなかった先に相手が居たかどうかは言えない。**「探した先には居なかった」と
+     「相手が居なかった」を同じにしない。** */
+  it('上限まで開いても見つからなければ、探し切れていないと言う', async () => {
+    const many = Array.from({ length: 30 }, (_, index) =>
+      other({ id: `sess-${index + 2}`, file: `/nest/sess-${index + 2}.jsonl` }),
+    );
+    const texts: Record<string, Held> = {
+      '/nest/sess-1.jsonl': [
+        send('glasshive-clean-arch-port', 'toolu_01A'),
+        sendResult('toolu_01A', 'be3ecd13'),
+      ].join('\n'),
+    };
+    for (const candidate of many) texts[candidate.file] = '';
+
+    const messages = await seen(session(), texts, many);
+
+    expect(messages.peers, '見つからなかったものは片端のまま残す').toHaveLength(1);
+    expect(messages.peersComplete, '開かなかった先に居た相手が、居なかったことになる').toBe(false);
+  });
+
+  it('読み取り範囲が先頭まで届かなかった先が在れば、探し切れていないと言う', async () => {
+    const messages = await seen(
+      session(),
+      {
+        '/nest/sess-1.jsonl': [
+          send('glasshive-clean-arch-port', 'toolu_01A'),
+          sendResult('toolu_01A', 'be3ecd13'),
+        ].join('\n'),
+        '/nest/sess-2.jsonl': { text: '', partial: true },
+      },
+      [other()],
+    );
+
+    expect(messages.peers).toHaveLength(1);
+    expect(messages.peersComplete, '読めていない先に在ったかどうかは言えない').toBe(false);
+  });
+
+  /* 探す相手が居ないなら、探し切れたかを問う相手も居ない */
+  it('片端しか置けなかったやり取りが無ければ、探し切れたと言う', async () => {
+    const messages = await seen(session(), { '/nest/sess-1.jsonl': '' }, [other()]);
+
+    expect(messages.peers).toEqual([]);
+    expect(messages.peersComplete).toBe(true);
   });
 });

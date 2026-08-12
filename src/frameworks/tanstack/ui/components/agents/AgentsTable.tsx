@@ -191,6 +191,10 @@ interface TalkHops {
   readonly unplaced: number;
   /** 読み取り範囲が `transcript` の先頭まで届いたか */
   readonly complete: boolean;
+  /* 片端しか置けなかったやり取りの相手を、当たり得るセッションぜんぶで探せたか。
+     探し切れていなければ、`peers` に残った 1 通は「相手が居ない」ではなく「探した先には
+     居なかった」である。 */
+  readonly peersComplete: boolean;
   readonly readable: boolean;
 }
 
@@ -692,6 +696,7 @@ export function AgentsTable({
         dropped: 0,
         unplaced: 0,
         complete: false,
+        peersComplete: false,
         readable: false,
       };
     }
@@ -774,7 +779,9 @@ export function AgentsTable({
       });
     }
 
-    /* 片端しか無いやり取り。**この画面に居ない相手なので、矢にはしない。**
+    /* 相手の端が見つからなかったやり取り。**片端しか観測できていないので、矢にはしない。**
+       このプロジェクトのセッションは `msg_id` で探した後なので、ここに残るのは別のプロジェクトの
+       相手か、読み取り範囲の外に在るものである。
        時間の外へ出たものは矢と同じく描かない —— 端へ寄せると、そこで起きたことに見える。 */
     const peers: TalkPeerMark[] = [];
     for (const exchange of answer.body.peers) {
@@ -794,7 +801,7 @@ export function AgentsTable({
         out,
         label: [
           out ? `to ${who}` : `from ${who}`,
-          'not in this view',
+          'the other end was not found in this project',
           exchange.mode === null ? '' : exchange.mode,
           exchange.summary,
         ]
@@ -817,6 +824,7 @@ export function AgentsTable({
       dropped,
       unplaced: answer.body.unplaced,
       complete: answer.body.complete,
+      peersComplete: answer.body.peers_complete,
       readable: true,
     };
   }, [talk, talkQuery.data, rows, data, axis, span, tlGeom.width]);
@@ -873,6 +881,7 @@ export function AgentsTable({
                 marks: talkHops.drawn.length,
                 dropped: talkHops.dropped,
                 unplaced: talkHops.unplaced,
+                peersComplete: talkHops.peersComplete,
                 peers: talkHops.peers.length,
                 complete: talkHops.complete,
               }

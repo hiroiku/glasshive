@@ -18,7 +18,10 @@ import {
   type AgentHop,
   SESSION_ADDRESSES,
 } from '~/domain/value-objects/sessions/agent-message.value-object.ts';
-import { MESSAGE_SCAN_BYTES } from '~/domain/value-objects/sessions/observation-window.value-object.ts';
+import {
+  MESSAGE_PEER_SESSIONS,
+  MESSAGE_SCAN_BYTES,
+} from '~/domain/value-objects/sessions/observation-window.value-object.ts';
 
 /* セッション 1 つぶんのメッセージのやり取りを集める。
 
@@ -36,12 +39,12 @@ export interface PlacedHop {
   readonly hop: AgentHop;
 }
 
-/* この画面に居ないセッションとのやり取り 1 通。
+/* 相手の端を置けなかったやり取り 1 通。
 
    **相手の `transcript` は指せていない。** 名乗る名前はセッションの id でも `slug` でも
-   なく、こちらが観測した一覧のどれとも一致しない。指せているのは `msgId` —— 相手の
-   `transcript` にも同じ文字列が書かれているので、**探せば辿り着ける**が、ここでは
-   探していない。「相手が居ない」ではなく「相手をまだ置いていない」である。 */
+   なく、こちらが観測した一覧のどれとも一致しない。指せるのは `msgId` だけで、同じ
+   プロジェクトのセッションはそれで探しに行く。ここに残るのは、探した先に居なかったものである
+   —— 別のプロジェクトのセッションか、開いた `transcript` の読み取り範囲より前に在るものである。 */
 export interface PeerExchange {
   readonly atMs: number;
   readonly direction: 'sent' | 'received';
@@ -66,6 +69,10 @@ export interface SessionMessages {
   /* 宛先も相手が自己申告した名前も決まらなかったメッセージの数。**別のセッションへ渡ったものは
      ここに入らない** —— そちらは `peers` に、相手の自己申告した名前ごと在る。 */
   readonly unplaced: number;
+  /* 相手の端を、当たり得るセッションぜんぶで探せたか。**探し切れなかったことと、相手が
+     居なかったことを同じにしない** —— `peers` に残った 1 通は、開いた先には居なかった
+     というだけである。 */
+  readonly peersComplete: boolean;
 }
 
 export interface ObserveMessagesUseCase {
@@ -93,11 +100,107 @@ function addressesOf(session: TranscriptSession): Map<string, string> {
   return addresses;
 }
 
+/* そのセッションが持ち得るやり取りのうち、いちばん近いものとの隔たり。1 つも持ち得ないなら `null`。
+
+   持ち得るのは、始まりと最後の書き込みの間に在る時刻だけである。**始まりを読めていない
+   セッションは外さない** —— 読めていないだけで、その 1 行はそこに在るかもしれない。 */
+function nearestExchange(session: TranscriptSession, times: readonly number[]): number | null {
+  const startedMs = session.startedRaw === null ? Number.NaN : Date.parse(session.startedRaw);
+  let nearest: number | null = null;
+  for (const at of times) {
+    if (at > session.lastActivityMs) continue;
+    if (Number.isFinite(startedMs) && at < startedMs) continue;
+    const gap = session.lastActivityMs - at;
+    if (nearest === null || gap < nearest) nearest = gap;
+  }
+  return nearest;
+}
+
 export function createObserveMessages(deps: {
   readonly tree: TreeSnapshotService;
   readonly transcripts: TranscriptRepository;
 }): ObserveMessagesUseCase {
   const { tree, transcripts } = deps;
+
+  /* 片端しか置けなかったやり取りの相手を、同じプロジェクトのセッションに探す。
+
+     結べるのは `msgId` だけである。送った側の `transcript` には結果として、受け取った側には
+     届いた記録として、同じ文字列が書かれている。名乗る名前はどの id とも一致しないので、
+     ここを名前で結ぶと、観測していない対応を作ることになる。
+
+     近い順に開いて、探しているものが尽きたところでやめる。相手はたいてい、同じ時間に
+     動いていた 1 つである。上限まで開いても見つからなかったものは、**見つからなかった
+     こととして返す** —— 相手が居なかったことにはしない。 */
+  const findPeerEnds = async (
+    pending: readonly PeerExchange[],
+    sent: ReadonlyMap<string, AgentHop>,
+    sessions: readonly TranscriptSession[],
+    focusId: string,
+  ): Promise<{
+    readonly hops: readonly PlacedHop[];
+    readonly left: readonly PeerExchange[];
+    readonly searchedAll: boolean;
+  }> => {
+    const wanted = new Map<string, PeerExchange>();
+    for (const exchange of pending) wanted.set(exchange.msgId, exchange);
+    if (wanted.size === 0) return { hops: [], left: pending, searchedAll: true };
+
+    const times = [...wanted.values()].map((exchange) => exchange.atMs);
+    const candidates = sessions
+      .filter((candidate) => candidate.id !== focusId)
+      .map((candidate) => ({ session: candidate, near: nearestExchange(candidate, times) }))
+      .filter((entry): entry is { session: TranscriptSession; near: number } => entry.near !== null)
+      .sort((a, b) => a.near - b.near);
+
+    const hops: PlacedHop[] = [];
+    let opened = 0;
+    let partial = false;
+    for (const entry of candidates) {
+      if (wanted.size === 0 || opened >= MESSAGE_PEER_SESSIONS) break;
+      opened += 1;
+      const stat = await transcripts.statTranscript(entry.session.file);
+      if (stat.kind !== 'observed') {
+        partial = true;
+        continue;
+      }
+      const window = await transcripts.readTail(
+        { file: entry.session.file, ...stat.value },
+        { maxBytes: MESSAGE_SCAN_BYTES, trimPartialLine: true },
+      );
+      if (window.kind !== 'observed') {
+        partial = true;
+        continue;
+      }
+      // 読み取り範囲が先頭まで届かなかったなら、その先に在ったかどうかは言えない
+      if (!window.value.complete) partial = true;
+      const text = window.value.text;
+      // 探している id が 1 つも現れない本文は、行に組み立てるまでもない
+      if (![...wanted.keys()].some((id) => text.includes(id))) continue;
+
+      /* こちらが送った 1 通が、ここに届いていた。**矢は送った側の行から作る** ——
+         届いた側の記録は宛先を持たず、送った側の 1 行だけが誰から誰へを言う。 */
+      for (const delivery of extractDeliveries(text)) {
+        const exchange = wanted.get(delivery.msgId);
+        const hop = sent.get(delivery.msgId);
+        if (exchange === undefined || hop === undefined) continue;
+        hops.push({ fromId: exchange.agentId, toId: entry.session.id, hop });
+        wanted.delete(delivery.msgId);
+      }
+      // こちらへ届いた 1 通を、ここが送っていた
+      for (const hop of extractHops(text)) {
+        if (hop.msgId === null) continue;
+        const exchange = wanted.get(hop.msgId);
+        if (exchange === undefined) continue;
+        hops.push({ fromId: entry.session.id, toId: exchange.agentId, hop });
+        wanted.delete(hop.msgId);
+      }
+    }
+
+    const left = pending.filter((exchange) => wanted.has(exchange.msgId));
+    // 残りが無いなら、探し切れたかを問う相手が居ない
+    const searchedAll = left.length === 0 || (!partial && opened === candidates.length);
+    return { hops, left, searchedAll };
+  };
 
   return {
     async execute(projectId, sessionId) {
@@ -117,6 +220,8 @@ export function createObserveMessages(deps: {
 
       const placed: PlacedHop[] = [];
       const peers: PeerExchange[] = [];
+      /** 送ったほうの記録。相手が見つかったとき、矢はこの 1 行から作る */
+      const sent = new Map<string, AgentHop>();
       let complete = true;
       let unplaced = 0;
       for (const owner of owners) {
@@ -147,6 +252,7 @@ export function createObserveMessages(deps: {
             unplaced += 1;
             continue;
           }
+          sent.set(hop.msgId, hop);
           peers.push({
             atMs: hop.atMs,
             direction: 'sent',
@@ -175,9 +281,22 @@ export function createObserveMessages(deps: {
         }
       }
 
+      /* 片端しか置けなかったやり取りの、もう一方を同じプロジェクトの中に探す。
+         結べるのは `msgId` だけである —— 名乗る名前はどの id とも一致しない。 */
+      const found = await findPeerEnds(peers, sent, project.sessions, session.id);
+      placed.push(...found.hops);
+
       placed.sort((a, b) => a.hop.atMs - b.hop.atMs);
-      peers.sort((a, b) => a.atMs - b.atMs);
-      return ok(observed({ hops: placed, peers, complete, unplaced }));
+      const left = [...found.left].sort((a, b) => a.atMs - b.atMs);
+      return ok(
+        observed({
+          hops: placed,
+          peers: left,
+          complete,
+          unplaced,
+          peersComplete: found.searchedAll,
+        }),
+      );
     },
   };
 }

@@ -35,6 +35,14 @@ export const SEARCH_TAIL_BYTES = 1024 * 1024;
    届かなかったことは `complete` で言う。 */
 export const MESSAGE_SCAN_BYTES = 4 * 1024 * 1024;
 
+/* 片端しか置けなかったやり取りの相手を探しに開く `transcript` の数の上限。
+
+   結べるのは `msg_id` だけで、それが在るのは相手の `transcript` の中である。1 通ぶんの相手を
+   探すためにプロジェクトぜんぶを開くと、`MESSAGE_SCAN_BYTES` の掛け算で数百 MiB になる。
+   ここまで開いて見つからなかったものは、**見つからなかったこととして出す** —— 相手が
+   居なかったことにはしない。 */
+export const MESSAGE_PEER_SESSIONS = 24;
+
 /* 検索で返す `transcript` の数の上限。**開いた数ではなく、当たった数を数える。**
    ここまで当たったら、残りは見に行かずに打ち切る。 */
 export const SEARCH_MAX_FILES = 200;

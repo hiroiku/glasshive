@@ -164,6 +164,7 @@ describe('メッセージの数が、何を言っているのかを分ける', (
     unplaced: 0,
     peers: 0,
     complete: true,
+    peersComplete: true,
     ...over,
   });
 
@@ -207,7 +208,23 @@ describe('メッセージの数が、何を言っているのかを分ける', (
     });
 
     expect(chipOf(container, '⇄').textContent).toBe('⇄ 21');
-    expect(chipOf(container, '⇄').getAttribute('title')).toContain('not in this view');
+    expect(chipOf(container, '⇄').getAttribute('title')).toContain(
+      'whose other end was not found in this project',
+    );
+  });
+
+  /* 相手を探し切れていないなら、見つからなかったことの意味が変わる。**黙ると、開かなかった
+     セッションに居た相手が「居なかった」ことになる。** */
+  it('相手を探し切れていないなら、見つからなかったことにそう添える', () => {
+    const { container } = mount({
+      talk: true,
+      talkNote: note({ messages: 0, marks: 0, peers: 4, peersComplete: false }),
+    });
+
+    expect(
+      chipOf(container, '⇄').getAttribute('title'),
+      '開かなかった先に居た相手が、居なかったことになる',
+    ).toContain('not every session was opened');
   });
 
   it('本当に 1 通も無かった回は、そう言う', () => {
