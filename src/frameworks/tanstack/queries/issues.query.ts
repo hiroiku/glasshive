@@ -33,6 +33,7 @@ const EMPTY: IssuesJson = {
   walked: false,
   repository: null,
   other_repositories: 0,
+  progress: null,
 };
 
 /* チャンクを 1 枚の一覧へ畳む。
@@ -41,14 +42,24 @@ const EMPTY: IssuesJson = {
    最初の 1 枚だけは丸ごと置き換わる —— そこに `state` と尋ね先が入っている。 */
 export function reduceIssues(current: IssuesJson, chunk: IssuesChunkJson): IssuesJson {
   if (chunk.kind === 'head') return chunk.head;
-  if (chunk.kind === 'complete') return { ...current, truncated: chunk.truncated, walked: true };
+  /* 読み終えたら進み具合を落とす。**読み終えた一覧の上に「あと少し」を残さない** ——
+     上限で切れて終わったときも、残りは読まないのだから途中ではない。 */
+  if (chunk.kind === 'complete') {
+    return { ...current, truncated: chunk.truncated, walked: true, progress: null };
+  }
   /* 状態の名前は GitHub から来る。素のオブジェクトに足すと `__proto__` という名前の状態が
      件数ではなくプロトタイプを動かすので、台帳と同じく prototype の無い入れ物に足す。 */
   const counts: Record<string, number> = Object.assign(Object.create(null), current.counts);
   for (const [status, count] of Object.entries(chunk.counts)) {
     counts[status] = (counts[status] ?? 0) + count;
   }
-  return { ...current, issues: [...current.issues, ...chunk.issues], counts };
+  /* 受け取った数を足す。分母は `head` が置いたものをそのまま持ち回る —— 歩いている間に
+     GitHub の総数を尋ね直さないので、途中で分母が動くことは無い。 */
+  const progress =
+    current.progress === null
+      ? null
+      : { ...current.progress, fetched_issues: current.progress.fetched_issues + chunk.fetched };
+  return { ...current, issues: [...current.issues, ...chunk.issues], counts, progress };
 }
 
 /* 置く時間を長めにとってあるのは、相手がネットワークの向こうにいて、取り直すたびに

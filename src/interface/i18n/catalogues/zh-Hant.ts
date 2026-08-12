@@ -140,6 +140,7 @@ export const zhHant: Catalogue = {
     '有些工作階段記錄無法讀取。列仍然只保留目前找到的符合項，因此可能有缺少的列',
   'Reading inside transcripts (last 1 MiB · last 7 days). Matches are added as they are read':
     '正在讀取工作階段記錄內部（末尾 1 MiB · 最近 7 天）。符合項會隨讀取逐步加入',
+  transcripts: '工作階段記錄',
   'transcripts could not be read': '工作階段記錄無法讀取',
   'reading transcripts…': '正在讀取工作階段記錄…',
   '{scanned} of {total} transcripts read': '已讀取 {total} 份工作階段記錄中的 {scanned} 份',

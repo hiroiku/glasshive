@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { Translator } from '~/interface/i18n/translator.ts';
 
 /* 読んでいる最中の表示。
 
@@ -24,6 +25,21 @@ export interface ReadScan {
   /** 何を数えているかまで含む 1 行。`1.2 of 4.8 MiB read from this transcript` */
   readonly text: string;
 }
+
+/* 数で数えた進み具合。**何を数えたのかまで 1 行にする** —— 裸の「6%」は、何の 6% なのかを
+   言わない。数えているのは読み取りの進み具合なので、`unit` に入るのは読んだものの名前
+   (`transcripts` / `issues`)であって、一覧に並ぶ行の名前ではない。
+
+   分母を観測できていなければ `null`。塗る幅も、読み上げに渡す割合も、そこからは出せない。 */
+export const countScan = (
+  t: Translator,
+  done: number,
+  total: number | null | undefined,
+  unit: string,
+): ReadScan | null =>
+  total === null || total === undefined || total <= 0
+    ? null
+    : { done, total, text: t('{done} of {total} {unit}', { done, total, unit }) };
 
 interface ReadProgressProps {
   /** いま何を読んでいるか */

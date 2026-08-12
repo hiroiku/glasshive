@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { counted, sourcesStateOf } from '~/frameworks/tanstack/ui/derive/sources.ts';
+import {
+  counted,
+  sourcesStateOf,
+  transcriptScan,
+} from '~/frameworks/tanstack/ui/derive/sources.ts';
+import { defaultTranslator as t } from '~/frameworks/tanstack/ui/i18n/useT.ts';
 
 /* 「出ている数がこれで全部か」を決める 1 つの述語。
 
@@ -84,5 +89,36 @@ describe('プロジェクトを、どこまで数え上げられたか', () => {
 
   it('セッションが 1 つも無くても、プロジェクトの観測は読める', () => {
     expect(sourcesStateOf(project({ sessions: [] }))).toBe('observed');
+  });
+});
+
+/* `~/.claude/projects` をどこまで歩いたか。
+
+   数えるのは `transcript` の本数である。**一覧に並んだプロジェクトの数ではない** —— 索引は
+   最初の 1 枚で全部のプロジェクトを敷くので、行の数は最初から動かない。 */
+describe('読み取りの進み具合', () => {
+  type TreeJson = Parameters<typeof transcriptScan>[1];
+  const tree = (progress: NonNullable<TreeJson>['progress']): TreeJson =>
+    ({ progress }) as TreeJson;
+
+  it('何を数えたのかまで 1 行にする', () => {
+    const scan = transcriptScan(t, tree({ read_transcripts: 312, total_transcripts: 4180 }));
+
+    expect(scan?.done).toBe(312);
+    expect(scan?.total).toBe(4180);
+    expect(scan?.text, '裸の「7%」は、何の 7% なのかを言わない').toBe('312 of 4,180 transcripts');
+  });
+
+  /* 索引が届く前と、読み終えた後は、どちらも進み具合を持たない。**そこで塗らない** ——
+     塗る幅は観測した量ではなく、見た目のための数になる。 */
+  it.each([
+    ['索引がまだ届いていない', undefined],
+    ['読み終えている', tree(null)],
+    ['本数を数えられていない', tree({ read_transcripts: 0, total_transcripts: 0 })],
+  ])('%sときは、塗る幅を出さない', (_name, given) => {
+    expect(
+      transcriptScan(t, given),
+      '分母を観測していない割合を、画面にも読み上げにも渡せない',
+    ).toBe(null);
   });
 });

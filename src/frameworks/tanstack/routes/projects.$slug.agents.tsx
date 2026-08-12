@@ -7,6 +7,7 @@ import { AGENT_COLUMN_IDS, AgentsTable } from '../ui/components/agents/AgentsTab
 import { NotObserved } from '../ui/components/primitives/NotObserved.tsx';
 import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
 import { StatsFooter } from '../ui/components/stats/StatsFooter.tsx';
+import { transcriptScan } from '../ui/derive/sources.ts';
 import { projectTrouble, treeTrouble } from '../ui/derive/trouble.ts';
 import { useNowMs } from '../ui/hooks/useNowMs.ts';
 import { useT } from '../ui/i18n/useT.ts';
@@ -85,7 +86,9 @@ function AgentsView() {
        観測できなかったことの上に「無かった」という判定を建てることになる。 */
     if (tree.data.sources.state === 'unobservable') return <NotObserved {...treeTrouble(t)} />;
     // 読み終えるまでは、まだ届いていない行の中に居るかもしれない
-    if (!tree.data.complete) return <ReadProgress label={t('Reading transcripts')} />;
+    if (!tree.data.complete) {
+      return <ReadProgress label={t('Reading transcripts')} scan={transcriptScan(t, tree.data)} />;
+    }
     return <NotObserved {...projectTrouble(t, slug)} />;
   }
 

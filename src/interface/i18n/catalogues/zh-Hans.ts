@@ -139,6 +139,7 @@ export const zhHans: Catalogue = {
     '有些会话记录无法读取。行仍然只保留目前找到的匹配，因此可能有缺失的行',
   'Reading inside transcripts (last 1 MiB · last 7 days). Matches are added as they are read':
     '正在读取会话记录内部（末尾 1 MiB · 最近 7 天）。匹配项会随读取逐步加入',
+  transcripts: '会话记录',
   'transcripts could not be read': '会话记录无法读取',
   'reading transcripts…': '正在读取会话记录…',
   '{scanned} of {total} transcripts read': '已读取 {total} 份会话记录中的 {scanned} 份',

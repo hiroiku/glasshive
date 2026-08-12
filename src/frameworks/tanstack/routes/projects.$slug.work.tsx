@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import type { GitOverviewResponse } from '~/interface/controllers/git/git.controller.ts';
+import type { Translator } from '~/interface/i18n/translator.ts';
+import type { IssuesJson } from '~/interface/presenters/issues/issues.presenter.ts';
 import type { ProjectJson } from '~/interface/presenters/sessions/tree.presenter.ts';
 import { gitQuery } from '../queries/git.query.ts';
 import { githubIssueEventsQuery, githubIssuesQuery } from '../queries/issues.query.ts';
@@ -14,7 +16,11 @@ import { type IssueSortKey, IssuesTable } from '../ui/components/issues/IssuesTa
 import { IssuesLegend } from '../ui/components/issues/Legend.tsx';
 import { Icon } from '../ui/components/primitives/Icon.tsx';
 import { NotObserved } from '../ui/components/primitives/NotObserved.tsx';
-import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
+import {
+  countScan,
+  ReadProgress,
+  type ReadScan,
+} from '../ui/components/primitives/ReadProgress.tsx';
 import { SearchInput } from '../ui/components/primitives/SearchInput.tsx';
 import { Milestones } from '../ui/components/work/Milestones.tsx';
 import type { UnitCount } from '../ui/components/work/UnitSwitch.tsx';
@@ -67,6 +73,14 @@ const BRANCH_SORT_KEYS: readonly TipSortKey[] = ['name', 'ahead', 'date'];
 
 /** 相対の時刻の表示を進めるためだけの時計。観測そのものは取り直さない */
 const TICK_MS = 15_000;
+
+/* GitHub をどこまで歩いたか。**数えているのは受け取った課題で、一覧に並んだ行ではない** ——
+   閉じた課題は一覧から落ちるし、絞り込めば更に減る。バーは歩きを測り、一覧は見つかったものを
+   出す。この 2 つが合わないのは正しい。
+
+   総数を答えてもらえなかったときは `null` を返して、輪郭だけのバーに戻す。 */
+const issuesScan = (t: Translator, body: IssuesJson | undefined): ReadScan | null =>
+  countScan(t, body?.progress?.fetched_issues ?? 0, body?.progress?.total_issues, t('issues'));
 
 function WorkView() {
   const t = useT();
@@ -282,6 +296,7 @@ function WorkView() {
         <ReadProgress
           label={t('Fetching issues from GitHub')}
           slowNote={t('gh is paging through this repository — a large one takes a few seconds')}
+          scan={issuesScan(t, issues.data)}
         />
       </>
     );
@@ -320,6 +335,7 @@ function WorkView() {
           slowNote={t(
             'this view needs every issue — the dependencies and milestones are read from the whole list',
           )}
+          scan={issuesScan(t, body)}
         />
       </>
     );
@@ -466,6 +482,7 @@ function WorkView() {
       ) : (
         <ReadProgress
           label={t('Fetching the rest of the issues — the cumulative flow counts all of them')}
+          scan={issuesScan(t, body)}
         />
       )}
     </>

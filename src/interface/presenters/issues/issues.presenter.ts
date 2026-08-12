@@ -140,6 +140,18 @@ export interface IssuesJson {
      読んでいる最中かどうかを問い合わせの `isFetching` から採ってはいけない。取り直しの間は
      前の答えを出したままにしてあるので、**読み終えた一覧の上で `isFetching` が真になる。** */
   walked: boolean;
+  /* どこまで受け取ったか。読み終えていれば `null`。
+
+     数えるのは受け取った課題の数である。**一覧に並んだ行の数ではない** —— 閉じた課題は
+     一覧から落ちるし、絞り込めば更に減る。ここが数えているのは歩いた量のほうで、
+     一覧の出来高は `issues` と `counts` が言う。 */
+  progress: IssuesProgressJson | null;
+}
+
+/** 受け取った課題の数と、GitHub が答えた総数 */
+export interface IssuesProgressJson {
+  fetched_issues: number;
+  total_issues: number;
 }
 
 /* ストリームに流れる 1 つ。
@@ -152,7 +164,8 @@ export interface IssuesJson {
    仕事になる —— 積み上げたものを配ると、同じ課題を 5 回運ぶことになる。 */
 export type IssuesChunkJson =
   | { kind: 'head'; head: IssuesJson }
-  | { kind: 'page'; issues: IssueSummaryJson[]; counts: Record<string, number> }
+  /** `fetched` は受け取った課題の数。`issues` は一覧に載るぶんだけなので、2 つは合わない */
+  | { kind: 'page'; issues: IssueSummaryJson[]; counts: Record<string, number>; fetched: number }
   | { kind: 'complete'; truncated: boolean };
 
 /* GitHub の課題 1 件の本文。**空の本文と、読めなかったことを分けて運ぶ。**
@@ -317,6 +330,10 @@ export function presentIssuesHead(observation: Observation<IssueListingHead>): I
     repository:
       head === null ? null : `${head.source.repository.owner}/${head.source.repository.name}`,
     other_repositories: head?.source.others ?? 0,
+    /* 総数を答えられていなければ、進み具合そのものを置かない。**0 で埋めない** ——
+       0 は「1 件も無い」で、答えられていないこととは別である。 */
+    progress:
+      head === null || head.total === null ? null : { fetched_issues: 0, total_issues: head.total },
   };
 }
 

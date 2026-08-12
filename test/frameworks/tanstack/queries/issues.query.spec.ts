@@ -22,6 +22,7 @@ const EMPTY: IssuesJson = {
   walked: false,
   repository: null,
   other_repositories: 0,
+  progress: null,
 };
 
 /** 課題 1 件。ここで見るのは畳み方だけなので、id 以外は問わない */
@@ -32,13 +33,52 @@ const head = (over: Partial<IssuesJson> = {}): Chunk => ({
   head: { ...EMPTY, state: 'observed', reason: null, repository: 'hiroiku/glasshive', ...over },
 });
 
-const page = (ids: readonly string[], counts: Record<string, number>): Chunk => ({
+const page = (
+  ids: readonly string[],
+  counts: Record<string, number>,
+  fetched = ids.length,
+): Chunk => ({
   kind: 'page',
   issues: ids.map(issue),
   counts,
+  fetched,
 });
 
 describe('ページを 1 枚の一覧へ畳む', () => {
+  /* バーが測るのは歩いた量である。**一覧に載った行の数ではない** —— 閉じた課題は一覧から
+     落ちるので、2 つは合わない。分母は最初の 1 枚が置いたものを持ち回る。 */
+  it('受け取った課題の数を足し、分母は動かさない', () => {
+    let folded = reduceIssues(EMPTY, head({ progress: { fetched_issues: 0, total_issues: 250 } }));
+    folded = reduceIssues(folded, page([], { closed: 100 }, 100));
+    folded = reduceIssues(folded, page(['#1'], { open: 1 }, 100));
+
+    expect(folded.progress, '一覧の行数で数えると、閉じた課題を歩いた分が消える').toEqual({
+      fetched_issues: 200,
+      total_issues: 250,
+    });
+  });
+
+  /* 総数を答えてもらえなかったときに、こちらで作らない。**上限のページ数で割らない** ——
+     観測した割合ではなく、見た目のための数になる。 */
+  it('分母が無いままなら、進み具合も置かない', () => {
+    let folded = reduceIssues(EMPTY, head({ progress: null }));
+    folded = reduceIssues(folded, page(['#1'], { open: 1 }));
+
+    expect(folded.progress, '観測していない分母を、受け取る側で作らない').toBe(null);
+  });
+
+  /* 読み終えた一覧の上に「あと少し」を残さない。上限で切れて終わったときも、
+     残りは読まないのだから途中ではない。 */
+  it('歩き終えたら、進み具合を落とす', () => {
+    let folded = reduceIssues(EMPTY, head({ progress: { fetched_issues: 0, total_issues: 250 } }));
+    folded = reduceIssues(folded, page(['#1'], { open: 1 }, 100));
+    folded = reduceIssues(folded, { kind: 'complete', truncated: true });
+
+    expect(folded.progress, '読み終えた一覧の上のバーは、終わらない読み取りとして読める').toBe(
+      null,
+    );
+  });
+
   it('最初の 1 枚が、尋ね先と `state` を決める', () => {
     const observed = reduceIssues(EMPTY, head());
     const refused = reduceIssues(
@@ -109,7 +149,7 @@ describe('ページを 1 枚の一覧へ畳む', () => {
   it('状態の名前が何であれ、件数を落とさない', () => {
     const counts = JSON.parse('{"__proto__": 2}') as Record<string, number>;
     let folded = reduceIssues(EMPTY, head());
-    folded = reduceIssues(folded, { kind: 'page', issues: [], counts });
+    folded = reduceIssues(folded, { kind: 'page', issues: [], counts, fetched: 0 });
 
     expect(
       Object.getOwnPropertyDescriptor(folded.counts, '__proto__')?.value,

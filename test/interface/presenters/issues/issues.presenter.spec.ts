@@ -70,9 +70,10 @@ const LEDGER = {
 };
 
 /** 一覧と、その一覧をどこから取ったか。尋ね先まで揃えて初めて外の形になる */
-const listing = <T>(ledger: T, others = 0) => ({
+const listing = <T>(ledger: T, others = 0, total: number | null = null) => ({
   ledger,
   source: { repository: { owner: 'hiroiku', name: 'glasshive' }, others },
+  total,
 });
 
 describe('一覧を外の形へ写す', () => {
@@ -210,6 +211,7 @@ describe('一覧を外の形へ写す', () => {
       walked: false,
       repository: null,
       other_repositories: 0,
+      progress: null,
     });
   });
 
@@ -226,13 +228,33 @@ describe('一覧を外の形へ写す', () => {
       counts: {},
       repository: null,
       other_repositories: 0,
+      progress: null,
     });
+  });
+
+  /* 歩く先の全部の件数は、最初の 1 枚が運ぶ。**受け取った数は 0 から始める** ——
+     行はまだ 1 つも届いていない。 */
+  it('歩く先の全部の件数を、最初の 1 枚で言う', () => {
+    const presented = presentIssuesHead(observed(listing(LEDGER, 0, 1204)));
+
+    expect(presented.progress).toEqual({ fetched_issues: 0, total_issues: 1204 });
+  });
+
+  /* 総数を答えてもらえなかったときは、進み具合そのものを置かない。**0 で埋めない** ——
+     0 は「1 件も無い」で、答えられていないこととは別である。 */
+  it('総数を答えられていなければ、進み具合を置かない', () => {
+    expect(
+      presentIssuesHead(observed(listing(LEDGER, 0, null))).progress,
+      '観測していない分母を置くと、その分母で割った割合が画面に出る',
+    ).toBe(null);
   });
 
   /* remote を 2 つ以上持つプロジェクトでは glasshive が 1 つ選んでいる。
      選んだことを黙ると、選ばれなかったリポジトリの課題が「無い」ものとして読まれる。 */
   it('どこから取った一覧かを言う', () => {
-    const presented = presentIssuesHead(observed({ source: listing(LEDGER, 1).source }));
+    const presented = presentIssuesHead(
+      observed({ source: listing(LEDGER, 1).source, total: null }),
+    );
 
     expect(presented.repository).toBe('hiroiku/glasshive');
     expect(presented.other_repositories, '尋ねなかった先が在ることを黙らせない').toBe(1);
@@ -537,7 +559,7 @@ describe('一覧ぶんのイベントを外の形へ写す', () => {
 describe('歩き終えたかどうかを、届き方が言う', () => {
   it('最初の 1 枚は、まだ歩き終えていない', () => {
     expect(
-      presentIssuesHead(observed({ source: listing(LEDGER).source })).walked,
+      presentIssuesHead(observed({ source: listing(LEDGER).source, total: null })).walked,
       '行が 1 つも届いていないところで、一覧が読み終えたことになる',
     ).toBe(false);
     expect(

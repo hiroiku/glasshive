@@ -246,6 +246,11 @@ export interface GithubIssuePage {
   readonly nodes: readonly JsonRecord[];
   readonly endCursor: string | null;
   readonly hasNextPage: boolean;
+  /* このページではなく、歩く先の全部の件数。答えに入っていなければ `null`。
+
+     **0 と `null` を同じにしない。** 0 は「1 件も無い」で、`null` は「幾つ在るのかを
+     答えられていない」である。潰すと、分母を観測できていないのに割合を出すことになる。 */
+  readonly total: number | null;
 }
 
 /* 応答 1 ページを読む。応答から `issues` と、その `nodes` を辿れなければ `null`。
@@ -279,10 +284,12 @@ export function parseIssuePage(text: string): GithubIssuePage | null {
   const nodes = asArray(issues, 'nodes');
   if (nodes === undefined) return null;
 
+  const total = issues.totalCount;
   return {
     nodes: nodes.filter((node): node is JsonRecord => typeof node === 'object' && node !== null),
     endCursor: asString(pageInfo ?? {}, 'endCursor') ?? null,
     hasNextPage: pageInfo?.hasNextPage === true,
+    total: typeof total === 'number' && Number.isFinite(total) ? Math.trunc(total) : null,
   };
 }
 

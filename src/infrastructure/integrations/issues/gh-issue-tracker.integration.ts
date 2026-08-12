@@ -49,11 +49,18 @@ const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
    依存は 50 まで採る。上限そのものは残す — 際限なく求めると、1 件に数千の依存が付いた
    リポジトリで応答が返らなくなる。
 
+   `totalCount` は求める。**歩く先の全部の件数がここにしか無い。** `states` はこの問い合わせと
+   同じものが掛かるので、返るのは歩く対象そのものの数である —— 採った数と引き比べれば、
+   どこまで歩いたかが観測した割合になる。値段は変わらない(実測。求めても cost 4 のまま)。
+   やり取り(`ISSUE_DISCUSSION_QUERY`)で求めないのとは事情が違う —— あちらの総数は
+   こちらが読み飛ばす種類まで数えているので、歩く対象の数にならない。
+
    本文(`body`)は求めない。一覧に本文は要らず、100 件ぶんを運ぶと一覧そのものが開かなくなる。 */
 const ISSUE_PAGE_QUERY = `
 query($owner:String!,$name:String!,$pageSize:Int!,$cursor:String){
   repository(owner:$owner,name:$name){
     issues(first:$pageSize, after:$cursor, states:[OPEN,CLOSED], orderBy:{field:UPDATED_AT,direction:DESC}){
+      totalCount
       pageInfo{ hasNextPage endCursor }
       nodes{
         number title state stateReason createdAt updatedAt closedAt url
@@ -171,6 +178,7 @@ const ISSUE_EVENTS_QUERY = `
 query($owner:String!,$name:String!,$pageSize:Int!,$cursor:String){
   repository(owner:$owner,name:$name){
     issues(first:$pageSize, after:$cursor, states:[OPEN,CLOSED], orderBy:{field:UPDATED_AT,direction:DESC}){
+      totalCount
       pageInfo{ hasNextPage endCursor }
       nodes{
         number

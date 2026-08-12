@@ -144,6 +144,7 @@ export const ko: Catalogue = {
     '일부 트랜스크립트를 읽지 못했습니다. 행은 지금까지 찾은 일치 항목으로만 좁혀져 있으므로 빠진 행이 있을 수 있습니다',
   'Reading inside transcripts (last 1 MiB · last 7 days). Matches are added as they are read':
     '트랜스크립트 내부를 읽는 중 (마지막 1 MiB · 최근 7일). 일치 항목은 읽는 대로 추가됩니다',
+  transcripts: '트랜스크립트',
   'transcripts could not be read': '트랜스크립트를 읽지 못했습니다',
   'reading transcripts…': '트랜스크립트를 읽는 중…',
   '{scanned} of {total} transcripts read': '트랜스크립트 {total}건 중 {scanned}건을 읽었습니다',

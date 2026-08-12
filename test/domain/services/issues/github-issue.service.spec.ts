@@ -40,6 +40,30 @@ describe('応答 1 ページを読む', () => {
     expect(parsed?.endCursor).toBe('Y3Vyc29y');
   });
 
+  /* 歩く先の全部の件数は、この応答にしか無い。**0 と「答えていない」を同じにしない** ——
+     潰すと、分母を観測できていないのに割合を塗ることになる。 */
+  it('歩く先の全部の件数を、答えのとおりに持ち帰る', () => {
+    const counted = parseIssuePage(page({ totalCount: 1204, nodes: [node({ number: 7 })] }));
+    const silent = parseIssuePage(page({ nodes: [node({ number: 7 })] }));
+    const empty = parseIssuePage(page({ totalCount: 0, nodes: [] }));
+
+    expect(counted?.total).toBe(1204);
+    expect(silent?.total, '答えていない総数を 0 にすると、0 件のリポジトリと同じ形になる').toBe(
+      null,
+    );
+    expect(empty?.total, '0 件だと答えられたことは、答えられていないこととは別である').toBe(0);
+  });
+
+  it.each([
+    ['数でない', '1204'],
+    ['null である', null],
+  ])('総数が%sときは、答えられていないものとして返す', (_name, totalCount) => {
+    expect(
+      parseIssuePage(page({ totalCount, nodes: [] }))?.total,
+      '読めない値を数として持ち帰ると、その数で割った割合が出る',
+    ).toBe(null);
+  });
+
   it('課題が 1 件も無いページは、歩けたものとして返す', () => {
     const parsed = parseIssuePage(
       page({ pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] }),

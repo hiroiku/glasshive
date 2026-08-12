@@ -34,16 +34,17 @@ const gitWithoutRemote = (): GitCommandIntegration => ({
   },
 });
 
-const pageOf = (numbers: readonly number[], next: string | null) =>
+const pageOf = (numbers: readonly number[], next: string | null, total?: number, state = 'OPEN') =>
   JSON.stringify({
     data: {
       repository: {
         issues: {
+          ...(total === undefined ? {} : { totalCount: total }),
           pageInfo: { hasNextPage: next !== null, endCursor: next },
           nodes: numbers.map((number) => ({
             number,
             title: `issue ${number}`,
-            state: 'OPEN',
+            state,
             blockedBy: { nodes: [] },
           })),
         },
@@ -105,6 +106,55 @@ async function collect(useCase: ReturnType<typeof createListGithubIssues>, proje
 }
 
 describe('GitHub の課題を一覧にする', () => {
+  /* どこまで歩いたかは、受け取った課題の数でしか言えない。**一覧に載る数では言えない** ——
+     閉じた課題は落ちるので、そちらで数えると歩いた分が消える。 */
+  it('歩く先の全部の件数と、ページごとに受け取った数を配る', async () => {
+    /* 閉じた課題を混ぜる。**一覧には載らないが、歩いてはいる** —— ここが同じ数だと、
+       一覧の行数で数える書き方も通ってしまう。 */
+    const { tracker } = fakeTracker([pageOf([1, 2], 'cur', 5, 'CLOSED'), pageOf([3], null, 5)]);
+    const useCase = createListGithubIssues({
+      avatars: fakeAvatars().avatars,
+      git: gitWithRemote('git@github.com:hiroiku/glasshive.git\n'),
+      tracker,
+    });
+
+    const fetched: number[] = [];
+    const listed: number[] = [];
+    let total: number | null | undefined;
+    for await (const chunk of useCase.stream({
+      projectPath: '/work/glasshive',
+      includeClosed: false,
+    })) {
+      if (chunk.kind === 'head' && chunk.head.kind === 'observed') total = chunk.head.value.total;
+      if (chunk.kind === 'page') {
+        fetched.push(chunk.fetched);
+        listed.push(chunk.ledger.issues.length);
+      }
+    }
+
+    expect(total, '総数はページ 1 を読んで初めて分かる。最初の 1 枚がそれを運ぶ').toBe(5);
+    expect(fetched, 'ページごとの数を配らないと、受け取る側は積み上げられない').toEqual([2, 1]);
+    expect(listed, '一覧に載る数で数えると、閉じた課題を歩いた分が消える').toEqual([0, 1]);
+  });
+
+  /* 総数を答えてもらえないことが在る。**上限のページ数で作らない** —— 「5 ページ中 2 ページ」は
+     上限までの割合であって、課題が幾つ在るかは言っていない。 */
+  it('総数を答えられていなければ、そのまま答えられていないと言う', async () => {
+    const { tracker } = fakeTracker([pageOf([1], null)]);
+    const useCase = createListGithubIssues({
+      avatars: fakeAvatars().avatars,
+      git: gitWithRemote('git@github.com:hiroiku/glasshive.git\n'),
+      tracker,
+    });
+
+    const { head } = await collect(useCase, '/work/glasshive');
+
+    expect(
+      head?.kind === 'observed' ? head.value.total : 'missing',
+      '観測していない分母を作ると、その分母で割った割合が画面に出る',
+    ).toBe(null);
+  });
+
   it('remote から owner とリポジトリ名を引いて尋ねる', async () => {
     const { tracker, asked } = fakeTracker([pageOf([1], null)]);
     const useCase = createListGithubIssues({

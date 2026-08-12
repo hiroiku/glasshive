@@ -25,6 +25,7 @@ import {
   totalsOf,
   withinSpan,
 } from '../ui/derive/overview.ts';
+import { transcriptScan } from '../ui/derive/sources.ts';
 import { treeTrouble } from '../ui/derive/trouble.ts';
 import { useTabSelection } from '../ui/hooks/useTabSelection.ts';
 import { useT } from '../ui/i18n/useT.ts';
@@ -198,7 +199,7 @@ function Overview() {
           /* **読み終えるまで「1 つも無い」と言わない。** 索引がまだ届いていないだけかもしれず、
              「無かった」と「まだ観測していない」を同じ画面にすると見分けが付かない。 */
           !tree.data.complete ? (
-            <ReadProgress label={t('Reading transcripts')} />
+            <ReadProgress label={t('Reading transcripts')} scan={transcriptScan(t, tree.data)} />
           ) : (
             <p className="empty">
               {/* 「無かった」と「観測できなかった」を同じ文にしない。**片方は 0 で、

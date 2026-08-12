@@ -92,7 +92,8 @@ export async function* streamGithubIssues(
 
   for await (const chunk of deps.list.stream({ projectPath: path.value, includeClosed })) {
     if (chunk.kind === 'head') yield { kind: 'head', head: presentIssuesHead(chunk.head) };
-    else if (chunk.kind === 'page') yield { kind: 'page', ...presentIssuePage(chunk.ledger) };
+    else if (chunk.kind === 'page')
+      yield { kind: 'page', ...presentIssuePage(chunk.ledger), fetched: chunk.fetched };
     else yield { kind: 'complete', truncated: chunk.truncated };
   }
 }

@@ -90,6 +90,9 @@ const head = {
     walked: false,
     repository: 'hiroiku/glasshive',
     other_repositories: 0,
+    /* GitHub が答えた総数。**ページ数の上限ではない** —— 5 ページ中 2 ページは上限までの
+       割合であって、課題が幾つ在るかは言っていない。 */
+    progress: { fetched_issues: 0, total_issues: 4 },
   },
 };
 
@@ -117,9 +120,9 @@ function held() {
   });
   async function* stream() {
     yield head;
-    yield { kind: 'page', issues: [issue('#1')], counts: { open: 1 } };
+    yield { kind: 'page', issues: [issue('#1')], counts: { open: 1 }, fetched: 1 };
     await gate;
-    yield { kind: 'page', issues: [issue('#2')], counts: { open: 1 } };
+    yield { kind: 'page', issues: [issue('#2')], counts: { open: 1 }, fetched: 1 };
     yield { kind: 'complete', truncated: false };
   }
   return { stream, release };
@@ -331,5 +334,53 @@ describe('届いたページから出す', () => {
     paging.release();
     await waitFor(() => expect(chipOf('open')).toBe('open 2'));
     expect(chipOf('+ closed')).toBe('+ closed 0');
+  });
+  /* バーが測るのは歩いた量で、一覧の出来高ではない。**2 つは合わなくてよい** —— 閉じた課題は
+     一覧から落ちるし、絞り込めば更に減る。合わせにいくと、バーは観測した量ではなく
+     見た目のための数になる。 */
+  it('バーは、受け取った課題の数で塗る', async () => {
+    getGithubIssuesStream.mockImplementation(async function* () {
+      yield head;
+      /* 受け取ったのは 2 件で、一覧に載るのは 0 件。閉じた課題を載せていない一覧が
+         そうなる —— 歩いてはいるが、出す行が無い。 */
+      yield { kind: 'page', issues: [], counts: { closed: 2 }, fetched: 2 };
+      await new Promise(() => {});
+    });
+
+    const { container } = draw();
+
+    await waitFor(() =>
+      expect(container.querySelector('.rp-scan')?.textContent).toBe('2 of 4 issues'),
+    );
+    expect(
+      container.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow'),
+      '一覧の行数で塗ると、歩いているのに 0% のままになる',
+    ).toBe('50');
+  });
+
+  /* 総数を答えてもらえないことが在る。**そこで割合を作らない** —— 上限のページ数で割った数は
+     観測した割合ではなく、見た目のための数である。 */
+  it('総数が届かなければ、輪郭だけのバーにする', async () => {
+    getGithubIssuesStream.mockImplementation(async function* () {
+      yield { ...head, head: { ...head.head, progress: null } };
+      yield { kind: 'page', issues: [], counts: { closed: 2 }, fetched: 2 };
+      await new Promise(() => {});
+    });
+
+    const { container } = draw();
+
+    await waitFor(() => expect(barLabels(container)).toContain('Fetching issues from GitHub'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(
+      container.querySelector('[role="progressbar"]')?.hasAttribute('aria-valuenow'),
+      '分母を観測していない割合を、読み上げにだけ渡すことはできない',
+    ).toBe(false);
+    expect(
+      container.querySelector('.rp-fill'),
+      '塗る幅を持たないバーに、塗る要素は無い',
+    ).toBeNull();
   });
 });

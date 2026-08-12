@@ -1,8 +1,10 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
+import { treeQuery } from './queries/tree.query.ts';
 import { routeTree } from './routeTree.gen';
 import { NotObserved } from './ui/components/primitives/NotObserved.tsx';
 import { ReadProgress } from './ui/components/primitives/ReadProgress.tsx';
+import { transcriptScan } from './ui/derive/sources.ts';
 import { crashTrouble, routeTrouble } from './ui/derive/trouble.ts';
 import { useT } from './ui/i18n/useT.ts';
 
@@ -18,12 +20,22 @@ import { useT } from './ui/i18n/useT.ts';
 
    ここは言葉を選ぶ入れ物より外で描かれることが在る。そのときは英語のまま出る —— 落ちた画面が
    さらに落ちるより、読める英語が出るほうがよい。 */
+
+/* 起動を待っているあいだ。**何を待っているのかを名指す。** 誰もが必ず一度は見る待ちなので、
+   ここが黙っていると、glasshive は最初に「しばらく黙るもの」として憶えられる。
+
+   索引が届いていれば、そこに `transcript` の本数が在る。`enabled: false` で加わるのは、
+   **ここが読み取りを始める場所ではない**からである —— 始めるのはルートの loader で、
+   ここは既に走っている読み取りの進み具合を写すだけである。届いていなければ輪郭だけのバーで、
+   それは「まだ何も観測していない」という正しい姿である。 */
 function StartingView() {
   const t = useT();
+  const tree = useQuery({ ...treeQuery, enabled: false });
   return (
     <ReadProgress
       label={t('Starting glasshive')}
       slowNote={t('The first read of ~/.claude/projects takes a moment.')}
+      scan={transcriptScan(t, tree.data)}
     />
   );
 }
@@ -61,10 +73,11 @@ export function getRouter() {
        **これを置かないと、シェルは空のままビルドされる。** ブラウザーは hydrate のときに
        ルートの中身を描くので、空のシェルと食い違い、React が DOM を丸ごと作り直す。
        同じものを両側で描かせておけば、hydrate は静かに済む。 */
-    /* 何を待っているのかまで言う。**割合は出せない** —— ここはまだ何も読めていない時点で、
-       分母を持たない。8 秒を過ぎてから足す 1 行が食い違いにならないのは、それを出すのが
-       `useEffect` のタイマーだからである。シェルを描くときには走らないので、hydrate する
-       その瞬間はどちらの側にもこの 1 行が無い。 */
+    /* 何を待っているのかまで言う。**シェルには割合が出ない** —— ビルドの時点では索引が
+       まだ無く、`enabled: false` はそれを取りに行かないので、hydrate するその瞬間は
+       どちらの側も輪郭だけのバーである。塗り始めるのは索引が届いてからで、それは
+       hydrate より後になる。8 秒を過ぎてから足す 1 行が食い違わないのも同じ理由で、
+       それを出すのは `useEffect` のタイマーである。 */
     defaultPendingComponent: () => <StartingView />,
     /* 待ちの表示を、間を置いてからではなく最初から出す。HTML シェルには既に描かれて
        いるので、ここで間を置くと、その間だけブラウザー側が空になって食い違う。 */

@@ -63,13 +63,22 @@ export interface IssueListing {
    なる。積み上げるのは受け取る側でよい。 */
 export type IssueListingChunk =
   | { readonly kind: 'head'; readonly head: Observation<IssueListingHead> }
-  | { readonly kind: 'page'; readonly ledger: IssueLedger }
+  /* `fetched` は、このページで受け取った課題の数である。**一覧に載る数ではない** ——
+     `includeClosed` が偽なら閉じたものは `ledger` から落ちる。数えているのは歩いた量の
+     ほうで、一覧の出来高ではない。 */
+  | { readonly kind: 'page'; readonly ledger: IssueLedger; readonly fetched: number }
   /** 読み終えた。上限に当たったか、途中で読めなくなったなら `truncated` */
   | { readonly kind: 'complete'; readonly truncated: boolean };
 
-/** `head` が運ぶもの。中身は尋ね先だけで、行はまだ 1 つも無い */
+/** `head` が運ぶもの。尋ね先と、歩く先の全部の件数。行はまだ 1 つも無い */
 export interface IssueListingHead {
   readonly source: GithubSource;
+  /* 歩く先の全部の件数。GitHub が答えていなければ `null`。
+
+     ページ 1 を読んで初めて分かるので、`head` は必ずページ 1 の後に配る。**上限
+     (`MAX_PAGES`)で割った数ではない。** 「5 ページ中 2 ページ」は上限までの割合であって、
+     課題が何件在るかは言っていない。 */
+  readonly total: number | null;
 }
 
 export interface ListGithubIssuesUseCase {
@@ -158,13 +167,14 @@ export function createListGithubIssues(deps: {
       seen.push(...parsed.nodes);
       remember(buildLedger(seen, { includeClosed, truncated: false }));
       if (!opened) {
-        yield { kind: 'head', head: observed({ source: source.value }) };
+        yield { kind: 'head', head: observed({ source: source.value, total: parsed.total }) };
         opened = true;
       }
       /* このページぶんだけを配る。積み上げるのは受け取る側で、そちらは前のページを持っている */
       yield {
         kind: 'page',
         ledger: buildLedger(parsed.nodes, { includeClosed, truncated: false }),
+        fetched: parsed.nodes.length,
       };
 
       if (!parsed.hasNextPage) break;

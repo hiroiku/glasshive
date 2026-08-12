@@ -147,6 +147,7 @@ export const ja: Catalogue = {
     '一部のトランスクリプトを読めなかった。行はここまでに見つかった一致に絞られたままなので、抜けている行が在るかもしれない',
   'Reading inside transcripts (last 1 MiB · last 7 days). Matches are added as they are read':
     'トランスクリプトの中を読んでいます（末尾 1 MiB · 直近 7 日）。一致は読めたものから足していく',
+  transcripts: 'トランスクリプト',
   'transcripts could not be read': 'トランスクリプトを読めなかった',
   'reading transcripts…': 'トランスクリプトを読んでいます…',
   '{scanned} of {total} transcripts read': '{total} 件中 {scanned} 件のトランスクリプトを読んだ',
