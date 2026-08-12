@@ -406,7 +406,6 @@ export const ko: Catalogue = {
   'Could not be read': '읽지 못했습니다',
   '{tokens} — {percent}% of the {total} shown': '{tokens} — 표시된 {total} 중 {percent}%',
   all: '전체',
-  watched: '보는 중',
   'any time': '전체 기간',
   'Some projects could not be read — the counts may be short':
     '일부 프로젝트를 읽지 못했습니다 — 개수가 실제보다 적을 수 있습니다',

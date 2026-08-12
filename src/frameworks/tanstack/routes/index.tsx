@@ -68,7 +68,6 @@ function Overview() {
          まだ読んでいない行のほうに在るかもしれない。 */
       if (filter === 'input') return !row.read || (row.input ?? 0) > 0;
       if (filter === 'active') return !row.read || (row.active ?? 0) > 0;
-      if (filter === 'watched') return tabs.watched.has(row.id);
       return true;
     });
     /* 読み終えるまで並べ替えない。**部分集合に順位を付けない。**
@@ -78,7 +77,7 @@ function Overview() {
        カーソルの下で動く。索引の並び(最終活動の新しい順)のまま待つ。 */
     const filtered = filterRows(byChip, query);
     return complete ? sortRows(filtered, order) : filtered;
-  }, [rows, filter, span, nowMs, query, order, tabs.watched, complete]);
+  }, [rows, filter, span, nowMs, query, order, complete]);
 
   const totals = useMemo(() => totalsOf(rows), [rows]);
   /* 数え上げられなかった行の数。**絞り込む前の一覧で数える** — 絞り込みで隠れただけの行を

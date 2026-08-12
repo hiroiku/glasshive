@@ -411,7 +411,6 @@ export const ja: Catalogue = {
   'Could not be read': '読めなかった',
   '{tokens} — {percent}% of the {total} shown': '{tokens} — 出ている {total} のうち {percent}%',
   all: 'すべて',
-  watched: '観ている',
   'any time': '全期間',
   'Some projects could not be read — the counts may be short':
     '一部のプロジェクトを読めなかった — 件数は足りていない可能性がある',

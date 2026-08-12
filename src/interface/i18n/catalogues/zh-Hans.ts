@@ -389,7 +389,6 @@ export const zhHans: Catalogue = {
   'Could not be read': '无法读取',
   '{tokens} — {percent}% of the {total} shown': '{tokens} —— 占所列 {total} 的 {percent}%',
   all: '全部',
-  watched: '在看',
   'any time': '任何时间',
   'Some projects could not be read — the counts may be short': '有些项目无法读取 —— 计数可能偏少',
   'Some transcripts could not be read': '有些会话记录无法读取',

@@ -391,7 +391,6 @@ export const zhHant: Catalogue = {
   'Could not be read': '無法讀取',
   '{tokens} — {percent}% of the {total} shown': '{tokens} —— 占所列 {total} 的 {percent}%',
   all: '全部',
-  watched: '在看',
   'any time': '任何時間',
   'Some projects could not be read — the counts may be short': '有些專案無法讀取 —— 計數可能偏少',
   'Some transcripts could not be read': '有些工作階段記錄無法讀取',

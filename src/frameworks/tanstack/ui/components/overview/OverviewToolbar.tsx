@@ -6,7 +6,7 @@ import { SearchInput } from '../primitives/SearchInput.tsx';
 
 /* Overview のツールバー。検索と、いま全体がどうなっているかの 1 行。 */
 
-export type OverviewFilter = 'all' | 'input' | 'active' | 'watched';
+export type OverviewFilter = 'all' | 'input' | 'active';
 
 export interface OverviewToolbarProps {
   readonly query: string;
@@ -32,7 +32,6 @@ const chips = (
   { key: 'all', label: t('all') },
   { key: 'input', label: t('input') },
   { key: 'active', label: t('active') },
-  { key: 'watched', label: t('watched') },
 ];
 
 /* 期間のチップは状態のチップと別のグループにする。**同じ並びに混ぜない** —
