@@ -1,14 +1,9 @@
-import {
-  DEFAULT_LOCALE,
-  isLocale,
-  LOCALES,
-  type Locale,
-} from '~/application/use-cases/workspace/read-preferences.use-case.ts';
+import { DEFAULT_LOCALE, isLocale, LOCALES, type Locale } from '~/application/i18n/locale.ts';
 
 /* 画面に出せる言葉と、ブラウザーが名乗る言葉との間。
 
-   出せる言葉の一覧は `preferences.json` を読む側が持っている。ここで数え直さない —
-   数え直すと、言葉を足した日にどちらかが取り残される。 */
+   出せる言葉の一覧は内側の層が持っている。ここで数え直さない — 数え直すと、
+   言葉を足した日にどちらかが取り残される。 */
 
 export { DEFAULT_LOCALE, isLocale, LOCALES, type Locale };
 

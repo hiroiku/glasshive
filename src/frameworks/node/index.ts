@@ -1,6 +1,5 @@
 import { parseArgs } from './cli.js';
-import { reportStatus, stopRunning } from './commands.js';
-import { portsToTry } from './instance.js';
+import { runCommand } from './commands.js';
 import { launch } from './launcher.js';
 
 const parsed = parseArgs(process.argv.slice(2));
@@ -9,12 +8,14 @@ if (!parsed.ok) {
   process.exit(parsed.exitCode);
 }
 
+/* 尋ねて終わるだけの求めは、開発用のスクリプトと同じ `runCommand` を通す。**立ち上げ方に
+   よって `--stop` の意味が変わってはいけない。** */
+const code = await runCommand(parsed.args, false);
+if (code !== null) process.exit(code);
+
 /* 失敗の中身をそのまま出す。ここで「ポートを取れなかった」と決め打つと、走っている
    glasshive に断られたときに嘘の理由が出る。 */
 try {
-  const range = portsToTry(parsed.args.port);
-  if (parsed.args.action === 'status') process.exit(await reportStatus(range, false));
-  if (parsed.args.action === 'stop') process.exit(await stopRunning(range, false));
   await launch(parsed.args);
 } catch (e) {
   console.error(`glasshive: ${e instanceof Error ? e.message : String(e)}`);

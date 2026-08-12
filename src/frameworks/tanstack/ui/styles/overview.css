@@ -49,7 +49,7 @@ p.warn {
 .dash-sum b.input {
   color: var(--input);
 }
-/* 左端にピン留めの列を置くので、列は 8 本になる。
+/* 左端に観るかどうかの列を置くので、列は 8 本になる。
    行の属性として状態の点と並べて読めるようにしてある(右端だと消す操作に見える) */
 .dash-grid {
   display: grid;
@@ -74,7 +74,7 @@ p.warn {
   border-radius: 0;
   padding-bottom: 6px;
 }
-/* ピン留めと名前のセル。押しどころはセルの中の button とリンクで、セル自身は列の枠でしかない。
+/* 観るかどうかと名前のセル。押しどころはセルの中の button とリンクで、セル自身は列の枠でしかない。
    中の 1 つを列いっぱいに敷いて、行の高さは中身の高さのままにする */
 .dash-row > .pin-col,
 .dash-row > .name-col {
@@ -164,7 +164,7 @@ p.warn {
   white-space: nowrap;
 }
 
-/* ピン留めのボタン。留めていないものは行にホバーしたときだけ薄く現れる —
+/* 観ると決めるボタン。観ていないものは行にホバーしたときだけ薄く現れる —
    常に出ていると 40 行ぶんの点が並んで、状態の点と読み違える */
 .pin {
   background: transparent;
@@ -234,4 +234,71 @@ p.warn {
     rgba(251, 191, 36, 0.12) 4px 8px
   );
   opacity: 1;
+}
+
+/* ---------- 見つけたが、まだ観ると決めていないディレクトリ ---------- */
+
+/* 一覧の外に置く。**表の中に混ぜない** —— 観ているものと、観ていないものが同じ並びに
+   なると、選んだという行為そのものが読めなくなる。 */
+.picker {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  max-width: 1400px;
+  background: var(--panel);
+}
+.picker > summary {
+  padding: 7px 12px;
+  color: var(--dim);
+  cursor: pointer;
+}
+.picker > summary:hover {
+  color: var(--fg);
+}
+.picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 8px 8px;
+  /* 長い一覧でも、この箱の中だけが伸び縮みする */
+  max-height: 40vh;
+  overflow: auto;
+}
+/* 押す所・名前・場所・時刻の 4 つ。**場所だけが伸びる** —— 名前と時刻は幅が読めるが、
+   パスは機械によって長さが桁違いに違う。 */
+.picker-list li {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr) max-content;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 4px;
+}
+.picker-add {
+  font: inherit;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.picker-add:hover {
+  border-color: var(--accent);
+}
+.picker-name {
+  font-weight: 600;
+}
+.picker-path {
+  color: var(--dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  /* 収まらないパスは頭を削る。末尾のディレクトリ名が、見分けの付く所である */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+.picker-when {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
 }

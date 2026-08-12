@@ -2,65 +2,68 @@ import { type Observation, valueOr } from '~/app-kernel/observation.ts';
 import type { ViewerPreferencesRepository } from '~/application/ports/repositories/workspace/viewer-preferences.repository.ts';
 import {
   localeOf,
-  selectionOf,
+  watchedOf,
 } from '~/application/services/workspace/preferences-document.service.ts';
-import { reconcile, visibleTabs } from '~/domain/services/workspace/tab-selection.service.ts';
+import { reconcile, visibleTabs } from '~/domain/services/workspace/watched-projects.service.ts';
 import type { Locale } from '~/domain/value-objects/workspace/locale.value-object.ts';
 import {
-  DEFAULT_TAB_SELECTION,
-  type TabSelection,
-} from '~/domain/value-objects/workspace/tab-selection.value-object.ts';
+  DEFAULT_WATCHED_PROJECTS,
+  type WatchedProjects,
+} from '~/domain/value-objects/workspace/watched-projects.value-object.ts';
 
 /* `preferences.json` を読み、いま観測しているものと突き合わせる。
 
-   **ピン留めの一覧は `preferences.json` のコピーではない。** 一覧を作るたびにここで
-   突き合わせて立てる。だから `preferences.json` が読めないときにはピン留めが
-   「留めていない」に倒れ、観測は 1 つも欠けない。 */
+   **記録の一覧は `preferences.json` のコピーではない。** 一覧を作るたびにここで
+   突き合わせて立てる。だから `preferences.json` が読めないときには記録が
+   「まだ何も観ていない」に倒れ、観測は 1 つも欠けない。 */
 
-/* 出す形。**外部 API へ写す側と、カタログを選ぶ側は、この名前だけを見る。**
-   内側の名前をそのまま覗かせると、内側を組み替えるたびに外の形まで引きずられる。
+/* 出す形。**外部 API へ写す側は、この名前だけを見る。** 内側の名前をそのまま覗かせると、
+   内側を組み替えるたびに外の形まで引きずられる。
 
-   `LOCALES` を値のまま通してあるのは、出せる言葉の一覧が 1 箇所にしか無いためである。
-   写す側が自分の一覧を持つと、言葉を足した日にどちらかが取り残される。 */
-export {
-  DEFAULT_LOCALE,
-  isLocale,
-  LOCALES,
-  type Locale,
-} from '~/domain/value-objects/workspace/locale.value-object.ts';
-export type { TabSelection };
+   画面に出せる言葉の一覧はここから渡さない。渡すのは `~/application/i18n/locale.ts` で、
+   そちらはブラウザーへ届く側も引く。 */
+export type { ObservedProjectRef } from '~/domain/services/workspace/watched-projects.service.ts';
+export type { WatchedProjects };
+
+export interface PreferencesInput {
+  /** いま観測できているプロジェクト。タブに出す対象を決める */
+  readonly observed: readonly { readonly id: string; readonly path: string }[];
+  /* 見つけただけのものも含めて、id からパスを引ける全部。**1 つ前の形からの引き継ぎに要る**
+     —— 留めてあったのは id で、パスは観測の側にしか無い。 */
+  readonly known: readonly { readonly id: string; readonly path: string }[];
+}
 
 export interface PreferencesView {
-  /** `preferences.json` と観測を突き合わせた、いま使うタブの選択。消えた id もここには残る */
-  readonly selection: TabSelection;
-  /** タブに出す id。観測に在るものだけが並ぶ */
+  /** `preferences.json` を整えた、いま使う記録。観測できていない場所もここには残る */
+  readonly watched: WatchedProjects;
+  /** タブに出す id。観測に在るものだけが、記録した順に並ぶ */
   readonly visibleTabs: readonly string[];
   /* 選ばれた画面の言葉。**まだ選んでいなければ `null` である。**
      `en` に倒して返すと、選んでいない人の画面がブラウザーの言葉を見に行けなくなる。 */
   readonly locale: Locale | null;
   /* `preferences.json` をどう読めたか。既定へ倒れたとき、なぜ倒れたのかをユーザーへ
-     伝えるために持つ。無かったのか観測できなかったのかが分からないと、選択が消えた
+     伝えるために持つ。無かったのか観測できなかったのかが分からないと、記録が消えた
      理由を尋ねようがない。 */
-  readonly stored: Observation<TabSelection>;
+  readonly stored: Observation<WatchedProjects>;
 }
 
 export interface ReadPreferencesUseCase {
-  execute(observedIds: readonly string[]): Promise<PreferencesView>;
+  execute(input: PreferencesInput): Promise<PreferencesView>;
 }
 
 export function createReadPreferences(deps: {
   readonly preferences: ViewerPreferencesRepository;
 }): ReadPreferencesUseCase {
   return {
-    async execute(observedIds) {
+    async execute({ observed, known }) {
       const document = await deps.preferences.load();
-      const stored = selectionOf(document);
+      const stored = watchedOf(document, known);
       /* 読めなかった理由をここで潰す。潰してよいのは、**`preferences.json` が壊れても
          観測は止まらない**と決めてあるからである。理由そのものは `stored` に残して外へ渡す。 */
-      const selection = reconcile(valueOr(stored, DEFAULT_TAB_SELECTION));
+      const watched = reconcile(valueOr(stored, DEFAULT_WATCHED_PROJECTS));
       return {
-        selection,
-        visibleTabs: visibleTabs(selection, observedIds),
+        watched,
+        visibleTabs: visibleTabs(watched, observed),
         locale: valueOr(localeOf(document), null),
         stored,
       };

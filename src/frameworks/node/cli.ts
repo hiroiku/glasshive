@@ -34,8 +34,10 @@ Usage: glasshive [path] [options]
   --active-threshold <secs>  Seconds since the last write to still count as "active" (default ${DEFAULTS.activeThresholdSecs})
   --config-dir <path>        Where local preferences are kept (default ~/.config/glasshive)
   --no-open                  Do not open the browser automatically
-  --status                   Say where glasshive is running, and since when
-  --stop                     Stop the glasshive that is running
+  --status                   List every glasshive found, with its pid and uptime.
+                             Exits 0 when at least one was found, 1 when none was
+  --stop                     Stop every glasshive found. Exits 0 when there was none
+                             to stop
   -h, --help                 Show this help
 
 With no path, every project an agent has worked in is listed, and the viewer picks
@@ -44,8 +46,10 @@ rest is still observed, and the hive is one click away.
 
 Running glasshive again does not start a second server. It hands the path to the one
 already listening and opens that window, reusing the scan and the index it has built.
-Since there is only ever one, --status says where it is and --stop ends it, from any
-directory and any terminal.
+--status and --stop reach it from any directory and any terminal, and both report
+everything they find — one started before that rule, or on another --port, is still
+out there. Neither calls it "not running" when it could not get an answer: that goes
+to stderr and exits 1, so a script can tell the two apart.
 `;
 
 export type ParseResult =
@@ -86,11 +90,20 @@ export function parseArgs(
     target: undefined,
   };
 
+  /* 打たれたまま控えておく。**解決した後のパスを控えると、断り文句が打った覚えのない
+     文字列になる** —— `glasshive . --stop` に返すのは `.` であって、`/Users/…/repo` ではない。 */
+  let typed: string | undefined;
+
+  /* 立ち上げるときにしか読まれない指定のうち、実際に打たれたもの。既定値と見分けるには
+     控えるしかない —— `--no-open` は打たれなくても `open` が決まっている。 */
+  const serveOnly: string[] = [];
+
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     switch (a) {
       case '--no-open':
         args.open = false;
+        serveOnly.push(a);
         break;
       /* 走っているものに尋ねて終わるだけの求め。**2 つ渡されたら断る** —— 居場所を訊いた
          つもりで止まっていた、が起こらないようにする。 */
@@ -134,6 +147,7 @@ export function parseArgs(
           };
         }
         args.activeThresholdSecs = n;
+        serveOnly.push('--active-threshold');
         break;
       }
       case '--config-dir': {
@@ -146,6 +160,7 @@ export function parseArgs(
           };
         }
         args.configDir = raw;
+        serveOnly.push('--config-dir');
         break;
       }
       /* 観測する範囲は起動時には決められない。黙って無視すると、渡したユーザーは
@@ -166,39 +181,59 @@ export function parseArgs(
         }
         /* 開く先は 1 つである。2 つ渡されたら、どちらを開いたかが画面から読めない
            まま片方だけが開くことになるので、受け取った時点で断る。 */
-        if (args.target !== undefined) {
+        if (typed !== undefined) {
           return {
             ok: false,
-            message: `only one path can be opened: ${args.target} and ${path.resolve(environment.cwd, a)}\n`,
+            message: `only one path can be opened: ${typed} and ${a}\n`,
             exitCode: 2,
           };
         }
-        const target = path.resolve(environment.cwd, a);
-        /* 開けないパスは、開いた後に「何も無い」と言うのではなく、ここで断る。
-           **無かったのと観測できなかったのを分けるのは、観測したものについての話である。**
-           名指した相手そのものが開けないなら、それは観測ではなく打ち間違いである。 */
-        if (!environment.isDirectory(target)) {
-          return {
-            ok: false,
-            message: `not a directory: ${a}\n`,
-            exitCode: 2,
-          };
-        }
-        args.target = target;
+        typed = a;
         break;
       }
     }
   }
 
-  /* 走っているものに尋ねるだけの求めに、開く先は要らない。**黙って捨てない** ——
-     `glasshive . --stop` を「このディレクトリのぶんだけ止める」と読んだ人に、
-     1 つしかないサーバーを止めたことを言わないまま終わることになる。 */
-  if (args.action !== 'serve' && args.target !== undefined) {
-    return {
-      ok: false,
-      message: `--${args.action} does not take a path: ${args.target}\n`,
-      exitCode: 2,
-    };
+  /* 走っているものに尋ねるだけの求めに、立ち上げるときの指定は要らない。**黙って捨てない**
+     —— `glasshive . --stop` を「このディレクトリのぶんだけ止める」と読んだ人にも、
+     `glasshive --config-dir ~/elsewhere --stop` を「その設定のものを止める」と読んだ人にも、
+     1 つしかないサーバーを止めたことを言わないまま終わることになる。
+
+     **パスが開けるかどうかは、ここでは見ない。** 先に見ると、打った順によって
+     `glasshive --stop /nope` が「そんなディレクトリは無い」と答えることになり、
+     `--stop` がパスを取らないことのほうが伝わらない。 */
+  if (args.action !== 'serve') {
+    const refused = [...new Set(serveOnly)];
+    if (refused.length > 0) {
+      return {
+        ok: false,
+        message: `--${args.action} does not take ${refused.join(' or ')}\n`,
+        exitCode: 2,
+      };
+    }
+    if (typed !== undefined) {
+      return {
+        ok: false,
+        message: `--${args.action} does not take a path: ${typed}\n`,
+        exitCode: 2,
+      };
+    }
+    return { ok: true, args };
+  }
+
+  /* 開けないパスは、開いた後に「何も無い」と言うのではなく、ここで断る。
+     **無かったのと観測できなかったのを分けるのは、観測したものについての話である。**
+     名指した相手そのものが開けないなら、それは観測ではなく打ち間違いである。 */
+  if (typed !== undefined) {
+    const target = path.resolve(environment.cwd, typed);
+    if (!environment.isDirectory(target)) {
+      return {
+        ok: false,
+        message: `not a directory: ${typed}\n`,
+        exitCode: 2,
+      };
+    }
+    args.target = target;
   }
 
   return { ok: true, args };

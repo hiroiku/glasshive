@@ -12,9 +12,9 @@
 [English](../README.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [한국어](README.ko.md) · [Español](README.es.md) · **Français** · [Deutsch](README.de.md)
 
 glasshive est un tableau de bord local en lecture seule pour [Claude Code](https://claude.com/claude-code).
-Il lit les journaux de session déjà présents sur votre disque et place sur un seul écran chaque projet
-dans lequel un agent a travaillé — ses sessions et ses subagents, ce que chacun est en train de faire,
-ses tickets et ses branches `git` actives. Voyez-le comme un `htop` pour les sessions d'agents, sans la
+Il lit les journaux de session déjà présents sur votre disque et place sur un seul écran les projets
+que vous observez — leurs sessions et leurs subagents, ce que chacun est en train de faire, leurs
+tickets et leurs branches `git` actives. Voyez-le comme un `htop` pour les sessions d'agents, sans la
 touche kill : glasshive n'écrit jamais dans `~/.claude`, ni dans vos dépôts, ni dans votre gestionnaire
 de tickets, et il ne peut ni démarrer, ni arrêter, ni piloter un agent.
 
@@ -35,9 +35,10 @@ soit `/proc/<pid>/cwd`, soit `lsof`.
 
 ### Overview
 
-Chaque projet dans lequel un agent a travaillé, d'où que vous ayez lancé glasshive. Ceux qui
-attendent votre réponse viennent en premier, puis ceux qui tournent encore. Filtrez par nom, par
-état ou par période, et épinglez à la barre d'onglets les projets qui comptent pour vous.
+Les projets que vous observez. Ceux qui attendent votre réponse viennent en premier, puis ceux qui
+tournent encore. Filtrez par nom, par état ou par période, et réorganisez la barre d'onglets. Elle
+commence vide : lancez `glasshive` dans un dépôt et ce dépôt est observé désormais, ou choisissez-en
+un parmi les répertoires que glasshive a trouvés sans les observer, listés au-dessus du tableau.
 
 ![Overview](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/overview.png)
 
@@ -86,8 +87,8 @@ et quelle pull request y a fait référence, lus à côté des agents qui y trav
 - **Il lit trois choses et n'écrit dans aucune.** Les journaux de session de Claude Code
   (`~/.claude/projects/**/*.jsonl`), `git` et — via la CLI `gh` — les tickets du dépôt GitHub vers
   lequel pointent vos remotes. Aucune transcription, aucun dépôt, aucun ticket n'est jamais modifié.
-- **Le seul fichier qu'il écrit est le sien.** `~/.config/glasshive/preferences.json` conserve vos
-  onglets épinglés et vos préférences d'affichage. Avant d'écrire, glasshive vérifie que le chemin
+- **Le seul fichier qu'il écrit est le sien.** `~/.config/glasshive/preferences.json` conserve les
+  répertoires que vous observez et vos préférences d'affichage. Avant d'écrire, glasshive vérifie que le chemin
   n'est ni dans `~/.claude`, ni dans la racine des transcriptions, ni dans un répertoire `.git` ou
   `.beads` appartenant à un projet qu'il peut voir, et refuse si c'est le cas — écrire dans ce qu'il
   observe est empêché par construction, pas par convention. Supprimez ce seul fichier et il ne reste
@@ -119,9 +120,18 @@ npx glasshive --active-threshold 120  # secondes depuis la dernière écriture c
 npx glasshive --config-dir ~/somewhere  # où preferences.json est conservé
 ```
 
-Lancez `glasshive --help` pour la liste complète. La portée n'est pas une option de démarrage : chaque
-projet dans lequel un agent a travaillé est listé, et c'est vous qui choisissez lesquels deviennent
-des onglets.
+Lancez `glasshive --help` pour la liste complète.
+
+**Nommer un répertoire, c'est commencer à l'observer.** `glasshive .` observe ce dépôt et l'ouvre ;
+un `glasshive` seul fait de même lorsque vous êtes dans un dépôt git, et atterrit sur l'Overview
+sinon. Le chemin est résolu vers le dépôt auquel il appartient : un sous-répertoire ou un worktree
+vous mènent au même endroit.
+
+**Observer, c'est ce que vous voyez, pas ce que glasshive a le droit de lire.** Tous les répertoires
+sous `~/.claude/projects` restent trouvés par leur nom, et l'Overview liste ceux que vous n'observez
+pas pour que vous les ajoutiez en un clic. Seul ce que vous observez est lu en entier ; du reste, on
+ne lit qu'une ligne d'une transcription, juste de quoi savoir où il se trouve. Cessez d'observer un
+projet depuis son onglet et il retourne dans cette liste ; rien n'est supprimé.
 
 ### Clavier
 

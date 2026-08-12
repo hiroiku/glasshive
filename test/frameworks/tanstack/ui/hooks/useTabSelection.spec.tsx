@@ -24,14 +24,16 @@ type Handle = ReturnType<typeof useTabSelection>;
 type StoredState = Handle['storedState'];
 
 interface PreferencesBody {
-  tab_selection: Handle['selection'];
+  watched: string[];
   visible_tabs: string[];
   stored: { state: StoredState; reason: string | null };
 }
 
-const body = (pinned: string[], stored: PreferencesBody['stored']): PreferencesBody => ({
-  tab_selection: { version: 1, mode: 'all', pinned, hidden: [] },
-  visible_tabs: pinned,
+/* 記録は絶対パスで、タブに並ぶのは id である。**画面はその読み替えを知らない** ——
+   知らないままでよいことを、ここでも同じ形で確かめる。 */
+const body = (tabs: string[], stored: PreferencesBody['stored']): PreferencesBody => ({
+  watched: tabs.map((id) => `/w/${id}`),
+  visible_tabs: tabs,
   stored,
 });
 
@@ -53,7 +55,7 @@ describe('`preferences.json` をどう読めたかを、画面まで落とさず
     const { result } = mount();
 
     await waitFor(() => expect(result.current.storedState).toBe('observed'));
-    expect(result.current.pinned).toEqual(new Set(['-w-a']));
+    expect(result.current.watched).toEqual(new Set(['-w-a']));
   });
 
   it('まだ `preferences.json` が無い日は、無いと言う', async () => {
@@ -74,7 +76,7 @@ describe('`preferences.json` をどう読めたかを、画面まで落とさず
     await waitFor(() => expect(result.current.storedState).toBe('unobservable'));
   });
 
-  it('取りに行って落ちた日は、「ピン留めしていない」と言わない', async () => {
+  it('取りに行って落ちた日は、「1 つも観ていない」と言わない', async () => {
     server.get.mockRejectedValue(new Error('つながらない'));
 
     const { result } = mount();
@@ -82,10 +84,10 @@ describe('`preferences.json` をどう読めたかを、画面まで落とさず
     await waitFor(() =>
       expect(
         result.current.storedState,
-        '結果を一度も受け取れていないのを absent と言うと、ピン留めが黙って消えたようにしか見えない',
+        '結果を一度も受け取れていないのを absent と言うと、記録が黙って消えたようにしか見えない',
       ).toBe('unobservable'),
     );
-    expect(result.current.pinned, 'ピン留めは分からないので、空で描くほかない').toEqual(new Set());
+    expect(result.current.watched, '記録は分からないので、空で描くほかない').toEqual(new Set());
   });
 
   it('まだ届いていない間は、何も言わない', () => {
@@ -109,10 +111,10 @@ describe('置きに行った結果を、クライアント側の状態へ正し�
     const { result } = mount();
     await waitFor(() => expect(result.current.storedState).toBe('absent'));
 
-    act(() => result.current.togglePin('-w-a'));
+    act(() => result.current.toggleWatch('-w-a'));
 
     await waitFor(() => expect(result.current.storedState).toBe('observed'));
-    expect(result.current.pinned).toEqual(new Set(['-w-a']));
+    expect(result.current.watched).toEqual(new Set(['-w-a']));
   });
 
   it('断られたら、クライアント側の状態を元へ戻す', async () => {
@@ -128,14 +130,14 @@ describe('置きに行った結果を、クライアント側の状態へ正し�
     });
 
     const { result } = mount();
-    await waitFor(() => expect(result.current.pinned).toEqual(new Set(['-w-a'])));
+    await waitFor(() => expect(result.current.watched).toEqual(new Set(['-w-a'])));
 
-    act(() => result.current.togglePin('-w-b'));
+    act(() => result.current.toggleWatch('-w-b'));
 
     await waitFor(() => expect(result.current.error).not.toBeNull());
     expect(
-      result.current.pinned,
-      '置けなかったのにピン留めだけ残ると、次に開いたときに黙って消える',
+      result.current.watched,
+      '置けなかったのにタブだけ残ると、次に開いたときに黙って消える',
     ).toEqual(new Set(['-w-a']));
   });
 
@@ -147,14 +149,14 @@ describe('置きに行った結果を、クライアント側の状態へ正し�
     });
 
     const { result } = mount();
-    await waitFor(() => expect(result.current.pinned).toEqual(new Set(['-w-a'])));
+    await waitFor(() => expect(result.current.watched).toEqual(new Set(['-w-a'])));
 
-    act(() => result.current.togglePin('-w-a'));
+    act(() => result.current.toggleWatch('-w-a'));
 
     await waitFor(() => expect(server.set).toHaveBeenCalled());
     expect(
       server.set.mock.calls.at(-1)?.[0],
-      '丸ごと送ると、読んでから送るまでの間に別のクライアントがピン留めしたぶんが消える',
-    ).toEqual({ data: { action: 'unpin', id: '-w-a' } });
+      '丸ごと送ると、読んでから送るまでの間に別のクライアントが足したぶんが消える',
+    ).toEqual({ data: { action: 'unwatch', id: '-w-a' } });
   });
 });

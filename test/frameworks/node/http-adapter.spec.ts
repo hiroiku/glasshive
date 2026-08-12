@@ -30,7 +30,7 @@ async function serve(handle: (request: Request) => Promise<Response>): Promise<s
 
 describe('リクエストを Request に写す', () => {
   /* 本文を読み終えたことを「クライアントが切断した」と読むと、本文付きのリクエストが
-     自分自身を途中で断ち切る。ピン留めがどう頑張っても置けなくなる。 */
+     自分自身を途中で断ち切る。記録がどう頑張っても置けなくなる。 */
   it('本文を読み終えても、途中で断ち切らない', async () => {
     const origin = await serve(async (request) => {
       const text = await request.text();

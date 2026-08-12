@@ -19,86 +19,64 @@ class TreeError extends AppError {
 
 /* 偽物の形は、コントローラーが受け取る形から取る。**型を書き写すと、内側の形が変わっても気づけない。** */
 type Deps = Parameters<typeof writePreferences>[0];
-type Snapshot = Extract<Awaited<ReturnType<Deps['tree']['get']>>, { ok: true }>['value'];
+type Snapshot = Extract<Awaited<ReturnType<Deps['index']['get']>>, { ok: true }>['value'];
+type Stub = Snapshot['index']['stubs'][number];
 type WriteInput = Parameters<Deps['write']['execute']>[0];
 type View = Awaited<ReturnType<Deps['read']['execute']>>;
 
-const SELECTION: View['selection'] = {
-  version: 1,
-  mode: 'all',
-  pinned: ['-w-a'],
-  hidden: [],
-};
+const WATCHED: View['watched'] = { version: 2, paths: ['/w/a'] };
 
 const VIEW: View = {
-  selection: SELECTION,
+  watched: WATCHED,
   visibleTabs: ['-w-a'],
   locale: null,
-  stored: observed(SELECTION),
+  stored: observed(WATCHED),
 };
 
-const project = (id: string, canonicalPath: string | null): Snapshot['projects'][number] => ({
+const project = (id: string, canonicalPath: string | null): Stub => ({
   id,
   slugs: [id],
   path: canonicalPath,
   canonicalPath,
   name: id,
   liveProcessCount: 0,
-  sessions: [],
   latestActivityMs: 0,
-  recentTokens: observed(0),
+  transcriptCount: 0,
   walked: observed(0),
 });
 
-/* 木 1 枚から、本物と同じ順に配る索引のチャンクを起こす。
-   本物も索引を先に配るので、偽物もその順を守っておく。 */
-const indexChunkOf = (tree: Snapshot) =>
-  ({
-    kind: 'index' as const,
-    index: {
-      generatedAtMs: tree.generatedAtMs,
-      activeThresholdMs: tree.activeThresholdMs,
-      sources: tree.sources,
-      processes: tree.processes,
-      stubs: [],
-    },
-  }) as const;
+/* 索引の偽物。触られたかどうかが分かるよう、覗いた回数を数える。
 
-/** スナップショットの偽物。触られたかどうかが分かるよう、覗いた回数を数える */
-function fakeTree(projects: readonly Snapshot['projects'][number][] = []) {
+   **見るのは索引であって木ではない。** 木に居るのは観ると決めたものだけなので、
+   まだ記録していないディレクトリは木から起こせない。 */
+function fakeIndex(stubs: readonly Stub[] = [], watched?: readonly string[]) {
   let looks = 0;
-  const service: Deps['tree'] = {
+  const service: Deps['index'] = {
     async get() {
       looks += 1;
       return ok({
-        generatedAtMs: 0,
-        activeThresholdMs: 60_000,
-        sources: observed(projects.length),
-        processes: observed(0),
-        projects,
+        index: {
+          generatedAtMs: 0,
+          activeThresholdMs: 60_000,
+          sources: observed(stubs.length),
+          processes: observed(0),
+          stubs,
+        },
+        watchedIds: new Set(watched ?? stubs.map((stub) => stub.id)),
+        transcriptFiles: new Set<string>(),
+        groups: [],
       });
-    },
-    // この controller が見るのは `get` だけである。`stream` は形を満たすためだけに置く
-    async *stream() {
-      const answer = await service.get();
-      if (answer.ok) yield indexChunkOf(answer.value);
-      return answer;
     },
     invalidate() {},
   };
   return { service, lookCount: () => looks };
 }
 
-/** スナップショットを起こせない偽物。材料が欠けたときに何が起きるかを見るために要る */
-function blindTree() {
-  const service: Deps['tree'] = {
+/** 索引を起こせない偽物。材料が欠けたときに何が起きるかを見るために要る */
+function blindIndex() {
+  const service: Deps['index'] = {
     async get() {
       return err(new TreeError('`transcript` のルートを読めなかった'));
-    },
-    // この controller が見るのは `get` だけである。`stream` は形を満たすためだけに置く
-    // biome-ignore lint/correctness/useYield: 木を起こせない偽物なので、配るものが 1 つも無い
-    async *stream() {
-      return await service.get();
     },
     invalidate() {},
   };
@@ -109,8 +87,8 @@ function blindTree() {
 function fakeUseCases(options: { refuse?: boolean } = {}) {
   const inputs: WriteInput[] = [];
   const read: Deps['read'] = {
-    async execute(observedIds) {
-      return { ...VIEW, visibleTabs: [...observedIds] };
+    async execute({ observed: rows }) {
+      return { ...VIEW, visibleTabs: rows.map((row) => row.id) };
     },
   };
   const write: Deps['write'] = {
@@ -123,44 +101,47 @@ function fakeUseCases(options: { refuse?: boolean } = {}) {
   return { read, write, inputs };
 }
 
-const deps = (tree: ReturnType<typeof fakeTree>, cases: ReturnType<typeof fakeUseCases>): Deps => ({
+const deps = (
+  index: ReturnType<typeof fakeIndex>,
+  cases: ReturnType<typeof fakeUseCases>,
+): Deps => ({
   read: cases.read,
   write: cases.write,
-  tree: tree.service,
+  index: index.service,
 });
 
 describe('操作を受けるコントローラー', () => {
-  it('留めるという操作を、そのまま内側へ渡す', async () => {
-    const tree = fakeTree([project('-w-a', '/w/a'), project('-w-b', null)]);
+  it('観ると決める操作を、そのまま内側へ渡す', async () => {
+    const index = fakeIndex([project('-w-a', '/w/a'), project('-w-b', null)]);
     const cases = fakeUseCases();
 
-    const response = await writePreferences(deps(tree, cases), {
-      action: 'pin',
+    const response = await writePreferences(deps(index, cases), {
+      action: 'watch',
       id: '-w-a',
     });
 
     expect(cases.inputs[0]?.action, 'コントローラーは操作を読み替えない').toEqual({
-      action: 'pin',
+      action: 'watch',
       id: '-w-a',
     });
     expect(
-      cases.inputs[0]?.observedIds,
-      '出す対象を決める材料は、いまのスナップショットから起こす',
-    ).toEqual(['-w-a', '-w-b']);
+      cases.inputs[0]?.observed.map((row) => row.id),
+      '出す対象と、id からパスへの読み替えの材料は、いまのスナップショットから起こす',
+    ).toEqual(['-w-a']);
     expect(
       cases.inputs[0]?.observedRoots,
       'パスの分からないプロジェクトは書き先の判定に使えない。渡しても意味が無いので落とす',
     ).toEqual(['/w/a']);
     expect(response.ok).toBe(true);
     if (!response.ok) throw new Error('断られた');
-    expect(response.body.tab_selection.pinned).toEqual(['-w-a']);
+    expect(response.body.watched).toEqual(['/w/a']);
   });
 
   it('並べ替えの落とし先も、そのまま渡す', async () => {
-    const tree = fakeTree();
+    const index = fakeIndex();
     const cases = fakeUseCases();
 
-    await writePreferences(deps(tree, cases), {
+    await writePreferences(deps(index, cases), {
       action: 'move',
       id: '-w-a',
       toIndex: 2,
@@ -176,10 +157,10 @@ describe('操作を受けるコントローラー', () => {
   /* 言葉の選択には相手の id が要らない。**知らない綴りは断る** —— 既定へ倒して受けると、
      送り間違いが「英語を選んだ」として `preferences.json` に残る。 */
   it('言葉を選ぶ操作を、そのまま内側へ渡す', async () => {
-    const tree = fakeTree();
+    const index = fakeIndex();
     const cases = fakeUseCases();
 
-    const response = await writePreferences(deps(tree, cases), {
+    const response = await writePreferences(deps(index, cases), {
       action: 'locale',
       locale: 'zh-Hant',
     });
@@ -191,10 +172,10 @@ describe('操作を受けるコントローラー', () => {
   /* `null` は英語ではなく「選ぶのをやめる」である。断ると、一度選んだ人は
      ブラウザーの言葉へ戻れなくなる。 */
   it('言葉を選ぶのをやめる操作も受ける', async () => {
-    const tree = fakeTree();
+    const index = fakeIndex();
     const cases = fakeUseCases();
 
-    const response = await writePreferences(deps(tree, cases), {
+    const response = await writePreferences(deps(index, cases), {
       action: 'locale',
       locale: null,
     });
@@ -204,26 +185,26 @@ describe('操作を受けるコントローラー', () => {
   });
 
   it('外すという操作も受ける', async () => {
-    const tree = fakeTree();
+    const index = fakeIndex();
     const cases = fakeUseCases();
 
-    await writePreferences(deps(tree, cases), { action: 'unpin', id: '-w-a' });
+    await writePreferences(deps(index, cases), { action: 'unwatch', id: '-w-a' });
 
-    expect(cases.inputs[0]?.action).toEqual({ action: 'unpin', id: '-w-a' });
+    expect(cases.inputs[0]?.action).toEqual({ action: 'unwatch', id: '-w-a' });
   });
 
   it('断られたときは、断りとして返す', async () => {
-    const tree = fakeTree();
+    const index = fakeIndex();
     const cases = fakeUseCases({ refuse: true });
 
-    const response = await writePreferences(deps(tree, cases), {
-      action: 'pin',
+    const response = await writePreferences(deps(index, cases), {
+      action: 'watch',
       id: '-w-a',
     });
 
     expect(
       response.ok,
-      '置けなかったのに置けたことにすると、ピン留めが次に開いたとき黙って消える',
+      '置けなかったのに置けたことにすると、記録が次に開いたとき黙って消える',
     ).toBe(false);
     if (response.ok) throw new Error('通ってしまった');
     expect(response.status, '保存先を変えるまで何度求めても同じで、再試行では通らない').toBe(403);
@@ -239,10 +220,10 @@ describe('読めないリクエストは、置きに行く前に断る', () => {
   const BAD: [string, unknown][] = [
     ['組ではない', 'pin'],
     ['何も無い', null],
-    ['並び', [{ action: 'pin', id: '-w-a' }]],
-    ['どれへの操作か分からない', { action: 'pin' }],
-    ['id が文字列でない', { action: 'pin', id: 1 }],
-    ['id が空', { action: 'pin', id: '' }],
+    ['並び', [{ action: 'watch', id: '-w-a' }]],
+    ['どれへの操作か分からない', { action: 'watch' }],
+    ['id が文字列でない', { action: 'watch', id: 1 }],
+    ['id が空', { action: 'watch', id: '' }],
     ['知らない操作', { action: 'hide', id: '-w-a' }],
     ['丸ごとの差し替え', { version: 1, mode: 'all', pinned: ['-w-a'], hidden: [] }],
     ['落とし先が無い', { action: 'move', id: '-w-a' }],
@@ -257,10 +238,10 @@ describe('読めないリクエストは、置きに行く前に断る', () => {
 
   for (const [name, input] of BAD) {
     it(`${name}: リクエストの側の誤りとして断る`, async () => {
-      const tree = fakeTree();
+      const index = fakeIndex();
       const cases = fakeUseCases();
 
-      const response = await writePreferences(deps(tree, cases), input);
+      const response = await writePreferences(deps(index, cases), input);
 
       expect(response.ok).toBe(false);
       if (response.ok) throw new Error('通ってしまった');
@@ -271,27 +252,27 @@ describe('読めないリクエストは、置きに行く前に断る', () => {
       expect(response.body.code).toBe('workspace.invalid_action');
       expect(response.body.state, 'リクエストの側の落ち度である').toBe('invalid');
       expect(cases.inputs, '読めないリクエストで保存先に触らない').toEqual([]);
-      expect(tree.lookCount(), '読めないリクエストで観測にも触らない').toBe(0);
+      expect(index.lookCount(), '読めないリクエストで観測にも触らない').toBe(0);
     });
   }
 
   it('プロトタイプから生えた欄を、操作の欄として読まない', async () => {
-    const tree = fakeTree();
+    const index = fakeIndex();
     const cases = fakeUseCases();
-    const forged = Object.create({ action: 'pin', id: '-w-a' });
+    const forged = Object.create({ action: 'watch', id: '-w-a' });
 
-    const response = await writePreferences(deps(tree, cases), forged);
+    const response = await writePreferences(deps(index, cases), forged);
 
     expect(response.ok, 'プロトタイプに欄が生えていると、送った覚えのない操作が通る').toBe(false);
     expect(cases.inputs).toEqual([]);
   });
 
   it('投げずに返す', async () => {
-    const tree = fakeTree();
+    const index = fakeIndex();
     const cases = fakeUseCases();
 
     await expect(
-      writePreferences(deps(tree, cases), Object.create(null)),
+      writePreferences(deps(index, cases), Object.create(null)),
       '届いた形が悪いだけで投げると、届け方ひとつで glasshive が止まる',
     ).resolves.toMatchObject({ ok: false });
   });
@@ -299,11 +280,11 @@ describe('読めないリクエストは、置きに行く前に断る', () => {
 
 describe('スナップショットを起こせないときは、置きに行かない', () => {
   it('材料が欠けたまま置きに行かず、断りとして返す', async () => {
-    const tree = blindTree();
+    const index = blindIndex();
     const cases = fakeUseCases();
 
-    const response = await writePreferences(deps(tree, cases), {
-      action: 'pin',
+    const response = await writePreferences(deps(index, cases), {
+      action: 'watch',
       id: '-w-a',
     });
 
@@ -327,10 +308,10 @@ describe('スナップショットを起こせないときは、置きに行か�
 
 describe('タブの選択を読むコントローラー', () => {
   it('いま観測しているプロジェクトを、突き合わせの材料として渡す', async () => {
-    const tree = fakeTree([project('-w-a', '/w/a')]);
+    const index = fakeIndex([project('-w-a', '/w/a')]);
     const cases = fakeUseCases();
 
-    const json = await readPreferences(deps(tree, cases));
+    const json = await readPreferences(deps(index, cases));
 
     expect(json.visible_tabs, '出す対象は、いまのスナップショットと突き合わせて決まる').toEqual([
       '-w-a',
@@ -340,11 +321,36 @@ describe('タブの選択を読むコントローラー', () => {
   /* 読み出しの結果はタブの選択そのもので、断りを載せる欄が無い。だから断りは投げる。
      空のスナップショットへ倒して答えると、観測していないだけのプロジェクトが「消えた」ものとして並ぶ。 */
   it('スナップショットを起こせなければ、空のスナップショットへ倒さず断る', async () => {
-    const tree = blindTree();
+    const index = blindIndex();
     const cases = fakeUseCases();
 
-    await expect(readPreferences(deps(tree, cases))).rejects.toMatchObject({
+    await expect(readPreferences(deps(index, cases))).rejects.toMatchObject({
       code: 'transcript.unreadable',
     });
+  });
+});
+
+/* 記録していないディレクトリを選び直すための一覧。
+
+   **画面はパスを名指せない。** 名指せると、開いているどのページも任意のディレクトリを
+   glasshive に読ませられる。だから候補は、こちらが見つけたものを id で配る。 */
+describe('選び直すための候補', () => {
+  it('記録していないものだけを、候補として配る', async () => {
+    const index = fakeIndex([project('-w-a', '/w/a'), project('-w-b', '/w/b')], ['-w-a']);
+    const cases = fakeUseCases();
+
+    const json = await readPreferences(deps(index, cases));
+
+    expect(json.candidates.map((candidate) => candidate.id)).toEqual(['-w-b']);
+    expect(json.candidates[0]?.path, '選ぶ人が見分けられるのは、名前と場所である').toBe('/w/b');
+  });
+
+  it('記録したものは、候補から消える', async () => {
+    const index = fakeIndex([project('-w-a', '/w/a')]);
+    const cases = fakeUseCases();
+
+    const json = await readPreferences(deps(index, cases));
+
+    expect(json.candidates, '記録したものが候補に残ると、二度目を押せてしまう').toEqual([]);
   });
 });

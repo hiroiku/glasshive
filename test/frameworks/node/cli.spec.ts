@@ -120,6 +120,52 @@ describe('走っているものへの求め', () => {
     expect(parsed.exitCode).toBe(2);
   });
 
+  /* 断り文句には、打った文字列をそのまま返す。**解決した後のパスを返すと、打った覚えの
+     ない文字列が出てくる。** */
+  it('断るときは、打ったとおりのパスを返す', () => {
+    const parsed = parseArgs(['.', '--stop'], environment([HOME]));
+
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.message).toContain('--stop does not take a path: .');
+    expect(parsed.message, '打っていない絶対パスを返さない').not.toContain(HOME);
+  });
+
+  /* 開けるかどうかより先に、そもそも受け取らないことを言う。**先に見ると、打った順で
+     答えが変わる。** */
+  it('開けないパスでも、パスを取らないことのほうを言う', () => {
+    const parsed = parseArgs(['--stop', '/nope'], environment([]));
+
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.message).toContain('--stop does not take a path: /nope');
+    expect(parsed.message).not.toContain('not a directory');
+  });
+
+  /* パスだけ断って残りを黙って捨てると、`--config-dir` を渡した人は「その設定のものを
+     止めた」と読んだまま終わる。**読めない指定は既定に倒さず断る**、はここにも掛かる。 */
+  it.each([
+    ['--no-open', ['--no-open', '--stop']],
+    ['--config-dir', ['--config-dir', '/tmp/x', '--stop']],
+    ['--active-threshold', ['--active-threshold', '30', '--stop']],
+  ])('立ち上げるときにしか効かない %s も断る', (flag, argv) => {
+    const parsed = parseArgs(argv, environment([]));
+
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) return;
+    expect(parsed.message).toContain(`--stop does not take ${flag}`);
+    expect(parsed.exitCode).toBe(2);
+  });
+
+  /* 尋ねる先を名指すのは効く。**効く指定まで断ると、別のポートのものを止めてしまう。** */
+  it('--port は断らない', () => {
+    const parsed = parseArgs(['--port', '5000', '--status'], environment([]));
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.args.port).toBe(5000);
+  });
+
   it('2 つ渡されたら断る', () => {
     const parsed = parseArgs(['--status', '--stop'], environment([]));
 

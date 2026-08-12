@@ -24,6 +24,9 @@ export interface NamedDirectory {
   /** リポジトリの根。`git` が答えなければ、打たれたパスそのもの */
   readonly rootPath: string;
   readonly name: string;
+  /* `git` がそこをリポジトリだと答えたか。**答えなかったことと、リポジトリでないことは
+     ここでは同じである** —— どちらも「打たれたパスがそのまま単位になる」に落ちる。 */
+  readonly repository: boolean;
   /** 同じリポジトリの worktree。根そのものは含まない */
   readonly worktrees: readonly string[];
 }
@@ -58,7 +61,13 @@ export function createNamedDirectories(deps: {
     const rootPath = outputOrEmpty(top).trim();
     if (rootPath === '') {
       return {
-        directory: { requestedPath: path, rootPath: path, name: pathBasename(path), worktrees: [] },
+        directory: {
+          requestedPath: path,
+          rootPath: path,
+          name: pathBasename(path),
+          repository: false,
+          worktrees: [],
+        },
         answered: blocked === null,
       };
     }
@@ -73,6 +82,7 @@ export function createNamedDirectories(deps: {
         requestedPath: path,
         rootPath,
         name: pathBasename(rootPath),
+        repository: true,
         worktrees: parseWorktreeList(outputOrEmpty(list))
           .map((worktree) => worktree.path)
           .filter((at) => !samePath(at, rootPath)),

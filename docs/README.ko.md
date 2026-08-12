@@ -12,7 +12,7 @@
 [English](../README.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · **한국어** · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md)
 
 glasshive는 [Claude Code](https://claude.com/claude-code)를 위한 읽기 전용 로컬 대시보드입니다. 이미
-디스크에 쌓여 있는 세션 로그를 읽어, 에이전트가 작업한 모든 프로젝트를 — 그 세션과 서브에이전트,
+디스크에 쌓여 있는 세션 로그를 읽어, 당신이 보기로 한 프로젝트를 — 그 세션과 서브에이전트,
 각각이 지금 무엇을 하고 있는지, 이슈, 그리고 살아 있는 git 브랜치까지 — 한 화면에 놓습니다. 에이전트
 세션을 위한 `htop`, 다만 kill 키는 없다고 생각하면 됩니다. glasshive는 `~/.claude`에도, 저장소에도,
 이슈 트래커에도 결코 쓰지 않으며, 에이전트를 시작하거나 멈추거나 조종할 수 없습니다.
@@ -34,9 +34,10 @@ macOS와 Linux에서 합니다. Windows에서는 살아 있는 에이전트의 �
 
 ### Overview
 
-glasshive를 어디에서 실행했든, 에이전트가 작업한 모든 프로젝트. 당신의 입력을 기다리는 것이 먼저 오고,
-그다음이 아직 실행 중인 것입니다. 이름, 상태, 기간으로 걸러내고, 신경 쓰는 프로젝트는 탭 바에
-고정하세요.
+당신이 보기로 한 프로젝트. 당신의 입력을 기다리는 것이 먼저 오고, 그다음이 아직 실행 중인
+것입니다. 이름, 상태, 기간으로 걸러내고, 탭 바의 순서도 바꿀 수 있습니다. 처음에는 비어 있습니다 ——
+저장소 안에서 `glasshive`를 실행하면 그 저장소가 기록되고, 또는 표 위에 나오는 「찾았지만 보고 있지
+않은 디렉터리」에서 골라 추가하면 됩니다.
 
 ![Overview](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/overview.png)
 
@@ -84,8 +85,8 @@ sub-issue는 중첩되고, `blocked by`는 의존 관계의 간선으로 그려�
 - **세 가지를 읽고, 그중 어느 것에도 쓰지 않습니다.** Claude Code 세션 로그
   (`~/.claude/projects/**/*.jsonl`), `git`, 그리고 `gh` CLI를 통해 당신의 remote가 가리키는 GitHub
   저장소의 이슈. 트랜스크립트도, 저장소도, 이슈도 결코 수정되지 않습니다.
-- **쓰는 파일은 자기 것 하나뿐입니다.** `~/.config/glasshive/preferences.json`에 고정한 탭과 화면
-  설정이 들어갑니다. 쓰기 전에 glasshive는 그 경로가 `~/.claude`, 트랜스크립트 루트, 또는
+- **쓰는 파일은 자기 것 하나뿐입니다.** `~/.config/glasshive/preferences.json`에 보기로 한
+  디렉터리와 화면 설정이 들어갑니다. 쓰기 전에 glasshive는 그 경로가 `~/.claude`, 트랜스크립트 루트, 또는
   glasshive가 볼 수 있는 프로젝트의 `.git`이나 `.beads` 디렉터리 안에 있지 않은지 확인하고,
   안에 있으면 거부합니다 — 관찰하는 대상에 쓰는 일은 관례가 아니라 구조로 막혀 있습니다. 그 파일
   하나를 지우면 glasshive가 쓴 것은 아무것도 남지 않습니다.
@@ -114,8 +115,16 @@ npx glasshive --active-threshold 120  # 마지막 쓰기로부터 몇 초까지 
 npx glasshive --config-dir ~/somewhere  # preferences.json을 둘 곳
 ```
 
-전체 목록은 `glasshive --help`로 확인하세요. 범위는 시작 옵션이 아닙니다. 에이전트가 작업한 모든
-프로젝트가 나열되고, 그중 어떤 것을 탭으로 만들지는 당신이 고릅니다.
+전체 목록은 `glasshive --help`로 확인하세요.
+
+**디렉터리를 지정하는 것이 곧 보기로 정하는 것입니다.** `glasshive .`는 이 저장소를 기록하고 엽니다.
+그냥 `glasshive`도 git 저장소 안에 있으면 같은 일을 하고, 아니면 Overview로 갑니다. 지정한 경로는
+그것이 속한 저장소로 풀리므로, 하위 디렉터리든 worktree든 같은 곳에 닿습니다.
+
+**본다는 것은 보여 주는 방식이지, 읽어도 되는 범위가 아닙니다.** `~/.claude/projects` 아래는 지금까지
+처럼 이름으로는 전부 찾아내며, 보고 있지 않은 것은 Overview에서 한 번의 클릭으로 추가할 수 있습니다.
+전부 읽는 것은 보기로 한 것뿐이고, 나머지는 「어디에 있는지」를 알기 위한 트랜스크립트 한 개만 엽니다.
+탭에서 내리면 그 목록으로 돌아갈 뿐, 아무것도 지워지지 않습니다.
 
 ### 키보드
 

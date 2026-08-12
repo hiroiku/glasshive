@@ -5,7 +5,7 @@ import { isApple } from '../platform.ts';
 /* タブ行をキーボードから扱う。位置で選び、位置を入れ替える。
 
    タブは位置で覚えて選ぶものなので、キーボードに割り当てるならその位置がそのまま
-   番号になる。1 が一覧、2 から先がピン留めしたものである。
+   番号になる。1 が一覧、2 から先が観ると決めたものである。
 
    **文字を入力している手からは奪わない。** macOS では ⌘⇧← が「行の頭まで選ぶ」なので、
    検索欄に居るあいだに奪うと、選ぼうとした人のタブが黙って動く。 */
@@ -24,15 +24,13 @@ const isTyping = (target: EventTarget | null): boolean => {
 };
 
 export interface TabShortcutsProps {
-  /** タブ行に出ているプロジェクトの id。行の並びそのもの */
+  /** タブ行に出ているプロジェクトの id。行の並びそのもの。動かす先もこの位置で数える */
   readonly visible: readonly string[];
-  /** ピン留めの並び。動かす先はこちらの位置で数える */
-  readonly pinned: readonly string[];
   readonly current: string | null;
   readonly onMove: (id: string, toIndex: number) => void;
 }
 
-export function useTabShortcuts({ visible, pinned, current, onMove }: TabShortcutsProps) {
+export function useTabShortcuts({ visible, current, onMove }: TabShortcutsProps) {
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -63,12 +61,9 @@ export function useTabShortcuts({ visible, pinned, current, onMove }: TabShortcu
 
       const at = visible.indexOf(current);
       if (at < 0) return;
-      /* 隣は**行に出ている**ほうで数え、置く先はピン留めの位置で言う。
-         ピン留めには観測から消えたものも残っているので、ピン留めの上で 1 つ動かしても
-         行の上では何も動かないことがある。 */
       const neighbour = visible[at + step];
       if (neighbour === undefined) return;
-      const toIndex = pinned.indexOf(neighbour);
+      const toIndex = visible.filter((id) => id !== current).indexOf(neighbour);
       if (toIndex < 0) return;
       event.preventDefault();
       onMove(current, toIndex);
@@ -76,5 +71,5 @@ export function useTabShortcuts({ visible, pinned, current, onMove }: TabShortcu
 
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [visible, pinned, current, onMove, navigate]);
+  }, [visible, current, onMove, navigate]);
 }

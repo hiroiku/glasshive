@@ -12,9 +12,9 @@
 [English](../README.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [한국어](README.ko.md) · **Español** · [Français](README.fr.md) · [Deutsch](README.de.md)
 
 glasshive es un panel local de solo lectura para [Claude Code](https://claude.com/claude-code). Lee
-los registros de sesión que ya están en tu disco y pone cada proyecto en el que ha trabajado un
-agente —sus sesiones y subagentes, lo que cada uno está haciendo ahora mismo, sus issues y sus ramas
-de git activas— en una sola pantalla. Piensa en `htop` para sesiones de agentes, sin la tecla que
+los registros de sesión que ya están en tu disco y pone los proyectos que observas —sus sesiones y
+subagentes, lo que cada uno está haciendo ahora mismo, sus issues y sus ramas de git activas— en una
+sola pantalla. Piensa en `htop` para sesiones de agentes, sin la tecla que
 mata procesos: glasshive nunca escribe en `~/.claude`, ni en tus repositorios, ni en tu gestor de
 issues, y no puede arrancar, detener ni dirigir a un agente.
 
@@ -35,9 +35,10 @@ recuento de agentes vivos vuelve como «no se pudo observar», porque leerlo nec
 
 ### Overview
 
-Cada proyecto en el que ha trabajado un agente, desde donde sea que hayas arrancado glasshive. Van
-primero los que esperan tu respuesta, y luego los que siguen en marcha. Filtra por nombre, estado
-o intervalo de tiempo, y fija en la barra de pestañas los proyectos que te importan.
+Los proyectos que observas. Van primero los que esperan tu respuesta, y luego los que siguen en
+marcha. Filtra por nombre, estado o intervalo de tiempo, y reordena la barra de pestañas. Empieza
+vacío: ejecuta `glasshive` dentro de un repositorio y ese repositorio queda observado, o elige uno
+de los directorios que glasshive encontró pero no observa, listados encima de la tabla.
 
 ![Overview](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/overview.png)
 
@@ -87,8 +88,8 @@ qué pull request lo referenció, leído junto a los agentes que están trabajan
   (`~/.claude/projects/**/*.jsonl`), `git` y —a través de la CLI `gh`— los issues del repositorio de
   GitHub al que apuntan tus remotes. Nunca se modifica ninguna transcripción, ningún repositorio ni
   ningún issue.
-- **El único archivo que escribe es el suyo.** `~/.config/glasshive/preferences.json` guarda tus
-  pestañas fijadas y tus preferencias de vista. Antes de escribir, glasshive comprueba que la ruta no
+- **El único archivo que escribe es el suyo.** `~/.config/glasshive/preferences.json` guarda los
+  directorios que observas y tus preferencias de vista. Antes de escribir, glasshive comprueba que la ruta no
   esté dentro de `~/.claude`, de la raíz de las transcripciones ni de un directorio `.git` o
   `.beads` de un proyecto que pueda ver, y se niega si lo está: escribir en lo que observa está
   bloqueado por construcción, no por convención. Borra ese único archivo y no queda nada de lo que
@@ -119,8 +120,18 @@ npx glasshive --active-threshold 120  # segundos desde la última escritura que 
 npx glasshive --config-dir ~/somewhere  # dónde se guarda preferences.json
 ```
 
-Ejecuta `glasshive --help` para ver la lista completa. El alcance no es una opción de arranque: se
-listan todos los proyectos en los que ha trabajado un agente, y tú eliges cuáles se vuelven pestañas.
+Ejecuta `glasshive --help` para ver la lista completa.
+
+**Nombrar un directorio es empezar a observarlo.** `glasshive .` observa este repositorio y lo abre;
+un `glasshive` a secas hace lo mismo cuando estás dentro de un repositorio git, y aterriza en el
+Overview cuando no lo estás. La ruta se resuelve al repositorio al que pertenece, así que un
+subdirectorio o un worktree te llevan al mismo sitio.
+
+**Observar es lo que ves, no lo que glasshive puede leer.** Todos los directorios bajo
+`~/.claude/projects` se siguen encontrando por nombre, y el Overview lista los que no observas para
+que los añadas con un clic. Solo lo que observas se lee entero; del resto se lee una línea de una
+transcripción, lo justo para saber dónde está. Deja de observar un proyecto desde su pestaña y vuelve
+a esa lista; no se borra nada.
 
 ### Teclado
 

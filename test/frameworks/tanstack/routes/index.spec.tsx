@@ -36,12 +36,12 @@ vi.mock('~/frameworks/tanstack/queries/preferences.query.ts', () => ({
 }));
 vi.mock('~/frameworks/tanstack/ui/hooks/useTabSelection.ts', () => ({
   useTabSelection: () => ({
-    selection: { version: 1, mode: 'all', pinned: [], hidden: [] },
     visibleTabs: [],
-    pinned: new Set<string>(),
+    watched: new Set<string>(),
+    candidates: [],
     storedState: 'observed',
-    togglePin: () => undefined,
-    movePin: () => undefined,
+    toggleWatch: () => undefined,
+    moveWatch: () => undefined,
     error: null,
   }),
 }));

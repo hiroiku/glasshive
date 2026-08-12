@@ -29,10 +29,16 @@ export const zhHant: Catalogue = {
     '{n, plural, other {有 # 個專案無法讀取 —— 那些列顯示的是我們能看到的，而不是實際存在的}}',
   'Could not count live processes — waiting and ended cannot be told apart':
     '無法統計存活的行程 —— 等待中與已結束無法區分',
-  'Could not read the pinned tabs — the order fell back to the default':
-    '無法讀取釘選的分頁 —— 順序回復為預設',
-  'No projects yet — run Claude Code and they show up here':
-    '還沒有專案 —— 執行 Claude Code 後就會出現在這裡',
+  'Could not read the watched projects — the order fell back to the default':
+    '無法讀取在看的專案 —— 順序回復為預設',
+  'Nothing watched yet — pick a directory above, or run `glasshive` where you work':
+    '還沒有在看的專案 —— 從上面的清單中挑選，或在你工作的目錄裡執行 `glasshive`',
+  'Nothing watched yet — run `glasshive` in a directory to watch it':
+    '還沒有在看的專案 —— 在想看的目錄裡執行 `glasshive`',
+  '{n, plural, one {# directory found that you are not watching} other {# directories found that you are not watching}}':
+    '{n, plural, other {發現 # 個尚未在看的目錄}}',
+  Watch: '觀察',
+  'could not read where this is': '無法讀取它在哪裡',
   'Nothing to read yet — ~/.claude/projects is not there':
     '還沒有可讀取的內容 —— ~/.claude/projects 不存在',
   'Unknown — the projects could not be counted': '未知 —— 無法統計專案',
@@ -373,19 +379,19 @@ export const zhHant: Catalogue = {
   'Some activity could not be read — the gaps may not be quiet':
     '有些活動無法讀取 —— 空白處未必真的沒有動靜',
   Projects: '專案',
-  Pinned: '已釘選',
+  Watched: '在看',
   Project: '專案',
   Active: '執行中',
   Input: '等待輸入',
   'Tokens 24h': 'Token 24h',
   Activity: '活動',
   'Last activity': '最後活動',
-  'Unpin {name}': '取消釘選 {name}',
-  'Pin {name}': '釘選 {name}',
+  'Stop watching {name}': '不再觀察 {name}',
+  'Watch {name}': '觀察 {name}',
   'Could not be read': '無法讀取',
   '{tokens} — {percent}% of the {total} shown': '{tokens} —— 占所列 {total} 的 {percent}%',
   all: '全部',
-  pinned: '已釘選',
+  watched: '在看',
   'any time': '任何時間',
   'Some projects could not be read — the counts may be short': '有些專案無法讀取 —— 計數可能偏少',
   'Some transcripts could not be read': '有些工作階段記錄無法讀取',
@@ -491,9 +497,9 @@ export const zhHant: Catalogue = {
   'idle — next prompt opens a window': '閒置 —— 下一次輸入會開啟一個新視窗',
   '{tokens}/day avg': '日均 {tokens}',
   Overview: '總覽',
-  'Pinned projects': '釘選的專案',
+  'Watched projects': '在看的專案',
   '{name}{slot} — drag to reorder': '{name}{slot} —— 拖曳可重新排序',
-  '{name} — double-click to pin': '{name} —— 按兩下可釘選',
+  '{name} — double-click to watch': '{name} —— 連按兩下以觀察',
   '{label} (YYYY-MM-DD HH:MM)': '{label}（YYYY-MM-DD HH:MM）',
   '{from} → {to} · earlier activity (density unknown — beyond bounded scan)':
     '{from} → {to} · 更早的活動（密度未知 —— 超出掃描範圍）',

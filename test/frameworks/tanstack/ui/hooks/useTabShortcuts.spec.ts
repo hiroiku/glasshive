@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 /* タブ行をキーボードから扱う。
 
    位置で選ぶショートカットなので、番号は**行の並びそのもの**でなければならない。1 が一覧、
-   2 から先がピン留め。ピン留めには観測から消えたものも残るので、ピン留めの順で数えると
+   2 から先が記録したもの。記録には観測から消えたものも残るので、記録の順で数えると
    画面に出ている位置と番号がずれる。 */
 
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
@@ -14,12 +14,11 @@ vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
 const { useTabShortcuts } = await import('~/frameworks/tanstack/ui/hooks/useTabShortcuts.ts');
 
 const VISIBLE = ['alpha', 'bravo', 'charlie'];
-const PINNED = ['alpha', '消えたプロジェクト', 'bravo', 'charlie'];
 
 const onMove = vi.fn();
 
 const mount = (current: string | null = 'bravo') =>
-  renderHook(() => useTabShortcuts({ visible: VISIBLE, pinned: PINNED, current, onMove }));
+  renderHook(() => useTabShortcuts({ visible: VISIBLE, current, onMove }));
 
 /** この機械の ⌘ を押しながら 1 つ叩く */
 const press = (key: string, over: KeyboardEventInit = {}) => {
@@ -90,20 +89,20 @@ describe('位置で選ぶ', () => {
 });
 
 describe('位置を入れ替える', () => {
-  /* 置く先はピン留めの中での位置で言う。行に出ている位置で言うと、観測から消えた
-     プロジェクトを跨ぐたびに 1 つぶん足りない場所へ落ちる。 */
+  /* 置く先は、動かすものを抜いた行の中での位置で言う。記録の位置へ読み替えるのは
+     向こう側の仕事で、こちらは行に出ているものしか知らない。 */
   it('右へ動かすと、行の上の次の隣の位置へ置く', () => {
     mount('bravo');
     press('ArrowRight', { shiftKey: true });
 
-    expect(onMove).toHaveBeenCalledWith('bravo', PINNED.indexOf('charlie'));
+    expect(onMove).toHaveBeenCalledWith('bravo', 1);
   });
 
   it('左へ動かすと、行の上の前の隣の位置へ置く', () => {
     mount('bravo');
     press('ArrowLeft', { shiftKey: true });
 
-    expect(onMove).toHaveBeenCalledWith('bravo', PINNED.indexOf('alpha'));
+    expect(onMove).toHaveBeenCalledWith('bravo', 0);
   });
 
   it('行の端では動かさない', () => {
@@ -113,7 +112,7 @@ describe('位置を入れ替える', () => {
     expect(onMove).not.toHaveBeenCalled();
   });
 
-  it('ピン留めしていないプロジェクトは動かせない', () => {
+  it('観ると決めていないプロジェクトは動かせない', () => {
     mount('留めていないプロジェクト');
     press('ArrowRight', { shiftKey: true });
 

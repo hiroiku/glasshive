@@ -92,8 +92,13 @@ function spyRepository(groups: readonly TranscriptGroup[], cwdBySlug: Record<str
 
 interface SceneOptions {
   readonly processes?: AgentProcessIntegration;
-  /** 名指されたディレクトリ。起動のときのものと、あとから伝えられたものが並ぶ */
-  readonly namedPaths?: readonly string[];
+  /* 観ると決めたディレクトリ。渡さなければ、偽のポートが名乗る場所 1 つを記録してある。
+   **どのテストも自分で渡す** —— 記録していないディレクトリは深く読まれない。 */
+  readonly watched?: readonly string[];
+  /** 1 つ前の形から引き継いだ id。パスを持っていないので、名前として突き合わせる */
+  readonly watchedSlugs?: readonly string[];
+  /** 先に読むディレクトリ。名指されたリポジトリで、記録の全部とは限らない */
+  readonly readFirst?: readonly string[];
   /** slug ごとの作業ディレクトリ。渡さなければ、どの slug も同じ場所を指す */
   readonly cwdBySlug?: Record<string, string>;
 }
@@ -104,7 +109,7 @@ function sceneOf(groups: readonly TranscriptGroup[], options: SceneOptions = {})
     transcripts: spy.transcripts,
     activeThresholdMs: ACTIVE_THRESHOLD_MS,
   });
-  const named = options.namedPaths;
+  const roots = options.watched ?? ['/w/proj'];
   const index = createTranscriptIndex({
     transcripts: spy.transcripts,
     processes: options.processes ?? { list: async () => observed([]) },
@@ -112,7 +117,7 @@ function sceneOf(groups: readonly TranscriptGroup[], options: SceneOptions = {})
     activeThresholdMs: ACTIVE_THRESHOLD_MS,
     clock: { now: () => NOW },
     ttlMs: 0,
-    ...(named === undefined ? {} : { namedPaths: async () => named }),
+    watched: async () => ({ roots, worktrees: [], slugs: options.watchedSlugs ?? [] }),
   });
   return {
     ...spy,
@@ -121,10 +126,17 @@ function sceneOf(groups: readonly TranscriptGroup[], options: SceneOptions = {})
       index,
       drafts,
       activeThresholdMs: ACTIVE_THRESHOLD_MS,
-      ...(named === undefined ? {} : { readFirst: async () => named }),
+      readFirst: async () => options.readFirst ?? roots,
     }),
   };
 }
+
+/** 木に並んだプロジェクトの id */
+const treeIdsOf = async (scene: ReturnType<typeof sceneOf>) => {
+  const tree = await scene.observe.execute(NOW);
+  if (!tree.ok) throw tree.error;
+  return tree.value.projects.map((project) => project.id);
+};
 
 const indexOf = async (scene: ReturnType<typeof sceneOf>) => {
   const snapshot = await scene.index.get();
@@ -279,13 +291,13 @@ describe('索引と本読みの読み取り', () => {
   });
 });
 
-/* ディレクトリを名指されたとき。
+/* 観ると決めたディレクトリ。
 
-   名指すのは観測してよい範囲の指定ではない。走査するのは今までどおり `~/.claude/projects`
-   の全部で、変わるのは **一覧に 1 行足りること** と **読む順** だけである。 */
-describe('名指されたディレクトリ', () => {
+   走査するのは今までどおり `~/.claude/projects` の全部で、名前は全部が見える。変わるのは
+   **どこを深く読むか** と、一覧に 1 行足りること、読む順である。 */
+describe('記録したディレクトリ', () => {
   it('`transcript` が 1 本も無くても、一覧に居る', async () => {
-    const scene = sceneOf([sourceOf('a', 'session')], { namedPaths: ['/w/fresh'] });
+    const scene = sceneOf([sourceOf('a', 'session')], { watched: ['/w/proj', '/w/fresh'] });
 
     const snapshot = await indexOf(scene);
     const named = snapshot.index.stubs.find((stub) => stub.canonicalPath === '/w/fresh');
@@ -300,8 +312,8 @@ describe('名指されたディレクトリ', () => {
     );
   });
 
-  it('すでに観測できているディレクトリを名指しても、行は増えない', async () => {
-    const scene = sceneOf([sourceOf('a', 'session')], { namedPaths: ['/w/proj'] });
+  it('すでに観測できているディレクトリを記録しても、行は増えない', async () => {
+    const scene = sceneOf([sourceOf('a', 'session')], { watched: ['/w/proj'] });
 
     const snapshot = await indexOf(scene);
 
@@ -312,11 +324,11 @@ describe('名指されたディレクトリ', () => {
     expect(snapshot.index.stubs[0]?.canonicalPath).toBe('/w/proj');
   });
 
-  /* 走っている glasshive は、あとから別のディレクトリを伝えられる。**先に名指された相手が
+  /* 走っている glasshive は、あとから別のディレクトリを伝えられる。**先に記録した相手が
      一覧から消えると、開いていたウィンドウの行が無くなる。** */
-  it('名指されたディレクトリは、増えても全部が一覧に居る', async () => {
+  it('記録したディレクトリは、増えても全部が一覧に居る', async () => {
     const scene = sceneOf([sourceOf('a', 'session')], {
-      namedPaths: ['/w/fresh', '/w/later'],
+      watched: ['/w/proj', '/w/fresh', '/w/later'],
     });
 
     const snapshot = await indexOf(scene);
@@ -330,9 +342,10 @@ describe('名指されたディレクトリ', () => {
 
   /* 名指したリポジトリが画面に揃うまでの待ちを、ほかのプロジェクトの読み取りで長くしない。
    **並べ替えるのは読む順だけである** —— 一覧の並びは索引が決めたままにする。 */
-  it('名指されたディレクトリのプロジェクトから先に読む', async () => {
+  it('先に名指されたディレクトリのプロジェクトから読む', async () => {
     const scene = sceneOf([sourceOf('a', 'first'), sourceOf('b', 'second')], {
-      namedPaths: ['/w/b'],
+      watched: ['/w/b', '/w/a'],
+      readFirst: ['/w/b'],
       cwdBySlug: { a: '/w/a', b: '/w/b' },
     });
 
@@ -349,5 +362,90 @@ describe('名指されたディレクトリ', () => {
       snapshot.index.stubs.map((stub) => stub.id),
       '読む順が一覧の並びに漏れると、行が読み取りのたびに入れ替わる',
     ).toEqual(['a', 'b']);
+  });
+});
+
+/** 同じディレクトリに `transcript` が 2 本。どこまで開くかを数えるための場面 */
+const twoSessionsOf = (slug: string): TranscriptGroup => ({
+  slug,
+  sessions: [...sourceOf(slug, 'first').sessions, ...sourceOf(slug, 'second').sessions],
+  walked: observed(2),
+});
+
+/* 記録していないディレクトリ。
+
+   **名前は全部が見える。中身は記録したところしか読まない。** 名前まで捨てると、そこで
+   Claude Code が動いていることに気付けず、Overview から選び直すこともできなくなる。 */
+describe('見つけただけのディレクトリ', () => {
+  it('いちばん新しい 1 本しか開かない', async () => {
+    const scene = sceneOf([twoSessionsOf('a')], { watched: [], cwdBySlug: { a: '/w/a' } });
+
+    await indexOf(scene);
+
+    expect(scene.heads, '全部を開くなら、観る相手を選んだ意味が無い').toHaveLength(1);
+  });
+
+  /* 1 本だけ開くのは、そこがどこなのかを知るためである。**名前からは決まらない** ——
+     同じディレクトリを別の書き表し方で記録していることが在り、そのとき名前は一致しない。 */
+  it('記録したディレクトリは、`transcript` を全部開く', async () => {
+    const scene = sceneOf([twoSessionsOf('a')], { watched: ['/w/a'], cwdBySlug: { a: '/w/a' } });
+
+    await indexOf(scene);
+
+    expect(scene.heads).toHaveLength(2);
+  });
+
+  it('木には出ない', async () => {
+    const scene = sceneOf([sourceOf('a', 'session'), sourceOf('b', 'session')], {
+      watched: ['/w/a'],
+      cwdBySlug: { a: '/w/a', b: '/w/b' },
+    });
+
+    expect(await treeIdsOf(scene), '選んでいないものが並ぶなら、選んだ意味が無い').toEqual(['a']);
+  });
+
+  it('索引には名前が残る', async () => {
+    const scene = sceneOf([sourceOf('a', 'session'), sourceOf('b', 'session')], {
+      watched: ['/w/a'],
+      cwdBySlug: { a: '/w/a', b: '/w/b' },
+    });
+
+    const snapshot = await indexOf(scene);
+
+    expect(
+      snapshot.index.stubs.map((stub) => stub.id),
+      '名前まで捨てると、Overview から選び直すこともできなくなる',
+    ).toEqual(['a', 'b']);
+    expect([...snapshot.watchedIds]).toEqual(['a']);
+  });
+
+  /* 同じ場所を `/Volumes/…` と `/Users/…` の両方で書けるように、名前が一致しないことは
+     珍しくない。**名前だけで決めると、記録したはずのディレクトリが一覧に出ない。** */
+  it('名前が違っても、同じ場所を記録していれば深く読む', async () => {
+    const scene = sceneOf([sourceOf('-別の-書き方', 'session')], { watched: ['/w/proj'] });
+
+    expect(await treeIdsOf(scene)).toEqual(['-別の-書き方']);
+  });
+
+  /* 1 つ前の形が持っているのは id で、パスは持っていない。id は走査で見えた名前そのものなので、
+     名前として突き合わせれば読み替えずに引き継げる。 */
+  it('1 つ前の形に留めてあった id は、名前として引き継ぐ', async () => {
+    const scene = sceneOf([sourceOf('a', 'session')], { watched: [], watchedSlugs: ['a'] });
+
+    expect(await treeIdsOf(scene), '引き継がないと、更新した日に一覧が黙って空になる').toEqual([
+      'a',
+    ]);
+  });
+
+  /* 読んでよい範囲は観測した範囲である。**観ていないところの `transcript` は開かせない。** */
+  it('読んでよい `transcript` は、記録したところのものだけ', async () => {
+    const scene = sceneOf([sourceOf('a', 'session'), sourceOf('b', 'session')], {
+      watched: ['/w/a'],
+      cwdBySlug: { a: '/w/a', b: '/w/b' },
+    });
+
+    const snapshot = await indexOf(scene);
+
+    expect([...snapshot.transcriptFiles]).toEqual(['/nest/projects/a/session.jsonl']);
   });
 });

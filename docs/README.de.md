@@ -12,9 +12,9 @@
 [English](../README.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md) · [한국어](README.ko.md) · [Español](README.es.md) · [Français](README.fr.md) · **Deutsch**
 
 glasshive ist ein rein lesendes, lokales Dashboard für [Claude Code](https://claude.com/claude-code).
-Es liest die Session-Logs, die ohnehin schon auf deiner Platte liegen, und bringt jedes Projekt, in
-dem ein Agent gearbeitet hat, auf einen Bildschirm – seine Sessions und Subagents, was jedes davon
-gerade tut, seine Issues und seine laufenden git-Branches. Denk an `htop` für Agent-Sessions, nur
+Es liest die Session-Logs, die ohnehin schon auf deiner Platte liegen, und bringt die Projekte, die
+du beobachtest, auf einen Bildschirm – ihre Sessions und Subagents, was jedes davon gerade tut, ihre
+Issues und ihre laufenden git-Branches. Denk an `htop` für Agent-Sessions, nur
 ohne Kill-Taste: glasshive schreibt nie nach `~/.claude`, nie in deine Repositories und nie in deinen
 Issue-Tracker, und es kann einen Agenten weder starten noch stoppen noch steuern.
 
@@ -35,9 +35,11 @@ denn sie zu lesen braucht `ps` und entweder `/proc/<pid>/cwd` oder `lsof`.
 
 ### Overview
 
-Jedes Projekt, in dem ein Agent gearbeitet hat, egal von wo aus du glasshive gestartet hast. Die, die
-auf deine Eingabe warten, kommen zuerst, dann die, die noch laufen. Filtere nach Name, Zustand oder
-Zeitraum und hefte die Projekte, die dich interessieren, an die Tab-Leiste.
+Die Projekte, die du beobachtest. Die, die auf deine Eingabe warten, kommen zuerst, dann die, die
+noch laufen. Filtere nach Name, Zustand oder Zeitraum und ordne die Tab-Leiste um. Sie beginnt leer:
+Führe `glasshive` in einem Repository aus, und dieses Repository wird von da an beobachtet – oder
+wähle eines aus den Verzeichnissen, die glasshive gefunden, aber nicht beobachtet, aufgeführt über
+der Tabelle.
 
 ![Overview](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/overview.png)
 
@@ -89,7 +91,7 @@ daran arbeiten.
   GitHub-Repositorys, auf das deine Remotes zeigen. Kein Transkript, kein Repository und kein Issue
   wird je verändert.
 - **Die einzige Datei, die es schreibt, ist seine eigene.** `~/.config/glasshive/preferences.json`
-  enthält deine angehefteten Tabs und Ansichtseinstellungen. Vor dem Schreiben prüft glasshive, dass
+  enthält die Verzeichnisse, die du beobachtest, und deine Ansichtseinstellungen. Vor dem Schreiben prüft glasshive, dass
   der Pfad nicht in `~/.claude`, im Wurzelverzeichnis der Transkripte oder in einem `.git`- oder
   `.beads`-Verzeichnis eines Projekts liegt, das es sehen kann, und verweigert es andernfalls – in
   das zu schreiben, was es beobachtet, ist bauartbedingt ausgeschlossen, nicht bloß per Konvention.
@@ -122,9 +124,19 @@ npx glasshive --active-threshold 120  # Sekunden seit dem letzten Schreiben, die
 npx glasshive --config-dir ~/somewhere  # wo preferences.json liegt
 ```
 
-Führe `glasshive --help` aus für die vollständige Liste. Der Umfang ist keine Startoption: Jedes
-Projekt, in dem ein Agent gearbeitet hat, wird aufgeführt, und du wählst, welche davon zu Tabs
-werden.
+Führe `glasshive --help` aus für die vollständige Liste.
+
+**Ein Verzeichnis zu nennen heißt, es zu beobachten.** `glasshive .` beobachtet dieses Repository und
+öffnet es; ein bloßes `glasshive` tut dasselbe, wenn du in einem git-Repository bist, und landet
+sonst im Overview. Der Pfad wird auf das Repository aufgelöst, zu dem er gehört – ein
+Unterverzeichnis oder ein Worktree bringen dich an denselben Ort.
+
+**Beobachten ist, was du siehst, nicht was glasshive lesen darf.** Alle Verzeichnisse unter
+`~/.claude/projects` werden weiterhin dem Namen nach gefunden, und das Overview führt die auf, die du
+nicht beobachtest, damit du sie mit einem Klick hinzufügst. Nur was du beobachtest, wird ganz
+gelesen; vom Rest kostet es eine Zeile eines Transkripts, gerade genug, um zu wissen, wo es liegt.
+Hörst du über den Tab auf, ein Projekt zu beobachten, kehrt es in diese Liste zurück; gelöscht wird
+nichts.
 
 ### Tastatur
 

@@ -26,10 +26,11 @@ if (!parsed.ok) {
 }
 const args = parsed.args;
 
-// 居場所を訊くのも終わらせるのも、相手は開発中の glasshive である
+// 居場所を訊くのも終わらせるのも、相手は開発中の glasshive である。読み方も失敗の言い方も
+// ランチャーと同じ `runCommand` に任せる — ここで書き直すと、`--stop` の意味が静かに食い違う。
 const range = instance.portsToTry(args.port);
-if (args.action === 'status') process.exit(await commands.reportStatus(range, true));
-if (args.action === 'stop') process.exit(await commands.stopRunning(range, true));
+const code = await commands.runCommand(args, true);
+if (code !== null) process.exit(code);
 
 // 走っている開発中の glasshive が在れば、そこへ伝えて終わる。ビルドしたものは使い回さない —
 // 書いたばかりのコードが画面に出ないまま「開いた」ことになる。

@@ -99,6 +99,21 @@
           "react": "none"
         }
       }
+    },
+    {
+      // 素の JS なので、どの tsconfig にも入っていない。名前の付け間違いをここで止めないと、
+      // `npm run check` が緑のまま `npm run dev` が立ち上がらない。
+      "includes": ["scripts/**"],
+      "linter": {
+        "domains": {
+          "react": "none"
+        },
+        "rules": {
+          "correctness": {
+            "noUndeclaredVariables": "error"
+          }
+        }
+      }
     }
   ]
 }

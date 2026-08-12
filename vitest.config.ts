@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import viteReact from '@vitejs/plugin-react';
 import { playwright } from '@vitest/browser-playwright';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 const alias = { '~': fileURLToPath(new URL('./src', import.meta.url)) };
 
@@ -27,6 +27,9 @@ export default defineConfig({
             'test/{app-kernel,domain,application,interface,infrastructure,contracts}/**/*.spec.ts',
             // ランチャーは node のコードである。ブラウザーを模した環境に載せると `node:http` が歪む
             'test/frameworks/node/**/*.spec.ts',
+            /* `/api/*` のルートには画面の側が無い。**client の環境では `server` ごと消える**
+               —— `Route.options` が空になるので、`ui` に載せるとハンドラーに触れない。 */
+            'test/frameworks/tanstack/routes/api.*.spec.ts',
           ],
         },
         resolve: { alias },
@@ -57,6 +60,9 @@ export default defineConfig({
           pool,
           environment: 'happy-dom',
           include: ['test/frameworks/tanstack/**/*.spec.{ts,tsx}'],
+          /* `/api/*` は `unit` が見る。ここに残すと、消えた `server` を確かめようとして落ちる。
+           **既定の除外は書き足す形にする** —— 丸ごと置き換えると `node_modules` が戻ってくる。 */
+          exclude: [...configDefaults.exclude, 'test/frameworks/tanstack/routes/api.*.spec.ts'],
           setupFiles: ['test/setup-ui.ts'],
           css: false,
         },

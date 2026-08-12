@@ -29,10 +29,16 @@ export const zhHans: Catalogue = {
     '{n, plural, other {有 # 个项目无法读取 —— 那些行显示的是我们能看到的，而不是实际存在的}}',
   'Could not count live processes — waiting and ended cannot be told apart':
     '无法统计存活的进程 —— 等待中与已结束无法区分',
-  'Could not read the pinned tabs — the order fell back to the default':
-    '无法读取固定的标签 —— 顺序回退到默认',
-  'No projects yet — run Claude Code and they show up here':
-    '还没有项目 —— 运行 Claude Code 后就会出现在这里',
+  'Could not read the watched projects — the order fell back to the default':
+    '无法读取在看的项目 —— 顺序回退到默认',
+  'Nothing watched yet — pick a directory above, or run `glasshive` where you work':
+    '还没有在看的项目 —— 从上面的列表中选择，或在你工作的目录里运行 `glasshive`',
+  'Nothing watched yet — run `glasshive` in a directory to watch it':
+    '还没有在看的项目 —— 在想看的目录里运行 `glasshive`',
+  '{n, plural, one {# directory found that you are not watching} other {# directories found that you are not watching}}':
+    '{n, plural, other {发现 # 个尚未在看的目录}}',
+  Watch: '观察',
+  'could not read where this is': '无法读取它在哪里',
   'Nothing to read yet — ~/.claude/projects is not there':
     '还没有可读取的内容 —— ~/.claude/projects 不存在',
   'Unknown — the projects could not be counted': '未知 —— 无法统计项目',
@@ -371,19 +377,19 @@ export const zhHans: Catalogue = {
   'Some activity could not be read — the gaps may not be quiet':
     '有些活动无法读取 —— 空白处未必真的没有动静',
   Projects: '项目',
-  Pinned: '已固定',
+  Watched: '在看',
   Project: '项目',
   Active: '运行中',
   Input: '等待输入',
   'Tokens 24h': 'Token 24h',
   Activity: '活动',
   'Last activity': '最后活动',
-  'Unpin {name}': '取消固定 {name}',
-  'Pin {name}': '固定 {name}',
+  'Stop watching {name}': '不再观察 {name}',
+  'Watch {name}': '观察 {name}',
   'Could not be read': '无法读取',
   '{tokens} — {percent}% of the {total} shown': '{tokens} —— 占所列 {total} 的 {percent}%',
   all: '全部',
-  pinned: '已固定',
+  watched: '在看',
   'any time': '任何时间',
   'Some projects could not be read — the counts may be short': '有些项目无法读取 —— 计数可能偏少',
   'Some transcripts could not be read': '有些会话记录无法读取',
@@ -489,9 +495,9 @@ export const zhHans: Catalogue = {
   'idle — next prompt opens a window': '空闲 —— 下一次输入会开启一个新窗口',
   '{tokens}/day avg': '日均 {tokens}',
   Overview: '总览',
-  'Pinned projects': '固定的项目',
+  'Watched projects': '在看的项目',
   '{name}{slot} — drag to reorder': '{name}{slot} —— 拖动可重新排序',
-  '{name} — double-click to pin': '{name} —— 双击可固定',
+  '{name} — double-click to watch': '{name} —— 双击以观察',
   '{label} (YYYY-MM-DD HH:MM)': '{label}（YYYY-MM-DD HH:MM）',
   '{from} → {to} · earlier activity (density unknown — beyond bounded scan)':
     '{from} → {to} · 更早的活动（密度未知 —— 超出扫描范围）',

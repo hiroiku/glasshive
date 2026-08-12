@@ -13,7 +13,7 @@ import { useT } from '../../i18n/useT.ts';
 import { Dot } from '../primitives/Dot.tsx';
 import { Icon } from '../primitives/Icon.tsx';
 
-/* タブ行。ピン留めしたものが、留めた順に並ぶ。
+/* タブ行。観ると決めたものが、記録した順に並ぶ。
 
    **幅を動かさない。** 件数と閉じる × は同じ場所に置き、ホバーしたときに差し替える。
    × が現れて行が伸びると隣が動き、押すつもりのなかったタブを外してしまう。
@@ -72,10 +72,8 @@ const swallow = (event: Event) => {
 };
 
 export interface TabBarProps {
-  /** タブに出す id。**ピン留めの一覧そのものではない** — 観測に在るものだけが渡ってくる */
+  /** タブに出す id。**記録そのものではない** — 観測に在るものだけが渡ってくる */
   readonly visible: readonly string[];
-  /** ピン留めの並び。動かす先はこちらの位置で言う — 観測から消えたものもここには残る */
-  readonly pinned: readonly string[];
   readonly onPin: (id: string) => void;
   readonly onMove: (id: string, toIndex: number) => void;
   /* 観測できたプロジェクト。**まだ木が届いていない間は `undefined` である。**
@@ -83,21 +81,13 @@ export interface TabBarProps {
      届くのを待っているだけのタブまで、消えたタブとして落ちる。 */
   readonly projects: readonly ProjectJson[] | undefined;
   readonly onUnpin: (id: string) => void;
-  /* いま開いているが、ピン留めしていないプロジェクト。末尾に暫定タブとして出す。
-     出さないと、ピン留めしていないプロジェクトを見ているあいだ、自分がどこに居るかが
+  /* いま開いているが、観ると決めていないプロジェクト。末尾に暫定タブとして出す。
+     出さないと、記録していないプロジェクトを見ているあいだ、自分がどこに居るかが
      タブ行から消える。 */
   readonly current: string | null;
 }
 
-export function TabBar({
-  visible,
-  pinned,
-  projects,
-  onUnpin,
-  onPin,
-  onMove,
-  current,
-}: TabBarProps) {
+export function TabBar({ visible, projects, onUnpin, onPin, onMove, current }: TabBarProps) {
   const t = useT();
   const byId = new Map((projects ?? []).map((project) => [project.id, project]));
   /* 木が届いているか。**届く前と、届いた上で見つからないのは別である。**
@@ -113,7 +103,7 @@ export function TabBar({
      中で見える数と見えない数の境目がずれる。 */
   const nowMs = Date.now();
   const mark = useCommandMark();
-  // タブの番号は並び順そのもの。Overview が 1、ピン留めしたものが 2 から続く
+  // タブの番号は並び順そのもの。Overview が 1、観ると決めたものが 2 から続く
   const slotMark = (slot: number) => (slot > MAX_SLOTS ? '' : ` (${mark}${slot})`);
   const home = (
     <>
@@ -159,7 +149,7 @@ export function TabBar({
       /* タブを掴んで放した後の押下は、開くための押下ではない。飲まないと、置いた瞬間にそこへ移動する */
       document.addEventListener('click', swallow, { capture: true, once: true });
       const before = others[at]?.id;
-      const rest = pinned.filter((other) => other !== id);
+      const rest = visible.filter((other) => other !== id);
       const toIndex = before === undefined ? rest.length : rest.indexOf(before);
       if (toIndex >= 0) onMove(id, toIndex);
     };
@@ -169,8 +159,8 @@ export function TabBar({
   };
 
   return (
-    <nav id="tabs" ref={navRef} aria-label={t('Pinned projects')}>
-      {/* Overview へ戻るタブ。**ピン留めが空でも消えない** — 消えると戻る手段が無くなる */}
+    <nav id="tabs" ref={navRef} aria-label={t('Watched projects')}>
+      {/* Overview へ戻るタブ。**1 つも観ていなくても消えない** — 消えると戻る手段が無くなる */}
       <span className="tab">
         {hydrated ? (
           <Link
@@ -194,7 +184,7 @@ export function TabBar({
         // 観測から消えた id。**待っているのではなく、もう無い**
         if (project === undefined && observed) return null;
         /* 木が届くまでは id そのものを名前として出す。**id は観測ではなく URL の値である。**
-           ここでタブごと落とすと、ピン留めしたプロジェクトを直に開いたユーザーには、
+           ここでタブごと落とすと、観ると決めたプロジェクトを直に開いたユーザーには、
            いまどこに居るかがどこにも出ない画面になる(アドレスバーを読むしか手が無くなる)。 */
         const name = project?.name ?? id;
         const count = countOf(t, project, nowMs);
@@ -235,7 +225,7 @@ export function TabBar({
               <button
                 type="button"
                 className="tab-close"
-                aria-label={t('Unpin {name}', { name })}
+                aria-label={t('Stop watching {name}', { name })}
                 onClick={() => onUnpin(id)}
               >
                 ×
@@ -256,7 +246,7 @@ export function TabBar({
             to="/projects/$slug"
             params={{ slug: provisional }}
             className="tab-link on"
-            title={t('{name} — double-click to pin', {
+            title={t('{name} — double-click to watch', {
               name: byId.get(provisional)?.path ?? provisional,
             })}
           >

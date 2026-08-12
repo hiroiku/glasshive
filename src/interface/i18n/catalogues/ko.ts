@@ -30,10 +30,16 @@ export const ko: Catalogue = {
     '{n, plural, other {프로젝트 #개를 읽지 못했습니다 — 해당 행은 확인할 수 있었던 것을 보여 줄 뿐, 실제로 있는 것을 보여 주지 않습니다}}',
   'Could not count live processes — waiting and ended cannot be told apart':
     '살아 있는 프로세스를 세지 못했습니다 — 대기 중과 종료됨을 구분할 수 없습니다',
-  'Could not read the pinned tabs — the order fell back to the default':
-    '고정한 탭을 읽지 못했습니다 — 순서는 기본값으로 되돌렸습니다',
-  'No projects yet — run Claude Code and they show up here':
-    '아직 프로젝트가 없습니다 — Claude Code를 실행하면 여기에 나타납니다',
+  'Could not read the watched projects — the order fell back to the default':
+    '보고 있는 프로젝트를 읽지 못했습니다 — 순서는 기본값으로 되돌렸습니다',
+  'Nothing watched yet — pick a directory above, or run `glasshive` where you work':
+    '아직 보고 있는 것이 없습니다 — 위 목록에서 고르거나, 작업하는 디렉터리에서 `glasshive`를 실행하세요',
+  'Nothing watched yet — run `glasshive` in a directory to watch it':
+    '아직 보고 있는 것이 없습니다 — 보고 싶은 디렉터리에서 `glasshive`를 실행하세요',
+  '{n, plural, one {# directory found that you are not watching} other {# directories found that you are not watching}}':
+    '{n, plural, other {보고 있지 않은 디렉터리 #개를 찾았습니다}}',
+  Watch: '보기',
+  'could not read where this is': '어디에 있는지 읽지 못했습니다',
   'Nothing to read yet — ~/.claude/projects is not there':
     '아직 읽을 것이 없습니다 — ~/.claude/projects가 없습니다',
   'Unknown — the projects could not be counted': '알 수 없음 — 프로젝트를 세지 못했습니다',
@@ -388,19 +394,19 @@ export const ko: Catalogue = {
   'Some activity could not be read — the gaps may not be quiet':
     '일부 활동을 읽지 못했습니다 — 빈 곳이 조용했다는 뜻은 아닙니다',
   Projects: '프로젝트',
-  Pinned: '고정됨',
+  Watched: '보는 중',
   Project: '프로젝트',
   Active: '실행 중',
   Input: '입력 대기',
   'Tokens 24h': '토큰 24h',
   Activity: '활동',
   'Last activity': '마지막 활동',
-  'Unpin {name}': '{name} 고정 해제',
-  'Pin {name}': '{name} 고정',
+  'Stop watching {name}': '{name} 보기 중지',
+  'Watch {name}': '{name} 보기',
   'Could not be read': '읽지 못했습니다',
   '{tokens} — {percent}% of the {total} shown': '{tokens} — 표시된 {total} 중 {percent}%',
   all: '전체',
-  pinned: '고정됨',
+  watched: '보는 중',
   'any time': '전체 기간',
   'Some projects could not be read — the counts may be short':
     '일부 프로젝트를 읽지 못했습니다 — 개수가 실제보다 적을 수 있습니다',
@@ -508,9 +514,9 @@ export const ko: Catalogue = {
   'idle — next prompt opens a window': '유휴 상태 — 다음 입력이 새 구간을 엽니다',
   '{tokens}/day avg': '하루 평균 {tokens}',
   Overview: '개요',
-  'Pinned projects': '고정한 프로젝트',
+  'Watched projects': '보고 있는 프로젝트',
   '{name}{slot} — drag to reorder': '{name}{slot} — 드래그하여 순서 변경',
-  '{name} — double-click to pin': '{name} — 두 번 클릭하면 고정',
+  '{name} — double-click to watch': '{name} — 두 번 클릭하면 보기',
   '{label} (YYYY-MM-DD HH:MM)': '{label} (YYYY-MM-DD HH:MM)',
   '{from} → {to} · earlier activity (density unknown — beyond bounded scan)':
     '{from} → {to} · 그 이전의 활동 (밀도 불명 — 스캔 범위 밖)',

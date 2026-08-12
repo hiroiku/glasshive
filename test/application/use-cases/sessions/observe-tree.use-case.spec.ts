@@ -73,6 +73,7 @@ function createStub(overrides: {
     transcripts,
     activeThresholdMs: ACTIVE_THRESHOLD_MS,
   });
+  const found = overrides.groups ?? observed([GROUP]);
   const index = createTranscriptIndex({
     transcripts,
     processes,
@@ -81,6 +82,13 @@ function createStub(overrides: {
     clock: { now: () => NOW },
     // 覚えさせない。1 つのテストの中で 2 度観測したときに、1 度目の索引が返ると読み違える
     ttlMs: 0,
+    /* ここで見るのは木の組み立てである。**どれを観るかの選別はここの主題ではない**ので、
+       走査で見えた名前は全部を記録してあることにする。 */
+    watched: async () => ({
+      roots: [],
+      worktrees: [],
+      slugs: found.kind === 'observed' ? found.value.map((group) => group.slug) : [],
+    }),
   });
   return {
     asked,
@@ -383,6 +391,15 @@ function observeWith(transcripts: TranscriptRepository) {
       activeThresholdMs: ACTIVE_THRESHOLD_MS,
       clock: { now: () => NOW },
       ttlMs: 0,
+      /* 走査で見えた名前は全部を記録してあることにする。選別はここの主題ではない */
+      watched: async () => {
+        const found = await transcripts.listTranscripts();
+        return {
+          roots: [],
+          worktrees: [],
+          slugs: found.kind === 'observed' ? found.value.map((group) => group.slug) : [],
+        };
+      },
     }),
     drafts,
     activeThresholdMs: ACTIVE_THRESHOLD_MS,

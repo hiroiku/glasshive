@@ -40,6 +40,7 @@ const index: Deps['index'] = {
           },
         ],
       },
+      watchedIds: new Set(['glasshive']),
       transcriptFiles: new Set<string>(),
       groups: [],
     });

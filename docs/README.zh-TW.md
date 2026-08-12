@@ -12,7 +12,7 @@
 [English](../README.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · **繁體中文** · [한국어](README.ko.md) · [Español](README.es.md) · [Français](README.fr.md) · [Deutsch](README.de.md)
 
 glasshive 是給 [Claude Code](https://claude.com/claude-code) 用的唯讀本機儀表板。它讀取你磁碟上早已存在的
-session 記錄，把代理程式工作過的每個專案——它的 session 與 subagent、每一個此刻正在做什麼、它的 issue，
+session 記錄，把你在看的專案——它們的 session 與 subagent、每一個此刻正在做什麼、它們的 issue，
 以及使用中的 git 分支——放進同一個畫面。可以把它想成代理程式 session 的 `htop`，只是沒有那個 kill 鍵：
 glasshive 絕不寫入 `~/.claude`、你的儲存庫或你的 issue 追蹤器，也無法啟動、停止或操控代理程式。
 
@@ -32,8 +32,9 @@ GitHub 檢視之前，不會有任何東西離開你的機器——發佈的套�
 
 ### Overview
 
-不論你從哪裡啟動 glasshive，代理程式工作過的每個專案都會列出。等你回應的排在最前面，接著是仍在執行的。
-可以依名稱、狀態或時間範圍篩選，並把你在意的專案釘到分頁列上。
+你在看的專案。等你回應的排在最前面，接著是仍在執行的。可以依名稱、狀態或時間範圍篩選，也可以
+調整分頁列的順序。一開始是空的——在儲存庫裡執行 `glasshive`，那個儲存庫從此就被記錄下來；或者從
+表格上方「找到但沒在看的目錄」裡挑一個加進來。
 
 ![Overview](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/overview.png)
 
@@ -77,7 +78,7 @@ issue 與 branch 只靠 pull request 的 head branch 相接——差一點對上
 - **它讀三樣東西，一樣都不寫。** Claude Code 的 session 記錄
   （`~/.claude/projects/**/*.jsonl`）、`git`，以及——透過 `gh` CLI——你的 remote 指向的
   GitHub 儲存庫的 issue。任何 transcript、儲存庫或 issue 都不會被修改。
-- **它唯一會寫的檔案是它自己的。** `~/.config/glasshive/preferences.json` 存放你釘選的分頁與檢視偏好。
+- **它唯一會寫的檔案是它自己的。** `~/.config/glasshive/preferences.json` 存放你在看的目錄與檢視偏好。
   寫入之前，glasshive 會檢查該路徑不在 `~/.claude`、transcript 根目錄，或它看得到的專案裡的
   `.git` 或 `.beads` 目錄底下，若在其中就拒絕——寫入自己觀察的對象是由結構擋下的，不是靠慣例。
   刪掉這一個檔案，glasshive 寫過的東西就一點也不剩。
@@ -104,8 +105,15 @@ npx glasshive --active-threshold 120  # 距上次寫入多少秒以內仍算 act
 npx glasshive --config-dir ~/somewhere  # preferences.json 的存放位置
 ```
 
-執行 `glasshive --help` 可以看到完整清單。範圍不是啟動選項：代理程式工作過的每個專案都會列出，
-再由你挑哪些成為分頁。
+執行 `glasshive --help` 可以看到完整清單。
+
+**指定一個目錄，就是決定開始看它。** `glasshive .` 會記錄並開啟這個儲存庫；不帶路徑的 `glasshive`
+在 git 儲存庫裡做同樣的事，不在儲存庫裡則落到 Overview。給出的路徑會解析到它所屬的儲存庫，所以
+子目錄或 worktree 都會到同一個地方。
+
+**「在看」是呈現方式，不是允許讀取的範圍。** `~/.claude/projects` 底下的目錄仍然全部依名字被找到，
+沒在看的會列在 Overview 裡，一次點擊就能加進來。只有在看的才會被完整讀取，其餘的只花掉一份
+session 記錄的一行，剛好夠知道它在哪裡。從分頁上移除只是回到那份清單，什麼都不會被刪除。
 
 ### 鍵盤
 

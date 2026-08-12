@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { preferencesQuery } from '../queries/preferences.query.ts';
 import { treeQuery } from '../queries/tree.query.ts';
+import { DirectoryPicker } from '../ui/components/overview/DirectoryPicker.tsx';
 import { OverviewTable } from '../ui/components/overview/OverviewTable.tsx';
 import {
   type OverviewFilter,
@@ -40,9 +41,10 @@ export const Route = createFileRoute('/')({
   component: Overview,
 });
 
-/* プロジェクトの一覧。**どこから起動しても同じものが並ぶ。**
+/* 観ると決めたプロジェクトの一覧。
 
-   タブに出すものはユーザーが選ぶ。タブの選択は見せ方の話で、何を観測するかには一切効かない。 */
+   **並ぶのは、観ると決めたものだけである。** 機械の中で動いた Claude Code を全部並べると、
+   自分がいま何を見ているのかが分からなくなる。見つけたものは、下の一覧から選び直せる。 */
 function Overview() {
   const t = useT();
   const tree = useQuery(treeQuery);
@@ -66,7 +68,7 @@ function Overview() {
          まだ読んでいない行のほうに在るかもしれない。 */
       if (filter === 'input') return !row.read || (row.input ?? 0) > 0;
       if (filter === 'active') return !row.read || (row.active ?? 0) > 0;
-      if (filter === 'pinned') return tabs.pinned.has(row.id);
+      if (filter === 'watched') return tabs.watched.has(row.id);
       return true;
     });
     /* 読み終えるまで並べ替えない。**部分集合に順位を付けない。**
@@ -76,7 +78,7 @@ function Overview() {
        カーソルの下で動く。索引の並び(最終活動の新しい順)のまま待つ。 */
     const filtered = filterRows(byChip, query);
     return complete ? sortRows(filtered, order) : filtered;
-  }, [rows, filter, span, nowMs, query, order, tabs.pinned, complete]);
+  }, [rows, filter, span, nowMs, query, order, tabs.watched, complete]);
 
   const totals = useMemo(() => totalsOf(rows), [rows]);
   /* 数え上げられなかった行の数。**絞り込む前の一覧で数える** — 絞り込みで隠れただけの行を
@@ -89,7 +91,7 @@ function Overview() {
   /* 触っている間は並びを止める。**順位付けは変えない** —— 覚えた並びで出し直すだけである。
 
      既定の並びは人待ち・稼働・最終活動から作られるので、変更通知が届くたびに行が動く。
-     ピンは行を狙って押す操作なので、狙った行がその瞬間に入れ替わると押し間違える。
+     観ると決めるのは行を狙って押す操作なので、狙った行がその瞬間に入れ替わると押し間違える。
      絞り込みと並べ替えを変えたときは覚えを捨てる —— そこで止めたままにすると、
      押した並べ替えが効かなかったように見える。 */
   const [held, setHeld] = useState<readonly string[] | null>(null);
@@ -190,10 +192,19 @@ function Overview() {
         )}
         {tabs.storedState === 'unobservable' && (
           <p className="warn">
-            {t('Could not read the pinned tabs — the order fell back to the default')}
+            {t('Could not read the watched projects — the order fell back to the default')}
           </p>
         )}
         {tabs.error !== null && <p className="warn">{tabs.error}</p>}
+
+        {/* 見つけたものは、記録していなくても伝える。伝えないと、Claude Code を走らせた
+            ことのあるディレクトリを画面から選べない */}
+        <DirectoryPicker
+          candidates={tabs.candidates}
+          onWatch={tabs.toggleWatch}
+          open={projects.length === 0}
+          nowMs={nowMs}
+        />
 
         {projects.length === 0 ? (
           /* **読み終えるまで「1 つも無い」と言わない。** 索引がまだ届いていないだけかもしれず、
@@ -205,7 +216,11 @@ function Overview() {
               {/* 「無かった」と「観測できなかった」を同じ文にしない。**片方は 0 で、
                   もう片方は不明である。** 同じに書くと、読む人は在るものを無いと読む */}
               {sources.state === 'observed'
-                ? t('No projects yet — run Claude Code and they show up here')
+                ? tabs.candidates.length > 0
+                  ? t(
+                      'Nothing watched yet — pick a directory above, or run `glasshive` where you work',
+                    )
+                  : t('Nothing watched yet — run `glasshive` in a directory to watch it')
                 : sources.state === 'absent'
                   ? t('Nothing to read yet — ~/.claude/projects is not there')
                   : t('Unknown — the projects could not be counted')}
@@ -226,8 +241,8 @@ function Overview() {
             rows={ordered}
             order={order}
             onSort={onSort}
-            pinned={tabs.pinned}
-            onTogglePin={tabs.togglePin}
+            watched={tabs.watched}
+            onToggleWatch={tabs.toggleWatch}
             nowMs={nowMs}
             spanMs={SPAN_MS[span]}
           />

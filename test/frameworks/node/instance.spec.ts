@@ -10,7 +10,9 @@ import {
   isGlasshive,
   openDirectoryAt,
   portsToTry,
+  probeGlasshive,
   stopAt,
+  surveyRange,
 } from '~/frameworks/node/instance.ts';
 
 /* すでに走っている glasshive を見つけて、開きたいディレクトリを伝える。
@@ -81,6 +83,67 @@ async function freePort(): Promise<number> {
   return port;
 }
 
+/** ポートは握ったまま、何も答えない。**止まっているのとは違う** */
+async function silent(at = 0): Promise<{ origin: string; port: number }> {
+  const server = http.createServer(() => {
+    // 受け取るだけで答えない。握りは解かない
+  });
+  servers.push(server);
+  await listen(server, at);
+  const { port } = server.address() as AddressInfo;
+  return { origin: `http://127.0.0.1:${port}`, port };
+}
+
+/* 尋ねた先が何を答えたか。**無かったのと、観測できなかったのは別である** —— 答えが返らない
+   ことは、そこに glasshive が居ないことではない。畳むと、握られたままのポートを空いていると
+   言うことになる。 */
+describe('尋ねた先の答え', () => {
+  it('答えが返らなければ、観測できなかったと言う', { timeout: 20_000 }, async () => {
+    const { origin } = await silent();
+
+    expect(await probeGlasshive(origin, false)).toEqual({ kind: 'unobservable' });
+  });
+
+  it('誰も待ち受けていなければ、無かったと言う', async () => {
+    const port = await freePort();
+
+    expect(await probeGlasshive(`http://127.0.0.1:${port}`, false)).toEqual({ kind: 'absent' });
+  });
+
+  /* `/api/health` は I/O を持たない 1 つの `Response.json` なので、そこから 2xx 以外は
+     返らない。返ってきたなら、そのポートは別のプログラムが握っている。 */
+  it('別のプログラムが答えたなら、無かったと言う', async () => {
+    const other = await health('not json at all', 500);
+
+    expect(await probeGlasshive(other.origin, false)).toEqual({ kind: 'absent' });
+  });
+
+  /* 立ち上げに来た側は、居ないと答えれば自分で立ち上げる。握られたままのポートならそこで
+     待てずに次の空きへ落ちるので、**畳んだことがその場で正される。** */
+  it('立ち上げに来た側では、どちらも「居ない」でよい', { timeout: 20_000 }, async () => {
+    const { origin } = await silent();
+
+    expect(await askGlasshive(origin, false)).toBeNull();
+  });
+});
+
+/* 報告するだけの求めは、取りこぼしを自分で正せない。**答えなかったポートを「見つからな
+   かった」に混ぜると、そこに居るかどうかを確かめられなかったことが、居ないことになる。** */
+describe('範囲を尋ねる', () => {
+  it('答えなかったポートを、見つからなかったに混ぜない', { timeout: 20_000 }, async () => {
+    const found = await health(
+      JSON.stringify({ app: 'glasshive', dev: false, pid: 7, uptime_s: 3 }),
+    );
+    const quiet = await silent(found.port + 1);
+
+    expect(quiet.port, '2 つが並びで待てなければ、この確かめは成り立たない').toBe(found.port + 1);
+    expect(await surveyRange({ first: found.port, attempts: 2 }, false)).toEqual({
+      running: [{ origin: found.origin, pid: 7, uptimeSecs: 3 }],
+      unobservable: [quiet.origin],
+    });
+  });
+});
+
 describe('そこに居るのが glasshive か', () => {
   it('返ってきた答えが合えば、居ると答える', async () => {
     const { origin } = await health(JSON.stringify({ app: 'glasshive', dev: false }));
@@ -102,11 +165,12 @@ describe('そこに居るのが glasshive か', () => {
     });
   });
 
-  /* 添え物を答えない glasshive も居る。**使い回せるかどうかは、そこでは変わらない。** */
+  /* 添え物を答えない glasshive も居る。**使い回せるかどうかは、そこでは変わらない。**
+     答えなかった欄は `null` にする —— 0 と書くと、`ps` から辿ろうとした人がそこで止まる。 */
   it('添え物が無くても、居ることは変わらない', async () => {
     const { origin } = await health(JSON.stringify({ app: 'glasshive', dev: false }));
 
-    expect(await askGlasshive(origin, false)).toEqual({ origin, pid: 0, uptimeSecs: 0 });
+    expect(await askGlasshive(origin, false)).toEqual({ origin, pid: null, uptimeSecs: null });
   });
 
   /* 開発中の glasshive がビルドされたものを使い回すと、書いたばかりのコードが画面に出ない。

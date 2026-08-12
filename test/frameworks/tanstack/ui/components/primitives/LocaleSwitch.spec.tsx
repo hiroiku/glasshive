@@ -22,7 +22,7 @@ vi.mock('~/frameworks/tanstack/functions/preferences.ts', () => ({
 }));
 
 const body = (locale: string | null) => ({
-  tab_selection: { version: 1, mode: 'all', pinned: [], hidden: [] },
+  tab_selection: { version: 1, mode: 'all', watched: [], hidden: [] },
   visible_tabs: [],
   locale,
   stored: { state: 'observed', reason: null },

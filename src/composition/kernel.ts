@@ -10,6 +10,7 @@ import { createTranscriptDrafts } from '~/application/services/sessions/transcri
 import {
   createTranscriptIndex,
   type TranscriptIndexService,
+  type WatchedScope,
 } from '~/application/services/sessions/transcript-index.service.ts';
 import { createTranscriptSearch } from '~/application/services/sessions/transcript-search.service.ts';
 import {
@@ -17,6 +18,10 @@ import {
   type TreeSnapshotService,
 } from '~/application/services/sessions/tree-snapshot.service.ts';
 import { createNamedDirectories } from '~/application/services/workspace/named-directory.service.ts';
+import {
+  pinnedIdsOf,
+  watchedOf,
+} from '~/application/services/workspace/preferences-document.service.ts';
 import {
   createObserveRef,
   type ObserveRefUseCase,
@@ -66,6 +71,7 @@ import {
   createReadPreferences,
   type ReadPreferencesUseCase,
 } from '~/application/use-cases/workspace/read-preferences.use-case.ts';
+import { createWatchDirectory } from '~/application/use-cases/workspace/watch-directory.use-case.ts';
 import {
   createWritePreferences,
   type WritePreferencesUseCase,
@@ -140,6 +146,33 @@ function assemble(): Kernel {
      以降の `glasshive .` は自分で立ち上がらずにここへ伝えに来る。 */
   const named = createNamedDirectories({ target: settings.target, git });
 
+  /* glasshive で唯一の書き込み。保存先だけを渡し、書いてよいかのガードは実装が自分で持つ。 */
+  const preferences = createFsViewerPreferencesRepository({
+    configDir: settings.configDir,
+  });
+
+  /* 観ると決めたディレクトリを、走査の側の言葉にする。
+
+     **記録が持っているのはパスだけである。** 同じリポジトリの worktree は別のプロジェクトに
+     なるので、ここで `git` に尋ねて足す —— 記録した根だけを深く読むと、その隣で動いている
+     worktree が一覧から消える。
+
+     1 つ前の形から引き継ぐぶんは id のまま渡す。id からパスは決まらないが、id は走査で見えた
+     名前そのものなので、名前として突き合わせれば読み替えずに引き継げる。 */
+  async function watchedScope(): Promise<WatchedScope> {
+    const document = await preferences.load();
+    const stored = watchedOf(document);
+    const roots = stored.kind === 'observed' ? stored.value.paths : [];
+    const directories = await Promise.all(roots.map((root) => named.name(root)));
+    return {
+      roots,
+      worktrees: directories.flatMap((directory) =>
+        directory === null ? [] : [directory.rootPath, ...directory.worktrees],
+      ),
+      slugs: pinnedIdsOf(document),
+    };
+  }
+
   /* 何が並ぶかを、中身を読む前に決める 1 枚。**パスを引くだけの呼び出しはここで足りる。**
      Git も課題も会話も「この id はどこに在るか」しか要らないので、木を組ませない。 */
   const index = createTranscriptIndex({
@@ -148,9 +181,7 @@ function assemble(): Kernel {
     drafts,
     activeThresholdMs: settings.activeThresholdMs,
     clock: systemClock,
-    /* 名指されたディレクトリは、まだ `transcript` を 1 本も持っていなくても一覧に載せる。
-       載せないと、そこで Claude Code を走らせるまで開くウィンドウがどこにも無い。 */
-    namedPaths: async () => (await named.all()).map((directory) => directory.rootPath),
+    watched: watchedScope,
   });
   const observeTree = createObserveTree({
     index,
@@ -173,11 +204,6 @@ function assemble(): Kernel {
   changes.subscribe(() => {
     index.invalidate();
     tree.invalidate();
-  });
-
-  /* glasshive で唯一の書き込み。保存先だけを渡し、書いてよいかのガードは実装が自分で持つ。 */
-  const preferences = createFsViewerPreferencesRepository({
-    configDir: settings.configDir,
   });
 
   return {
@@ -204,7 +230,7 @@ function assemble(): Kernel {
     gitRef: createObserveRef({ git }),
     readPreferences: createReadPreferences({ preferences }),
     writePreferences: createWritePreferences({ preferences }),
-    target: createObserveTarget({ named, index }),
+    target: createObserveTarget({ named, index, watch: createWatchDirectory({ preferences }) }),
   };
 }
 

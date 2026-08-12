@@ -2,10 +2,10 @@ import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TabBar, type TabBarProps } from '~/frameworks/tanstack/ui/components/tabs/TabBar.tsx';
 
-/* タブ行は、ピン留めと観測の 2 つを突き合わせて並ぶ。
+/* タブ行は、記録と観測の 2 つを突き合わせて並ぶ。
 
    **突き合わせる相手がまだ来ていないことと、突き合わせて見つからなかったことは別である。**
-   潰すと、木を待っているだけのタブが「もう無いタブ」として落ち、ピン留めしたプロジェクトを
+   潰すと、木を待っているだけのタブが「もう無いタブ」として落ち、観ると決めたプロジェクトを
    直に開いたユーザーには、自分がどこに居るのかが画面のどこにも出なくなる。
    ここで見るのはその境目である。 */
 
@@ -99,13 +99,12 @@ const subagent = (over: Partial<SubagentJson> = {}): SubagentJson => ({
   ...over,
 });
 
-/* タブは「一覧へ戻る」から始まってピン留めの順に続き、暫定タブが末尾に付く。
-   先頭は必ず一覧なので、ピン留めのタブを見るときは 1 つ飛ばす。 */
+/* タブは「一覧へ戻る」から始まって記録した順に続き、暫定タブが末尾に付く。
+   先頭は必ず一覧なので、記録したタブを見るときは 1 つ飛ばす。 */
 function draw(props: Partial<TabBarProps> = {}) {
   const { container } = render(
     <TabBar
       visible={['-w-alpha']}
-      pinned={['-w-alpha']}
       projects={[project('-w-alpha', 'alpha')]}
       onUnpin={() => undefined}
       onPin={() => undefined}
@@ -127,30 +126,30 @@ function draw(props: Partial<TabBarProps> = {}) {
   return {
     container,
     seatCount: seats.length,
-    pinned: read(seats[1] ?? null),
+    watched: read(seats[1] ?? null),
     provisional: read(container.querySelector('.tab.provisional')),
   };
 }
 
-describe('ピン留めのタブと、まだ届いていない木', () => {
+describe('記録したタブと、まだ届いていない木', () => {
   it('木が届いていれば、プロジェクトの名前と状態の点を出す', () => {
-    const { pinned } = draw();
+    const { watched } = draw();
 
-    expect(pinned.name).toBe('alpha');
-    expect(pinned.dot).toContain('active');
-    expect(pinned.count, '数は観測から出る').toBe('1');
+    expect(watched.name).toBe('alpha');
+    expect(watched.dot).toContain('active');
+    expect(watched.count, '数は観測から出る').toBe('1');
   });
 
   /* ここが本題。`preferences.json` は先に届き、木は後から届く。 */
   it('木がまだ届いていない間も、タブは id を名前として出す', () => {
-    const { pinned } = draw({ projects: undefined });
+    const { watched } = draw({ projects: undefined });
 
     expect(
-      pinned.name,
+      watched.name,
       'id は観測ではなくルートが持つ情報。落とすと、いまどこに居るかが画面から消える',
     ).toBe('-w-alpha');
-    expect(pinned.dot, 'まだ観ていない状態を出さない。場所だけ取る').toContain('unknown');
-    expect(pinned.count, '数はまだ言えない').toBe('');
+    expect(watched.dot, 'まだ観ていない状態を出さない。場所だけ取る').toContain('unknown');
+    expect(watched.count, '数はまだ言えない').toBe('');
   });
 
   it('木が届いた上で見つからない id は、タブごと落とす', () => {
@@ -169,17 +168,17 @@ describe('ピン留めのタブと、まだ届いていない木', () => {
     if (first === undefined) throw new Error('セッションが無い');
     first.awaiting = 'user';
 
-    const { pinned } = draw({ projects: [awaiting] });
+    const { watched } = draw({ projects: [awaiting] });
 
-    expect(pinned.dot).toContain('input');
-    expect(pinned.countClass, '点 1 つだけだと、隣のタブの点に紛れる').toContain('input');
+    expect(watched.dot).toContain('input');
+    expect(watched.countClass, '点 1 つだけだと、隣のタブの点に紛れる').toContain('input');
   });
 
   it('人待ちでないプロジェクトの件数には、その色を付けない', () => {
-    expect(draw().pinned.countClass).toBe('n');
+    expect(draw().watched.countClass).toBe('n');
   });
 
-  it('ピン留めしていないプロジェクトを観ている間は、末尾に暫定タブが出る', () => {
+  it('観ると決めていないプロジェクトを観ている間は、末尾に暫定タブが出る', () => {
     const { provisional } = draw({ visible: [], projects: undefined, current: '-w-gamma' });
 
     expect(provisional.name).toBe('-w-gamma');
@@ -216,9 +215,9 @@ describe('タブの件数は、Agents の絞り込みに追随しない', () => 
   };
 
   it('ずっと前に終わったセッションは数に入らない', () => {
-    const { pinned } = draw({ projects: [withOldEnded()] });
+    const { watched } = draw({ projects: [withOldEnded()] });
 
-    expect(pinned.count, '動いている 1 本だけがここで起きていることである').toBe('1');
+    expect(watched.count, '動いている 1 本だけがここで起きていることである').toBe('1');
   });
 });
 
@@ -230,9 +229,9 @@ describe('数え上げられなかったプロジェクトのタブ', () => {
   });
 
   it('プロジェクトのディレクトリを歩けなかったなら、件数に `+?` を添える', () => {
-    const { pinned } = draw({ projects: [unwalked()] });
+    const { watched } = draw({ projects: [unwalked()] });
 
-    expect(pinned.count, '0 も空欄も「1 つも動いていない」という断定である').toBe('0+?');
+    expect(watched.count, '0 も空欄も「1 つも動いていない」という断定である').toBe('0+?');
   });
 
   it('子のディレクトリを歩けなかったセッションが在るときも、件数に `+?` を添える', () => {
@@ -241,37 +240,37 @@ describe('数え上げられなかったプロジェクトのタブ', () => {
     if (first === undefined) throw new Error('セッションが無い');
     first.sources = { state: 'unobservable', reason: 'subagents.unreadable' };
 
-    const { pinned } = draw({ projects: [short] });
+    const { watched } = draw({ projects: [short] });
 
-    expect(pinned.count, '見えた 1 本は本当に在るが、それで全部とは言えない').toBe('1+?');
+    expect(watched.count, '見えた 1 本は本当に在るが、それで全部とは言えない').toBe('1+?');
   });
 
   it('数え終えていないことを、指せば分かるようにする', () => {
-    const { pinned } = draw({ projects: [unwalked()] });
+    const { watched } = draw({ projects: [unwalked()] });
 
-    expect(pinned.slotTitle).toBe(
+    expect(watched.slotTitle).toBe(
       'Some of this project could not be read — the count may be short',
     );
   });
 
   /* `+?` は 1 文字ぶんの枠に収まらない。枠を広げないと、隣の名前と × に重なる。 */
   it('`+?` を出す枠は広げる', () => {
-    expect(draw({ projects: [unwalked()] }).pinned.slotClass).toContain('short');
+    expect(draw({ projects: [unwalked()] }).watched.slotClass).toContain('short');
   });
 
   it('数え終えたプロジェクトの枠は広げず、一言も添えない', () => {
-    const { pinned } = draw();
+    const { watched } = draw();
 
-    expect(pinned.slotClass).toBe('tab-slot');
-    expect(pinned.slotTitle).toBeNull();
+    expect(watched.slotClass).toBe('tab-slot');
+    expect(watched.slotTitle).toBeNull();
   });
 
   /* `ended` は「ここでは何も動いていない」という断定である。歩けなかったディレクトリの
      向こう側について、それは言えない。 */
   it('走査できなかったプロジェクトの点を、`ended` に落とさない', () => {
-    const { pinned } = draw({ projects: [unwalked()] });
+    const { watched } = draw({ projects: [unwalked()] });
 
-    expect(pinned.dot).toContain('unknown');
+    expect(watched.dot).toContain('unknown');
   });
 
   /* 見えた 1 本が動いていることは、他に何本見落としていても変わらない。 */
@@ -281,9 +280,9 @@ describe('数え上げられなかったプロジェクトのタブ', () => {
     if (first === undefined) throw new Error('セッションが無い');
     first.sources = { state: 'unobservable', reason: 'subagents.unreadable' };
 
-    const { pinned } = draw({ projects: [short] });
+    const { watched } = draw({ projects: [short] });
 
-    expect(pinned.dot).toContain('active');
+    expect(watched.dot).toContain('active');
   });
 });
 
@@ -300,25 +299,25 @@ describe('まだ読んでいないプロジェクトのタブ', () => {
   });
 
   it('読む前のプロジェクトの点を、`ended` に落とさない', () => {
-    const { pinned } = draw({ projects: [unread()] });
+    const { watched } = draw({ projects: [unread()] });
 
-    expect(pinned.dot, '読む前の行について「何も動いていない」とは言えない').toContain('unknown');
+    expect(watched.dot, '読む前の行について「何も動いていない」とは言えない').toContain('unknown');
   });
 
   it('読む前の件数を、空欄にしない', () => {
-    const { pinned } = draw({ projects: [unread()] });
+    const { watched } = draw({ projects: [unread()] });
 
-    expect(pinned.count, '空欄は「1 つも動いていない」という断定である').toBe('?');
+    expect(watched.count, '空欄は「1 つも動いていない」という断定である').toBe('?');
   });
 
   it('まだ読んでいないことを、指せば分かるようにする', () => {
-    const { pinned } = draw({ projects: [unread()] });
+    const { watched } = draw({ projects: [unread()] });
 
-    expect(pinned.slotTitle).toBe('Not read yet');
+    expect(watched.slotTitle).toBe('Not read yet');
   });
 
   it('読み終えたプロジェクトには、その一言を添えない', () => {
-    expect(draw().pinned.slotTitle).toBeNull();
+    expect(draw().watched.slotTitle).toBeNull();
   });
 
   /* 一覧とタブは同じ木を読んでいる。同じプロジェクトについて 2 つの答えが出るのは、
@@ -330,9 +329,9 @@ describe('まだ読んでいないプロジェクトのタブ', () => {
     first.state = 'waiting';
     first.subagents = [subagent()];
 
-    const { pinned } = draw({ projects: [onlyChild] });
+    const { watched } = draw({ projects: [onlyChild] });
 
-    expect(pinned.dot, '一覧とタブが、同じプロジェクトについて別の答えを出している').toContain(
+    expect(watched.dot, '一覧とタブが、同じプロジェクトについて別の答えを出している').toContain(
       'active',
     );
   });
@@ -343,7 +342,6 @@ describe('まだ読んでいないプロジェクトのタブ', () => {
 describe('タブを掴んで並べ替える', () => {
   const three = {
     visible: ['-w-a', '-w-b', '-w-c'],
-    pinned: ['-w-a', '-w-b', '-w-c'],
     projects: [project('-w-a', 'a'), project('-w-b', 'b'), project('-w-c', 'c')],
   };
 
@@ -414,7 +412,6 @@ describe('暫定タブを留める', () => {
     const { container } = render(
       <TabBar
         visible={[]}
-        pinned={[]}
         projects={[project('-w-gamma', 'gamma')]}
         onUnpin={() => undefined}
         onPin={onPin}
@@ -435,7 +432,6 @@ describe('暫定タブを留める', () => {
     const { container } = render(
       <TabBar
         visible={[]}
-        pinned={[]}
         projects={[project('-w-gamma', 'gamma')]}
         onUnpin={() => undefined}
         onPin={onPin}

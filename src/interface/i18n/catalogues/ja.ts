@@ -30,10 +30,16 @@ export const ja: Catalogue = {
     '{n, plural, other {# 件のプロジェクトを読めなかった — その行に出ているのは見えたものであって、そこに在るものではない}}',
   'Could not count live processes — waiting and ended cannot be told apart':
     '生きているプロセスを数えられなかった — 待機と終了を見分けられない',
-  'Could not read the pinned tabs — the order fell back to the default':
-    'ピン留めしたタブを読めなかった — 並びは既定に戻した',
-  'No projects yet — run Claude Code and they show up here':
-    'まだプロジェクトが無い — Claude Code を動かすとここに出る',
+  'Could not read the watched projects — the order fell back to the default':
+    '観ているプロジェクトを読めなかった — 並びは既定に戻した',
+  'Nothing watched yet — pick a directory above, or run `glasshive` where you work':
+    'まだ観ているものが無い — 上の一覧から選ぶか、作業するディレクトリで `glasshive` を動かす',
+  'Nothing watched yet — run `glasshive` in a directory to watch it':
+    'まだ観ているものが無い — 観たいディレクトリで `glasshive` を動かす',
+  '{n, plural, one {# directory found that you are not watching} other {# directories found that you are not watching}}':
+    '{n, plural, other {観ていないディレクトリが # 件見つかっている}}',
+  Watch: '観る',
+  'could not read where this is': 'どこに在るかを読めなかった',
   'Nothing to read yet — ~/.claude/projects is not there':
     '読むものがまだ無い — ~/.claude/projects が無い',
   'Unknown — the projects could not be counted': '不明 — プロジェクトを数えられなかった',
@@ -393,19 +399,19 @@ export const ja: Catalogue = {
   'Some activity could not be read — the gaps may not be quiet':
     '一部の稼働を読めなかった — 空いているところが静かだったとは限らない',
   Projects: 'プロジェクト',
-  Pinned: 'ピン留め',
+  Watched: '観ている',
   Project: 'プロジェクト',
   Active: '稼働中',
   Input: '入力待ち',
   'Tokens 24h': 'トークン 24h',
   Activity: '稼働',
   'Last activity': '最終稼働',
-  'Unpin {name}': '{name} のピン留めを外す',
-  'Pin {name}': '{name} をピン留めする',
+  'Stop watching {name}': '{name} を観るのをやめる',
+  'Watch {name}': '{name} を観る',
   'Could not be read': '読めなかった',
   '{tokens} — {percent}% of the {total} shown': '{tokens} — 出ている {total} のうち {percent}%',
   all: 'すべて',
-  pinned: 'ピン留め',
+  watched: '観ている',
   'any time': '全期間',
   'Some projects could not be read — the counts may be short':
     '一部のプロジェクトを読めなかった — 件数は足りていない可能性がある',
@@ -514,9 +520,9 @@ export const ja: Catalogue = {
   'idle — next prompt opens a window': '動いていない — 次の入力で枠が始まる',
   '{tokens}/day avg': '1 日あたり平均 {tokens}',
   Overview: '概観',
-  'Pinned projects': 'ピン留めしたプロジェクト',
+  'Watched projects': '観ているプロジェクト',
   '{name}{slot} — drag to reorder': '{name}{slot} — ドラッグで並べ替える',
-  '{name} — double-click to pin': '{name} — ダブルクリックでピン留めする',
+  '{name} — double-click to watch': '{name} — ダブルクリックで観る',
   '{label} (YYYY-MM-DD HH:MM)': '{label}（YYYY-MM-DD HH:MM）',
   '{from} → {to} · earlier activity (density unknown — beyond bounded scan)':
     '{from} → {to} · それより前の稼働（濃さは不明 — 走査の範囲の外）',

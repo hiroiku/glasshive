@@ -114,7 +114,14 @@ export function createObserveTree(deps: {
   async function* generate(nowMs: number): AsyncGenerator<TreeDelta, Result<ProjectTree>, void> {
     const snapshot = await index.get();
     if (!snapshot.ok) return snapshot;
-    const { index: projectIndex, groups } = snapshot.value;
+    const { groups, watchedIds } = snapshot.value;
+    /* 観ると決めたものだけを組む。**見つけただけのものは、ここには来ない。**
+       索引には見つけた名前も並んでいる —— それは「記録しますか」と尋ねる相手であって、
+       中身を読む相手ではない。 */
+    const projectIndex = {
+      ...snapshot.value.index,
+      stubs: snapshot.value.index.stubs.filter((stub) => watchedIds.has(stub.id)),
+    };
 
     /* 走査できた周だけキャッシュを掃除する。走査できなかった周に落とすと、
        `~/.claude/projects` が一瞬読めなかっただけでキャッシュが全部消え、

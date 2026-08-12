@@ -182,12 +182,7 @@ function Chrome() {
     [tree.data, only, current],
   );
   useAwaitingNotice(tree.data, prefs.notify, only ? current : null);
-  useTabShortcuts({
-    visible: tabs.visibleTabs,
-    pinned: tabs.selection.pinned,
-    current,
-    onMove: tabs.movePin,
-  });
+  useTabShortcuts({ visible: tabs.visibleTabs, current, onMove: tabs.moveWatch });
 
   const toggleNotify = async () => {
     // 入れるときだけ尋ねる。切るのに許可は要らない
@@ -277,11 +272,10 @@ function Chrome() {
       ) : (
         <TabBar
           visible={tabs.visibleTabs}
-          pinned={tabs.selection.pinned}
           projects={tree.data?.projects}
-          onUnpin={tabs.togglePin}
-          onPin={tabs.togglePin}
-          onMove={tabs.movePin}
+          onUnpin={tabs.toggleWatch}
+          onPin={tabs.toggleWatch}
+          onMove={tabs.moveWatch}
           current={current}
         />
       )}

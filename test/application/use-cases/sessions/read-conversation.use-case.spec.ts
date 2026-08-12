@@ -40,6 +40,7 @@ const indexWith = (files: readonly string[]): TranscriptIndexService => ({
           },
         ],
       },
+      watchedIds: new Set(['a']),
       transcriptFiles: new Set(files),
       groups: [],
     }),

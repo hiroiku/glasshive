@@ -71,8 +71,8 @@ const draw = (rows: readonly Row[], over: Partial<OverviewTableProps> = {}) =>
       rows={rows}
       order={{ key: 'standing', direction: 'desc' }}
       onSort={() => undefined}
-      pinned={new Set()}
-      onTogglePin={() => undefined}
+      watched={new Set()}
+      onToggleWatch={() => undefined}
       nowMs={NOW}
       spanMs={DAY_MS}
       {...over}
@@ -298,7 +298,7 @@ describe('表として、支援技術に渡す', () => {
     expect(onSort).toHaveBeenCalledWith('active');
   });
 
-  it('ピン留めは、セルの中の button のままである', () => {
+  it('観ると決めるのは、セルの中の button のままである', () => {
     const { container } = draw([readRow()]);
     const pin = container.querySelector('.pin');
 

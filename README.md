@@ -12,9 +12,9 @@
 **English** · [日本語](docs/README.ja.md) · [简体中文](docs/README.zh-CN.md) · [繁體中文](docs/README.zh-TW.md) · [한국어](docs/README.ko.md) · [Español](docs/README.es.md) · [Français](docs/README.fr.md) · [Deutsch](docs/README.de.md)
 
 glasshive is a read-only local dashboard for [Claude Code](https://claude.com/claude-code). It reads
-the session logs already sitting on your disk and puts every project an agent has worked in — its
-sessions and subagents, what each one is doing right now, its issues, and its live git branches — on
-one screen. Think `htop` for agent sessions, without the kill key: glasshive never writes to
+the session logs already sitting on your disk and puts the projects you watch — their
+sessions and subagents, what each one is doing right now, their issues, and their live git branches —
+on one screen. Think `htop` for agent sessions, without the kill key: glasshive never writes to
 `~/.claude`, to your repositories, or to your issue tracker, and it cannot start, stop, or steer an
 agent.
 
@@ -35,10 +35,10 @@ needs `ps` and either `/proc/<pid>/cwd` or `lsof`.
 
 ### Overview
 
-Every project an agent has worked in, wherever you started glasshive from. The ones waiting for your
-input come first, then the ones still running. Filter by name, state, or time span, and pin the
-projects you care about to the tab bar. Start with a path (`glasshive .`) and you skip straight to
-that one repository instead.
+The projects you watch. The ones waiting for your input come first, then the ones still running.
+Filter by name, state, or time span, and reorder the tab bar. It starts empty: run `glasshive` in a
+repository and that repository is watched from then on, or pick one from the directories glasshive
+found but is not watching, listed above the table.
 
 ![Overview](https://raw.githubusercontent.com/hiroiku/glasshive/main/docs/images/overview.png)
 
@@ -84,8 +84,8 @@ which pull request referenced it, read next to the agents working on it right no
 - **It reads three things and writes to none of them.** Claude Code session logs
   (`~/.claude/projects/**/*.jsonl`), `git`, and — through the `gh` CLI — the issues of the GitHub
   repository your remotes point at. No transcript, repository, or issue is ever modified.
-- **The one file it writes is its own.** `~/.config/glasshive/preferences.json` holds your pinned
-  tabs and view preferences. Before writing, glasshive checks that the path is not inside `~/.claude`,
+- **The one file it writes is its own.** `~/.config/glasshive/preferences.json` holds the
+  directories you watch and your view preferences. Before writing, glasshive checks that the path is not inside `~/.claude`,
   the transcripts root, or a `.git` or `.beads` directory belonging to a project it can see, and
   refuses if it is — writing to what it observes is blocked by construction, not by convention.
   Delete that one file and nothing glasshive has ever written is left behind.
@@ -108,7 +108,7 @@ which pull request referenced it, read next to the agents working on it right no
 ## Options
 
 ```sh
-npx glasshive                       # http://127.0.0.1:4483 — every project
+npx glasshive                       # http://127.0.0.1:4483 — watch this repository
 npx glasshive .                     # just this repository
 npx glasshive ~/src/foo             # or that one, from anywhere
 npx glasshive --port 8080           # listen somewhere else
@@ -121,14 +121,16 @@ npx glasshive --config-dir ~/somewhere  # where preferences.json is kept
 
 Run `glasshive --help` for the full list.
 
-A path is the only thing that changes what you land on. Give one and glasshive opens that
-repository — no tab bar, its name in the header, and the hive one click away on the mark. The path
-resolves to the repository it belongs to, so a subdirectory or a worktree gets you to the same place,
-and the other projects of that repository are named next to it. Give no path and you get the
-Overview, exactly as before.
+**Naming a directory is how you start watching it.** `glasshive .` watches this repository and
+opens it; a bare `glasshive` does the same when you are inside a git repository, and lands on the
+Overview when you are not. The path resolves to the repository it belongs to, so a subdirectory or a
+worktree gets you to the same place, and the other projects of that repository are named next to it.
 
-**A path is not a scope.** Every project stays observable either way; naming one decides where you
-land and what gets read first, not what glasshive is allowed to see.
+**Watching is what you see, not what glasshive may read.** Every directory under
+`~/.claude/projects` is still found by name, and the Overview lists the ones you are not watching so
+you can add them in one click. Only what you watch is read in full — the rest costs one line of one
+transcript, just enough to know where it is. Stop watching a project from its tab and it goes back to
+that list; nothing is deleted.
 
 **One server, however many times you run it.** Running `glasshive` again does not start a second
 one. It finds the server already listening, hands it the path you named, and opens that window —

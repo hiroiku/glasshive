@@ -150,8 +150,8 @@ export interface OverviewTableProps {
   readonly rows: readonly OverviewRow[];
   readonly order: SortOrder;
   readonly onSort: (key: SortKey) => void;
-  readonly pinned: ReadonlySet<string>;
-  readonly onTogglePin: (id: string) => void;
+  readonly watched: ReadonlySet<string>;
+  readonly onToggleWatch: (id: string) => void;
   /** 今の時刻。外から渡すのは、全ての行で同じ基準にするためである */
   readonly nowMs: number;
   /** 稼働のトラックが覆う時間の幅。`null` は「観測できた分だけ」 */
@@ -162,8 +162,8 @@ export function OverviewTable({
   rows,
   order,
   onSort,
-  pinned,
-  onTogglePin,
+  watched,
+  onToggleWatch,
   nowMs,
   spanMs,
 }: OverviewTableProps) {
@@ -183,10 +183,10 @@ export function OverviewTable({
   return (
     <div className="dash-grid" role="grid" aria-label={t('Projects')}>
       <div className="dash-row head" role="row">
-        {/* ピン留めの列にも名前を置く。**見えない形で置く** — 16px の列に語を出すと、
-            その語の幅ぶんだけ列が広がって、点とピン留めの間が空く */}
+        {/* 観るかどうかの列にも名前を置く。**見えない形で置く** — 16px の列に語を出すと、
+            その語の幅ぶんだけ列が広がって、点とボタンの間が空く */}
         <span className="pin-col" role="columnheader">
-          <span className="vhidden">{t('Pinned')}</span>
+          <span className="vhidden">{t('Watched')}</span>
         </span>
         <SortHead label={t('Project')} sortKey="name" order={order} onSort={onSort} />
         <SortHead label={t('Active')} sortKey="active" order={order} onSort={onSort} right />
@@ -198,13 +198,13 @@ export function OverviewTable({
       </div>
 
       {rows.map((row) => {
-        const isPinned = pinned.has(row.id);
+        const isPinned = watched.has(row.id);
         /* この行の `transcript` を数え上げられたか。数え上げられていなければ、
            どの欄も「これで全部だ」という顔をしてはいけない。 */
         const counted = row.sourcesState !== 'unobservable';
         return (
           <div key={row.id} className="dash-row" role="row">
-            {/* 行の属性としてのピン留め。行を開く操作とは別のクリック対象にしたいので、
+            {/* 行の属性としての「観ている」。行を開く操作とは別のクリック対象にしたいので、
                 リンクの外に出して独立した button にしてある。押しどころはセルの中に置く —
                 セルそのものを押しどころにすると、留めたかどうかが読み上げから消える。 */}
             <span className="pin-col" role="gridcell">
@@ -214,10 +214,10 @@ export function OverviewTable({
                 aria-pressed={isPinned}
                 aria-label={
                   isPinned
-                    ? t('Unpin {name}', { name: row.name })
-                    : t('Pin {name}', { name: row.name })
+                    ? t('Stop watching {name}', { name: row.name })
+                    : t('Watch {name}', { name: row.name })
                 }
-                onClick={() => onTogglePin(row.id)}
+                onClick={() => onToggleWatch(row.id)}
               >
                 <i />
               </button>

@@ -1,6 +1,7 @@
 import { ok, type Result } from '~/app-kernel/result.ts';
 import type { TranscriptIndexService } from '~/application/services/sessions/transcript-index.service.ts';
 import type { NamedDirectoryService } from '~/application/services/workspace/named-directory.service.ts';
+import type { WatchDirectoryUseCase } from '~/application/use-cases/workspace/watch-directory.use-case.ts';
 import { chooseTarget } from '~/domain/services/workspace/target.service.ts';
 
 /* 名指されたディレクトリが指すプロジェクトを答える。
@@ -44,15 +45,25 @@ export interface ObserveTargetUseCase {
 export function createObserveTarget(deps: {
   readonly named: NamedDirectoryService;
   readonly index: TranscriptIndexService;
+  /** 名指されたディレクトリを記録する。**名指すことは、観ると決めることである** */
+  readonly watch: WatchDirectoryUseCase;
 }): ObserveTargetUseCase {
   return {
     async execute(path = null) {
       const root = path === null ? await deps.named.launched() : await deps.named.name(path);
       if (root === null) return ok(null);
 
+      /* 名指されたら記録する。**打たれたパスは、そのとき限りのものではない。**
+
+         起動しただけのときは、`git` がリポジトリだと答えたときに限る —— 打った人が場所を
+         選んでいないので、`~` で立ち上げただけの日にホームが記録される。パスを打った人は
+         その場所を選んでいるので、リポジトリでなくても記録する。 */
+      const remembered =
+        path !== null || root.repository ? await deps.watch.execute(root.rootPath) : false;
+
       /* 初めて聞いたディレクトリは、索引にまだ載っていない。**載る前に選ぶと、まだ
          `transcript` を 1 本も持たないリポジトリが「観測できていない」になる。** */
-      if (path !== null) deps.index.invalidate();
+      if (path !== null || remembered) deps.index.invalidate();
 
       const snapshot = await deps.index.get();
       if (!snapshot.ok) return snapshot;

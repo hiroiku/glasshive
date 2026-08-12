@@ -197,6 +197,55 @@ describe('パッケージを外から叩く', () => {
     ).toBeGreaterThan(0);
   });
 
+  /* 立ち上げに来たコマンドが読む欄。**両側が手で書いた文字列で、共有している定数が無い**
+     —— 片方だけ名前を変えても中のテストは通り、`--status` が黙って `up 0s` を出し続ける。
+     ここで名前をそのまま書いてあるのは、確かめたいのがまさにその文字列だからである。 */
+  it('立ち上げに来たコマンドが読む欄を、そのままの名前で返す', async () => {
+    const body = (await (await fetch(`${origin}/api/health`)).json()) as Record<string, unknown>;
+
+    expect(body.app).toBe('glasshive');
+    expect(body.dev, 'ビルドしたものと開発中のものは別に数える').toBe(false);
+    expect(typeof body.pid, 'ターミナルを見失っても `ps` から辿れなければならない').toBe('number');
+    expect(typeof body.uptime_s).toBe('number');
+  });
+
+  /* **ブラウザーからは終わらせられない。** 開いているページが、観ている当のサーバーを落とせて
+     は困る。`origin` が付いているかで見分けるので、ここも `fetch` では確かめられない ——
+     送る側の API が付けさせてくれないヘッダーである。 */
+  it('ブラウザーの形をした求めでは終わらせられない', async () => {
+    const url = new URL(origin);
+    const refused = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const request = http.request(
+        {
+          host: url.hostname,
+          port: url.port,
+          method: 'POST',
+          path: '/api/quit',
+          headers: { origin, 'x-glasshive-command': '1' },
+        },
+        (res) => {
+          let body = '';
+          res.setEncoding('utf8');
+          res.on('data', (chunk) => {
+            body += chunk;
+          });
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, body }));
+        },
+      );
+      request.once('error', reject);
+      request.end();
+    });
+
+    expect(refused.status).toBe(403);
+    /* 断った理由まで見る。**別の理由の 403 だと、断りが在ることの確かめにならない** ——
+       `Host` を見るガードも同じ 403 を返す。 */
+    expect(JSON.parse(refused.body)).toMatchObject({ code: 'workspace.not_command_line' });
+    expect(
+      (await fetch(`${origin}/api/health`)).ok,
+      '断ったと言いながら終わっていては、断ったことにならない',
+    ).toBe(true);
+  });
+
   it('観測元へは何も書かない', async () => {
     await fetch(origin);
     expect(

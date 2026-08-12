@@ -1,8 +1,6 @@
 import type { ObserveTargetUseCase } from '~/application/use-cases/workspace/observe-target.use-case.ts';
-import {
-  InvalidOpenRequestError,
-  NotCommandLineError,
-} from '~/interface/errors/workspace/open-directory.error.ts';
+import { NotCommandLineError } from '~/interface/errors/workspace/command-line.error.ts';
+import { InvalidOpenRequestError } from '~/interface/errors/workspace/open-directory.error.ts';
 import { type ApiResponse, presentError } from '~/interface/presenters/api-error.presenter.ts';
 import {
   type OpenedJson,
