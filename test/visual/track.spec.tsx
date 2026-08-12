@@ -8,7 +8,7 @@ import {
 import type { EventLog } from '~/frameworks/tanstack/ui/derive/issueEvents.ts';
 import { MONTH_MS } from '~/frameworks/tanstack/ui/derive/issueGantt.ts';
 import { buildWorkJoin } from '~/frameworks/tanstack/ui/derive/workJoin.ts';
-import { differsAfter, paintedBy } from './paint.ts';
+import { differsAfter, paintedBy, suppress } from './paint.ts';
 
 /* トラックの上で観測を語る規則が、実際に何を塗るか。
 
@@ -107,7 +107,6 @@ function drawTrack(issues: readonly Issue[], eventLog: EventLog): HTMLElement {
       firstPaint
     />,
   );
-  document.body.append(container);
   const track = container.querySelector<HTMLElement>('.issue-row:not(.head) .gt');
   if (track === null) throw new Error('トラックが無い');
   return track;
@@ -148,22 +147,52 @@ describe('測る土台が、測れる状態に在る', () => {
    行と同じ絵になる。端をぼかす `mask-image` を要素そのものに掛けると、区間が細いほど強く
    効き、切れ目を言う線ごと持っていく。 */
 describe('読み残しの区間は、細くても消えない', () => {
-  it.each([0.6, 1.2, 3, 6])('幅 %s パーセントでも、ぼかした端が区間を消さない', async (width) => {
+  /* ハッチだけを測る。**切れ目の線を止めておく** —— 同じ要素の `::after` が濃く、要素ごと
+     測るとインクの 9 割をそちらが出すので、ハッチを丸ごと消しても測りは 1 割しか動かない。
+     線そのものは、下の「幅 0 の区間でも」が別に見ている。 */
+  const hatchOnly = () => suppress('.gt-cut::after { content: none }');
+
+  const inkOf = async (width: number, soft: boolean) => {
     const track = cutTrack();
     const cut = child(track, '.gt-cut');
     cut.style.left = '20%';
     cut.style.width = `${width}%`;
+    cut.classList.toggle('soft-from', soft);
+    return (await paintedBy(cut, track)).ink;
+  };
 
-    cut.classList.add('soft-from');
-    const soft = await paintedBy(cut, track);
-    cut.classList.remove('soft-from');
-    const hard = await paintedBy(cut, track);
-
-    expect(
-      soft.ink / hard.ink,
-      'ぼかしは端を柔らかくするものであって、区間を消すものではない',
-    ).toBeGreaterThan(0.6);
+  it.each([0.6, 1.2, 3, 6])('幅 %s パーセントでも、ハッチそのものが塗られている', async (width) => {
+    const stop = hatchOnly();
+    try {
+      expect(
+        await inkOf(width, false),
+        '読み残しの在る行が、読み終えた行と同じ絵になっている',
+      ).toBeGreaterThan(60);
+    } finally {
+      stop();
+    }
   });
+
+  /* 硬い端は観測した時刻、ぼかした端は「分からない」である。**同じ絵になった時点で、
+     観測していない端が観測した端として画面に出る。** */
+  it.each([0.6, 1.2, 3, 6])(
+    '幅 %s パーセントでも、ぼかした端は硬い端と別の絵になる',
+    async (width) => {
+      const stop = hatchOnly();
+      try {
+        const soft = await inkOf(width, true);
+        const hard = await inkOf(width, false);
+
+        expect(soft / hard, 'ぼかしが効いていない。両端が同じことを言っている').toBeLessThan(0.9);
+        expect(
+          soft / hard,
+          'ぼかしが区間を消している。読み残しが読み終えたことになる',
+        ).toBeGreaterThan(0.15);
+      } finally {
+        stop();
+      }
+    },
+  );
 
   /* 記録の始まりを言う線。**幅が 0 でも残る** —— 切れ目がどこかを言うのはこの線であって、
      ハッチの広さではない。読み残しが 1 日の行と 1 か月の行が、同じことを言う。 */
@@ -251,19 +280,22 @@ describe('代用した閉じた時刻は、観測した時刻と別の絵にな�
     expect(painted.strongest).toBeGreaterThan(60);
   });
 
-  /* 撮るのはフラグ自身の箱だけである。**`::before` まで入れると測りが鈍る** —— 旗の部分は
-     箱の右へはみ出していて、そちらが変わるだけで差が出てしまい、縦棒が実線に戻っても
-     気付けない。破線であることを言っているのは縦棒のほうである。 */
-  it('代用の時刻は、縦棒そのものが実線と違う絵になる', async () => {
+  /* 撮るのはフラグ自身の箱だけである。`::before` まで入れると、旗の部分が変わるだけで差が
+     出てしまい、縦棒が実線に戻っても気付けない。破線であることを言っているのは縦棒である。
+
+     見るのは「違う」ではなく「隙間が在る」ほうである。**薄いだけの実線は、代用を観測した
+     時刻と同じ形で描いている** —— 濃さが違うだけの線は、並べて見ないと違いが分からない。 */
+  it('代用の時刻の縦棒には、実線に無い隙間が在る', async () => {
     const track = closedTrack();
     const flag = child(track, '.gt-flag');
 
-    const painted = await differsAfter(
-      flag,
-      () => flag.classList.add('approx'),
-      () => flag.classList.remove('approx'),
-    );
+    const solid = await paintedBy(flag, track, flag);
+    flag.classList.add('approx');
+    const dashed = await paintedBy(flag, track, flag);
 
-    expect(painted.pixels, '代用の時刻が、観測した時刻と同じ形で出ている').toBeGreaterThan(4);
+    expect(dashed.pixels, '代用の時刻が、観測した時刻と同じ形で出ている').toBeLessThan(
+      solid.pixels * 0.8,
+    );
+    expect(dashed.pixels, '縦棒そのものが消えている').toBeGreaterThan(0);
   });
 });

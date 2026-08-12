@@ -74,14 +74,20 @@ export default defineConfig({
         plugins: [viteReact()],
         test: {
           name: 'visual',
-          include: ['test/visual/**/*.spec.tsx'],
+          include: ['test/visual/**/*.spec.{ts,tsx}'],
           css: true,
+          setupFiles: ['test/setup-visual.ts'],
           browser: {
             enabled: true,
             headless: true,
             provider: playwright(),
             instances: [{ browser: 'chromium' }],
-            viewport: { width: 1280, height: 800 },
+            /* ページの大きさに合わせておく。**外すと、撮った絵が縮めて返ってくる** ——
+               ランナーは合わない指定を `transform: scale()` で収めるので、数えているのが
+               規則の塗ったものなのか、縮めたときの残りなのかが混ざる。 */
+            viewport: { width: 1280, height: 720 },
+            // 落ちたときの写しは残さない。テストが書いてよいのは `mkdtemp` の下だけである
+            screenshotFailures: false,
           },
         },
         resolve: { alias },
