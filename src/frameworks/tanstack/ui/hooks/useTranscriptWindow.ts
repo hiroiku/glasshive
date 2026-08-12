@@ -102,6 +102,15 @@ export function useTranscriptWindow(file: string | null): TranscriptWindowHandle
      変更通知はまとめて配られ、追記は続けて届くので、取っているあいだに次が来るのは
      普通のことである。落とすと、その追記が最後だったときに会話が黙って止まる。 */
   const pendingRef = useRef(false);
+  /* もっと前を押されたことを覚えておくフラグ。**取り終えた側が必ず読み直す。**
+
+     末尾を追っているあいだ、このフックの中は 1 つの求めしか通さない —— 重なると、ページが
+     互い違いに入ってバイトの計算が合わなくなる。落とすと、押しても何も起きないボタンが、
+     「もう前は無い」と見分けの付かない形で残る。しかも塞がっている時間がいちばん長いのは、
+     いま誰かが動かしている `transcript` である。 */
+  const pendingOlderRef = useRef(false);
+  /** 覚えておいた押しを効かせるための、いちばん新しい `loadOlder` */
+  const loadOlderRef = useRef<() => void>(() => undefined);
   /* いま開いている `transcript`。返ってきたページをこれと照らして、開き直した後に
      届いた前のファイルのページを捨てる。 */
   const openRef = useRef(file);
@@ -160,6 +169,11 @@ export function useTranscriptWindow(file: string | null): TranscriptWindowHandle
       if (openRef.current === following) setFailed((current) => ({ ...current, follow: true }));
     } finally {
       loadingRef.current = false;
+      // 追っているあいだに押された「もっと前」を、ここで効かせる
+      if (pendingOlderRef.current) {
+        pendingOlderRef.current = false;
+        loadOlderRef.current();
+      }
     }
   }, []);
 
@@ -168,6 +182,8 @@ export function useTranscriptWindow(file: string | null): TranscriptWindowHandle
   useEffect(() => {
     openRef.current = file;
     pendingRef.current = false;
+    // 前の `transcript` で押された「もっと前」を持ち越さない
+    pendingOlderRef.current = false;
     /* 開くものが無いなら、読んでいる最中でもない。**先に畳む** —— 前の `transcript` の
        求めが走ったまま閉じると、読むものが無い画面に待ちの表示が残る。 */
     if (file === null) {
@@ -234,7 +250,18 @@ export function useTranscriptWindow(file: string | null): TranscriptWindowHandle
   /* もっと前を読む。**読む前の「下からの距離」を覚えておき、足した後に戻す。**
      戻さないと、上に足したぶんだけ画面が飛んで、読んでいた行が視界から消える。 */
   const loadOlder = useCallback(() => {
-    if (file === null || loadingRef.current || windowStart === 0) return;
+    /* 読むものが無い。覚えておいた押しがここへ来ることも在るので、待ちは畳んでおく */
+    if (file === null || windowStart === 0) {
+      setReading((current) => (current.older ? { ...current, older: false } : current));
+      return;
+    }
+    /* いま塞がっているなら、押されたことを覚えて戻る。**待ちは押した時点で出す** ——
+       効くのが一拍後でも、押した人から見て何も変わらない間が在ってはいけない。 */
+    if (loadingRef.current) {
+      pendingOlderRef.current = true;
+      setReading((current) => ({ ...current, older: true }));
+      return;
+    }
     loadingRef.current = true;
     setReading((current) => ({ ...current, older: true }));
     void (async () => {
@@ -279,6 +306,13 @@ export function useTranscriptWindow(file: string | null): TranscriptWindowHandle
       }
     })();
   }, [file, follow, windowStart]);
+
+  /* `follow` は張り替えないので、最新の `loadOlder` をここから渡す。**`follow` の依存に
+     `loadOlder` を足さない** —— 足すと `windowStart` が動くたびに変更通知の購読が張り直り、
+     その隙に届いた追記を取り落とす。 */
+  useEffect(() => {
+    loadOlderRef.current = loadOlder;
+  }, [loadOlder]);
 
   return {
     events,

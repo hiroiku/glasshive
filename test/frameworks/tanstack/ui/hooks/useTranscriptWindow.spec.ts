@@ -210,6 +210,103 @@ describe('もっと前を読む', () => {
   });
 });
 
+/* 末尾を追っているあいだの「もっと前」。**押されたことを落とさない。**
+
+   このフックの中は 1 つの求めしか通さない —— 重なるとページが互い違いに入り、バイトの計算が
+   合わなくなる。それは正しいが、塞がっているあいだの押しを黙って捨てると、押しても何も
+   起きないボタンが「もう前は無い」と見分けの付かない形で残る。しかも塞がっている時間が
+   いちばん長いのは、いま誰かが動かしている `transcript` —— 押したくなるのはまさにそこである。 */
+describe('末尾を追っているあいだに、もっと前を押す', () => {
+  /** 末尾を追わせたまま止めておく。追いかけが返るまで、このフックは塞がったままである */
+  const following = async () => {
+    const tail = held();
+    fetchConversation
+      .mockResolvedValueOnce(page(1_000_000, 1_000_100, [event]))
+      .mockReturnValueOnce(tail.answer)
+      .mockResolvedValue(page(800_000, 900_000, [event]));
+
+    const { result, rerender } = renderHook(({ file }) => useTranscriptWindow(file), {
+      initialProps: { file: FILE },
+    });
+    await waitFor(() => expect(result.current.events).toHaveLength(1));
+    await act(async () => {
+      notify(FILE);
+    });
+    return { result, rerender, tail };
+  };
+
+  it('押しは落とさず、追い終えてから効く', async () => {
+    const { result, tail } = await following();
+
+    act(() => {
+      result.current.loadOlder();
+    });
+
+    expect(asked().length, '塞がっているあいだの押しで取りに行くと、ページが互い違いに入る').toBe(
+      2,
+    );
+
+    await act(async () => {
+      tail.settle(page(1_000_100, 1_000_200, [event]));
+      await tail.answer;
+    });
+    await waitFor(() => expect(result.current.events).toHaveLength(3));
+
+    expect(asked().at(-1), '押されたことを落とすと、押しても何も起きないボタンが残る').toEqual([
+      737_856, 1_000_000,
+    ]);
+  });
+
+  /* 効くのが一拍後でも、押した人から見て何も変わらない間が在ってはいけない。
+   **待ちは押した時点で出す** —— そこが空白だと、押せていないのと同じ絵になる。 */
+  it('待ちは、押した時点で出る', async () => {
+    const { result, tail } = await following();
+
+    act(() => {
+      result.current.loadOlder();
+    });
+
+    expect(
+      result.current.reading.older,
+      '押した瞬間に何も変わらないと、押せなかったのと同じ絵になる',
+    ).toBe(true);
+
+    await act(async () => {
+      tail.settle(page(1_000_100, 1_000_200, [event]));
+      await tail.answer;
+    });
+    await waitFor(() => expect(result.current.reading.older).toBe(false));
+  });
+
+  /* 覚えた押しは、その `transcript` のものである。**開き直したら捨てる** —— 持ち越すと、
+     開いた別の会話が、押してもいないのに勝手に遡り始める。 */
+  it('別の `transcript` へ移ったら、覚えた押しは捨てる', async () => {
+    const { result, rerender, tail } = await following();
+
+    act(() => {
+      result.current.loadOlder();
+    });
+    /* 移った先も途中から読み始める。**`windowStart` が 0 の会話に移らない** —— 0 だと
+       遡るものが無く、持ち越した押しがそこで止まって、持ち越したかどうかが見えない。 */
+    fetchConversation.mockResolvedValue(page(500_000, 500_100, [event, event]));
+    rerender({ file: OTHER });
+    await waitFor(() => expect(result.current.events).toHaveLength(2));
+    expect(result.current.hasOlder, '遡るものが無いと、この回は何も確かめていない').toBe(true);
+
+    const before = fetchConversation.mock.calls.length;
+    await act(async () => {
+      tail.settle(page(1_000_100, 1_000_200, [event]));
+      await tail.answer;
+    });
+    await settled();
+
+    expect(
+      fetchConversation.mock.calls.length,
+      '前の `transcript` で押されたことを持ち越すと、開いた会話が押されてもいないのに遡る',
+    ).toBe(before);
+  });
+});
+
 describe('末尾を追う', () => {
   it('変更通知が届いたら、次に読む位置から先だけを足す', async () => {
     fetchConversation
