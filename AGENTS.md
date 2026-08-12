@@ -119,11 +119,11 @@ cp -rf source dest          # NOT: cp -r source dest
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
 <!-- agents-harness:begin -->
-## Review
-
-When implementation or a fix is done, delegate verification to the applicable review agents before reporting completion.
-
 ## Code
 
 Comments explain the intent of the code they sit on. No history, no ADRs, no provisions for the future.
+
+## Review
+
+When implementation or a fix is done, delegate verification to the applicable review agents before reporting completion.
 <!-- agents-harness:end -->

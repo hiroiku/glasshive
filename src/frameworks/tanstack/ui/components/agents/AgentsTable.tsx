@@ -183,8 +183,12 @@ interface TalkHops {
   readonly peers: readonly TalkPeerMark[];
   /** 矢印が語っているメッセージの数 */
   readonly shown: number;
-  /** 描けなかったメッセージの数 */
+  /** 表示範囲の外へ出たか、描く数の上限を超えて描けなかったメッセージの数 */
   readonly dropped: number;
+  /* 送ったことは読めたが、どこへ届いたのかを置けなかったメッセージの数。**`dropped` と
+     混ぜない** —— あちらは「描かなかった」で、こちらは「相手を観測できていない」である。
+     混ぜると、置けなかったやり取りが表示範囲の話として片付く。 */
+  readonly unplaced: number;
   /** 読み取り範囲が `transcript` の先頭まで届いたか */
   readonly complete: boolean;
   readonly readable: boolean;
@@ -681,7 +685,15 @@ export function AgentsTable({
        `unobservable` でも `hops` を空で返す。** 空をそのまま数えると、走査に失敗した
        セッションが「一度も話さなかった」ことになる。 */
     if (!answer.ok || answer.body.state !== 'observed') {
-      return { drawn: [], peers: [], shown: 0, dropped: 0, complete: false, readable: false };
+      return {
+        drawn: [],
+        peers: [],
+        shown: 0,
+        dropped: 0,
+        unplaced: 0,
+        complete: false,
+        readable: false,
+      };
     }
 
     const visible = new Map<string, number>();
@@ -802,7 +814,8 @@ export function AgentsTable({
       peers,
       // 矢印が語っているメッセージの数。まとめた本数ではなく、まとめられた中身の数で言う
       shown: drawn.reduce((count, mark) => count + mark.count, 0),
-      dropped: dropped + answer.body.unplaced,
+      dropped,
+      unplaced: answer.body.unplaced,
       complete: answer.body.complete,
       readable: true,
     };
@@ -859,6 +872,7 @@ export function AgentsTable({
                 messages: talkHops.shown,
                 marks: talkHops.drawn.length,
                 dropped: talkHops.dropped,
+                unplaced: talkHops.unplaced,
                 peers: talkHops.peers.length,
                 complete: talkHops.complete,
               }

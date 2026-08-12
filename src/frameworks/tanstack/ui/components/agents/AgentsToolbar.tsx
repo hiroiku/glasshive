@@ -35,7 +35,12 @@ export interface AgentsToolbarProps {
     readonly readable: boolean;
     readonly messages: number;
     readonly marks: number;
+    /** 表示範囲の外へ出たか、描く数の上限を超えて描けなかった数 */
     readonly dropped: number;
+    /* 送ったことは読めたが、相手を置けなかった数。**`dropped` と 1 つの文にしない** ——
+       あちらは描かなかっただけで、こちらは相手を観測できていない。1 つにすると、
+       置けなかったやり取りが表示範囲を広げれば出てくるものとして読める。 */
+    readonly unplaced: number;
     /* この画面に居ないセッションとのやり取りの数。**`messages` とは別に数える** ——
        片端しか置けていないので、矢の数に混ぜると置いた相手が居るように読める。 */
     readonly peers: number;
@@ -109,6 +114,11 @@ export function AgentsToolbar({
     if (talkNote.dropped > 0) {
       parts.push(`${talkNote.dropped} outside the window or over the limit`);
     }
+    if (talkNote.unplaced > 0) {
+      parts.push(
+        `${talkNote.unplaced} sent to a name that is not in this session, with nothing recording where they arrived`,
+      );
+    }
     if (!talkNote.complete) {
       parts.push('messages older than the scan window are not counted');
     }
@@ -155,8 +165,10 @@ export function AgentsToolbar({
             : !talkNote.readable
               ? '⇄ ?'
               : `⇄ ${talkNote.complete ? '' : '≥'}${talkNote.messages + talkNote.peers}`}
-        {talkNote?.readable === true && talkNote.dropped > 0 && (
-          <span className="n">+{talkNote.dropped}</span>
+        {/* 描かなかった数と置けなかった数を、1 つの `+N` にまとめる。**理由は説明が分ける** ——
+            数として分けると、押す前の 1 行に 2 つの数が並んで、どちらも読まれない */}
+        {talkNote?.readable === true && talkNote.dropped + talkNote.unplaced > 0 && (
+          <span className="n">+{talkNote.dropped + talkNote.unplaced}</span>
         )}
       </button>
       <button

@@ -417,6 +417,30 @@ describe('メッセージを観測できなかったことを、0 通と言わ�
     await waitFor(() => expect(chipOf('⇄').textContent).toBe('⇄ 0'));
   });
 
+  /* 送ったことは読めたのに、どこへ届いたのかを置けなかったやり取りが在る。**表示範囲の外へ
+     出たものと 1 つの数にしない** —— 一緒にすると、幅を広げれば出てくるものとして読める。
+     相手そのものを観測できていないので、幅をどう変えても出てこない。 */
+  it('相手を置けなかったやり取りを、表示範囲の外へ出たものと同じ文にしない', async () => {
+    answerMessages({
+      state: 'observed',
+      reason: null,
+      complete: true,
+      unplaced: 2,
+      peers: [],
+      hops: [],
+    });
+    mount({ project: three });
+
+    fireEvent.click(chipOf('⇄ messages'));
+
+    await waitFor(() =>
+      expect(
+        chipOf('⇄').getAttribute('title'),
+        '観測できていない相手を、表示範囲の話にしている',
+      ).toContain('sent to a name that is not in this session'),
+    );
+  });
+
   /* 押してから返るまで `transcript` を読みに行くので、ここは見える長さの待ちである。 */
   const READ = {
     ok: true,

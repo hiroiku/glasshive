@@ -161,6 +161,7 @@ describe('メッセージの数が、何を言っているのかを分ける', (
     messages: 12,
     marks: 5,
     dropped: 0,
+    unplaced: 0,
     peers: 0,
     complete: true,
     ...over,
@@ -220,6 +221,26 @@ describe('メッセージの数が、何を言っているのかを分ける', (
       chipOf(container, '⇄').getAttribute('title'),
       '0 だけでは、読めなかった回と見分けが付かない',
     ).toContain('messaged each other');
+  });
+
+  /* 描かなかったのと、相手を置けなかったのは違う。**1 つの文にすると、置けなかったやり取りが
+     表示範囲を広げれば出てくるものとして読める。** 相手は観測できていないので、幅を変えても
+     出てこない。 */
+  it('描けなかった数と、相手を置けなかった数を、別々に言う', () => {
+    const { container } = mount({
+      talk: true,
+      talkNote: note({ dropped: 3, unplaced: 2 }),
+    });
+    const title = chipOf(container, '⇄').getAttribute('title') ?? '';
+
+    expect(title).toContain('3 outside the window or over the limit');
+    expect(title, '観測できていない相手を、表示範囲の話にしている').toContain(
+      '2 sent to a name that is not in this session',
+    );
+    expect(
+      chipOf(container, '⇄').querySelector('.n')?.textContent,
+      '描かれなかった数が、片方だけになっている',
+    ).toBe('+5');
   });
 
   it('描けなかった数は、読めた回にだけ添える', () => {
