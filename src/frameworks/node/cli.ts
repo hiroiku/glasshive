@@ -34,6 +34,9 @@ Usage: glasshive [path] [options]
 With no path, every project an agent has worked in is listed, and the viewer picks
 which ones to keep as tabs. With a path, that one repository fills the window — the
 rest is still observed, and the hive is one click away.
+
+Running glasshive again does not start a second server. It hands the path to the one
+already listening and opens that window, reusing the scan and the index it has built.
 `;
 
 export type ParseResult =

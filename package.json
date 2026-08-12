@@ -24,7 +24,7 @@
     "THIRD-PARTY-NOTICES.md"
   ],
   "scripts": {
-    "dev": "vite dev",
+    "dev": "node scripts/dev.mjs",
     "build": "$npm_execpath run build:app && $npm_execpath run build:launcher && $npm_execpath run verify:dist",
     "build:app": "vite build",
     "build:launcher": "tsc -p tsconfig.launcher.json",

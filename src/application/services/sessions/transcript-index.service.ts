@@ -68,12 +68,12 @@ export function createTranscriptIndex(deps: {
   readonly activeThresholdMs: number;
   readonly clock: Clock;
   readonly ttlMs?: number;
-  /* 起動のときに名指されたディレクトリ。**まだ `transcript` を 1 本も持っていなくても
-     一覧に載せる** —— 打った相手が一覧に居なければ、開くウィンドウがどこにも無い。
+  /* 名指されたディレクトリ。**まだ `transcript` を 1 本も持っていなくても一覧に載せる**
+     —— 打った相手が一覧に居なければ、開くウィンドウがどこにも無い。
 
      観測してよい範囲ではない。走査するのは今までどおり `~/.claude/projects` の全部で、
-     ここが足すのは名指された 1 行だけである。 */
-  readonly namedPath?: () => Promise<string | null>;
+     ここが足すのは名指されたぶんの行だけである。 */
+  readonly namedPaths?: () => Promise<readonly string[]>;
 }): TranscriptIndexService {
   const ttlMs = deps.ttlMs ?? DEFAULT_TTL_MS;
   let cachedAtMs = Number.NEGATIVE_INFINITY;
@@ -87,25 +87,30 @@ export function createTranscriptIndex(deps: {
      割れて、片方だけにセッションが並ぶ。居るのに `transcript` を 1 本も持たない行には、
      一覧に残す指定だけを付ける。 */
   async function includeNamed(groups: LocatedGroup<LocatedTranscript>[]): Promise<void> {
-    const named = (await deps.namedPath?.()) ?? null;
-    if (named === null) return;
-
-    const canonical = await deps.transcripts.canonicalize(named);
-    const path = canonical.kind === 'observed' ? canonical.value : named;
-    const slug = slugOfPath(path);
-    const at = groups.findIndex(
-      (group) =>
-        group.slug === slug ||
-        (group.canonicalPath !== null && samePath(group.canonicalPath, path)),
-    );
-    const existing = at < 0 ? undefined : groups[at];
-    if (existing !== undefined) {
-      groups[at] = { ...existing, namedPath: path };
-      return;
+    for (const named of (await deps.namedPaths?.()) ?? []) {
+      const canonical = await deps.transcripts.canonicalize(named);
+      const path = canonical.kind === 'observed' ? canonical.value : named;
+      const slug = slugOfPath(path);
+      const at = groups.findIndex(
+        (group) =>
+          group.slug === slug ||
+          (group.canonicalPath !== null && samePath(group.canonicalPath, path)),
+      );
+      const existing = at < 0 ? undefined : groups[at];
+      if (existing !== undefined) {
+        groups[at] = { ...existing, namedPath: path };
+        continue;
+      }
+      /* まだ `transcript` が 1 本も無いディレクトリ。**数え上げられなかったのではなく、
+         0 本だと分かっている。** そこで Claude Code が動き出せば、同じ名前の下に増えていく。 */
+      groups.push({
+        slug,
+        canonicalPath: path,
+        sessions: [],
+        walked: observed(0),
+        namedPath: path,
+      });
     }
-    /* まだ `transcript` が 1 本も無いディレクトリ。**数え上げられなかったのではなく、
-       0 本だと分かっている。** そこで Claude Code が動き出せば、同じ名前の下に増えていく。 */
-    groups.push({ slug, canonicalPath: path, sessions: [], walked: observed(0), namedPath: path });
   }
 
   async function build(nowMs: number): Promise<Result<TranscriptIndexSnapshot>> {

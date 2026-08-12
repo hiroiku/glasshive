@@ -7,12 +7,21 @@ Thanks for looking. Bug reports, questions, and patches are all welcome —
 
 ```sh
 npm install
-npm run dev     # http://127.0.0.1:4483
+npm run dev        # http://127.0.0.1:4483 — every project
+npm run dev -- .   # just this repository (with Bun: bun run dev .)
 ```
 
-The dev server takes 4483, the same port a packaged `glasshive` uses — one number to remember. If
-4483 is already taken (say you left the packaged build running), Vite steps to the next free port
-and prints it. Both bind to `127.0.0.1` and reject requests whose `Host` header is not local.
+The dev server takes the same arguments as `glasshive` itself — `[path]`, `--port`, `--no-open`,
+`--config-dir`, `--active-threshold` — and reads them with the same `parseArgs`, so a flag means the
+same thing whichever way you start it.
+
+It takes 4483, the same port a packaged `glasshive` uses — one number to remember. Run it a second
+time and it joins the first instead of starting another server: the running one is told which
+directory you named, and the browser opens on its answer. **Dev servers and packaged ones are
+counted separately** — a dev run that reused a packaged build would serve code you had already
+changed. If 4483 is held by something that is not a dev glasshive (say you left the packaged build
+running), Vite steps to the next free port and prints it. Both bind to `127.0.0.1` and reject
+requests whose `Host` header is not local.
 
 To run what users actually get:
 

@@ -92,8 +92,8 @@ function spyRepository(groups: readonly TranscriptGroup[], cwdBySlug: Record<str
 
 interface SceneOptions {
   readonly processes?: AgentProcessIntegration;
-  /** 起動のときに名指されたディレクトリ */
-  readonly namedPath?: string;
+  /** 名指されたディレクトリ。起動のときのものと、あとから伝えられたものが並ぶ */
+  readonly namedPaths?: readonly string[];
   /** slug ごとの作業ディレクトリ。渡さなければ、どの slug も同じ場所を指す */
   readonly cwdBySlug?: Record<string, string>;
 }
@@ -104,7 +104,7 @@ function sceneOf(groups: readonly TranscriptGroup[], options: SceneOptions = {})
     transcripts: spy.transcripts,
     activeThresholdMs: ACTIVE_THRESHOLD_MS,
   });
-  const named = options.namedPath;
+  const named = options.namedPaths;
   const index = createTranscriptIndex({
     transcripts: spy.transcripts,
     processes: options.processes ?? { list: async () => observed([]) },
@@ -112,7 +112,7 @@ function sceneOf(groups: readonly TranscriptGroup[], options: SceneOptions = {})
     activeThresholdMs: ACTIVE_THRESHOLD_MS,
     clock: { now: () => NOW },
     ttlMs: 0,
-    ...(named === undefined ? {} : { namedPath: async () => named }),
+    ...(named === undefined ? {} : { namedPaths: async () => named }),
   });
   return {
     ...spy,
@@ -121,7 +121,7 @@ function sceneOf(groups: readonly TranscriptGroup[], options: SceneOptions = {})
       index,
       drafts,
       activeThresholdMs: ACTIVE_THRESHOLD_MS,
-      ...(named === undefined ? {} : { readFirst: async () => [named] }),
+      ...(named === undefined ? {} : { readFirst: async () => named }),
     }),
   };
 }
@@ -279,13 +279,13 @@ describe('索引と本読みの読み取り', () => {
   });
 });
 
-/* 起動のときにディレクトリを名指されたとき。
+/* ディレクトリを名指されたとき。
 
    名指すのは観測してよい範囲の指定ではない。走査するのは今までどおり `~/.claude/projects`
    の全部で、変わるのは **一覧に 1 行足りること** と **読む順** だけである。 */
 describe('名指されたディレクトリ', () => {
   it('`transcript` が 1 本も無くても、一覧に居る', async () => {
-    const scene = sceneOf([sourceOf('a', 'session')], { namedPath: '/w/fresh' });
+    const scene = sceneOf([sourceOf('a', 'session')], { namedPaths: ['/w/fresh'] });
 
     const snapshot = await indexOf(scene);
     const named = snapshot.index.stubs.find((stub) => stub.canonicalPath === '/w/fresh');
@@ -301,7 +301,7 @@ describe('名指されたディレクトリ', () => {
   });
 
   it('すでに観測できているディレクトリを名指しても、行は増えない', async () => {
-    const scene = sceneOf([sourceOf('a', 'session')], { namedPath: '/w/proj' });
+    const scene = sceneOf([sourceOf('a', 'session')], { namedPaths: ['/w/proj'] });
 
     const snapshot = await indexOf(scene);
 
@@ -312,11 +312,27 @@ describe('名指されたディレクトリ', () => {
     expect(snapshot.index.stubs[0]?.canonicalPath).toBe('/w/proj');
   });
 
+  /* 走っている glasshive は、あとから別のディレクトリを伝えられる。**先に名指された相手が
+     一覧から消えると、開いていたウィンドウの行が無くなる。** */
+  it('名指されたディレクトリは、増えても全部が一覧に居る', async () => {
+    const scene = sceneOf([sourceOf('a', 'session')], {
+      namedPaths: ['/w/fresh', '/w/later'],
+    });
+
+    const snapshot = await indexOf(scene);
+
+    expect(snapshot.index.stubs.map((stub) => stub.canonicalPath).sort()).toEqual([
+      '/w/fresh',
+      '/w/later',
+      '/w/proj',
+    ]);
+  });
+
   /* 名指したリポジトリが画面に揃うまでの待ちを、ほかのプロジェクトの読み取りで長くしない。
    **並べ替えるのは読む順だけである** —— 一覧の並びは索引が決めたままにする。 */
   it('名指されたディレクトリのプロジェクトから先に読む', async () => {
     const scene = sceneOf([sourceOf('a', 'first'), sourceOf('b', 'second')], {
-      namedPath: '/w/b',
+      namedPaths: ['/w/b'],
       cwdBySlug: { a: '/w/a', b: '/w/b' },
     });
 

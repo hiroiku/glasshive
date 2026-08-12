@@ -5,7 +5,10 @@ import type {
   TranscriptIndexService,
   TranscriptIndexSnapshot,
 } from '~/application/services/sessions/transcript-index.service.ts';
-import type { TargetRootService } from '~/application/services/workspace/target-root.service.ts';
+import type {
+  NamedDirectory,
+  NamedDirectoryService,
+} from '~/application/services/workspace/named-directory.service.ts';
 import { createObserveTarget } from '~/application/use-cases/workspace/observe-target.use-case.ts';
 
 /** 索引が並べる行の形は、索引そのものから引く。ここは domain を `import` できない */
@@ -31,39 +34,49 @@ const stubOf = (id: string, canonicalPath: string, latestActivityMs = 0): Projec
 });
 
 /** 索引 1 枚を返すだけの偽の相手。**木は組まれない** —— 組まれたらここで気づく */
-const indexOf = (stubs: readonly ProjectStub[]): TranscriptIndexService => ({
-  async get() {
-    return ok({
-      index: {
-        generatedAtMs: NOW,
-        activeThresholdMs: 60_000,
-        sources: observed(stubs.length),
-        processes: observed(0),
-        stubs,
-      },
-      transcriptFiles: new Set<string>(),
-      groups: [],
-    });
-  },
-  invalidate() {},
+function indexOf(stubs: readonly ProjectStub[]): TranscriptIndexService & { rebuilds: number } {
+  return {
+    rebuilds: 0,
+    async get() {
+      return ok({
+        index: {
+          generatedAtMs: NOW,
+          activeThresholdMs: 60_000,
+          sources: observed(stubs.length),
+          processes: observed(0),
+          stubs,
+        },
+        transcriptFiles: new Set<string>(),
+        groups: [],
+      });
+    },
+    invalidate() {
+      this.rebuilds += 1;
+    },
+  };
+}
+
+const directoryOf = (rootPath: string, worktrees: readonly string[] = []): NamedDirectory => ({
+  requestedPath: rootPath,
+  rootPath,
+  name: rootPath.split('/').pop() ?? rootPath,
+  worktrees,
 });
 
-const rootOf = (root: {
-  requestedPath: string;
-  rootPath: string;
-  name: string;
-  worktrees: readonly string[];
-}): TargetRootService => ({ get: async () => root });
+/** 起動のときの相手と、あとから伝えられた相手を分けて答える偽の相手 */
+const namedOf = (
+  launched: NamedDirectory | null,
+  told: Record<string, NamedDirectory> = {},
+): NamedDirectoryService => ({
+  launched: async () => launched,
+  name: async (path) => told[path] ?? null,
+  all: async () => [...(launched === null ? [] : [launched]), ...Object.values(told)],
+});
 
 describe('名指されたディレクトリが指すプロジェクト', () => {
   it('開くプロジェクトと、同じリポジトリの残りを答える', async () => {
     const target = createObserveTarget({
-      root: rootOf({
-        requestedPath: '/src/repo',
-        rootPath: '/src/repo',
-        name: 'repo',
-        worktrees: ['/src/repo-wt'],
-      }),
+      named: namedOf(directoryOf('/src/repo', ['/src/repo-wt'])),
       index: indexOf([
         stubOf('wt', '/src/repo-wt', 900),
         stubOf('repo', '/src/repo', 100),
@@ -89,12 +102,7 @@ describe('名指されたディレクトリが指すプロジェクト', () => {
      索引がそのディレクトリを載せていれば、開くプロジェクトはそこに在る。 */
   it('名指した場所に何も観測できていなければ、開くプロジェクトは無い', async () => {
     const target = createObserveTarget({
-      root: rootOf({
-        requestedPath: '/src/fresh',
-        rootPath: '/src/fresh',
-        name: 'fresh',
-        worktrees: [],
-      }),
+      named: namedOf(directoryOf('/src/fresh')),
       index: indexOf([stubOf('other', '/src/other', 900)]),
     });
 
@@ -108,7 +116,7 @@ describe('名指されたディレクトリが指すプロジェクト', () => {
 
   it('名指されていなければ、答えは無い', async () => {
     const target = createObserveTarget({
-      root: { get: async () => null },
+      named: namedOf(null),
       index: indexOf([stubOf('other', '/src/other')]),
     });
 
@@ -117,5 +125,38 @@ describe('名指されたディレクトリが指すプロジェクト', () => {
     expect(answer.ok).toBe(true);
     if (!answer.ok) return;
     expect(answer.value, '名指されていないことは、Overview を開くという答えである').toBe(null);
+  });
+
+  /* 走っている glasshive は、あとからパスを伝えられる。**起動のときの相手ではなく、
+     伝えられたほうを見る。** */
+  it('パスを渡されたら、そのディレクトリを見る', async () => {
+    const index = indexOf([stubOf('repo', '/src/repo'), stubOf('later', '/src/later')]);
+    const target = createObserveTarget({
+      named: namedOf(directoryOf('/src/repo'), { '/src/later': directoryOf('/src/later') }),
+      index,
+    });
+
+    const answer = await target.execute('/src/later');
+
+    expect(answer.ok).toBe(true);
+    if (!answer.ok || answer.value === null) throw new Error('答えが無い');
+    expect(answer.value.projectId).toBe('later');
+    expect(
+      index.rebuilds,
+      '初めて聞いたディレクトリは索引にまだ載っていない。組み直さないと、観測できていないことになる',
+    ).toBe(1);
+  });
+
+  it('渡されたパスを読み替えられなければ、答えは無い', async () => {
+    const target = createObserveTarget({
+      named: namedOf(directoryOf('/src/repo')),
+      index: indexOf([stubOf('repo', '/src/repo')]),
+    });
+
+    const answer = await target.execute('src/repo');
+
+    expect(answer.ok).toBe(true);
+    if (!answer.ok) return;
+    expect(answer.value, '起動のときの相手で代えると、伝えた相手と違うものが開く').toBe(null);
   });
 });

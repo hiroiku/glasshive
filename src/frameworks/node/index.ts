@@ -1,4 +1,4 @@
-import { DEFAULTS, parseArgs } from './cli.js';
+import { parseArgs } from './cli.js';
 import { launch } from './launcher.js';
 
 const parsed = parseArgs(process.argv.slice(2));
@@ -7,10 +7,11 @@ if (!parsed.ok) {
   process.exit(parsed.exitCode);
 }
 
+/* 失敗の中身をそのまま出す。ここで「ポートを取れなかった」と決め打つと、走っている
+   glasshive に断られたときに嘘の理由が出る。 */
 try {
   await launch(parsed.args);
 } catch (e) {
-  const message = e instanceof Error ? e.message : String(e);
-  console.error(`could not bind port ${parsed.args.port ?? DEFAULTS.port}: ${message}`);
+  console.error(`glasshive: ${e instanceof Error ? e.message : String(e)}`);
   process.exit(1);
 }

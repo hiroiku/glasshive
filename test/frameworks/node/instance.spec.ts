@@ -1,0 +1,184 @@
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { afterEach, describe, expect, it } from 'vitest';
+import { DEFAULTS } from '~/frameworks/node/cli.ts';
+import { COMMAND_HEADER, COMMAND_HEADER_VALUE } from '~/frameworks/node/cli-request.ts';
+import {
+  findRunning,
+  isGlasshive,
+  openDirectoryAt,
+  portsToTry,
+} from '~/frameworks/node/instance.ts';
+
+/* すでに走っている glasshive を見つけて、開きたいディレクトリを伝える。
+
+   **サーバーは 1 つに保つ。** 2 枚目を立ち上げると、走査も索引も `git` の答えも、同じ機械の
+   上でもう一度組み直すことになる。ここが「居ない」と答えるたびに、それが起きる。 */
+
+const servers: http.Server[] = [];
+
+afterEach(async () => {
+  await Promise.all(servers.splice(0).map((server) => new Promise((r) => server.close(r))));
+});
+
+/** 届いたリクエストを控えながら答える、最小のサーバー */
+async function serve(
+  handle: (request: { method: string; url: string; body: string }) => {
+    status?: number;
+    body: string;
+    contentType?: string;
+  },
+  at = 0,
+): Promise<{
+  origin: string;
+  port: number;
+  seen: string[];
+  headers: http.IncomingHttpHeaders[];
+}> {
+  const seen: string[] = [];
+  const headers: http.IncomingHttpHeaders[] = [];
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+    });
+    req.on('end', () => {
+      seen.push(`${req.method} ${req.url} ${body}`);
+      headers.push(req.headers);
+      const answer = handle({ method: req.method ?? '', url: req.url ?? '', body });
+      res.writeHead(answer.status ?? 200, {
+        'content-type': answer.contentType ?? 'application/json',
+      });
+      res.end(answer.body);
+    });
+  });
+  servers.push(server);
+  await listen(server, at);
+  const { port } = server.address() as AddressInfo;
+  return { origin: `http://127.0.0.1:${port}`, port, seen, headers };
+}
+
+/** 名指したポートで待つ。0 を渡せば空いている番号を借りる */
+const listen = (server: http.Server, port: number): Promise<void> =>
+  new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', () => resolve());
+  });
+
+const health = (body: string, status = 200, at = 0) =>
+  serve(({ url }) => (url === '/api/health' ? { status, body } : { status: 404, body: '{}' }), at);
+
+/** 誰も待ち受けていないポート。立ち上げてすぐ閉じ、その番号を借りる */
+async function freePort(): Promise<number> {
+  const server = http.createServer();
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
+
+describe('そこに居るのが glasshive か', () => {
+  it('返ってきた答えが合えば、居ると答える', async () => {
+    const { origin } = await health(JSON.stringify({ app: 'glasshive', dev: false }));
+
+    expect(await isGlasshive(origin, false)).toBe(true);
+  });
+
+  /* 開発中の glasshive がビルドされたものを使い回すと、書いたばかりのコードが画面に出ない。
+     逆向きも同じで、`glasshive` を打った人に開発中のサーバーを見せることになる。 */
+  it('開発中かどうかが違えば、居ないと答える', async () => {
+    const { origin } = await health(JSON.stringify({ app: 'glasshive', dev: true }));
+
+    expect(await isGlasshive(origin, false)).toBe(false);
+    expect(await isGlasshive(origin, true)).toBe(true);
+  });
+
+  it('別のプログラムが答えたら、居ないと答える', async () => {
+    const other = await health(JSON.stringify({ app: 'something-else' }));
+    const text = await health('<html>hello</html>');
+    const refusing = await health('{}', 500);
+
+    expect(await isGlasshive(other.origin, false)).toBe(false);
+    expect(await isGlasshive(text.origin, false), '答えを読めないのも、居ないである').toBe(false);
+    expect(await isGlasshive(refusing.origin, false)).toBe(false);
+  });
+
+  it('誰も待ち受けていなければ、居ないと答える', async () => {
+    expect(await isGlasshive(`http://127.0.0.1:${await freePort()}`, false)).toBe(false);
+  });
+});
+
+describe('使い回せる glasshive を探す', () => {
+  it('範囲の中に居れば、その居場所を答える', async () => {
+    const { origin, port } = await health(JSON.stringify({ app: 'glasshive', dev: false }));
+
+    expect(await findRunning({ first: port - 2, attempts: 5 }, false)).toBe(origin);
+  });
+
+  /* 何枚も開いている機械では、2 つ以上が同時に走っていることが在る。**採る相手が周ごとに
+     変われば、同じコマンドが 2 回目と 3 回目で違うウィンドウを開く。** */
+  it('2 つ走っていたら、番号の小さいほうを採る', async () => {
+    const body = JSON.stringify({ app: 'glasshive', dev: false });
+    const low = await health(body);
+    const high = await health(body, 200, low.port + 1);
+
+    expect(high.port, '隣のポートで待てなければ、この確かめは成り立たない').toBe(low.port + 1);
+    expect(await findRunning({ first: low.port, attempts: 2 }, false)).toBe(low.origin);
+  });
+
+  it('範囲の外に居ても、見つけない', async () => {
+    const { port } = await health(JSON.stringify({ app: 'glasshive', dev: false }));
+
+    expect(await findRunning({ first: port + 1, attempts: 1 }, false)).toBe(null);
+  });
+
+  /* 探す先と待ち受ける先は同じ範囲でなければならない。片方だけを広げると、走っている
+     glasshive を見落として 2 枚目が立ち上がる。 */
+  it('名指されたポートだけを見る。既定のときだけ先へ探す', () => {
+    expect(portsToTry(5000)).toEqual({ first: 5000, attempts: 1 });
+    expect(portsToTry(undefined).first).toBe(DEFAULTS.port);
+    expect(portsToTry(undefined).attempts).toBeGreaterThan(1);
+  });
+});
+
+describe('開きたいディレクトリを伝える', () => {
+  it('答えられた URL を、そのまま開く先にする', async () => {
+    const { origin, seen, headers } = await serve(() => ({
+      body: JSON.stringify({ url: '/projects/the-repo/work?only=true' }),
+    }));
+
+    expect(await openDirectoryAt(origin, '/src/repo')).toBe(
+      `${origin}/projects/the-repo/work?only=true`,
+    );
+    expect(seen, '開く先を組み立てるのは、索引を持っている側である').toEqual([
+      'POST /api/open {"path":"/src/repo"}',
+    ]);
+    expect(
+      headers[0]?.[COMMAND_HEADER],
+      'コマンドから来たことを伝えずに送ると、伝えた先はブラウザーと見分けられずに断る',
+    ).toBe(COMMAND_HEADER_VALUE);
+  });
+
+  it('ディレクトリを名指していなければ、何も伝えずに Overview を開く', async () => {
+    const { origin, seen } = await serve(() => ({ body: '{}' }));
+
+    expect(await openDirectoryAt(origin, undefined)).toBe(origin);
+    expect(seen).toEqual([]);
+  });
+
+  /* 断られたことを黙って飲み込むと、打った相手とは違うものが開いて終わる。 */
+  it('断られたら、その理由をそのまま伝える', async () => {
+    const { origin } = await serve(() => ({
+      status: 403,
+      body: JSON.stringify({ state: 'invalid', code: 'x', message: 'not allowed here' }),
+    }));
+
+    await expect(openDirectoryAt(origin, '/src/repo')).rejects.toThrow('not allowed here');
+  });
+
+  it('答えを読めなければ、開く先が無いことにする', async () => {
+    const { origin } = await serve(() => ({ body: 'not json' }));
+
+    await expect(openDirectoryAt(origin, '/src/repo')).rejects.toThrow('/src/repo');
+  });
+});

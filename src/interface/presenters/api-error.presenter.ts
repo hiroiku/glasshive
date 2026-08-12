@@ -38,6 +38,9 @@ const STATUS_BY_CODE: Record<string, ApiStatus> = {
   'git.invalid_revision': 400,
   // 読んでよいパスの外
   'workspace.out_of_scope': 403,
+  /* ディレクトリを名指せるのはコマンドラインだけである。**403 である** —— 求め方の誤り
+     ではなく、その求め手には許されていない。 */
+  'workspace.not_command_line': 403,
   /* 書いてよいパスの外。**503 ではない。**
      保存先を変えるまで何度求めても同じで、再試行で通る見込みが無い。 */
   'preferences.refused': 403,

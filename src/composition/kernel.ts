@@ -16,7 +16,7 @@ import {
   createTreeSnapshot,
   type TreeSnapshotService,
 } from '~/application/services/sessions/tree-snapshot.service.ts';
-import { createTargetRoot } from '~/application/services/workspace/target-root.service.ts';
+import { createNamedDirectories } from '~/application/services/workspace/named-directory.service.ts';
 import {
   createObserveRef,
   type ObserveRefUseCase,
@@ -135,9 +135,10 @@ function assemble(): Kernel {
      返す — 先端が 18 本あれば差分を取るだけで 18 回起動することになり、そこが一番重い。 */
   const git = createCliGitCommandIntegration();
 
-  /* 起動のときにディレクトリを名指されていたら、それをリポジトリ 1 つに読み替える。
-     名指されていなければ何も起きず、開くのは Overview である。 */
-  const targetRoot = createTargetRoot({ target: settings.target, git });
+  /* 名指されたディレクトリを覚えて、リポジトリ 1 つに読み替える。起動のときのパスと、
+     あとから伝えられたパスの両方がここに集まる —— サーバーは 1 つに保つので、2 枚目
+     以降の `glasshive .` は自分で立ち上がらずにここへ伝えに来る。 */
+  const named = createNamedDirectories({ target: settings.target, git });
 
   /* 何が並ぶかを、中身を読む前に決める 1 枚。**パスを引くだけの呼び出しはここで足りる。**
      Git も課題も会話も「この id はどこに在るか」しか要らないので、木を組ませない。 */
@@ -149,7 +150,7 @@ function assemble(): Kernel {
     clock: systemClock,
     /* 名指されたディレクトリは、まだ `transcript` を 1 本も持っていなくても一覧に載せる。
        載せないと、そこで Claude Code を走らせるまで開くウィンドウがどこにも無い。 */
-    namedPath: async () => (await targetRoot.get())?.rootPath ?? null,
+    namedPaths: async () => (await named.all()).map((directory) => directory.rootPath),
   });
   const observeTree = createObserveTree({
     index,
@@ -157,10 +158,8 @@ function assemble(): Kernel {
     activeThresholdMs: settings.activeThresholdMs,
     /* 名指されたリポジトリから先に読む。読むのは今までどおり全部で、変わるのは
        名指した相手が画面に揃うまでの待ち時間だけである。 */
-    readFirst: async () => {
-      const root = await targetRoot.get();
-      return root === null ? [] : [root.rootPath, ...root.worktrees];
-    },
+    readFirst: async () =>
+      (await named.all()).flatMap((directory) => [directory.rootPath, ...directory.worktrees]),
   });
   const tree = createTreeSnapshot({ observe: observeTree, clock: systemClock });
 
@@ -205,7 +204,7 @@ function assemble(): Kernel {
     gitRef: createObserveRef({ git }),
     readPreferences: createReadPreferences({ preferences }),
     writePreferences: createWritePreferences({ preferences }),
-    target: createObserveTarget({ root: targetRoot, index }),
+    target: createObserveTarget({ named, index }),
   };
 }
 

@@ -1,18 +1,17 @@
-import { spawn } from 'node:child_process';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { type Args, DEFAULTS } from './cli.js';
+import { openBrowser } from './browser.js';
+import type { Args } from './cli.js';
 import { isLocalHost } from './host-guard.js';
 import { toRequest, writeResponse } from './http-adapter.js';
+import {
+  findRunning,
+  isGlasshive,
+  LISTEN_ADDRESS,
+  openDirectoryAt,
+  portsToTry,
+} from './instance.js';
 import { serveShell, serveStatic } from './static.js';
-
-const LISTEN_ADDRESS = '127.0.0.1';
-
-/* 既定のポートが埋まっていたときに、いくつ先まで空きを探すか。**探すのは既定のときだけ**
-   —— `--port` で名指されたら、その番号で待てなかったことを黙らずに終わる。
-
-   ディレクトリを名指して開く使い方では、同時に何枚も開いているのが普通の状態になる。 */
-const PORT_ATTEMPTS = 20;
 
 /* 名指したディレクトリを開くための入口。ランチャーは id を組み立てない —— どの
    プロジェクトを指すかを決めるのは索引と `git` で、ここはその答えを知らない。 */
@@ -41,17 +40,17 @@ interface ServerEntry {
   fetch(request: Request): Promise<Response> | Response;
 }
 
-function openBrowser(url: string): void {
-  const cmd =
-    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
-  try {
-    spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
-  } catch {
-    /* ブラウザーを開けなくても致命ではない。URL は下に出してある */
-  }
-}
+/* 走っているものが在れば `null` を返す。**そのときサーバーは立てていない** —— 呼んだ側が
+   終わってよいことを、型で言う。 */
+export async function launch(args: Args): Promise<http.Server | null> {
+  const range = portsToTry(args.port);
 
-export async function launch(args: Args): Promise<http.Server> {
+  /* 先に「そこに居るのは誰か」を尋ねる。**サーバーバンドルを読み込む前に済ませる** ——
+     使い回せる glasshive が在るなら、読み込むだけ無駄になる。走査も索引も `git` の答えも、
+     走っているその 1 つが持っているものをそのまま使える。 */
+  const running = await findRunning(range, false);
+  if (running !== null) return await joinRunning(running, args);
+
   const clientDir = fileURLToPath(new URL('../client', import.meta.url));
   const entryUrl = new URL('../server/server.js', import.meta.url).href;
 
@@ -100,28 +99,50 @@ export async function launch(args: Args): Promise<http.Server> {
     })();
   });
 
-  /* 名指されたポートでは 1 度だけ試す。既定のポートは、埋まっていたら次の空きへ落ちる ——
-     ディレクトリごとに開く使い方では、埋まっているのが普通の状態だからである。 */
-  const first = args.port ?? DEFAULTS.port;
-  const attempts = args.port === undefined ? PORT_ATTEMPTS : 1;
+  /* ポートを 1 つずつ見ていく。埋まっていたら、**もう一度そこに尋ねてから次へ行く** ——
+     さっきの走査から今までの間に立ち上がった glasshive と、立ち上がってはいたが最初の
+     求めに答えるのが間に合わなかった glasshive が、ここで拾える。拾わないと、握っているのが
+     glasshive なのに 2 枚目を立てようとして、名指されたポートでは断って終わる。 */
   let port: number | undefined;
-  for (let i = 0; i < attempts; i++) {
+  for (let i = 0; i < range.attempts; i++) {
+    const at = range.first + i;
     try {
-      port = await listen(server, first + i);
+      port = await listen(server, at);
       break;
     } catch (error) {
-      if (!inUse(error) || i === attempts - 1) throw error;
+      if (!inUse(error)) throw error;
+      const late = `http://${LISTEN_ADDRESS}:${at}`;
+      if (await isGlasshive(late, false)) return await joinRunning(late, args);
+      if (i === range.attempts - 1) throw error;
     }
   }
-  if (port === undefined) throw new Error(`no free port from ${first} to ${first + attempts - 1}`);
+  if (port === undefined) {
+    throw new Error(`no free port from ${range.first} to ${range.first + range.attempts - 1}`);
+  }
 
   const origin = `http://${LISTEN_ADDRESS}:${port}`;
   /* 開く先が Overview なのか 1 つのディレクトリなのかを、端末にも出す。**名指したパスをそのまま
      出す** —— リポジトリまで登った先を出すのは画面の側で、ここに出すのは打った相手が
-     受け取られたことの控えである。 */
+     受け取られたことの控えである。
+
+     自分で立ち上げたときは `/here` を開く。ここで先に解決してから開くこともできるが、
+     解決には索引が要る —— 走り出したばかりのサーバーでそれを待つと、ブラウザーが開くのが
+     そのぶん遅れる。`/here` なら画面はすぐ開き、待ちはバーが引き受ける。 */
   const url = args.target === undefined ? origin : `${origin}${HERE_PATH}`;
   console.log(`glasshive: ${origin}`);
   if (args.target !== undefined) console.log(`           ${args.target}`);
   if (args.open) openBrowser(url);
   return server;
+}
+
+/* 走っている glasshive へ、開きたいディレクトリを伝える。**自分ではサーバーを立てない。**
+
+   伝えた先が答える URL を開く。ここでは待ちの画面を挟まない —— 走っているサーバーは
+   索引を持っているので、答えはすぐに返る。 */
+async function joinRunning(origin: string, args: Args): Promise<null> {
+  const url = await openDirectoryAt(origin, args.target);
+  console.log(`glasshive: ${origin} (already running)`);
+  if (args.target !== undefined) console.log(`           ${args.target}`);
+  if (args.open) openBrowser(url);
+  return null;
 }

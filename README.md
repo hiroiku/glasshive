@@ -126,8 +126,14 @@ and the other projects of that repository are named next to it. Give no path and
 Overview, exactly as before.
 
 **A path is not a scope.** Every project stays observable either way; naming one decides where you
-land and what gets read first, not what glasshive is allowed to see. The default port falls through
-to the next free one, so one window per repository is a normal thing to have.
+land and what gets read first, not what glasshive is allowed to see.
+
+**One server, however many times you run it.** Running `glasshive` again does not start a second
+one. It finds the server already listening, hands it the path you named, and opens that window —
+the scan, the index, and everything `git` has already answered are reused, so the second window
+arrives about as fast as switching tabs. Only the command line can name a directory this way; a page
+open in your browser cannot. The default port falls through to the next free one only when something
+that is not glasshive is holding it.
 
 ### Keyboard
 
@@ -145,8 +151,9 @@ replaces `⌘` on non-Apple keyboards.
 
 ```sh
 npm install
-npm run dev     # http://127.0.0.1:4483
-npm run check   # format, layer boundaries, types, tests
+npm run dev        # http://127.0.0.1:4483
+npm run dev -- .   # the dev server takes the same arguments as glasshive itself
+npm run check      # format, layer boundaries, types, tests
 npm run build
 ```
 

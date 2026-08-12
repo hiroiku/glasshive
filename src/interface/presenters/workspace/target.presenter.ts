@@ -26,6 +26,22 @@ export interface TargetJson {
   siblings: TargetSiblingJson[];
 }
 
+/** 名指されたディレクトリを開く先 */
+export interface OpenedJson {
+  /** 開く URL。同じサーバーの中を指すパスだけで、オリジンは付けない */
+  url: string;
+}
+
+/* 開く先を組み立てる。**組み立てるのはこちらである** —— 立ち上げに来たコマンドは、
+   どのプロジェクトがどの URL に居るかを知らないし、知る必要も無い。
+
+   何も観測できていなければ Overview を開く。名指したディレクトリが指すものがまだ何も
+   無いときに、行の無いプロジェクトの画面を出しても、そこには何も出ていない。 */
+export const presentOpened = (target: ObservedTarget | null): OpenedJson =>
+  target === null || target.projectId === null
+    ? { url: '/' }
+    : { url: `/projects/${encodeURIComponent(target.projectId)}/work?only=true` };
+
 export const presentTarget = (target: ObservedTarget | null): TargetJson | null =>
   target === null
     ? null
