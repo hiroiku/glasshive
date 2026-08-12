@@ -18,7 +18,9 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
   const tracker = useQuery({ ...githubIssuesQuery(slug, true), enabled: slug !== '' });
 
   const answer = tracker.data;
-  const tracked = answer?.ok === true && answer.body.state === 'observed' ? answer.body.issues : [];
+  /* 届いたぶんから引く。**読み終えるのを待たない** —— 開いた課題がページ 1 に在ったなら、
+     ページ 5 が届く前に開ける。 */
+  const tracked = answer?.state === 'observed' ? answer.issues : [];
   const issue = tracked.find((candidate) => candidate.id === id);
   if (issue !== undefined) {
     return <GithubIssueDetail issue={issue} all={tracked} project={project} nowMs={Date.now()} />;
@@ -33,16 +35,14 @@ export function IssueDetail({ id, project }: { id: string; project: ProjectJson 
       </div>
     );
   }
-  if (answer === undefined) {
+  /* まだ読んでいる最中。**「この id は無かった」と言えるのは読み終えてからである** ——
+     まだ届いていないページに在るかもしれない。 */
+  if (answer === undefined || tracker.isFetching) {
     return <ReadProgress label="Reading the issue" />;
   }
   /* 観測できなかったのと、一覧にこの id が無かったのは別である。**理由を持っているのは
      前者だけ** —— GitHub の remote が無いプロジェクトは失敗ではないので、理由を出さない。 */
-  const code = !answer.ok
-    ? answer.body.code
-    : answer.body.state === 'unobservable'
-      ? answer.body.reason
-      : null;
+  const code = answer.state === 'unobservable' ? answer.reason : null;
   return (
     <div className="detail">
       <NotObserved {...issueTrouble(id, code)} />

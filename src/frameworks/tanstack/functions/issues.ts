@@ -6,6 +6,7 @@ import {
   getGithubIssueDiscussion as readGithubIssueDiscussion,
   getGithubIssueEvents as readGithubIssueEvents,
   listGithubIssues as readGithubIssues,
+  streamGithubIssues as walkGithubIssues,
 } from '~/interface/controllers/issues/issues.controller.ts';
 
 /* 課題をブラウザーへ渡す server function。
@@ -27,6 +28,15 @@ const githubDeps = (): GithubIssuesDeps => {
 export const getGithubIssues = createServerFn({ method: 'GET' })
   .validator((value: unknown) => value)
   .handler(({ data }) => readGithubIssues(githubDeps(), data));
+
+/* 課題を、読めたページから順に渡す server function。
+
+   **`async function*` を返すだけでよい。** 同期的に書き切れない値は、フレーム化した本文へ
+   自動で切り替わる。応答のストリームそれ自体がこの呼び出しとの結び付きなので、相関の id も、
+   宛先を選ぶ仕掛けも要らない。 */
+export const getGithubIssuesStream = createServerFn({ method: 'GET' })
+  .validator((value: unknown) => value)
+  .handler(({ data }) => walkGithubIssues(githubDeps(), data));
 
 /* 開いた 1 件の本文。**一覧とは別に叩く。** 一覧に本文を混ぜると、100 件ぶんを運ぶことになる */
 export const getGithubIssueBody = createServerFn({ method: 'GET' })

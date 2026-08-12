@@ -5,7 +5,10 @@ import { TrackerResponseUnreadableError } from '~/application/errors/issues/trac
 import type { GitCommandIntegration } from '~/application/ports/integrations/git/git-command.integration.ts';
 import type { IssueTrackerIntegration } from '~/application/ports/integrations/issues/issue-tracker.integration.ts';
 import type { AvatarCacheService } from '~/application/services/issues/avatar-cache.service.ts';
-import { createListGithubIssues } from '~/application/use-cases/issues/list-github-issues.use-case.ts';
+import {
+  createListGithubIssues,
+  type IssueListingChunk,
+} from '~/application/use-cases/issues/list-github-issues.use-case.ts';
 
 class TrackerUnreachable extends AppError {
   readonly code = 'tracker.exit_nonzero';
@@ -438,5 +441,110 @@ describe('GitHub の課題を一覧にする', () => {
       ).toHaveLength(2);
       expect(result.value.value.ledger.truncated, 'その先を読んでいないことは言う').toBe(true);
     }
+  });
+});
+
+/* 一覧をページごとに配る。**ページ 1 の 100 件に、ページ 5 を待つ理由は無い。**
+
+   配る順そのものが約束である。尋ね先が決まる前に課題は来ないし、ページを 1 枚も読めなければ
+   課題は 1 件も来ない。積み上げるのは受け取る側なので、ここが配るのはそのページぶんだけである。 */
+describe('読めたページから順に配る', () => {
+  /** 配られたものを、届いた順に並べる */
+  const drain = async (stream: AsyncGenerator<IssueListingChunk, void, void>) => {
+    const chunks: IssueListingChunk[] = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    return chunks;
+  };
+
+  /** 種類で絞る。絞った先の欄をそのまま読めるように、型もそこで狭める */
+  const only = <K extends IssueListingChunk['kind']>(
+    chunks: readonly IssueListingChunk[],
+    kind: K,
+  ): Extract<IssueListingChunk, { kind: K }>[] =>
+    chunks.filter((chunk): chunk is Extract<IssueListingChunk, { kind: K }> => chunk.kind === kind);
+
+  const listing = (pages: readonly string[], avatars = fakeAvatars()) =>
+    createListGithubIssues({
+      avatars: avatars.avatars,
+      git: gitWithRemote('git@github.com:hiroiku/glasshive.git'),
+      tracker: fakeTracker(pages).tracker,
+    });
+
+  it('ページごとに、そのページぶんだけを配る', async () => {
+    const useCase = listing([pageOf([1, 2], 'c1'), pageOf([3], null)]);
+
+    const chunks = await drain(
+      useCase.stream({ projectPath: '/work/glasshive', includeClosed: false }),
+    );
+
+    expect(
+      chunks.map((chunk) => chunk.kind),
+      '尋ね先より先に課題が来ると、どこの課題なのか言えないまま行が並ぶ',
+    ).toEqual(['head', 'page', 'page', 'complete']);
+    expect(
+      only(chunks, 'page').map((chunk) => chunk.ledger.issues.length),
+      '積み上げたものを配ると、同じ課題が何度も運ばれる',
+    ).toEqual([2, 1]);
+  });
+
+  it('ページ 1 を読めなければ、課題を 1 件も配らない', async () => {
+    const useCase = listing(['not json at all']);
+
+    const chunks = await drain(
+      useCase.stream({ projectPath: '/work/glasshive', includeClosed: false }),
+    );
+
+    expect(
+      chunks.map((chunk) => chunk.kind),
+      '1 件も観ていない一覧を、観測できたことにしない',
+    ).toEqual(['head', 'complete']);
+    expect(only(chunks, 'head')[0]?.head.kind).toBe('unobservable');
+  });
+
+  /* 途中で読めなくなっても、観えたぶんは配り終えている。**その先を読んでいないことだけを言う。** */
+  it('2 ページ目で躓いても、配ったページは取り消さない', async () => {
+    const useCase = listing([pageOf([1], 'c1'), 'not json at all']);
+
+    const chunks = await drain(
+      useCase.stream({ projectPath: '/work/glasshive', includeClosed: false }),
+    );
+
+    expect(chunks.map((chunk) => chunk.kind)).toEqual(['head', 'page', 'complete']);
+    expect(
+      only(chunks, 'complete')[0]?.truncated,
+      '読めなくなったことを黙ると、その先の課題が「無かった」ことになる',
+    ).toBe(true);
+  });
+
+  /* `remember` はプロジェクト 1 つぶんを丸ごと置き換える。ページごとにそのページだけを
+     覚えさせると、ページ 2 が届いた瞬間にページ 1 の人の顔が引けなくなる。 */
+  it('顔は、ここまでに観た全部で覚え直す', async () => {
+    const avatars = fakeAvatars();
+    const useCase = listing([pageOf([1, 2], 'c1'), pageOf([3], null)], avatars);
+
+    await drain(useCase.stream({ projectPath: '/work/glasshive', includeClosed: false }));
+
+    expect(
+      avatars.remembered.map((call) => call.issues),
+      'ページごとに入れ替えると、前のページに出ていた人の顔が引けなくなる',
+    ).toEqual([2, 3]);
+  });
+
+  it('尋ね先が引けなければ、尋ねに行かない', async () => {
+    const useCase = createListGithubIssues({
+      avatars: fakeAvatars().avatars,
+      git: gitWithoutRemote(),
+      tracker: fakeTracker([]).tracker,
+    });
+
+    const chunks = await drain(
+      useCase.stream({ projectPath: '/work/glasshive', includeClosed: false }),
+    );
+
+    expect(chunks.map((chunk) => chunk.kind)).toEqual(['head', 'complete']);
+    expect(
+      only(chunks, 'head')[0]?.head.kind,
+      'GitHub の remote が無いのは「課題が無い」であって「読めなかった」ではない',
+    ).toBe('absent');
   });
 });

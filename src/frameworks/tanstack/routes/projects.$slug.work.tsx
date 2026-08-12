@@ -115,8 +115,9 @@ function WorkView() {
     patch({ unit: unit ?? undefined, sort: undefined, dir: undefined, view: undefined });
 
   const overview = git.data?.ok === true ? git.data.body : null;
-  const page =
-    issues.data?.ok === true && issues.data.body.state === 'observed' ? issues.data.body : null;
+  /* 届いたページまでの一覧。**読み終えるのを待たない** —— ページ 1 の 100 件を出さずに
+     置いておく理由が無い。まだ途中であることは `issues.isFetching` が言う。 */
+  const page = issues.data?.state === 'observed' ? issues.data : null;
   const all = page?.issues ?? [];
 
   /* 手元の git をどこまで観測できたか。**`absent` はここでは観測できたほうに入る** ——
@@ -144,12 +145,14 @@ function WorkView() {
         ? overview.tips.length
         : 0
       : gitReach;
+  /* 読み終えるまでは `pending` のままにする。**届いたぶんの件数を切り替えに出さない** ——
+     数はそこで確定したものとして読まれるので、途中の数を出すと、増えていく数がちらつく。 */
   const issuePresence: UnitCount | null =
     issues.error !== null
       ? 'unobservable'
-      : issues.data === undefined
+      : issues.data === undefined || issues.isFetching
         ? 'pending'
-        : !issues.data.ok || issues.data.body.state === 'unobservable'
+        : issues.data.state === 'unobservable'
           ? 'unobservable'
           : null;
   const issueCount = useMemo<UnitCount>(
@@ -263,7 +266,9 @@ function WorkView() {
       </>
     );
   }
-  if (issues.data === undefined) {
+  /* 1 ページも届いていないあいだだけ、バーで待つ。**1 件でも届いたら行を出す** ——
+     ページ 1 の 100 件を隠して置いておく理由が無い。まだ途中であることは、行の下で言う。 */
+  if (issues.data === undefined || (issues.isFetching && issues.data.issues.length === 0)) {
     return (
       <>
         {toolbar()}
@@ -274,15 +279,7 @@ function WorkView() {
       </>
     );
   }
-  if (!issues.data.ok) {
-    return (
-      <>
-        {toolbar()}
-        <NotObserved {...githubTrouble(issues.data.body.code)} />
-      </>
-    );
-  }
-  const body = issues.data.body;
+  const body = issues.data;
   // このプロジェクトが GitHub のリポジトリを指していない。無いことは失敗ではない
   if (body.state === 'absent') {
     return (
@@ -355,6 +352,9 @@ function WorkView() {
           <Icon path={mdiFlagOutline} size={10} /> {search.ms} ×
         </button>
       )}
+      {/* 読み終えるまで、件数は `—` にする。**途中の数を数として出さない** —— チップの脇の数は
+          そこで数え終えたものとして読まれるので、ページが届くたびに増える数を置くと、
+          `open 40` を見た人が 40 件だと思う。数えられていないことは `UnitSwitch` と同じ形で言う。 */}
       {Object.entries(body.counts)
         .filter(([name]) => name !== 'closed')
         .map(([name, count]) => (
@@ -366,7 +366,7 @@ function WorkView() {
             aria-pressed={search.status === name}
             onClick={() => patch({ status: search.status === name ? undefined : name })}
           >
-            {name} {count}
+            {name} {issues.isFetching ? '—' : count}
           </button>
         ))}
       <button
@@ -375,7 +375,7 @@ function WorkView() {
         aria-pressed={includeClosed}
         onClick={() => patch({ closed: includeClosed ? undefined : true })}
       >
-        + closed {body.counts.closed ?? 0}
+        + closed {issues.isFetching ? '—' : (body.counts.closed ?? 0)}
       </button>
     </>
   );

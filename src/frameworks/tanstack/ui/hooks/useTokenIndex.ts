@@ -7,7 +7,6 @@ import {
   agentTokens,
   commitTokens,
   gitTokens,
-  type IssueRef,
   issueIndex,
   type TokenDict,
   tokenDict,
@@ -36,10 +35,9 @@ export function useTokenIndex(project: ProjectJson | undefined): TokenIndex {
   });
 
   const issues = useMemo(() => {
-    const response = tracker.data;
-    if (response === undefined || response === null || !response.ok)
-      return new Map<string, IssueRef>();
-    return issueIndex(response.body.issues);
+    /* 届いたぶんだけで組む。**読み終えるのを待たない** —— ページ 1 に出ていた課題は、
+       ページ 5 が届く前からチップにしてよい。 */
+    return issueIndex(tracker.data?.issues ?? []);
   }, [tracker.data]);
 
   const overview = repository.data?.ok === true ? repository.data.body : undefined;

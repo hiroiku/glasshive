@@ -15,11 +15,14 @@ import {
   type GithubIssueBodyJson,
   type GithubIssueDiscussionJson,
   type GithubIssueEventLogJson,
+  type IssuesChunkJson,
   type IssuesJson,
   presentGithubIssueBody,
   presentGithubIssueDiscussion,
   presentGithubIssueEvents,
+  presentIssuePage,
   presentIssues,
+  presentIssuesHead,
 } from '~/interface/presenters/issues/issues.presenter.ts';
 
 /* 課題を読むコントローラー。
@@ -85,6 +88,32 @@ export async function listGithubIssues(
   const issues = await deps.list.execute({ projectPath: path.value, includeClosed });
   if (!issues.ok) return { ok: false, ...presentError(issues.error) };
   return { ok: true, body: presentIssues(issues.value) };
+}
+
+/* GitHub の課題を、読めたページから順に返す。
+
+   **断りは最初のチャンクより前にしか投げられない。** 1 つでも配った後は HTTP のステータスが
+   既に決まっているので、そこで投げてもエラーコードから引いた status にはならない。
+   プロジェクトを名指せなかったときの断りは、最初の `yield` の前に出る。
+
+   ページが読めなかったことは断りではない。それは観測の結果なので、最初の 1 枚が `state` として
+   運ぶ —— 断って 503 にすると、`gh` が答えなかったことと、こちらが受理しなかったことが
+   同じ形になる。 */
+export async function* streamGithubIssues(
+  deps: GithubIssuesDeps,
+  input: unknown,
+): AsyncGenerator<IssuesChunkJson, void, void> {
+  const path = await locate(deps.index, input);
+  if (!path.ok) throw path.error;
+
+  // 載せるかどうかだけの指定なので、読めない値は「載せない」に倒してよい
+  const includeClosed = own(input, 'includeClosed') === true;
+
+  for await (const chunk of deps.list.stream({ projectPath: path.value, includeClosed })) {
+    if (chunk.kind === 'head') yield { kind: 'issues', issues: presentIssuesHead(chunk.head) };
+    else if (chunk.kind === 'page') yield { kind: 'page', ...presentIssuePage(chunk.ledger) };
+    else yield { kind: 'complete', truncated: chunk.truncated };
+  }
 }
 
 /* GitHub の課題 1 件の本文。**番号は一覧に出ていたものを渡す。**

@@ -51,6 +51,9 @@ const unusedList: Deps['list'] = {
   async execute() {
     throw new Error('not called');
   },
+  stream() {
+    throw new Error('not called');
+  },
 };
 const unusedBody: Deps['body'] = {
   async execute() {

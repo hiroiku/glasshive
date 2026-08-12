@@ -8,7 +8,9 @@ import type { GithubIssueEventLog } from '~/application/use-cases/issues/list-gi
 import type {
   GithubActor,
   GithubIssueExtra,
+  IssueLedger,
   IssueListing,
+  IssueListingHead,
   IssueSummary,
 } from '~/application/use-cases/issues/list-github-issues.use-case.ts';
 import type { ObservationState } from '~/interface/presenters/sessions/tree.presenter.ts';
@@ -131,6 +133,19 @@ export interface IssuesJson {
   /** 尋ねなかった GitHub のリポジトリの数。glasshive が選んでいなければ `0` */
   other_repositories: number;
 }
+
+/* ストリームに流れる 1 つ。
+
+   **`issues` が必ず先に来る。** そこに `state` と尋ね先が入っているので、後から届くページは
+   行を足すだけになり、どこの課題を見ているのかは 1 件目より先に決まっている。観測が
+   成り立たなかったときは、その 1 枚だけで終わる。
+
+   `page` が運ぶのはそのページぶんだけである。`counts` も同じで、足し合わせるのは受け取る側の
+   仕事になる —— 積み上げたものを配ると、同じ課題を 5 回運ぶことになる。 */
+export type IssuesChunkJson =
+  | { kind: 'issues'; issues: IssuesJson }
+  | { kind: 'page'; issues: IssueSummaryJson[]; counts: Record<string, number> }
+  | { kind: 'complete'; truncated: boolean };
 
 /* GitHub の課題 1 件の本文。**空の本文と、読めなかったことを分けて運ぶ。**
    `body: ''` を `null` と同じ形で返すと、本文の無い課題が読めなかった課題に見える。 */
@@ -289,6 +304,32 @@ export function presentIssues(observation: Observation<IssueListing>): IssuesJso
         : `${listing.source.repository.owner}/${listing.source.repository.name}`,
     other_repositories: listing?.source.others ?? 0,
   };
+}
+
+/* 一覧の最初の 1 枚。**行はまだ 1 つも無い。**
+
+   `truncated` はここでは `false` である。上限に当たったかどうかが分かるのは読み終えたときで、
+   読み始めに `true` を置くと、切れた先が在るとまだ言えないうちから言うことになる。 */
+export function presentIssuesHead(observation: Observation<IssueListingHead>): IssuesJson {
+  const head = observation.kind === 'observed' ? observation.value : null;
+  return {
+    state: observation.kind,
+    reason: reasonOf(observation),
+    issues: [],
+    counts: {},
+    truncated: false,
+    repository:
+      head === null ? null : `${head.source.repository.owner}/${head.source.repository.name}`,
+    other_repositories: head?.source.others ?? 0,
+  };
+}
+
+/** ページ 1 つぶん。件数も、そのページに在ったぶんだけ */
+export function presentIssuePage(ledger: IssueLedger): {
+  issues: IssueSummaryJson[];
+  counts: Record<string, number>;
+} {
+  return { issues: ledger.issues.map(presentSummary), counts: { ...ledger.counts } };
 }
 
 export function presentGithubIssueBody(body: Observation<string>): GithubIssueBodyJson {

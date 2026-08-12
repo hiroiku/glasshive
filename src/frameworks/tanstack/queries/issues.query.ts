@@ -1,9 +1,13 @@
-import { queryOptions } from '@tanstack/react-query';
+import { queryOptions, experimental_streamedQuery as streamedQuery } from '@tanstack/react-query';
+import type {
+  IssuesChunkJson,
+  IssuesJson,
+} from '~/interface/presenters/issues/issues.presenter.ts';
 import {
   getGithubIssueBody,
   getGithubIssueDiscussion,
   getGithubIssueEvents,
-  getGithubIssues,
+  getGithubIssuesStream,
 } from '../functions/issues.ts';
 
 /* GitHub の課題の問い合わせ。
@@ -12,12 +16,51 @@ import {
    からである。混ぜないと、チップのインデックスのために全部を取った結果が、一覧の結果として
    使い回される。 */
 
+/* 最初のチャンクが着くまでの姿。行はまだ 1 つも無く、どこの課題かも決まっていない。
+
+   `state` を `absent` にしてあるのは、まだ尋ねてもいないからである。**`unobservable` に
+   しない** —— 尋ねる前から「読めなかった」と言うことになる。 */
+const EMPTY: IssuesJson = {
+  state: 'absent',
+  reason: 'no-source',
+  issues: [],
+  counts: {},
+  truncated: false,
+  repository: null,
+  other_repositories: 0,
+};
+
+/* チャンクを 1 枚の一覧へ畳む。
+
+   **足すのであって、置き換えない。** ページは前のページを含まないので、行も件数も積み上げる。
+   最初の 1 枚だけは丸ごと置き換わる —— そこに `state` と尋ね先が入っている。 */
+export function reduceIssues(current: IssuesJson, chunk: IssuesChunkJson): IssuesJson {
+  if (chunk.kind === 'issues') return chunk.issues;
+  if (chunk.kind === 'complete') return { ...current, truncated: chunk.truncated };
+  const counts = { ...current.counts };
+  for (const [status, count] of Object.entries(chunk.counts)) {
+    counts[status] = (counts[status] ?? 0) + count;
+  }
+  return { ...current, issues: [...current.issues, ...chunk.issues], counts };
+}
+
 /* 置く時間を長めにとってあるのは、相手がネットワークの向こうにいて、取り直すたびに
-   `gh` の起動と API の呼び出しが要るからである。 */
+   `gh` の起動と API の呼び出しが要るからである。
+
+   届き方はストリームである。**ページ 1 の 100 件に、ページ 5 を待つ理由は無い。** 最初の
+   チャンクが着いた時点で `success` になり、最後まで届くまで `fetchStatus` は `fetching` の
+   ままなので、「もう描いてよい」と「まだ途中である」を同じ 1 つの問い合わせから言える。 */
 export const githubIssuesQuery = (projectId: string, includeClosed: boolean) =>
   queryOptions({
     queryKey: ['github-issues', projectId, includeClosed] as const,
-    queryFn: () => getGithubIssues({ data: { projectId, includeClosed } }),
+    queryFn: streamedQuery({
+      streamFn: () => getGithubIssuesStream({ data: { projectId, includeClosed } }),
+      reducer: reduceIssues,
+      initialValue: EMPTY,
+      /* 取り直しの間、前の一覧を出したままにする。**`reset` にしない** —— 変更通知のたびに
+         画面が空になり、読み終えるまで課題が 1 件も無いところへ戻ってしまう。 */
+      refetchMode: 'replace',
+    }),
     staleTime: 300_000,
   });
 
