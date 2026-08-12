@@ -226,6 +226,30 @@ describe('尋ね先が分からない課題', () => {
 
     expect(labelsOf(container), '尋ねていない求めの待ちは、いつまでも終わらない').toEqual([]);
   });
+
+  /* 尋ねてもいないものを「答えなかった」と言わない。**答えの場所そのものを空けない** ——
+     空けると、そこに出るのは「尋ねて、返らなかった」という別の話になる。 */
+  it('尋ねていないものを、答えなかったとは言わない', () => {
+    const { container } = draw({ issue: issue('bd-7') });
+
+    expect(
+      container.textContent,
+      '`gh` を起こしてもいないのに、本文が返らなかったことになっている',
+    ).not.toContain('The description did not come back');
+    expect(
+      container.textContent,
+      '`gh` を起こしてもいないのに、やり取りが返らなかったことになっている',
+    ).not.toContain('The discussion did not come back');
+  });
+
+  /* 読み終えて何も書かれていなかった課題とは、別の画面である。**静かな課題の文言も出さない**
+     —— 尋ねていないのだから、何も書かれていないとも言えない。 */
+  it('尋ねていないものを、何も書かれていないとも言わない', () => {
+    const { container } = draw({ issue: issue('bd-7') });
+
+    expect(container.textContent).not.toContain('Nothing has been said');
+    expect(container.querySelector('.disc'), 'やり取りの並びそのものを出さない').toBeNull();
+  });
 });
 
 /* 下流(この課題を待っている側)は、取ってきた一覧からしか引けない。一覧はページごとに届くので、

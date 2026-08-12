@@ -51,6 +51,16 @@ function numberAt(record: JsonRecord | undefined, key: string): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+/* 課題を名指す番号。**数であるだけでは足りない。**
+
+   この番号から作った id は、後でその課題を尋ね直すのに使う —— 画面は `#12` から `12` を
+   取り出して本文とやり取りを求める。取り出して同じ番号に戻らない値をここで通すと、`#1.5` の
+   パネルが `#1` の本文を自分のものとして描く。0 も負も、一覧に現れる番号ではない。 */
+function issueNumberAt(record: JsonRecord | undefined, key: string): number | null {
+  const value = numberAt(record, key);
+  return value !== null && Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
 /* `{ nodes: [...] }` の中身。GitHub の connection はどれもこの形をしている。
    欄そのものが無いのは「尋ねなかった」なので、空の並びとして扱う。 */
 function nodesOf(record: JsonRecord | undefined, key: string): readonly JsonRecord[] {
@@ -97,11 +107,11 @@ function dependenciesOf(node: JsonRecord): IssueDependency[] {
   const deps: IssueDependency[] = [];
 
   const parent = asRecord(node, 'parent');
-  const parentNumber = numberAt(parent, 'number');
+  const parentNumber = issueNumberAt(parent, 'number');
   if (parentNumber !== null) deps.push({ on: idOf(parentNumber), type: 'parent-child' });
 
   for (const blocker of nodesOf(node, 'blockedBy')) {
-    const number = numberAt(blocker, 'number');
+    const number = issueNumberAt(blocker, 'number');
     if (number === null) continue;
     deps.push({ on: idOf(number), type: 'blocks' });
   }
@@ -209,7 +219,7 @@ function assigneeOf(node: JsonRecord): string | null {
 }
 
 function toSummary(node: JsonRecord): IssueSummary | null {
-  const number = numberAt(node, 'number');
+  const number = issueNumberAt(node, 'number');
   if (number === null) return null;
 
   const deps = dependenciesOf(node);
@@ -487,7 +497,7 @@ const EVENT_KINDS: Readonly<Record<string, GithubIssueDiscussionEntry['kind']>> 
    切られたかどうかは GitHub の `totalCount` と、**返ってきた項目の数**で決める。読めたイベントの
    数と比べてはいけない —— こちらが落とした項目まで切られたことにしてしまう。 */
 function eventsOf(node: JsonRecord): GithubIssueEvents | null {
-  const number = numberAt(node, 'number');
+  const number = issueNumberAt(node, 'number');
   if (number === null) return null;
 
   const timeline = asRecord(node, 'timelineItems');

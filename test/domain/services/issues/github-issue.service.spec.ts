@@ -84,6 +84,56 @@ describe('応答 1 ページを読む', () => {
   });
 });
 
+/* id は `#12` の形で、画面はここから `12` を取り出して本文とやり取りを尋ね直す。
+   **取り出して同じ番号に戻らない値から id を作らない** —— `#1.5` のパネルが `#1` の本文を
+   自分のものとして描く。0 も負も、GitHub の一覧に現れる番号ではない。 */
+describe('尋ね直せない番号は、課題の番号ではない', () => {
+  const numbered = (number: unknown) =>
+    buildLedger([node({ number })], { includeClosed: false, truncated: false }).issues;
+
+  it.each([
+    ['小数', 1.5],
+    ['0', 0],
+    ['負', -3],
+    ['安全な整数を超える', Number.MAX_SAFE_INTEGER + 2],
+    ['数ではない', '12'],
+  ])('%s の番号を持つ課題は、一覧に出さない', (_name, number) => {
+    expect(
+      numbered(number),
+      'この id からは尋ね直せない。一覧に出すと、開いたパネルが別の課題の本文を描く',
+    ).toEqual([]);
+  });
+
+  it('尋ね直せない番号への依存は、辺にしない', () => {
+    const { issues } = buildLedger(
+      [node({ number: 12, parent: { number: 0 }, blockedBy: { nodes: [{ number: 1.5 }] } })],
+      { includeClosed: false, truncated: false },
+    );
+
+    expect(
+      issues[0]?.deps,
+      '一覧に出ない相手への辺は、どこにも着かないまま堰き止めているように描かれる',
+    ).toEqual([]);
+  });
+
+  it('尋ね直せない番号の記録も、行として持ち帰らない', () => {
+    const parsed = parseIssueEventsPage(
+      JSON.stringify({
+        data: {
+          repository: {
+            issues: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              nodes: [{ number: 0, timelineItems: { nodes: [], totalCount: 0 } }],
+            },
+          },
+        },
+      }),
+    );
+
+    expect(parsed?.issues, '一覧に居ない id の点は、どの行にも置けない').toEqual([]);
+  });
+});
+
 describe('GitHub の課題を台帳の形へ写す', () => {
   it('親を parent-child に、堰き止めを blocks に写す', () => {
     const { issues } = buildLedger(

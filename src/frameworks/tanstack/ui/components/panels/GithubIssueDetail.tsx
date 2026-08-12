@@ -310,33 +310,40 @@ export function GithubIssueDetail({ issue, all, walked, project, nowMs }: Github
           </>
         )}
 
-        {/* 本文。**読めなかったことも、尋ねている最中であることも黙らない** —— どちらを
-            黙っても、本文の無い課題として画面に出る。この 2 つは別の絵でなければならない。 */}
-        {text !== null ? (
-          text !== '' && <MdView text={text} source="github" project={project} />
-        ) : body.isPending && askable ? (
-          <ReadingLines lines={3} label="Reading the description" />
-        ) : (
-          <NotObserved
-            partial
-            icon={mdiGithub}
-            title="The description did not come back"
-            detail="The rest of this panel is built from the issue list, which glasshive already has. The body text is fetched on its own when you open an issue, and that fetch did not answer."
-            {...(bodyReason === null ? {} : { code: bodyReason })}
-            {...(github?.url == null
-              ? {}
-              : { steps: [{ text: 'Read the whole issue on GitHub', href: github.url }] })}
-          />
-        )}
+        {/* 尋ね先を組み立てられなかったなら、答えの場所も空けない。**「読めなかった」は
+            尋ねた後にしか言えない** —— `gh` を起こしてもいないところに場所を空けると、
+            そこに出るのは「尋ねて、返らなかった」という別の話になる。 */}
+        {askable && (
+          <>
+            {/* 本文。**読めなかったことも、尋ねている最中であることも黙らない** —— どちらを
+                黙っても、本文の無い課題として画面に出る。この 2 つは別の絵でなければならない。 */}
+            {text !== null ? (
+              text !== '' && <MdView text={text} source="github" project={project} />
+            ) : body.isPending ? (
+              <ReadingLines lines={3} label="Reading the description" />
+            ) : (
+              <NotObserved
+                partial
+                icon={mdiGithub}
+                title="The description did not come back"
+                detail="The rest of this panel is built from the issue list, which glasshive already has. The body text is fetched on its own when you open an issue, and that fetch did not answer."
+                {...(bodyReason === null ? {} : { code: bodyReason })}
+                {...(github?.url == null
+                  ? {}
+                  : { steps: [{ text: 'Read the whole issue on GitHub', href: github.url }] })}
+              />
+            )}
 
-        <IssueDiscussion
-          answer={discussion.data}
-          failed={discussion.error !== null}
-          pending={discussion.isPending && askable}
-          project={project}
-          nowMs={nowMs}
-          url={github?.url ?? null}
-        />
+            <IssueDiscussion
+              answer={discussion.data}
+              failed={discussion.error !== null}
+              pending={discussion.isPending}
+              project={project}
+              nowMs={nowMs}
+              url={github?.url ?? null}
+            />
+          </>
+        )}
       </div>
     </div>
   );
