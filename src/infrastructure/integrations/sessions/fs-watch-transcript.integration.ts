@@ -11,14 +11,21 @@ import { TranscriptWatchError } from '~/infrastructure/errors/sessions/transcrip
    黙って監視なしで続けると、更新が止まっていることがユーザーには何も伝わらない。
    だから張れなかったことを値で返し、画面がそう言えるようにする。 */
 
+/** 根がまだ歩けるかを確かめ直す間隔 */
+const RECHECK_MS = 30_000;
+
+/* 根を歩けるかを確かめる。無い・ディレクトリでない・読めないが、どれも例外で分かる。
+   `fs.stat` では「何かが在る」までしか分からず、ファイルを根にしたときに素通りする。 */
+const openTree = (root: string): void => fs.opendirSync(root).closeSync();
+
 export function createFsWatchTranscript(root: string): TranscriptWatchIntegration {
   return {
     watch({ onChange, onFail }): Observation<() => void> {
       try {
-        /* 張る前に根を見る。`fs.watch` は根が無くてもウォッチャーを返す実装があり
-           (Linux の Node 24 以降がそう)、**そのまま張れたことにすると、更新が 1 度も
-           無いことと、根を見に行けていないことが同じ絵になる**。 */
-        fs.statSync(root);
+        /* 張る前に根を歩けるか見る。`fs.watch` は歩けない根にもウォッチャーを返すことがあり
+           (Linux の Node 24 以降は、根が無くても返す)、**そのまま張れたことにすると、更新が
+           1 度も無いことと、根を見に行けていないことが同じ絵になる**。 */
+        openTree(root);
         const watcher = fs.watch(root, { recursive: true }, (_event, filename) => {
           // ファイル名の分からないイベントが来ることがある。どれが動いたか言えないので配らない
           if (filename === null) return;
@@ -26,18 +33,41 @@ export function createFsWatchTranscript(root: string): TranscriptWatchIntegratio
           if (!filename.endsWith('.jsonl')) return;
           onChange(path.join(root, filename));
         });
-        /* 張った後に壊れることもある。そのときは閉じたうえで、**閉じたことを伝える** —
-           黙って閉じると、そこから更新が来ないことをユーザーは知りようがない */
-        watcher.on('error', (e) => {
+
+        let stopped = false;
+        let recheck: ReturnType<typeof setInterval> | undefined;
+        const stop = () => {
+          stopped = true;
+          clearInterval(recheck);
           watcher.close();
+        };
+        /* 見に行けなくなったら閉じたうえで、**閉じたことを伝える** — 黙って閉じると、
+           そこから更新が来ないことをユーザーは知りようがない */
+        const fail = (cause: unknown) => {
+          if (stopped) return;
+          stop();
           onFail(
             new TranscriptWatchError(`Stopped watching the transcript tree: ${root}`, {
-              cause: asAppError(e),
+              cause: asAppError(cause),
               details: { root },
             }),
           );
-        });
-        return observed(() => watcher.close());
+        };
+        watcher.on('error', fail);
+
+        /* 根が消えても `fs.watch` は何も言わない。`.jsonl` でないイベントが 1、2 度来て、
+           あとは静かになるだけである。だからこちらから歩けるかを見に行く。
+           このタイマーだけでプロセスを起こしておく理由は無いので `unref` する。 */
+        recheck = setInterval(() => {
+          try {
+            openTree(root);
+          } catch (e) {
+            fail(e);
+          }
+        }, RECHECK_MS);
+        recheck.unref();
+
+        return observed(stop);
       } catch (e) {
         return unobservable(
           new TranscriptWatchError(`Could not watch the transcript tree: ${root}`, {
