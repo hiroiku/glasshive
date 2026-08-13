@@ -117,9 +117,13 @@ daran arbeiten.
 ## Optionen
 
 ```sh
-npx glasshive                       # http://127.0.0.1:4483
+npx glasshive                       # http://127.0.0.1:4483 — dieses Repository beobachten
+npx glasshive .                     # nur dieses Repository
+npx glasshive ~/src/foo             # oder jenes, von überall
 npx glasshive --port 8080           # woanders lauschen
 npx glasshive --no-open             # den Browser nicht öffnen
+npx glasshive --status              # wo es läuft, und seit wann
+npx glasshive --stop                # es beenden, aus jedem Terminal
 npx glasshive --active-threshold 120  # Sekunden seit dem letzten Schreiben, die noch als active zählen
 npx glasshive --config-dir ~/somewhere  # wo preferences.json liegt
 ```
@@ -137,6 +141,27 @@ nicht beobachtest, damit du sie mit einem Klick hinzufügst. Nur was du beobacht
 gelesen; vom Rest kostet es eine Zeile eines Transkripts, gerade genug, um zu wissen, wo es liegt.
 Hörst du über den Tab auf, ein Projekt zu beobachten, kehrt es in diese Liste zurück; gelöscht wird
 nichts.
+
+**Ein Server, egal wie oft du es startest.** Ein erneutes `glasshive` startet keinen zweiten. Es
+findet den Server, der schon lauscht, übergibt ihm den genannten Pfad und öffnet jenes Fenster – der
+Scan, der Index und alles, was `git` bereits beantwortet hat, werden wiederverwendet, sodass das
+zweite Fenster etwa so schnell da ist wie ein Tab-Wechsel. Nur die Kommandozeile kann auf diese
+Weise ein Verzeichnis nennen; eine im Browser geöffnete Seite kann es nicht. Der Standardport rutscht
+nur dann auf den nächsten freien, wenn etwas, das nicht glasshive ist, ihn belegt.
+
+Weil es nur einen gibt, musst du dir nie merken, welches Terminal ihn hat:
+
+```sh
+$ glasshive --status
+glasshive: http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+
+$ glasshive --stop
+glasshive: stopped http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+```
+
+`--status` listet jedes gefundene glasshive auf und endet mit einem Code ungleich null, wenn es
+keines gibt – so liest es sich als Bedingung in einem Skript. `--stop` beendet alle und nimmt es
+nicht übel, wenn es keines findet.
 
 ### Tastatur
 

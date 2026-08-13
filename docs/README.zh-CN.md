@@ -98,9 +98,13 @@ pull request 的 head 分支相连 —— 差一点点对上的，宁可留着�
 ## 选项
 
 ```sh
-npx glasshive                       # http://127.0.0.1:4483
+npx glasshive                       # http://127.0.0.1:4483 —— 看这个仓库
+npx glasshive .                     # 只看这个仓库
+npx glasshive ~/src/foo             # 或者那个，从任何地方
 npx glasshive --port 8080           # 监听其他端口
 npx glasshive --no-open             # 不打开浏览器
+npx glasshive --status              # 它在哪里运行，从什么时候开始
+npx glasshive --stop                # 在任何终端里结束它
 npx glasshive --active-threshold 120  # 距上次写入多少秒以内仍算 active
 npx glasshive --config-dir ~/somewhere  # preferences.json 的存放位置
 ```
@@ -114,6 +118,24 @@ worktree 都会到同一个地方。
 **「在看」是呈现方式，不是允许读取的范围。** `~/.claude/projects` 下面的目录仍然全部按名字被找到，
 没在看的会列在 Overview 里，一次点击就能加进来。只有在看的才会被完整读取，其余的只花掉一份会话记录
 的一行，刚好够知道它在哪里。从标签上移除只是回到那份列表，什么都不会被删除。
+
+**运行多少次，服务器都只有一个。** 再运行一次 `glasshive` 不会启动第二个。它会找到已经在监听
+的那个，把你指定的路径交给它，然后打开那个窗口 —— 扫描、索引，以及 `git` 已经回答过的一切都
+被复用，所以第二个窗口出现得和切换标签一样快。只有命令行能这样指定目录，浏览器里打开的页面
+不能。默认端口只有在被不是 glasshive 的东西占住时，才会顺延到下一个空闲端口。
+
+因为只有一个，你不必记住是哪个终端拿着它：
+
+```sh
+$ glasshive --status
+glasshive: http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+
+$ glasshive --stop
+glasshive: stopped http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+```
+
+`--status` 会列出它能找到的每一个 glasshive，一个都没有时以非零退出，所以可以直接用作脚本里的
+条件。`--stop` 会把它们全部结束，一个都没有也不算错。
 
 ### 键盘
 

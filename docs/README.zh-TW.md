@@ -98,9 +98,13 @@ issue 與 branch 只靠 pull request 的 head branch 相接——差一點對上
 ## 選項
 
 ```sh
-npx glasshive                       # http://127.0.0.1:4483
+npx glasshive                       # http://127.0.0.1:4483 —— 看這個儲存庫
+npx glasshive .                     # 只看這個儲存庫
+npx glasshive ~/src/foo             # 或者那個，從任何地方
 npx glasshive --port 8080           # 監聽其他連接埠
 npx glasshive --no-open             # 不開啟瀏覽器
+npx glasshive --status              # 它在哪裡執行，從什麼時候開始
+npx glasshive --stop                # 在任何終端機裡結束它
 npx glasshive --active-threshold 120  # 距上次寫入多少秒以內仍算 active
 npx glasshive --config-dir ~/somewhere  # preferences.json 的存放位置
 ```
@@ -114,6 +118,24 @@ npx glasshive --config-dir ~/somewhere  # preferences.json 的存放位置
 **「在看」是呈現方式，不是允許讀取的範圍。** `~/.claude/projects` 底下的目錄仍然全部依名字被找到，
 沒在看的會列在 Overview 裡，一次點擊就能加進來。只有在看的才會被完整讀取，其餘的只花掉一份
 session 記錄的一行，剛好夠知道它在哪裡。從分頁上移除只是回到那份清單，什麼都不會被刪除。
+
+**執行多少次，伺服器都只有一個。** 再執行一次 `glasshive` 不會啟動第二個。它會找到已經在監聽
+的那個，把你指定的路徑交給它，然後開啟那個視窗 —— 掃描、索引，以及 `git` 已經回答過的一切都
+會被重複使用，所以第二個視窗出現得和切換分頁一樣快。只有命令列能這樣指定目錄，瀏覽器裡開啟的
+頁面不能。預設連接埠只有在被不是 glasshive 的東西佔住時，才會順延到下一個空閒連接埠。
+
+因為只有一個，你不必記住是哪個終端機拿著它：
+
+```sh
+$ glasshive --status
+glasshive: http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+
+$ glasshive --stop
+glasshive: stopped http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+```
+
+`--status` 會列出它能找到的每一個 glasshive，一個都沒有時以非零結束，所以可以直接當成指令稿裡的
+條件。`--stop` 會把它們全部結束，一個都沒有也不算錯。
 
 ### 鍵盤
 

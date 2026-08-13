@@ -108,9 +108,13 @@ sub-issue는 중첩되고, `blocked by`는 의존 관계의 간선으로 그려�
 ## 옵션
 
 ```sh
-npx glasshive                       # http://127.0.0.1:4483
+npx glasshive                       # http://127.0.0.1:4483 — 이 저장소를 보기
+npx glasshive .                     # 이 저장소만
+npx glasshive ~/src/foo             # 또는 저 저장소를, 어디에서든
 npx glasshive --port 8080           # 다른 곳에서 듣기
 npx glasshive --no-open             # 브라우저를 열지 않기
+npx glasshive --status              # 어디에서 돌고 있는지, 언제부터인지
+npx glasshive --stop                # 어느 터미널에서든 끝내기
 npx glasshive --active-threshold 120  # 마지막 쓰기로부터 몇 초까지 active로 볼지
 npx glasshive --config-dir ~/somewhere  # preferences.json을 둘 곳
 ```
@@ -125,6 +129,25 @@ npx glasshive --config-dir ~/somewhere  # preferences.json을 둘 곳
 처럼 이름으로는 전부 찾아내며, 보고 있지 않은 것은 Overview에서 한 번의 클릭으로 추가할 수 있습니다.
 전부 읽는 것은 보기로 한 것뿐이고, 나머지는 「어디에 있는지」를 알기 위한 트랜스크립트 한 개만 엽니다.
 탭에서 내리면 그 목록으로 돌아갈 뿐, 아무것도 지워지지 않습니다.
+
+**몇 번을 실행하든 서버는 하나입니다.** `glasshive`를 다시 실행해도 두 번째가 뜨지 않습니다.
+이미 듣고 있는 서버를 찾아, 지정한 경로를 건네고, 그 창을 엽니다 —— 스캔도 인덱스도 `git`이
+이미 답한 것도 그대로 쓰이므로, 두 번째 창은 탭을 바꾸는 것만큼 빨리 나옵니다. 이렇게
+디렉터리를 지정할 수 있는 것은 커맨드 라인뿐이고, 브라우저에서 열린 페이지는 할 수 없습니다.
+기본 포트에서 다음 포트로 밀리는 것은 glasshive가 아닌 무언가가 그 포트를 쥐고 있을 때뿐입니다.
+
+하나이기 때문에, 어느 터미널이 그것을 쥐고 있는지 기억할 필요가 없습니다:
+
+```sh
+$ glasshive --status
+glasshive: http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+
+$ glasshive --stop
+glasshive: stopped http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+```
+
+`--status`는 찾은 것을 모두 나열하고 하나도 없으면 0이 아닌 코드로 끝나므로, 스크립트의
+조건으로 그대로 쓸 수 있습니다. `--stop`은 찾은 것을 모두 멈추며, 하나도 없어도 오류가 아닙니다.
 
 ### 키보드
 

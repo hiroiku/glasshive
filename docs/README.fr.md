@@ -113,9 +113,13 @@ et quelle pull request y a fait référence, lus à côté des agents qui y trav
 ## Options
 
 ```sh
-npx glasshive                       # http://127.0.0.1:4483
+npx glasshive                       # http://127.0.0.1:4483 — observer ce dépôt
+npx glasshive .                     # seulement ce dépôt
+npx glasshive ~/src/foo             # ou celui-là, depuis n'importe où
 npx glasshive --port 8080           # écouter ailleurs
 npx glasshive --no-open             # ne pas ouvrir le navigateur
+npx glasshive --status              # où il tourne, et depuis quand
+npx glasshive --stop                # l'arrêter, depuis n'importe quel terminal
 npx glasshive --active-threshold 120  # secondes depuis la dernière écriture comptant encore comme active
 npx glasshive --config-dir ~/somewhere  # où preferences.json est conservé
 ```
@@ -132,6 +136,28 @@ sous `~/.claude/projects` restent trouvés par leur nom, et l'Overview liste ceu
 pas pour que vous les ajoutiez en un clic. Seul ce que vous observez est lu en entier ; du reste, on
 ne lit qu'une ligne d'une transcription, juste de quoi savoir où il se trouve. Cessez d'observer un
 projet depuis son onglet et il retourne dans cette liste ; rien n'est supprimé.
+
+**Un seul serveur, quel que soit le nombre de lancements.** Relancer `glasshive` n'en démarre pas un
+second. Il trouve le serveur déjà à l'écoute, lui transmet le chemin que vous avez nommé et ouvre
+cette fenêtre — le balayage, l'index et tout ce que `git` a déjà répondu sont réutilisés, si bien
+que la deuxième fenêtre arrive presque aussi vite qu'un changement d'onglet. Seule la ligne de
+commande peut nommer un répertoire ainsi ; une page ouverte dans votre navigateur ne le peut pas. Le
+port par défaut ne glisse vers le suivant que lorsque quelque chose qui n'est pas glasshive
+l'occupe.
+
+Comme il n'y en a qu'un, vous n'avez jamais à vous rappeler quel terminal le détient :
+
+```sh
+$ glasshive --status
+glasshive: http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+
+$ glasshive --stop
+glasshive: stopped http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+```
+
+`--status` liste tous les glasshive qu'il trouve et sort avec un code non nul quand il n'y en a
+aucun : il se lit donc comme une condition dans un script. `--stop` les arrête tous et ne se plaint
+pas de n'en trouver aucun.
 
 ### Clavier
 

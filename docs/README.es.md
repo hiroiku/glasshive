@@ -113,9 +113,13 @@ qué pull request lo referenció, leído junto a los agentes que están trabajan
 ## Opciones
 
 ```sh
-npx glasshive                       # http://127.0.0.1:4483
+npx glasshive                       # http://127.0.0.1:4483 — observar este repositorio
+npx glasshive .                     # solo este repositorio
+npx glasshive ~/src/foo             # o aquel, desde donde sea
 npx glasshive --port 8080           # escuchar en otro sitio
 npx glasshive --no-open             # no abrir el navegador
+npx glasshive --status              # dónde está corriendo, y desde cuándo
+npx glasshive --stop                # terminarlo, desde cualquier terminal
 npx glasshive --active-threshold 120  # segundos desde la última escritura que aún cuentan como active
 npx glasshive --config-dir ~/somewhere  # dónde se guarda preferences.json
 ```
@@ -132,6 +136,27 @@ subdirectorio o un worktree te llevan al mismo sitio.
 que los añadas con un clic. Solo lo que observas se lee entero; del resto se lee una línea de una
 transcripción, lo justo para saber dónde está. Deja de observar un proyecto desde su pestaña y vuelve
 a esa lista; no se borra nada.
+
+**Un solo servidor, lo ejecutes las veces que lo ejecutes.** Volver a ejecutar `glasshive` no
+arranca un segundo. Encuentra el servidor que ya está escuchando, le pasa la ruta que nombraste y
+abre esa ventana —el escaneo, el índice y todo lo que `git` ya ha respondido se reutilizan, así que
+la segunda ventana llega casi tan rápido como cambiar de pestaña. Solo la línea de comandos puede
+nombrar un directorio así; una página abierta en tu navegador no puede. El puerto por defecto pasa
+al siguiente libre solo cuando algo que no es glasshive lo está ocupando.
+
+Como solo hay uno, nunca tienes que recordar qué terminal lo tiene:
+
+```sh
+$ glasshive --status
+glasshive: http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+
+$ glasshive --stop
+glasshive: stopped http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+```
+
+`--status` lista todos los glasshive que encuentra y sale con código distinto de cero cuando no hay
+ninguno, así que se lee como una condición en un script. `--stop` termina todos y no se queja si no
+encuentra ninguno.
 
 ### Teclado
 

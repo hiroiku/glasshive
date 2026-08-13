@@ -109,9 +109,13 @@ issue には、そこに書かれたコメントとタイムラインが付い�
 ## オプション
 
 ```sh
-npx glasshive                       # http://127.0.0.1:4483
+npx glasshive                       # http://127.0.0.1:4483 — このリポジトリを観る
+npx glasshive .                     # このリポジトリだけ
+npx glasshive ~/src/foo             # あるいはあちらを、どこからでも
 npx glasshive --port 8080           # 別のポートで待ち受ける
 npx glasshive --no-open             # ブラウザーを開かない
+npx glasshive --status              # どこで動いているか、いつから
+npx glasshive --stop                # どの端末からでも終わらせる
 npx glasshive --active-threshold 120  # 最後の書き込みから何秒までを active と見るか
 npx glasshive --config-dir ~/somewhere  # preferences.json を置く場所
 ```
@@ -127,6 +131,25 @@ npx glasshive --config-dir ~/somewhere  # preferences.json を置く場所
 名前としては全部が見つかり、観ていないものは Overview から 1 押しで足せる。全部を読むのは観ると
 決めたものだけで、残りは「どこに在るか」を知るための 1 本しか開かない。タブから外せばその一覧へ
 戻るだけで、何も消えない。
+
+**何度打っても、サーバーは 1 つ。** もう一度 `glasshive` を打っても 2 つ目は立ち上がらない。
+既に待ち受けているものを見つけ、打たれたパスを伝えて、その窓を開く —— 走査も索引も `git` が
+既に答えたことも使い回されるので、2 枚目はタブを切り替えるのと変わらない速さで出る。
+こうしてディレクトリを名指せるのはコマンドラインだけで、ブラウザーで開いているページには
+できない。既定のポートから次へずれるのは、glasshive でない何かがそこを握っているときだけである。
+
+1 つだから、どの端末が持っているかを覚えていなくてよい:
+
+```sh
+$ glasshive --status
+glasshive: http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+
+$ glasshive --stop
+glasshive: stopped http://127.0.0.1:4483 (pid 61651, up 2h 15m)
+```
+
+`--status` は見つけたものを全部並べ、1 つも無ければ 0 以外で終わる —— スクリプトの条件に
+そのまま使える。`--stop` は見つけたものを全部止め、1 つも無くても誤りにはしない。
 
 ### キーボード
 
