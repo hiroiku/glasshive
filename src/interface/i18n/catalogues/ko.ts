@@ -703,4 +703,9 @@ export const ko: Catalogue = {
   '{m}m': '{m}분',
   '{done} of {total} {unit}': '{total} {unit} 중 {done}',
   '{project}: awaiting your input': '{project}: 입력을 기다리는 중',
+  'You are not watching this project': '이 프로젝트를 보고 있지 않습니다',
+  'glasshive found it under ~/.claude/projects but is not reading it. Watching it adds it to the tab bar and reads it from now on — nothing about the project changes.':
+    '~/.claude/projects 안에서 찾기는 했지만 읽고 있지는 않습니다. 보기로 정하면 탭 바에 추가되고 그때부터 읽습니다 — 프로젝트 쪽은 아무것도 바뀌지 않습니다.',
+  'Or pick it from the overview, with everything else it found':
+    '찾은 다른 것들과 함께 Overview에서 고를 수도 있습니다',
 };

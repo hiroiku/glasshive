@@ -672,4 +672,9 @@ export const zhHans: Catalogue = {
   '{m}m': '{m} 分',
   '{done} of {total} {unit}': '{total} {unit} 中的 {done}',
   '{project}: awaiting your input': '{project}：正在等待你的输入',
+  'You are not watching this project': '你没有在看这个项目',
+  'glasshive found it under ~/.claude/projects but is not reading it. Watching it adds it to the tab bar and reads it from now on — nothing about the project changes.':
+    'glasshive 在 ~/.claude/projects 下面找到了它，但没有在读它。开始看它，它会被加到标签栏，并从此被读取 —— 项目那边什么都不会改变。',
+  'Or pick it from the overview, with everything else it found':
+    '也可以在 Overview 里，和其他找到的一起挑选',
 };

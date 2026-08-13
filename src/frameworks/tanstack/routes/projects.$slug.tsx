@@ -11,7 +11,8 @@ import { treeQuery } from '../queries/tree.query.ts';
 import { Icon } from '../ui/components/primitives/Icon.tsx';
 import { NotObserved } from '../ui/components/primitives/NotObserved.tsx';
 import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
-import { projectTrouble, treeTrouble } from '../ui/derive/trouble.ts';
+import { projectTrouble, treeTrouble, unwatchedTrouble } from '../ui/derive/trouble.ts';
+import { useTabSelection } from '../ui/hooks/useTabSelection.ts';
 import { useT } from '../ui/i18n/useT.ts';
 import { NavProvider, useNav } from '../ui/nav/NavContext.tsx';
 import { openPanelOf, type ProjectSearch, parseProjectSearch } from '../ui/nav/search.ts';
@@ -79,6 +80,9 @@ function ProjectLayout() {
 function ProjectChrome({ slug }: { slug: string }) {
   const t = useT();
   const tree = useQuery(treeQuery);
+  /* 見つかっているだけのプロジェクトを、その場から観ると決められるようにする。
+     記録していないことは、消えたこととは別である。 */
+  const tabs = useTabSelection();
   const search: ProjectSearch = Route.useSearch();
   const prefs = usePrefs();
   const nav = useNav();
@@ -137,6 +141,17 @@ function ProjectChrome({ slug }: { slug: string }) {
     /* `~/.claude/projects` を走査できていないなら、並んでいる行が空でも「無かった」とは
        言えない。**観測できなかったことの上に、無かったという判定を建てない。** */
     if (tree.data.sources.state === 'unobservable') return <NotObserved {...treeTrouble(t)} />;
+    /* 見つかっているが観ると決めていないだけなら、そう言う。**「そんな名前は無い」と
+       言わない** —— そこには在って、こちらが観ていないだけである。 */
+    const candidate = tabs.candidates.find((one) => one.id === slug);
+    if (candidate !== undefined) {
+      return (
+        <NotObserved
+          {...unwatchedTrouble(t, candidate.path ?? slug)}
+          action={{ label: t('Watch'), onClick: () => tabs.toggleWatch(slug) }}
+        />
+      );
+    }
     return <NotObserved {...projectTrouble(t, slug)} />;
   }
 

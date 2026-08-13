@@ -8,8 +8,9 @@ import { NotObserved } from '../ui/components/primitives/NotObserved.tsx';
 import { ReadProgress } from '../ui/components/primitives/ReadProgress.tsx';
 import { StatsFooter } from '../ui/components/stats/StatsFooter.tsx';
 import { transcriptScan } from '../ui/derive/sources.ts';
-import { projectTrouble, treeTrouble } from '../ui/derive/trouble.ts';
+import { projectTrouble, treeTrouble, unwatchedTrouble } from '../ui/derive/trouble.ts';
 import { useNowMs } from '../ui/hooks/useNowMs.ts';
+import { useTabSelection } from '../ui/hooks/useTabSelection.ts';
 import { useT } from '../ui/i18n/useT.ts';
 import { openPanelOf, type ProjectSearch } from '../ui/nav/search.ts';
 import { usePrefs } from '../ui/prefs/PrefsContext.tsx';
@@ -33,6 +34,8 @@ const TICK_MS = 5000;
 
 function AgentsView() {
   const t = useT();
+  // 見つかっているだけのプロジェクトを、その場から観ると決められるようにする
+  const tabs = useTabSelection();
   const { slug } = Route.useParams();
   const search: ProjectSearch = Route.useSearch();
   const navigate = useNavigate();
@@ -88,6 +91,17 @@ function AgentsView() {
     // 読み終えるまでは、まだ届いていない行の中に居るかもしれない
     if (!tree.data.complete) {
       return <ReadProgress label={t('Reading transcripts')} scan={transcriptScan(t, tree.data)} />;
+    }
+    /* 見つかっているが観ると決めていないだけなら、そう言う。**「そんな名前は無い」と
+       言わない** —— そこには在って、こちらが観ていないだけである。 */
+    const candidate = tabs.candidates.find((one) => one.id === slug);
+    if (candidate !== undefined) {
+      return (
+        <NotObserved
+          {...unwatchedTrouble(t, candidate.path ?? slug)}
+          action={{ label: t('Watch'), onClick: () => tabs.toggleWatch(slug) }}
+        />
+      );
     }
     return <NotObserved {...projectTrouble(t, slug)} />;
   }

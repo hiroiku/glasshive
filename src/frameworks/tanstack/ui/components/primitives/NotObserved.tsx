@@ -18,6 +18,13 @@ export interface NotObservedStep {
   readonly href?: string | undefined;
 }
 
+/* その場で押せる手立て。**コマンドを打たせずに済むときは、押させる** ——
+   観ると決めるのはこちらで済むことなので、端末へ戻す理由が無い。 */
+export interface NotObservedAction {
+  readonly label: string;
+  readonly onClick: () => void;
+}
+
 export interface NotObservedProps {
   /** mdi のパス。何を見に行ったのかを一目で言う */
   readonly icon: string;
@@ -27,11 +34,20 @@ export interface NotObservedProps {
   /** エラーコード。無ければ出さない */
   readonly code?: string | null | undefined;
   readonly steps?: readonly NotObservedStep[] | undefined;
+  readonly action?: NotObservedAction | undefined;
   /** 見えなくなっているのが観測の一部だけなら、そう言う */
   readonly partial?: boolean | undefined;
 }
 
-export function NotObserved({ icon, title, detail, code, steps, partial }: NotObservedProps) {
+export function NotObserved({
+  icon,
+  title,
+  detail,
+  code,
+  steps,
+  partial,
+  action,
+}: NotObservedProps) {
   return (
     <div className={`not-observed${partial === true ? ' partial' : ''}`}>
       <div className="no-head">
@@ -40,6 +56,11 @@ export function NotObserved({ icon, title, detail, code, steps, partial }: NotOb
         {code !== null && code !== undefined && <code className="no-code">{code}</code>}
       </div>
       <p className="no-detail">{detail}</p>
+      {action !== undefined && (
+        <button type="button" className="no-action" onClick={action.onClick}>
+          {action.label}
+        </button>
+      )}
       {steps !== undefined && steps.length > 0 && (
         <ol className="no-steps">
           {steps.map((step) => (

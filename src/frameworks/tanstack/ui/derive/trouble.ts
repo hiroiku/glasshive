@@ -191,6 +191,22 @@ export function transportTrouble(t: Translator, what: string): NotObservedProps 
 
    `~/.claude/projects` の下に無いディレクトリを URL に書くとここへ来る。タブに残った
    古いリンクを開いたときと、名前を変えた後がほとんどで、どちらも直し方は同じである。 */
+/* 見つかっているが、観ると決めていないプロジェクト。
+
+   **「そんな名前は無い」と言わない。** そこには在って、こちらが観ていないだけである。
+   同じ画面にすると、記録していないことが、消えたことに見える。 */
+export function unwatchedTrouble(t: Translator, at: string): NotObservedProps {
+  return {
+    icon: mdiFolderSearchOutline,
+    title: t('You are not watching this project'),
+    detail: t(
+      'glasshive found it under ~/.claude/projects but is not reading it. Watching it adds it to the tab bar and reads it from now on — nothing about the project changes.',
+    ),
+    code: at,
+    steps: [{ text: t('Or pick it from the overview, with everything else it found') }],
+  };
+}
+
 export function projectTrouble(t: Translator, slug: string): NotObservedProps {
   return {
     icon: mdiFolderSearchOutline,

@@ -143,6 +143,20 @@
   color: var(--dim);
   margin: 0 0 12px;
 }
+/* その場で押せる手立て。押せば見えるようになるものを、コマンドの一覧の中に埋めない */
+.no-action {
+  font: inherit;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 12px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+.no-action:hover {
+  border-color: var(--accent);
+}
 /* 手立ては順序のある一覧にする。上から順に打てば見えるようになる、という約束である */
 .no-steps {
   margin: 0;

@@ -19,6 +19,9 @@ type TreeJson = Parameters<typeof reduceTree>[0];
 
 const probe = vi.hoisted(() => ({
   slug: 'demo',
+  /** 見つかっているが、まだ観ると決めていないプロジェクト */
+  candidates: [] as { id: string; name: string; path: string | null; last_activity: string }[],
+  toggleWatch: vi.fn(),
   /** URL に載っている検索パラメータ。パネルの開閉はここだけが決める */
   search: {} as ProjectSearch,
   closePanel: vi.fn(),
@@ -38,6 +41,18 @@ vi.mock('@tanstack/react-router', () => ({
     </a>
   ),
   Outlet: () => <div id="outlet" />,
+}));
+
+vi.mock('~/frameworks/tanstack/ui/hooks/useTabSelection.ts', () => ({
+  useTabSelection: () => ({
+    visibleTabs: [],
+    watched: new Set<string>(),
+    candidates: probe.candidates,
+    storedState: 'observed',
+    toggleWatch: probe.toggleWatch,
+    moveWatch: () => undefined,
+    error: null,
+  }),
 }));
 
 vi.mock('~/frameworks/tanstack/queries/tree.query.ts', () => ({
@@ -242,5 +257,52 @@ describe('パネルの開閉を、`body` のクラスで表に出す', () => {
       document.body.classList.contains('drawer-open'),
       '何も選ばずに開いたパネルは、選んでくださいと言うために開いている',
     ).toBe(true);
+  });
+});
+
+/* 見つかっているが、観ると決めていないだけのプロジェクト。
+
+   **「そんな名前は無い」と言わない。** そこには在って、こちらが観ていないだけである。
+   同じ画面にすると、記録していないことが、消えたことに見える。 */
+describe('観ると決めていないプロジェクトを開いたとき', () => {
+  const empty = (): TreeJson => ({ ...tree(), projects: [] });
+  const candidate = () => ({
+    id: probe.slug,
+    name: probe.slug,
+    path: `/w/${probe.slug}`,
+    last_activity: AT,
+  });
+
+  beforeEach(() => {
+    probe.candidates = [];
+    probe.toggleWatch.mockClear();
+  });
+
+  it('無かったとは言わず、観ていないと言う', async () => {
+    probe.candidates = [candidate()];
+
+    const { said } = await draw({}, empty());
+
+    expect(said).toContain('You are not watching this project');
+    expect(said, '記録していないことが、消えたことに見える').not.toContain(
+      'No project by that name',
+    );
+  });
+
+  it('その場で観ると決められる', async () => {
+    probe.candidates = [candidate()];
+
+    const { container } = await draw({}, empty());
+    const watch = container.querySelector('.no-action');
+    if (watch === null) throw new Error('押す所が無い');
+    fireEvent.click(watch);
+
+    expect(probe.toggleWatch, '端末へ戻す理由が無い').toHaveBeenCalledWith(probe.slug);
+  });
+
+  it('見つかってもいなければ、そんな名前は無いと言う', async () => {
+    const { said } = await draw({}, empty());
+
+    expect(said).toContain('No project by that name');
   });
 });

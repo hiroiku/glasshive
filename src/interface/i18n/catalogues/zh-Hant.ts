@@ -674,4 +674,9 @@ export const zhHant: Catalogue = {
   '{m}m': '{m} 分',
   '{done} of {total} {unit}': '{total} {unit} 中的 {done}',
   '{project}: awaiting your input': '{project}：正在等待你的輸入',
+  'You are not watching this project': '你沒有在看這個專案',
+  'glasshive found it under ~/.claude/projects but is not reading it. Watching it adds it to the tab bar and reads it from now on — nothing about the project changes.':
+    'glasshive 在 ~/.claude/projects 底下找到了它，但沒有在讀它。開始看它，它會被加到分頁列，並從此被讀取 —— 專案那邊什麼都不會改變。',
+  'Or pick it from the overview, with everything else it found':
+    '也可以在 Overview 裡，和其他找到的一起挑選',
 };

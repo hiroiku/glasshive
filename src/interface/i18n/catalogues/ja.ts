@@ -705,4 +705,9 @@ export const ja: Catalogue = {
   '{m}m': '{m} 分',
   '{done} of {total} {unit}': '{total} {unit} 中 {done}',
   '{project}: awaiting your input': '{project}: 入力を待っている',
+  'You are not watching this project': 'このプロジェクトを観ていない',
+  'glasshive found it under ~/.claude/projects but is not reading it. Watching it adds it to the tab bar and reads it from now on — nothing about the project changes.':
+    '~/.claude/projects の中に見つけてはいるが、読んでいない。観ると決めると、タブに足されて、そこから読むようになる — プロジェクトの側は何も変わらない。',
+  'Or pick it from the overview, with everything else it found':
+    '見つけたものと一緒に、Overview から選び直すこともできる',
 };
