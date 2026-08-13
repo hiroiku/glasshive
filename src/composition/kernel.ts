@@ -100,6 +100,9 @@ export interface Kernel {
      木を組ませると、`git` を 1 本走らせるために `~/.claude/projects` を全部読むことになる。 */
   index: TranscriptIndexService;
   tree: TreeSnapshotService;
+  /* 覚えている観測を捨てる。**捨てる先は 2 つで、必ず両方である** —— 索引だけ捨てても、
+     木の側が短い間だけ古い 1 枚を返し続け、変わったはずの画面が変わらない。 */
+  refresh: () => void;
   conversation: ReadConversationUseCase;
   usage: ObserveUsageUseCase;
   messages: ObserveMessagesUseCase;
@@ -198,19 +201,22 @@ function assemble(): Kernel {
   const tracker = createGhIssueTrackerIntegration();
   const avatars = createAvatarCache({ avatars: createHttpAvatarIntegration(), clock: systemClock });
 
+  const refresh = () => {
+    index.invalidate();
+    tree.invalidate();
+  };
+
   const changes = createChangeBroadcast(createFsWatchTranscript(settings.transcriptsRoot));
   /* `transcript` が動いたら、キャッシュしているスナップショットを捨てる。捨てないと、変更通知を
      受けて取り直しても短い間だけ古いスナップショットが返り、変わったはずの画面が変わらない。 */
-  changes.subscribe(() => {
-    index.invalidate();
-    tree.invalidate();
-  });
+  changes.subscribe(refresh);
 
   return {
     settings,
     changes,
     index,
     tree,
+    refresh,
     conversation: createReadConversation({
       index,
       events: createFsTranscriptEventsRepository(),

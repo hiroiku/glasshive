@@ -14,14 +14,25 @@ import { useT } from '../../i18n/useT.ts';
 
 interface DirectoryPickerProps {
   readonly candidates: PreferencesJson['candidates'];
+  /* いま観ると決めてある id。**候補は走査のたびにしか作り直されない** —— ここで引かないと、
+     押したばかりのディレクトリが「観ていない」の一覧に残り、同じ `Watch` のボタンが
+     今度は観るのをやめる操作になる。 */
+  readonly watched: ReadonlySet<string>;
   readonly onWatch: (id: string) => void;
   /** 最初から開いておくか。まだ 1 つも観ていない画面では、ここから選ぶ以外にすることが無い */
   readonly open: boolean;
   readonly nowMs: number;
 }
 
-export function DirectoryPicker({ candidates, onWatch, open, nowMs }: DirectoryPickerProps) {
+export function DirectoryPicker({
+  candidates: found,
+  watched,
+  onWatch,
+  open,
+  nowMs,
+}: DirectoryPickerProps) {
   const t = useT();
+  const candidates = found.filter((candidate) => !watched.has(candidate.id));
   // 見つからなかったのなら、畳んだ見出しだけが残っても押す先が無い
   if (candidates.length === 0) return null;
 

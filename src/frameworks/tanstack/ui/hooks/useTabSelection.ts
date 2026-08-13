@@ -4,6 +4,7 @@ import type { TabAction } from '~/interface/controllers/workspace/preferences.co
 import type { PreferencesJson } from '~/interface/presenters/workspace/preferences.presenter.ts';
 import { setPreferences } from '../../functions/preferences.ts';
 import { preferencesQuery, preferencesQueryKey } from '../../queries/preferences.query.ts';
+import { treeQueryKey } from '../../queries/tree.query.ts';
 import { applyTabAction } from '../derive/tab-selection.ts';
 
 /* 観ると決めたものの読み書きを、画面から使える形にまとめる。
@@ -67,7 +68,15 @@ export function useTabSelection(): TabSelectionHandle {
       }
     },
 
-    onSuccess: (saved) => client.setQueryData(preferencesQueryKey, saved),
+    onSuccess: (saved, action) => {
+      client.setQueryData(preferencesQueryKey, saved);
+      /* 観る相手が変わったら木を取り直す。**タブも一覧も、名前と数を木から引いている** ——
+         取り直さないと、観ると決めたばかりのプロジェクトはどちらにも出ず、押しても
+         何も起きなかったようにしか見えない。並べ替えは記録の中の順だけの話なので取り直さない。 */
+      if (action.action === 'watch' || action.action === 'unwatch') {
+        void client.invalidateQueries({ queryKey: treeQueryKey });
+      }
+    },
   });
 
   const visibleTabs = json?.visible_tabs ?? [];

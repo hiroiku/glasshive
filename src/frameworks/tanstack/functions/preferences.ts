@@ -17,6 +17,7 @@ const deps = (): PreferencesDeps => {
     read: kernel.readPreferences,
     write: kernel.writePreferences,
     index: kernel.index,
+    refresh: kernel.refresh,
   };
 };
 

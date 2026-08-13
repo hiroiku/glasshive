@@ -34,6 +34,9 @@ export interface PreferencesDeps {
   readonly read: ReadPreferencesUseCase;
   readonly write: WritePreferencesUseCase;
   readonly index: TranscriptIndexService;
+  /* 覚えている観測を捨てる。**観る相手が変わると、読む範囲そのものが変わる** ——
+     捨てないと、置いた直後に取り直した画面が、変える前の 1 枚を受け取る。 */
+  readonly refresh: () => void;
 }
 
 /* 送る側が宣言する型。**送る側と受ける側が同じ 1 つの名前を見る。**
@@ -163,6 +166,9 @@ export async function writePreferences(
     observedRoots: scope.value.roots,
   });
   if (!saved.ok) return { ok: false, ...presentError(saved.error) };
+  /* 観る相手が変わったら、覚えている観測を捨てる。**並べ替えでは捨てない** —— タブの順は
+     記録の側だけの話で、読む範囲は 1 つも動いていない。捨てると走査をやり直すことになる。 */
+  if (action.value.action === 'watch' || action.value.action === 'unwatch') deps.refresh();
   /* 置いた後の候補は、置く前に起こしたものである。**取り直さない** —— 記録したばかりの
      ディレクトリが候補に残るのは 1 度きりで、次の読み取りで消える。取り直すと、置くたびに
      走査をやり直すことになる。 */

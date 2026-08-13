@@ -200,6 +200,7 @@ function Overview() {
             ことのあるディレクトリを画面から選べない */}
         <DirectoryPicker
           candidates={tabs.candidates}
+          watched={tabs.watched}
           onWatch={tabs.toggleWatch}
           open={projects.length === 0}
           nowMs={nowMs}

@@ -45,7 +45,15 @@ function mount() {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return renderHook(() => useTabSelection(), { wrapper });
+  /* 木を取り直しに行ったかどうかを見る。**タブも一覧も、名前と数を木から引いている** ——
+     取り直さないと、観ると決めたばかりのプロジェクトはどちらにも出ない。 */
+  const invalidated: unknown[] = [];
+  const original = client.invalidateQueries.bind(client);
+  client.invalidateQueries = (filters, options) => {
+    invalidated.push(filters?.queryKey);
+    return original(filters, options);
+  };
+  return { ...renderHook(() => useTabSelection(), { wrapper }), invalidated };
 }
 
 describe('`preferences.json` をどう読めたかを、画面まで落とさずに運ぶ', () => {
@@ -158,5 +166,81 @@ describe('置きに行った結果を、クライアント側の状態へ正し�
       server.set.mock.calls.at(-1)?.[0],
       '丸ごと送ると、読んでから送るまでの間に別のクライアントが足したぶんが消える',
     ).toEqual({ data: { action: 'unwatch', id: '-w-a' } });
+  });
+});
+
+describe('観る相手が変わったら、木を取り直す', () => {
+  it('観ると決めたら、木を取り直しに行く', async () => {
+    server.get.mockResolvedValue(body([], { state: 'observed', reason: null }));
+    server.set.mockResolvedValue({
+      ok: true,
+      body: body(['-w-a'], { state: 'observed', reason: null }),
+    });
+
+    const { result, invalidated } = mount();
+    await waitFor(() => expect(result.current.storedState).toBe('observed'));
+
+    act(() => result.current.toggleWatch('-w-a'));
+
+    await waitFor(() =>
+      expect(
+        invalidated,
+        '観ると決めたプロジェクトが木に無いままだと、タブも一覧の行も出ない',
+      ).toContainEqual(['tree']),
+    );
+  });
+
+  it('観るのをやめたときも、木を取り直しに行く', async () => {
+    server.get.mockResolvedValue(body(['-w-a'], { state: 'observed', reason: null }));
+    server.set.mockResolvedValue({
+      ok: true,
+      body: body([], { state: 'observed', reason: null }),
+    });
+
+    const { result, invalidated } = mount();
+    await waitFor(() => expect(result.current.watched).toEqual(new Set(['-w-a'])));
+
+    act(() => result.current.toggleWatch('-w-a'));
+
+    await waitFor(() =>
+      expect(invalidated, '外したプロジェクトの行が一覧に残る').toContainEqual(['tree']),
+    );
+  });
+
+  /* 並べ替えはタブの順だけの話である。取り直すと、掴んで動かすたびに
+     `~/.claude/projects` の走査をやり直させることになる。 */
+  it('並べ替えでは、木を取り直さない', async () => {
+    server.get.mockResolvedValue(body(['-w-a', '-w-b'], { state: 'observed', reason: null }));
+    server.set.mockResolvedValue({
+      ok: true,
+      body: body(['-w-b', '-w-a'], { state: 'observed', reason: null }),
+    });
+
+    const { result, invalidated } = mount();
+    await waitFor(() => expect(result.current.visibleTabs).toEqual(['-w-a', '-w-b']));
+
+    act(() => result.current.moveWatch('-w-a', 1));
+
+    await waitFor(() => expect(result.current.visibleTabs).toEqual(['-w-b', '-w-a']));
+    expect(invalidated, '順を変えただけで走査をやり直す理由が無い').not.toContainEqual(['tree']);
+  });
+
+  it('断られたら、木を取り直さない', async () => {
+    server.get.mockResolvedValue(body([], { state: 'observed', reason: null }));
+    server.set.mockResolvedValue({
+      ok: false,
+      status: 403,
+      body: { state: 'invalid', code: 'preferences.refused', message: '観測元の中には書かない' },
+    });
+
+    const { result, invalidated } = mount();
+    await waitFor(() => expect(result.current.storedState).toBe('observed'));
+
+    act(() => result.current.toggleWatch('-w-a'));
+
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(invalidated, '記録は 1 つも変わっていないので、木も変わらない').not.toContainEqual([
+      'tree',
+    ]);
   });
 });

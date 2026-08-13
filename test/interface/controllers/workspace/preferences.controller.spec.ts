@@ -101,13 +101,26 @@ function fakeUseCases(options: { refuse?: boolean } = {}) {
   return { read, write, inputs };
 }
 
+/** 覚えている観測を捨てにきた回数。捨てたかどうかは、外から数えるほかない */
+function fakeRefresh() {
+  let drops = 0;
+  return {
+    refresh: () => {
+      drops += 1;
+    },
+    dropCount: () => drops,
+  };
+}
+
 const deps = (
   index: ReturnType<typeof fakeIndex>,
   cases: ReturnType<typeof fakeUseCases>,
+  refresh: ReturnType<typeof fakeRefresh> = fakeRefresh(),
 ): Deps => ({
   read: cases.read,
   write: cases.write,
   index: index.service,
+  refresh: refresh.refresh,
 });
 
 describe('操作を受けるコントローラー', () => {
@@ -191,6 +204,64 @@ describe('操作を受けるコントローラー', () => {
     await writePreferences(deps(index, cases), { action: 'unwatch', id: '-w-a' });
 
     expect(cases.inputs[0]?.action).toEqual({ action: 'unwatch', id: '-w-a' });
+  });
+
+  /* 観る相手が変わると、読む範囲そのものが変わる。捨てないと、置いた直後に取り直した画面が
+     変える前の 1 枚を受け取り、観ると決めたプロジェクトがタブにも一覧にも出ない。 */
+  it('観ると決めたら、覚えている観測を捨てる', async () => {
+    const index = fakeIndex();
+    const cases = fakeUseCases();
+    const refresh = fakeRefresh();
+
+    await writePreferences(deps(index, cases, refresh), { action: 'watch', id: '-w-a' });
+
+    expect(refresh.dropCount(), '置いた直後の取り直しに、変える前の 1 枚を返さない').toBe(1);
+  });
+
+  it('観るのをやめたときも、覚えている観測を捨てる', async () => {
+    const index = fakeIndex();
+    const cases = fakeUseCases();
+    const refresh = fakeRefresh();
+
+    await writePreferences(deps(index, cases, refresh), { action: 'unwatch', id: '-w-a' });
+
+    expect(refresh.dropCount(), '外したプロジェクトが、次の走査まで一覧に残る').toBe(1);
+  });
+
+  /* 並べ替えはタブの順だけの話で、読む範囲は 1 つも動いていない。捨てると、掴んで動かす
+     たびに `~/.claude/projects` を走査し直すことになる。 */
+  it('並べ替えでは、覚えている観測を捨てない', async () => {
+    const index = fakeIndex();
+    const cases = fakeUseCases();
+    const refresh = fakeRefresh();
+
+    await writePreferences(deps(index, cases, refresh), {
+      action: 'move',
+      id: '-w-a',
+      toIndex: 0,
+    });
+
+    expect(refresh.dropCount(), '順を変えただけで走査をやり直す理由が無い').toBe(0);
+  });
+
+  it('言葉を選んだだけでは、覚えている観測を捨てない', async () => {
+    const index = fakeIndex();
+    const cases = fakeUseCases();
+    const refresh = fakeRefresh();
+
+    await writePreferences(deps(index, cases, refresh), { action: 'locale', locale: 'ja' });
+
+    expect(refresh.dropCount(), '画面の言葉は、何を読むかを変えない').toBe(0);
+  });
+
+  it('置けなかったときは、覚えている観測を捨てない', async () => {
+    const index = fakeIndex();
+    const cases = fakeUseCases({ refuse: true });
+    const refresh = fakeRefresh();
+
+    await writePreferences(deps(index, cases, refresh), { action: 'watch', id: '-w-a' });
+
+    expect(refresh.dropCount(), '記録は 1 つも変わっていないので、捨てるものが無い').toBe(0);
   });
 
   it('断られたときは、断りとして返す', async () => {
