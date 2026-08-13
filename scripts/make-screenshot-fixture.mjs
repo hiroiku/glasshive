@@ -1986,17 +1986,20 @@ function main() {
      置き忘れると「GitHub のリポジトリが無いプロジェクト」を撮ったことになる。 */
   fs.writeFileSync(path.join(binDir, 'package.json'), `${JSON.stringify({ type: 'module' })}\n`);
 
-  /* タブに留めるものを先に決めておく。**留めないと 22 個ぶんのタブが並ぶ** —— 撮る人が
-     毎回手で留め直すことになり、撮った 2 枚でタブの並びが違うことになる。glasshive が
-     唯一書くファイルと同じ形式で、同じ場所へ置く。留めるのは動いている 4 つだけ。 */
+  /* 観ると決めたものを先に置いておく。**置かないと一覧が空で始まる** —— 撮る人が毎回手で
+     選び直すことになり、撮った 2 枚でタブの並びが違うことになる。glasshive が唯一書く
+     ファイルと同じ形式で、同じ場所へ置く。観るのは動いている 4 つと、静かなものを 4 つ。残りは
+     「見つけたが観ていないディレクトリ」として一覧の上に出る —— 両方が映っていないと、絵から
+     新しく観る相手を選べることが読み取れない。 */
   fs.writeFileSync(
     path.join(configDir, 'preferences.json'),
     `${JSON.stringify(
       {
-        version: 1,
-        mode: 'pinned',
-        pinned: PROJECTS.map((project) => slugOf(repoPaths[project.name])),
-        hidden: [],
+        version: 2,
+        watched: [...PROJECTS, ...QUIET_PROJECTS.slice(0, 4)].map(
+          (project) => repoPaths[project.name],
+        ),
+        locale: null,
       },
       null,
       1,

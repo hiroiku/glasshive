@@ -291,12 +291,11 @@ p.warn {
   color: var(--dim);
   font-family: var(--mono);
   font-size: 11px;
-  /* 収まらないパスは頭を削る。末尾のディレクトリ名が、見分けの付く所である */
+  /* 収まらないパスは末尾を削る。**`direction` で頭から削らない** —— 先頭の `/` が
+     末尾へ回り、パスとして読めない文字列が出る。見分けの付くディレクトリ名は隣に在る。 */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  direction: rtl;
-  text-align: left;
 }
 .picker-when {
   color: var(--dim);
