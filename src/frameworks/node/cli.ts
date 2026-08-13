@@ -40,9 +40,10 @@ Usage: glasshive [path] [options]
                              to stop
   -h, --help                 Show this help
 
-With no path, every project an agent has worked in is listed, and the viewer picks
-which ones to keep as tabs. With a path, that one repository fills the window — the
-rest is still observed, and the hive is one click away.
+Naming a directory is how you start watching it. With a path, that repository is
+watched and fills the window. With no path, glasshive watches the repository you are
+standing in, or lands on the Overview when you are not in one. The Overview lists the
+directories it found but is not watching, so you can add them there.
 
 Running glasshive again does not start a second server. It hands the path to the one
 already listening and opens that window, reusing the scan and the index it has built.
@@ -163,12 +164,12 @@ export function parseArgs(
         serveOnly.push('--config-dir');
         break;
       }
-      /* 観測する範囲は起動時には決められない。黙って無視すると、渡したユーザーは
-         指定が効いたものと思い込むので、受け取った時点で断る。 */
+      /* 観る相手は記録から決まるので、起動のオプションでは決められない。黙って無視すると、
+         渡したユーザーは指定が効いたものと思い込むので、受け取った時点で断る。 */
       case '--global':
         return {
           ok: false,
-          message: `--global is no longer needed (every project is always observed)\n\n${HELP}`,
+          message: `--global is gone — glasshive watches the directories you name\n\n${HELP}`,
           exitCode: 2,
         };
       default: {

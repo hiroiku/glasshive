@@ -657,8 +657,8 @@ export const zhHant: Catalogue = {
   'Check the terminal glasshive is running in for the full trace':
     '在執行 glasshive 的終端機裡查看完整的堆疊',
   'No such page': '沒有這個頁面',
-  'glasshive has an overview of every project, and per-project Agents and Work views. This address is none of them.':
-    'glasshive 有一個所有專案的總覽，以及每個專案的 Agents 和 Work 檢視。這個位址不屬於其中任何一個。',
+  'glasshive has an overview of the projects you watch, and per-project Agents and Work views. This address is none of them.':
+    'glasshive 裡有你在看的專案的總覽，以及每個專案的 Agents 與 Work 檢視。這個位址不是其中任何一個。',
   'Pick a project from the Overview tab above': '從上方的 Overview 分頁裡選一個專案',
   'on the branch of PR #{number}': '在 PR #{number} 的分支上',
   '{n}s ago': '{n} 秒前',

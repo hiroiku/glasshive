@@ -305,7 +305,7 @@ export function routeTrouble(t: Translator, pathname: string): NotObservedProps 
     icon: mdiCompassOffOutline,
     title: t('No such page'),
     detail: t(
-      'glasshive has an overview of every project, and per-project Agents and Work views. This address is none of them.',
+      'glasshive has an overview of the projects you watch, and per-project Agents and Work views. This address is none of them.',
     ),
     code: pathname,
     steps: [{ text: t('Pick a project from the Overview tab above') }],

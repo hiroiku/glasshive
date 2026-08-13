@@ -688,8 +688,8 @@ export const ja: Catalogue = {
   'Check the terminal glasshive is running in for the full trace':
     'glasshive を動かしている端末で、詳しい記録を見る',
   'No such page': 'そのような画面は無い',
-  'glasshive has an overview of every project, and per-project Agents and Work views. This address is none of them.':
-    'glasshive に在るのは、全プロジェクトの概観と、プロジェクトごとの Agents と Work である。この住所はそのどれでもない。',
+  'glasshive has an overview of the projects you watch, and per-project Agents and Work views. This address is none of them.':
+    'glasshive に在るのは、観ているプロジェクトの一覧と、プロジェクトごとの Agents と Work の画面である。このアドレスはそのどれでもない。',
   'Pick a project from the Overview tab above': '上の Overview タブからプロジェクトを選ぶ',
   'on the branch of PR #{number}': 'PR #{number} のブランチ上',
   '{n}s ago': '{n} 秒前',

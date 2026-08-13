@@ -686,8 +686,8 @@ export const ko: Catalogue = {
   'Check the terminal glasshive is running in for the full trace':
     'glasshive를 실행 중인 터미널에서 전체 추적 확인하기',
   'No such page': '그런 페이지가 없습니다',
-  'glasshive has an overview of every project, and per-project Agents and Work views. This address is none of them.':
-    'glasshive에는 모든 프로젝트의 개요와, 프로젝트별 Agents 및 Work 화면이 있습니다. 이 주소는 그중 어느 것도 아닙니다.',
+  'glasshive has an overview of the projects you watch, and per-project Agents and Work views. This address is none of them.':
+    'glasshive에는 보고 있는 프로젝트의 목록과, 프로젝트별 Agents·Work 화면이 있습니다. 이 주소는 그중 어느 것도 아닙니다.',
   'Pick a project from the Overview tab above': '위의 Overview 탭에서 프로젝트 고르기',
   'on the branch of PR #{number}': 'PR #{number}의 브랜치에서',
   '{n}s ago': '{n}초 전',

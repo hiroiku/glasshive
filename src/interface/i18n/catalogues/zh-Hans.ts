@@ -655,8 +655,8 @@ export const zhHans: Catalogue = {
   'Check the terminal glasshive is running in for the full trace':
     '在运行 glasshive 的终端里查看完整的堆栈',
   'No such page': '没有这个页面',
-  'glasshive has an overview of every project, and per-project Agents and Work views. This address is none of them.':
-    'glasshive 有一个所有项目的总览，以及每个项目的 Agents 和 Work 视图。这个地址不属于其中任何一个。',
+  'glasshive has an overview of the projects you watch, and per-project Agents and Work views. This address is none of them.':
+    'glasshive 里有你在看的项目的总览，以及每个项目的 Agents 和 Work 视图。这个地址不是其中任何一个。',
   'Pick a project from the Overview tab above': '从上方的 Overview 标签里选一个项目',
   'on the branch of PR #{number}': '在 PR #{number} 的分支上',
   '{n}s ago': '{n} 秒前',
