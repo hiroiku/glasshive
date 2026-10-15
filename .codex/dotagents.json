@@ -1,0 +1,58 @@
+{
+  "schema": 7,
+  "version": "7.1.0",
+  "modules": [
+    "architecture",
+    "code",
+    "git",
+    "prompting",
+    "review",
+    "testing"
+  ],
+  "files": {
+    ".agents/skills/dotagents-design/SKILL.md": {
+      "hash": "sha256:d2756f502a63a77b126a096f5087c1da993585efd01ad999005ac268952c8165",
+      "module": "architecture"
+    },
+    ".agents/skills/dotagents-prompting/SKILL.md": {
+      "hash": "sha256:5a0b54212823074d1a325aa11b7686e0622ea576ccd9dfacf94671a7efeb8e8a",
+      "module": "prompting"
+    },
+    ".agents/skills/dotagents-testing/SKILL.md": {
+      "hash": "sha256:7deedb3730b7a62380aa063c18a2593e0dff6e0ced9ab01ed2461f13ca8c72f9",
+      "module": "testing"
+    },
+    ".codex/agents/dotagents-accessibility.toml": {
+      "hash": "sha256:2df479f1d25668c42c633cbf031b67a14ac0c6c192a6a06970d4498e850661d6",
+      "module": "review"
+    },
+    ".codex/agents/dotagents-review.toml": {
+      "hash": "sha256:a3501e5065fdb47deedba2aca5fda63f7bc04478623e6bb5100e033a5d8e90b6",
+      "module": "review"
+    },
+    ".codex/agents/dotagents-security.toml": {
+      "hash": "sha256:edc1eaf9d476b81271185018d60748e809b0251856c706448e2879247d1765ac",
+      "module": "review"
+    },
+    ".codex/dotagents/code/AGENTS.md": {
+      "hash": "sha256:f11b6aa152ffc479597d53f2440d6bce1c71ffc505a4a51b0dd374a0916ba606",
+      "module": "code"
+    },
+    ".codex/dotagents/git/AGENTS.md": {
+      "hash": "sha256:b1866dad87dd7d0e7603123f1146bf99c6d41b7f9b6bfb7bfbc5dc51958c7100",
+      "module": "git"
+    },
+    ".codex/dotagents/prompting/AGENTS.md": {
+      "hash": "sha256:7782d11eac3a1ece1ac463e5470ad890f48262b17ac95037d94f66bda1bfd7a3",
+      "module": "prompting"
+    },
+    ".codex/dotagents/review/AGENTS.md": {
+      "hash": "sha256:f2653838eb86195444b61083e5532795a6fecba0f2995d1c225603688300b23a",
+      "module": "review"
+    },
+    ".codex/dotagents/testing/AGENTS.md": {
+      "hash": "sha256:0a50d6d4f626baeb1285cb40b9e89d34f7620bb70364006f9854127f82f08f67",
+      "module": "testing"
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "schema": 7,
+  "version": "7.1.0",
+  "modules": [
+    "architecture",
+    "code",
+    "git",
+    "prompting",
+    "review",
+    "testing"
+  ],
+  "files": {
+    ".claude/rules/dotagents/code.md": {
+      "hash": "sha256:f11b6aa152ffc479597d53f2440d6bce1c71ffc505a4a51b0dd374a0916ba606",
+      "module": "code"
+    },
+    ".claude/rules/dotagents/git.md": {
+      "hash": "sha256:b1866dad87dd7d0e7603123f1146bf99c6d41b7f9b6bfb7bfbc5dc51958c7100",
+      "module": "git"
+    },
+    ".claude/rules/dotagents/project.md": {
+      "hash": "sha256:fa2341cfef97b17b008f0691614bc0e8aee0262f128d59aa423484a27f9f8bc2",
+      "module": null
+    },
+    ".claude/rules/dotagents/prompting.md": {
+      "hash": "sha256:7782d11eac3a1ece1ac463e5470ad890f48262b17ac95037d94f66bda1bfd7a3",
+      "module": "prompting"
+    },
+    ".claude/rules/dotagents/review.md": {
+      "hash": "sha256:f2653838eb86195444b61083e5532795a6fecba0f2995d1c225603688300b23a",
+      "module": "review"
+    },
+    ".claude/rules/dotagents/testing.md": {
+      "hash": "sha256:0a50d6d4f626baeb1285cb40b9e89d34f7620bb70364006f9854127f82f08f67",
+      "module": "testing"
+    },
+    ".claude/skills/dotagents/.claude-plugin/plugin.json": {
+      "hash": "sha256:15f13091dc15c771f20a26363dd7feb70a89316b15ddc7f099447a1c1270309b",
+      "module": null
+    },
+    ".claude/skills/dotagents/agents/accessibility.md": {
+      "hash": "sha256:f3472d11cad0a755872d088f4c767382391784c6c966b3b034be71fceb5e76ec",
+      "module": "review"
+    },
+    ".claude/skills/dotagents/agents/review.md": {
+      "hash": "sha256:8dd08f8664a992f42370b5b93913fa723d1b73a2c539264115aebc96cf8ff2a1",
+      "module": "review"
+    },
+    ".claude/skills/dotagents/agents/security.md": {
+      "hash": "sha256:87e5d4ae35f93b3a89c916a095e5a9fa6e43348f4cc98b751a4adf0171d82a91",
+      "module": "review"
+    },
+    ".claude/skills/dotagents/skills/design/SKILL.md": {
+      "hash": "sha256:cc127e3f17ee793e6b43e07acf179a9f4d95118096eba87d3fa324712bbd58c9",
+      "module": "architecture"
+    },
+    ".claude/skills/dotagents/skills/prompting/SKILL.md": {
+      "hash": "sha256:10faae99bd6fba7fc6b4ea1b74b8f4e7483467686b0a8e727811114c8fba101e",
+      "module": "prompting"
+    },
+    ".claude/skills/dotagents/skills/testing/SKILL.md": {
+      "hash": "sha256:d311ec9a050c0064e34dfc82827891f4a0e9b5040fc703c167ef2a9e3d74a291",
+      "module": "testing"
+    }
+  }
+}
