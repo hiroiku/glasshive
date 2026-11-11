@@ -1,6 +1,6 @@
 {
   "schema": 7,
-  "version": "7.1.0",
+  "version": "7.11.0",
   "modules": [
     "architecture",
     "code",
@@ -11,35 +11,39 @@
   ],
   "files": {
     ".agents/skills/dotagents-design/SKILL.md": {
-      "hash": "sha256:d2756f502a63a77b126a096f5087c1da993585efd01ad999005ac268952c8165",
+      "hash": "sha256:ac0d39760a3e6e17a90f24fed850656803c0bf017dfd6a8e8c3580035d6cb3d8",
       "module": "architecture"
     },
     ".agents/skills/dotagents-prompting/SKILL.md": {
-      "hash": "sha256:5a0b54212823074d1a325aa11b7686e0622ea576ccd9dfacf94671a7efeb8e8a",
+      "hash": "sha256:9491d21c1fc7783c35c275ff465de4636dc7fc7e5f8c8b1c8dd78ff8a434f89d",
       "module": "prompting"
     },
     ".agents/skills/dotagents-testing/SKILL.md": {
-      "hash": "sha256:7deedb3730b7a62380aa063c18a2593e0dff6e0ced9ab01ed2461f13ca8c72f9",
+      "hash": "sha256:666718f53429cc455027a5be92876bc62f25460cca9f4ca1162ad0d464df12c6",
       "module": "testing"
     },
     ".codex/agents/dotagents-accessibility.toml": {
-      "hash": "sha256:2df479f1d25668c42c633cbf031b67a14ac0c6c192a6a06970d4498e850661d6",
+      "hash": "sha256:93aa2a46e4c0716e56660cca581dd51303853abdc86b230c4a53e14d1b541250",
       "module": "review"
     },
     ".codex/agents/dotagents-review.toml": {
-      "hash": "sha256:a3501e5065fdb47deedba2aca5fda63f7bc04478623e6bb5100e033a5d8e90b6",
+      "hash": "sha256:feb468f59dab59aefdac783a667a857005a25d3f5239a4f46c55949ce287a4f4",
       "module": "review"
     },
     ".codex/agents/dotagents-security.toml": {
-      "hash": "sha256:edc1eaf9d476b81271185018d60748e809b0251856c706448e2879247d1765ac",
+      "hash": "sha256:15e5f16f137cd272d13e8b27fadd5dd1ac1042df9b67c8e2fe7dcf922e5c3578",
       "module": "review"
     },
     ".codex/dotagents/code/AGENTS.md": {
-      "hash": "sha256:f11b6aa152ffc479597d53f2440d6bce1c71ffc505a4a51b0dd374a0916ba606",
+      "hash": "sha256:4ebce30de3e28963ef4b2a5306b147fc26d9492f570d86ed4b2eb83d5755d8f0",
       "module": "code"
     },
     ".codex/dotagents/git/AGENTS.md": {
-      "hash": "sha256:b1866dad87dd7d0e7603123f1146bf99c6d41b7f9b6bfb7bfbc5dc51958c7100",
+      "hash": "sha256:275d0329855014634394d08c49101aefb99c59b2d0d3ddf83bd7d8cfdfb0dcf9",
+      "module": "git"
+    },
+    ".codex/dotagents/git/no-ai-attribution.mjs": {
+      "hash": "sha256:756e1ec4e6e1554dcb18d69bbfff6732759811ec278b2c5cf9b858b7c73ed088",
       "module": "git"
     },
     ".codex/dotagents/prompting/AGENTS.md": {
@@ -47,11 +51,11 @@
       "module": "prompting"
     },
     ".codex/dotagents/review/AGENTS.md": {
-      "hash": "sha256:f2653838eb86195444b61083e5532795a6fecba0f2995d1c225603688300b23a",
+      "hash": "sha256:b5b5f055e6b99fb8cd09c6351ecb57d41fb75a3af6b05a8b62faeefc9b07212f",
       "module": "review"
     },
     ".codex/dotagents/testing/AGENTS.md": {
-      "hash": "sha256:0a50d6d4f626baeb1285cb40b9e89d34f7620bb70364006f9854127f82f08f67",
+      "hash": "sha256:39e16115c7097aae6d0678428c3cd340f6110f4d8add86cc3e397d2fd5303ecf",
       "module": "testing"
     }
   }

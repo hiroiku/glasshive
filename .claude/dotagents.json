@@ -1,6 +1,6 @@
 {
   "schema": 7,
-  "version": "7.1.0",
+  "version": "7.11.0",
   "modules": [
     "architecture",
     "code",
@@ -11,11 +11,11 @@
   ],
   "files": {
     ".claude/rules/dotagents/code.md": {
-      "hash": "sha256:f11b6aa152ffc479597d53f2440d6bce1c71ffc505a4a51b0dd374a0916ba606",
+      "hash": "sha256:4ebce30de3e28963ef4b2a5306b147fc26d9492f570d86ed4b2eb83d5755d8f0",
       "module": "code"
     },
     ".claude/rules/dotagents/git.md": {
-      "hash": "sha256:b1866dad87dd7d0e7603123f1146bf99c6d41b7f9b6bfb7bfbc5dc51958c7100",
+      "hash": "sha256:275d0329855014634394d08c49101aefb99c59b2d0d3ddf83bd7d8cfdfb0dcf9",
       "module": "git"
     },
     ".claude/rules/dotagents/project.md": {
@@ -27,39 +27,47 @@
       "module": "prompting"
     },
     ".claude/rules/dotagents/review.md": {
-      "hash": "sha256:f2653838eb86195444b61083e5532795a6fecba0f2995d1c225603688300b23a",
+      "hash": "sha256:b5b5f055e6b99fb8cd09c6351ecb57d41fb75a3af6b05a8b62faeefc9b07212f",
       "module": "review"
     },
     ".claude/rules/dotagents/testing.md": {
-      "hash": "sha256:0a50d6d4f626baeb1285cb40b9e89d34f7620bb70364006f9854127f82f08f67",
+      "hash": "sha256:39e16115c7097aae6d0678428c3cd340f6110f4d8add86cc3e397d2fd5303ecf",
       "module": "testing"
     },
     ".claude/skills/dotagents/.claude-plugin/plugin.json": {
-      "hash": "sha256:15f13091dc15c771f20a26363dd7feb70a89316b15ddc7f099447a1c1270309b",
+      "hash": "sha256:c5aee18c8b6a9443ed6802d3b36796292df7dfb4b7bf4280c3f96fde574941ad",
       "module": null
     },
     ".claude/skills/dotagents/agents/accessibility.md": {
-      "hash": "sha256:f3472d11cad0a755872d088f4c767382391784c6c966b3b034be71fceb5e76ec",
+      "hash": "sha256:3198f1518864c07e628bd655339986f4908c34c82092a6ef9945f7c685fb8b04",
       "module": "review"
     },
     ".claude/skills/dotagents/agents/review.md": {
-      "hash": "sha256:8dd08f8664a992f42370b5b93913fa723d1b73a2c539264115aebc96cf8ff2a1",
+      "hash": "sha256:2bed84ab09e616bc38a1359adf74069875a83feb6de7d0d0bdb6757525ffb1eb",
       "module": "review"
     },
     ".claude/skills/dotagents/agents/security.md": {
-      "hash": "sha256:87e5d4ae35f93b3a89c916a095e5a9fa6e43348f4cc98b751a4adf0171d82a91",
+      "hash": "sha256:dfc3f71b2d8cf1a1d4bc21e51f8ce81694ba234642540b89a7553cd23a41e4b9",
       "module": "review"
     },
+    ".claude/skills/dotagents/hooks/hooks.json": {
+      "hash": "sha256:914d0081bd4e4f74d45cabd11622fb47e1eb9805bb3008f3143d61a06ac2b935",
+      "module": null
+    },
+    ".claude/skills/dotagents/hooks/no-ai-attribution.mjs": {
+      "hash": "sha256:756e1ec4e6e1554dcb18d69bbfff6732759811ec278b2c5cf9b858b7c73ed088",
+      "module": "git"
+    },
     ".claude/skills/dotagents/skills/design/SKILL.md": {
-      "hash": "sha256:cc127e3f17ee793e6b43e07acf179a9f4d95118096eba87d3fa324712bbd58c9",
+      "hash": "sha256:1b10a8f5b47c7396001f5fdabe106152b2572d8ed305aa622efe70bfdf5949c4",
       "module": "architecture"
     },
     ".claude/skills/dotagents/skills/prompting/SKILL.md": {
-      "hash": "sha256:10faae99bd6fba7fc6b4ea1b74b8f4e7483467686b0a8e727811114c8fba101e",
+      "hash": "sha256:4a9765c6a6ca46a489817a7225f76b1b1b40fcff60dc4f45275a9b0b7be279f9",
       "module": "prompting"
     },
     ".claude/skills/dotagents/skills/testing/SKILL.md": {
-      "hash": "sha256:d311ec9a050c0064e34dfc82827891f4a0e9b5040fc703c167ef2a9e3d74a291",
+      "hash": "sha256:8d6d2929abf18a40b9cc0ecb169d045158e5a60da2953be053a7460c2734fe2d",
       "module": "testing"
     }
   }
