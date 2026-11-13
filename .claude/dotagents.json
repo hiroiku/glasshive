@@ -1,6 +1,6 @@
 {
   "schema": 7,
-  "version": "7.11.0",
+  "version": "7.12.0",
   "modules": [
     "architecture",
     "code",
@@ -35,19 +35,19 @@
       "module": "testing"
     },
     ".claude/skills/dotagents/.claude-plugin/plugin.json": {
-      "hash": "sha256:c5aee18c8b6a9443ed6802d3b36796292df7dfb4b7bf4280c3f96fde574941ad",
+      "hash": "sha256:7fb4dfe0f95533501f20ee3f5f05b8194eec72ec9a30f2bf4955e42d0e45f9d3",
       "module": null
     },
     ".claude/skills/dotagents/agents/accessibility.md": {
-      "hash": "sha256:3198f1518864c07e628bd655339986f4908c34c82092a6ef9945f7c685fb8b04",
+      "hash": "sha256:756edc7deb7290b05343c5e7c37e1526654ddacceb9b39e5fac7b53309c0f447",
       "module": "review"
     },
     ".claude/skills/dotagents/agents/review.md": {
-      "hash": "sha256:2bed84ab09e616bc38a1359adf74069875a83feb6de7d0d0bdb6757525ffb1eb",
+      "hash": "sha256:85ed8a16161d19bfaa8ce783132df8015e5698f71e887ff2fb47a9570a924520",
       "module": "review"
     },
     ".claude/skills/dotagents/agents/security.md": {
-      "hash": "sha256:dfc3f71b2d8cf1a1d4bc21e51f8ce81694ba234642540b89a7553cd23a41e4b9",
+      "hash": "sha256:d4e77bb99e23d0ff87d082d82ef3de3a9b480c030ce54b7d895974c68329b56f",
       "module": "review"
     },
     ".claude/skills/dotagents/hooks/hooks.json": {

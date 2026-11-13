@@ -1,6 +1,6 @@
 {
   "schema": 7,
-  "version": "7.11.0",
+  "version": "7.12.0",
   "modules": [
     "architecture",
     "code",
@@ -23,15 +23,15 @@
       "module": "testing"
     },
     ".codex/agents/dotagents-accessibility.toml": {
-      "hash": "sha256:93aa2a46e4c0716e56660cca581dd51303853abdc86b230c4a53e14d1b541250",
+      "hash": "sha256:c72eece70622a55fd7f82a332d95a7cf13684abc0bd16c2f62efcdd79e3ab1ea",
       "module": "review"
     },
     ".codex/agents/dotagents-review.toml": {
-      "hash": "sha256:feb468f59dab59aefdac783a667a857005a25d3f5239a4f46c55949ce287a4f4",
+      "hash": "sha256:bf59973274992ee8dbabd64f61b2f2bbb9a55fe2f2c51cb7603ac97fe0e7e44b",
       "module": "review"
     },
     ".codex/agents/dotagents-security.toml": {
-      "hash": "sha256:15e5f16f137cd272d13e8b27fadd5dd1ac1042df9b67c8e2fe7dcf922e5c3578",
+      "hash": "sha256:f607d41d28aeb8dd064b8fa997f6db6ac1eb537f74f8bb577131e6af86f00fff",
       "module": "review"
     },
     ".codex/dotagents/code/AGENTS.md": {
