@@ -1,6 +1,6 @@
 {
   "schema": 7,
-  "version": "7.12.0",
+  "version": "7.13.0",
   "modules": [
     "architecture",
     "code",
@@ -35,7 +35,7 @@
       "module": "review"
     },
     ".codex/dotagents/code/AGENTS.md": {
-      "hash": "sha256:4ebce30de3e28963ef4b2a5306b147fc26d9492f570d86ed4b2eb83d5755d8f0",
+      "hash": "sha256:b8d87ef9a44e322e27f6d02882f7329b88088e9f2aca2bf82464fce0ff2eaf50",
       "module": "code"
     },
     ".codex/dotagents/git/AGENTS.md": {
