@@ -1,6 +1,6 @@
 {
   "schema": 7,
-  "version": "7.13.0",
+  "version": "7.15.0",
   "modules": [
     "architecture",
     "code",
@@ -15,7 +15,7 @@
       "module": "architecture"
     },
     ".agents/skills/dotagents-prompting/SKILL.md": {
-      "hash": "sha256:9491d21c1fc7783c35c275ff465de4636dc7fc7e5f8c8b1c8dd78ff8a434f89d",
+      "hash": "sha256:31d751a925573d7973ed9063bd0b4e8991604078a24b59224422c7dd150f2a72",
       "module": "prompting"
     },
     ".agents/skills/dotagents-testing/SKILL.md": {

@@ -7,9 +7,9 @@ description: プロンプト、指示ファイル、エージェント定義を�
 
 プロンプトやエージェント定義を変更する前に、次のガイドラインを読む。
 
-- [2025/09/29: Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
-- [2026/07/24: The new rules of context engineering for Claude 5 generation models](https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models)
-- [2026/08/14: Maximizing the value of your Claude Code sessions](https://claude.com/blog/maximizing-the-value-of-your-claude-code-sessions)
+- [2025/09/29: AI エージェントのための効果的なコンテキストエンジニアリング](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
+- [2026/07/24: Claude 5 世代のモデルに向けたコンテキストエンジニアリングの新しい規則](https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models)
+- [2026/08/14: Claude Code のセッションの価値を最大にする](https://claude.com/blog/maximizing-the-value-of-your-claude-code-sessions)
 
 ## 文脈の入り口を決める
 
