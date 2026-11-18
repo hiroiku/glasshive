@@ -1,6 +1,6 @@
 {
   "schema": 7,
-  "version": "7.16.0",
+  "version": "7.17.0",
   "modules": [
     "architecture",
     "code",
@@ -15,7 +15,7 @@
       "module": "code"
     },
     ".claude/rules/dotagents/git.md": {
-      "hash": "sha256:275d0329855014634394d08c49101aefb99c59b2d0d3ddf83bd7d8cfdfb0dcf9",
+      "hash": "sha256:efde3bb97df075fbec326c35fb4f34698b53ff8bd09a3fbec687278713e75f30",
       "module": "git"
     },
     ".claude/rules/dotagents/project.md": {
@@ -35,7 +35,7 @@
       "module": "testing"
     },
     ".claude/skills/dotagents/.claude-plugin/plugin.json": {
-      "hash": "sha256:e3dbae6f064bc75dca1e279327fef5c60b8688ab7f4e75bf05769ae214be3164",
+      "hash": "sha256:152ca6f0202c8670d0a4bfc7411921662f27dd6c1b6928eb5e87c92376d99abe",
       "module": null
     },
     ".claude/skills/dotagents/agents/accessibility.md": {
