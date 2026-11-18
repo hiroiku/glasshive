@@ -1,6 +1,6 @@
 {
   "schema": 7,
-  "version": "7.15.0",
+  "version": "7.16.0",
   "modules": [
     "architecture",
     "code",
@@ -35,7 +35,7 @@
       "module": "testing"
     },
     ".claude/skills/dotagents/.claude-plugin/plugin.json": {
-      "hash": "sha256:d97a3f97227eebf1c53b7c33b7efce68b6b2be3750c94121eaef8d5e4c6a3e73",
+      "hash": "sha256:e3dbae6f064bc75dca1e279327fef5c60b8688ab7f4e75bf05769ae214be3164",
       "module": null
     },
     ".claude/skills/dotagents/agents/accessibility.md": {
