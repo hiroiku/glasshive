@@ -1,6 +1,6 @@
 {
   "schema": 7,
-  "version": "7.22.0",
+  "version": "7.23.0",
   "modules": [
     "architecture",
     "code",
@@ -39,7 +39,7 @@
       "module": "code"
     },
     ".codex/dotagents/git/AGENTS.md": {
-      "hash": "sha256:efde3bb97df075fbec326c35fb4f34698b53ff8bd09a3fbec687278713e75f30",
+      "hash": "sha256:bca372a23323c605bc2d362fb2f4d5e680b3baea613fcb5fd3d03e7f85062eec",
       "module": "git"
     },
     ".codex/dotagents/git/no-ai-attribution.mjs": {
